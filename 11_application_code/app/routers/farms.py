@@ -87,8 +87,8 @@ async def list_farms(
                 f.notes,
                 f.created_at,
                 COUNT(DISTINCT z.zone_id) AS zone_count,
-                COUNT(DISTINCT pc.cycle_id) FILTER (WHERE pc.status = 'ACTIVE') AS active_cycles,
-                COUNT(DISTINCT a.alert_id) FILTER (WHERE a.status = 'OPEN') AS open_alerts
+                COUNT(DISTINCT pc.cycle_id) FILTER (WHERE pc.cycle_status = 'ACTIVE') AS active_cycles,
+                COUNT(DISTINCT a.alert_id) FILTER (WHERE a.alert_status = 'OPEN') AS open_alerts
             FROM tenant.farms f
             LEFT JOIN tenant.zones z ON z.farm_id = f.farm_id
             LEFT JOIN tenant.production_cycles pc ON pc.farm_id = f.farm_id
@@ -159,10 +159,10 @@ async def get_farm(
                 f.updated_at,
                 COUNT(DISTINCT z.zone_id) AS zone_count,
                 COALESCE(SUM(z.area_ha), 0) AS zones_area_ha,
-                COUNT(DISTINCT pc.cycle_id) FILTER (WHERE pc.status = 'ACTIVE') AS active_cycles,
-                COUNT(DISTINCT pc.cycle_id) FILTER (WHERE pc.status = 'CLOSED') AS closed_cycles,
-                COUNT(DISTINCT a.alert_id) FILTER (WHERE a.status = 'OPEN' AND a.severity = 'CRITICAL') AS critical_alerts,
-                COUNT(DISTINCT a.alert_id) FILTER (WHERE a.status = 'OPEN') AS open_alerts
+                COUNT(DISTINCT pc.cycle_id) FILTER (WHERE pc.cycle_status = 'ACTIVE') AS active_cycles,
+                COUNT(DISTINCT pc.cycle_id) FILTER (WHERE pc.cycle_status = 'CLOSED') AS closed_cycles,
+                COUNT(DISTINCT a.alert_id) FILTER (WHERE a.alert_status = 'OPEN' AND a.severity = 'CRITICAL') AS critical_alerts,
+                COUNT(DISTINCT a.alert_id) FILTER (WHERE a.alert_status = 'OPEN') AS open_alerts
             FROM tenant.farms f
             LEFT JOIN tenant.zones z ON z.farm_id = f.farm_id
             LEFT JOIN tenant.production_cycles pc ON pc.farm_id = f.farm_id
@@ -228,7 +228,7 @@ async def farm_dashboard(
                 pc.cycle_code,
                 z.zone_code,
                 pu.crop_name,
-                pc.status,
+                pc.cycle_status,
                 pc.planted_date,
                 pc.expected_harvest_date,
                 pc.actual_harvest_date,
@@ -254,7 +254,7 @@ async def farm_dashboard(
                 FROM tenant.cycle_cost_summary
                 GROUP BY cycle_id
             ) cost_agg ON cost_agg.cycle_id = pc.cycle_id
-            WHERE pc.farm_id = :fid AND pc.status = 'ACTIVE'
+            WHERE pc.farm_id = :fid AND pc.cycle_status = 'ACTIVE'
             ORDER BY pc.planted_date DESC
         """),
         {"fid": farm_id_str},
@@ -268,7 +268,7 @@ async def farm_dashboard(
                 alert_id, alert_type, severity, title, message,
                 zone_id, production_unit_id, created_at, due_date
             FROM tenant.alerts
-            WHERE farm_id = :fid AND status = 'OPEN'
+            WHERE farm_id = :fid AND alert_status = 'OPEN'
             ORDER BY
                 CASE severity WHEN 'CRITICAL' THEN 0 WHEN 'HIGH' THEN 1 WHEN 'MEDIUM' THEN 2 ELSE 3 END,
                 created_at DESC
