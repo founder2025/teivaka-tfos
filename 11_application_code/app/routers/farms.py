@@ -14,7 +14,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
 from pydantic import BaseModel, field_validator
 from typing import Optional
-from uuid import UUID
 import logging
 
 from app.middleware.rls import get_current_user, get_tenant_db, require_role
@@ -26,24 +25,24 @@ router = APIRouter()
 # ─── Schemas ──────────────────────────────────────────────────────────────────
 
 class FarmCreate(BaseModel):
-    farm_code: str
+    farm_id: str
     farm_name: str
-    location_description: Optional[str] = None
-    island: Optional[str] = None
-    total_area_ha: Optional[float] = None
+    location_name: str
+    location_island: Optional[str] = None
+    land_area_ha: Optional[float] = None
     notes: Optional[str] = None
 
-    @field_validator("farm_code")
+    @field_validator("farm_id")
     @classmethod
-    def farm_code_upper(cls, v: str) -> str:
+    def farm_id_upper(cls, v: str) -> str:
         return v.upper().strip()
 
 
 class FarmUpdate(BaseModel):
     farm_name: Optional[str] = None
-    location_description: Optional[str] = None
-    island: Optional[str] = None
-    total_area_ha: Optional[float] = None
+    location_name: Optional[str] = None
+    location_island: Optional[str] = None
+    land_area_ha: Optional[float] = None
     notes: Optional[str] = None
     is_active: Optional[bool] = None
 
@@ -53,7 +52,7 @@ class FarmUpdate(BaseModel):
 @router.get("", summary="List all farms for tenant")
 async def list_farms(
     is_active: Optional[bool] = Query(None, description="Filter by active status"),
-    island: Optional[str] = Query(None, description="Filter by island name"),
+    location_island: Optional[str] = Query(None, description="Filter by island name"),
     user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_tenant_db),
 ):
@@ -68,9 +67,9 @@ async def list_farms(
         filters.append("f.is_active = :is_active")
         params["is_active"] = is_active
 
-    if island:
-        filters.append("f.island ILIKE :island")
-        params["island"] = f"%{island}%"
+    if location_island:
+        filters.append("f.location_island ILIKE :location_island")
+        params["location_island"] = f"%{location_island}%"
 
     where_clause = f"WHERE {' AND '.join(filters)}" if filters else ""
 
@@ -78,11 +77,10 @@ async def list_farms(
         text(f"""
             SELECT
                 f.farm_id,
-                f.farm_code,
                 f.farm_name,
-                f.location_description,
-                f.island,
-                f.total_area_ha,
+                f.location_name,
+                f.location_island,
+                f.land_area_ha,
                 f.is_active,
                 f.notes,
                 f.created_at,
@@ -95,7 +93,7 @@ async def list_farms(
             LEFT JOIN tenant.alerts a ON a.farm_id = f.farm_id
             {where_clause}
             GROUP BY f.farm_id
-            ORDER BY f.farm_code
+            ORDER BY f.farm_id
         """),
         params,
     )
@@ -110,36 +108,40 @@ async def create_farm(
     db: AsyncSession = Depends(get_tenant_db),
 ):
     """Creates a new farm under the current tenant. FOUNDER role required."""
-    # Check farm_code uniqueness within tenant (RLS handles cross-tenant)
     exists = await db.execute(
-        text("SELECT 1 FROM tenant.farms WHERE farm_code = :code"),
-        {"code": payload.farm_code},
+        text("SELECT 1 FROM tenant.farms WHERE farm_id = :farm_id"),
+        {"farm_id": payload.farm_id},
     )
     if exists.first():
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=f"Farm code '{payload.farm_code}' already exists",
+            detail=f"Farm '{payload.farm_id}' already exists",
         )
 
+    # tenant_id is NOT NULL with no DB default — pull from the RLS session var
+    # that get_tenant_db already SET LOCAL-ed for this transaction.
     result = await db.execute(
         text("""
             INSERT INTO tenant.farms
-                (farm_code, farm_name, location_description, island, total_area_ha, notes)
+                (farm_id, tenant_id, farm_name, location_name,
+                 location_island, land_area_ha, notes)
             VALUES
-                (:farm_code, :farm_name, :location_description, :island, :total_area_ha, :notes)
-            RETURNING farm_id, farm_code, farm_name, location_description,
-                      island, total_area_ha, is_active, notes, created_at
+                (:farm_id, current_setting('app.tenant_id')::uuid,
+                 :farm_name, :location_name,
+                 :location_island, :land_area_ha, :notes)
+            RETURNING farm_id, farm_name, location_name,
+                      location_island, land_area_ha, is_active, notes, created_at
         """),
         payload.model_dump(),
     )
     row = result.mappings().first()
-    logger.info(f"Farm created: {row['farm_code']} by user {user['user_id']}")
+    logger.info(f"Farm created: {row['farm_id']} by user {user['user_id']}")
     return dict(row)
 
 
 @router.get("/{farm_id}", summary="Farm detail")
 async def get_farm(
-    farm_id: UUID,
+    farm_id: str,
     user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_tenant_db),
 ):
@@ -148,11 +150,10 @@ async def get_farm(
         text("""
             SELECT
                 f.farm_id,
-                f.farm_code,
                 f.farm_name,
-                f.location_description,
-                f.island,
-                f.total_area_ha,
+                f.location_name,
+                f.location_island,
+                f.land_area_ha,
                 f.is_active,
                 f.notes,
                 f.created_at,
@@ -170,7 +171,7 @@ async def get_farm(
             WHERE f.farm_id = :farm_id
             GROUP BY f.farm_id
         """),
-        {"farm_id": str(farm_id)},
+        {"farm_id": farm_id},
     )
     row = result.mappings().first()
     if not row:
@@ -180,23 +181,23 @@ async def get_farm(
 
 @router.get("/{farm_id}/dashboard", summary="Farm dashboard")
 async def farm_dashboard(
-    farm_id: UUID,
+    farm_id: str,
     user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_tenant_db),
 ):
     """
-    Returns a consolidated farm dashboard view:
-    - Decision signals from mv_decision_signals_current (materialised view)
-    - Active production cycles with CoKG
-    - Open alerts grouped by severity
-    - Recent harvests (last 10)
-    """
-    farm_id_str = str(farm_id)
+    Returns a consolidated farm dashboard view.
 
-    # Verify farm exists and belongs to tenant
+    NOTE: only the tenant.farms existence check below has been aligned to the
+    deployed schema. The signals / active_cycles / open_alerts / recent_harvests
+    queries further down still reference tables and columns outside tenant.farms
+    scope (tenant.harvests, tenant.cycle_cost_summary, pu.production_unit_id,
+    pc.cycle_code/planted_date/..., h.quantity_kg/is_compliant, etc.) and will
+    500 when the endpoint is hit. Tracked separately.
+    """
     farm_check = await db.execute(
-        text("SELECT farm_id, farm_code, farm_name FROM tenant.farms WHERE farm_id = :fid"),
-        {"fid": farm_id_str},
+        text("SELECT farm_id, farm_name FROM tenant.farms WHERE farm_id = :fid"),
+        {"fid": farm_id},
     )
     farm = farm_check.mappings().first()
     if not farm:
@@ -216,7 +217,7 @@ async def farm_dashboard(
                 days_since_event DESC
             LIMIT 20
         """),
-        {"fid": farm_id_str},
+        {"fid": farm_id},
     )
     signals = [dict(r) for r in signals_result.mappings().all()]
 
@@ -257,7 +258,7 @@ async def farm_dashboard(
             WHERE pc.farm_id = :fid AND pc.cycle_status = 'ACTIVE'
             ORDER BY pc.planted_date DESC
         """),
-        {"fid": farm_id_str},
+        {"fid": farm_id},
     )
     active_cycles = [dict(r) for r in cycles_result.mappings().all()]
 
@@ -274,7 +275,7 @@ async def farm_dashboard(
                 created_at DESC
             LIMIT 20
         """),
-        {"fid": farm_id_str},
+        {"fid": farm_id},
     )
     open_alerts = [dict(r) for r in alerts_result.mappings().all()]
 
@@ -294,7 +295,7 @@ async def farm_dashboard(
             ORDER BY h.harvest_date DESC
             LIMIT 10
         """),
-        {"fid": farm_id_str},
+        {"fid": farm_id},
     )
     recent_harvests = [dict(r) for r in harvests_result.mappings().all()]
 
@@ -316,7 +317,7 @@ async def farm_dashboard(
 
 @router.patch("/{farm_id}", summary="Update farm")
 async def update_farm(
-    farm_id: UUID,
+    farm_id: str,
     payload: FarmUpdate,
     user: dict = Depends(require_role("FOUNDER", "MANAGER")),
     db: AsyncSession = Depends(get_tenant_db),
@@ -327,15 +328,15 @@ async def update_farm(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No fields to update")
 
     set_clauses = ", ".join(f"{col} = :{col}" for col in updates)
-    updates["farm_id"] = str(farm_id)
+    updates["farm_id"] = farm_id
 
     result = await db.execute(
         text(f"""
             UPDATE tenant.farms
             SET {set_clauses}, updated_at = NOW()
             WHERE farm_id = :farm_id
-            RETURNING farm_id, farm_code, farm_name, location_description,
-                      island, total_area_ha, is_active, notes, updated_at
+            RETURNING farm_id, farm_name, location_name,
+                      location_island, land_area_ha, is_active, notes, updated_at
         """),
         updates,
     )
