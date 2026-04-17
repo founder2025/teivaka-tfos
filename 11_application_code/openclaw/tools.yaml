@@ -1,0 +1,259 @@
+# OpenClaw Tool Definitions — TFOS API Edition
+# These replace the old read_sheet / write_sheet / send_whatsapp Sheets tools.
+# All farm data now comes from TFOS FastAPI — not Google Sheets.
+#
+# Tool calls use the TFOS_API_URL + TFOS_SERVICE_TOKEN from agent_config.yaml.
+
+tools:
+
+  # ── READ TOOLS ─────────────────────────────────────────────────────────────
+
+  get_farm_context:
+    description: >
+      Returns full farm context for the currently active farm — dashboard summary,
+      active cycles, open alerts, pending tasks, and recent activity.
+      Call this first at the start of every conversation to populate MEMORY.md.
+    method: GET
+    endpoint: /farms/{farm_id}/dashboard
+    params:
+      farm_id:
+        type: string
+        description: "Farm ID, e.g. F001 or F002"
+        required: true
+    returns:
+      - farm_name
+      - active_cycles (list)
+      - open_alerts (list)
+      - pending_tasks (list)
+      - decision_engine_score (0-10)
+      - signal_summary (list of DS-001 to DS-010 statuses)
+
+  get_alerts:
+    description: >
+      Returns all open alerts for a farm, ordered by severity.
+      Use to populate the morning briefing and respond to "do we have any issues?"
+    method: GET
+    endpoint: /alerts
+    params:
+      farm_id:
+        type: string
+        required: true
+      status:
+        type: string
+        default: "OPEN"
+        description: "OPEN | ACKNOWLEDGED | RESOLVED"
+    returns: list of alerts with rule_id, severity, message, created_at
+
+  get_tasks:
+    description: >
+      Returns pending tasks from the automation task queue for a farm.
+      Use to answer "what should I do today?"
+    method: GET
+    endpoint: /tasks
+    params:
+      farm_id:
+        type: string
+        required: true
+      status:
+        type: string
+        default: "PENDING"
+    returns: list of tasks with title, priority, due_date, assigned_worker
+
+  get_cycle_status:
+    description: >
+      Returns current status and financials for a production cycle.
+      Use when farmer asks "how is the eggplant doing?" or "what's our CoKG?"
+    method: GET
+    endpoint: /cycles/{cycle_id}
+    params:
+      cycle_id:
+        type: string
+        description: "e.g. CYC-F001-Z01-PU02-2026-001"
+        required: true
+    returns: cycle status, stage, CoKG, labor/input costs, harvest totals
+
+  get_input_inventory:
+    description: >
+      Returns current input stock levels from the materialized view.
+      Use when farmer asks about supplies: "do we have enough NPK?"
+    method: GET
+    endpoint: /inputs
+    params:
+      farm_id:
+        type: string
+        required: true
+    returns: list of inputs with current_balance_kg, reorder_point, days_remaining
+
+  get_decision_score:
+    description: >
+      Returns the latest pre-computed decision engine signals (DS-001 to DS-010).
+      NEVER triggers re-computation — reads the snapshot only (pre-computed at 6:05am Fiji).
+      Use when farmer asks "how are we doing?" or "what's our farm score?"
+    method: GET
+    endpoint: /decision-engine/current
+    params:
+      farm_id:
+        type: string
+        required: true
+    returns: overall_score (0-10), signal list with GREEN/AMBER/RED statuses
+
+  tis_query:
+    description: >
+      Ask the TFOS TIS (Knowledge Broker + Operational Interpreter) a farm question.
+      Use for complex agronomy questions the Claude agent shouldn't answer from memory alone.
+      TIS uses pgvector RAG search across 25+ KB articles.
+      Returns: response text, confidence score, source articles used.
+    method: POST
+    endpoint: /tis/chat
+    body:
+      farm_id:
+        type: string
+        required: true
+      message:
+        type: string
+        description: "The farmer's question"
+        required: true
+      conversation_history:
+        type: array
+        description: "Last N messages for context"
+        default: []
+
+  # ── WRITE TOOLS ────────────────────────────────────────────────────────────
+  # IMPORTANT: Always confirm with farmer before calling any write tool.
+  # Format: "I'll log: [summary]. Is that correct?" → wait for YES → write.
+
+  log_harvest:
+    description: >
+      Logs a harvest record. ALWAYS confirm details with farmer first.
+      Returns the new harvest ID (e.g. HRV-20260411-001) for the confirmation message.
+      Chemical compliance is checked automatically — if within withholding period, write fails with error.
+    method: POST
+    endpoint: /harvests
+    confirm_required: true
+    body:
+      farm_id:
+        type: string
+        required: true
+      production_id:
+        type: string
+        description: "Production unit ID, e.g. F001-PU002"
+        required: true
+      harvest_date:
+        type: string
+        format: date
+        description: "YYYY-MM-DD — use today's date unless farmer specifies otherwise"
+      quantity_kg:
+        type: number
+        required: true
+      grade:
+        type: string
+        description: "A, B, C, PREMIUM, EXPORT"
+        default: "A"
+      destination_buyer:
+        type: string
+        description: "Market or buyer name, e.g. Korovou Market"
+      price_per_kg_fjd:
+        type: number
+        description: "Optional — leave blank if not yet sold"
+      notes:
+        type: string
+
+  log_field_event:
+    description: >
+      Logs a field activity — spraying, fertilizing, irrigation, weeding, pruning, etc.
+      ALWAYS confirm with farmer before writing.
+      Returns the new event ID (e.g. EVT-20260411-001).
+    method: POST
+    endpoint: /cycles/{cycle_id}/field-events
+    confirm_required: true
+    body:
+      cycle_id:
+        type: string
+        required: true
+      event_date:
+        type: string
+        format: date
+        description: "YYYY-MM-DD"
+        required: true
+      event_type:
+        type: string
+        description: >
+          One of: SPRAY, FERTILIZE, IRRIGATE, WEED, PRUNE, TRANSPLANT,
+          SCOUTING, HARVEST_PREP, OTHER
+        required: true
+      description:
+        type: string
+        description: "Free text — what was done"
+        required: true
+      worker_id:
+        type: string
+        description: "Worker ID if known, e.g. WRK-001"
+      hours_worked:
+        type: number
+        description: "Hours spent on this activity"
+      chemical_id:
+        type: string
+        description: "Chemical code if spraying, e.g. CHEM-001 (Dimethoate)"
+      input_used_kg:
+        type: number
+        description: "Amount of input used"
+      cost_fjd:
+        type: number
+
+  log_weather:
+    description: >
+      Logs a weather observation from the farm.
+      Use when farmer reports weather: "heavy rain this morning", "34 degrees today"
+    method: POST
+    endpoint: /weather
+    confirm_required: false   # Weather logging doesn't need confirmation
+    body:
+      farm_id:
+        type: string
+        required: true
+      logged_at:
+        type: string
+        format: datetime
+        description: "ISO datetime — use current time"
+      rainfall_mm:
+        type: number
+      temp_max_c:
+        type: number
+      temp_min_c:
+        type: number
+      humidity_pct:
+        type: number
+      conditions:
+        type: string
+        description: "e.g. Clear, Overcast, Rain, Heavy Rain, Cyclone Watch"
+      source:
+        type: string
+        default: "FARMER_REPORT"
+
+  acknowledge_alert:
+    description: >
+      Marks an alert as acknowledged by the farmer.
+      Use when farmer says "ok noted", "I'll handle that", or "acknowledged"
+    method: PATCH
+    endpoint: /alerts/{alert_id}/acknowledge
+    confirm_required: false
+    body:
+      acknowledged_by:
+        type: string
+        description: "User ID of the acknowledging farmer"
+      notes:
+        type: string
+        description: "Optional — what they plan to do"
+
+  complete_task:
+    description: >
+      Marks a task as completed.
+      Use when farmer says "done", "finished", or "I did [task]"
+    method: PATCH
+    endpoint: /tasks/{task_id}/complete
+    confirm_required: false
+    body:
+      completed_by:
+        type: string
+      notes:
+        type: string

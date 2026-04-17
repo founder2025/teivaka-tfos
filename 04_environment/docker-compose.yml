@@ -1,0 +1,536 @@
+# FILE: 04_environment/docker-compose.yml
+#
+# Teivaka Agricultural TOS — Docker Compose Production Configuration
+# Server: Hetzner CAX21 (ARM64, 8GB RAM, 4 vCPU, 80GB SSD)
+# Deployment: Hetzner VPS + Docker Compose + Caddy reverse proxy
+#
+# Services:
+#   api               - FastAPI application (uvicorn, 4 workers)
+#   worker-automation - Celery worker for automation queue (rules, alerts, tasks)
+#   worker-ai         - Celery worker for ai queue (TIS, Whisper, embeddings)
+#   worker-notifications - Celery worker for notifications queue (WhatsApp, SMS)
+#   beat              - Celery beat scheduler (periodic tasks)
+#   db                - PostgreSQL 16 + TimescaleDB + pgvector
+#   redis             - Redis 7.2 (broker, cache, rate limiting)
+#   caddy             - Caddy 2 reverse proxy + automatic HTTPS
+#
+# Resource allocation targets for CAX21 (8GB RAM, 4 vCPU):
+#   api:                  1.5GB RAM, 1.0 CPU
+#   worker-automation:    1.0GB RAM, 0.5 CPU
+#   worker-ai:            1.0GB RAM, 0.5 CPU
+#   worker-notifications: 512MB RAM, 0.25 CPU
+#   beat:                 256MB RAM, 0.1 CPU
+#   db:                   2.0GB RAM, 1.0 CPU
+#   redis:                512MB RAM, 0.25 CPU
+#   caddy:                256MB RAM, 0.1 CPU
+#   Total allocated:      ~7.1GB RAM, 3.7 CPU (leaves headroom for OS)
+#
+# Usage:
+#   Start:    docker compose up -d
+#   Logs:     docker compose logs -f [service]
+#   Scale:    docker compose up -d --scale worker-ai=2
+#   Rebuild:  docker compose up -d --build api
+
+version: "3.9"
+
+# ==============================================================================
+# SERVICES
+# ==============================================================================
+
+services:
+
+  # ----------------------------------------------------------------------------
+  # API — FastAPI Application
+  # ----------------------------------------------------------------------------
+  api:
+    build:
+      context: ../11_application_code
+      dockerfile: ../04_environment/Dockerfile
+      target: runtime
+    container_name: teivaka_api
+    restart: unless-stopped
+    command: >
+      uvicorn app.main:app
+      --host 0.0.0.0
+      --port 8000
+      --workers 4
+      --timeout-keep-alive 30
+      --access-log
+    env_file:
+      - .env
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+    ports:
+      # Only expose to Caddy on internal network — not to external internet
+      - "127.0.0.1:8000:8000"
+    volumes:
+      # Mount logs directory for persistent access log storage
+      - ../logs:/app/logs
+    networks:
+      - teivaka-network
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          memory: 1500M
+          cpus: "1.0"
+        reservations:
+          memory: 512M
+          cpus: "0.25"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+  # ----------------------------------------------------------------------------
+  # WORKER-AUTOMATION — Celery Worker: automation queue
+  # Handles: rotation validation, alert generation, task creation,
+  #          decision engine evaluation, scheduled automation rules
+  # ----------------------------------------------------------------------------
+  worker-automation:
+    build:
+      context: ../11_application_code
+      dockerfile: ../04_environment/Dockerfile
+      target: runtime
+    container_name: teivaka_worker_automation
+    restart: unless-stopped
+    command: >
+      celery -A app.workers.celery_app worker
+      --loglevel=info
+      --queues=automation
+      --concurrency=4
+      --hostname=worker-automation@%h
+      --max-tasks-per-child=500
+    env_file:
+      - .env
+    environment:
+      - PYTHONUNBUFFERED=1
+      - C_FORCE_ROOT=false
+    volumes:
+      - ../logs:/app/logs
+    networks:
+      - teivaka-network
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: >
+        ["CMD", "celery", "-A", "app.workers.celery_app", "inspect",
+         "ping", "-d", "worker-automation@$$HOSTNAME", "--timeout", "5"]
+      interval: 60s
+      timeout: 15s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 1000M
+          cpus: "0.5"
+        reservations:
+          memory: 256M
+          cpus: "0.1"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+  # ----------------------------------------------------------------------------
+  # WORKER-AI — Celery Worker: ai queue
+  # Handles: TIS command processing, Whisper transcription, KB embedding generation,
+  #          weekly AI insight generation, Anthropic Claude API calls
+  # AI tasks are I/O bound (waiting on external APIs) — higher concurrency is fine
+  # ----------------------------------------------------------------------------
+  worker-ai:
+    build:
+      context: ../11_application_code
+      dockerfile: ../04_environment/Dockerfile
+      target: runtime
+    container_name: teivaka_worker_ai
+    restart: unless-stopped
+    command: >
+      celery -A app.workers.celery_app worker
+      --loglevel=info
+      --queues=ai
+      --concurrency=8
+      --hostname=worker-ai@%h
+      --max-tasks-per-child=200
+    env_file:
+      - .env
+    environment:
+      - PYTHONUNBUFFERED=1
+      - C_FORCE_ROOT=false
+    volumes:
+      - ../logs:/app/logs
+    networks:
+      - teivaka-network
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: >
+        ["CMD", "celery", "-A", "app.workers.celery_app", "inspect",
+         "ping", "-d", "worker-ai@$$HOSTNAME", "--timeout", "5"]
+      interval: 60s
+      timeout: 15s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 1000M
+          cpus: "0.5"
+        reservations:
+          memory: 256M
+          cpus: "0.1"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+  # ----------------------------------------------------------------------------
+  # WORKER-NOTIFICATIONS — Celery Worker: notifications queue
+  # Handles: WhatsApp message sending via Twilio, SMS fallback,
+  #          alert delivery, digest sending
+  # Kept separate so notification failures don't affect automation or AI workers
+  # ----------------------------------------------------------------------------
+  worker-notifications:
+    build:
+      context: ../11_application_code
+      dockerfile: ../04_environment/Dockerfile
+      target: runtime
+    container_name: teivaka_worker_notifications
+    restart: unless-stopped
+    command: >
+      celery -A app.workers.celery_app worker
+      --loglevel=info
+      --queues=notifications
+      --concurrency=4
+      --hostname=worker-notifications@%h
+      --max-tasks-per-child=1000
+    env_file:
+      - .env
+    environment:
+      - PYTHONUNBUFFERED=1
+      - C_FORCE_ROOT=false
+    volumes:
+      - ../logs:/app/logs
+    networks:
+      - teivaka-network
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: >
+        ["CMD", "celery", "-A", "app.workers.celery_app", "inspect",
+         "ping", "-d", "worker-notifications@$$HOSTNAME", "--timeout", "5"]
+      interval: 60s
+      timeout: 15s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "0.25"
+        reservations:
+          memory: 128M
+          cpus: "0.05"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "3"
+
+  # ----------------------------------------------------------------------------
+  # BEAT — Celery Beat Scheduler
+  # Runs: scheduled periodic tasks (automation evaluation, weekly insights,
+  #       alert escalation, daily summaries)
+  # Only one instance should ever run — not scaled
+  # ----------------------------------------------------------------------------
+  beat:
+    build:
+      context: ../11_application_code
+      dockerfile: ../04_environment/Dockerfile
+      target: runtime
+    container_name: teivaka_beat
+    restart: unless-stopped
+    command: >
+      celery -A app.workers.celery_app beat
+      --loglevel=info
+      --scheduler=celery.beat.PersistentScheduler
+      --schedule=/app/data/celerybeat-schedule
+    env_file:
+      - .env
+    environment:
+      - PYTHONUNBUFFERED=1
+      - C_FORCE_ROOT=false
+    volumes:
+      - ../logs:/app/logs
+      # Persist beat schedule database to avoid re-running tasks on container restart
+      - beat_data:/app/data
+    networks:
+      - teivaka-network
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: "0.1"
+        reservations:
+          memory: 64M
+          cpus: "0.05"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ----------------------------------------------------------------------------
+  # DB — PostgreSQL 16 + TimescaleDB + pgvector
+  # timescale/timescaledb:2.15.3-pg16 image includes:
+  #   - PostgreSQL 16
+  #   - TimescaleDB 2.15.3 (time-series extension, used for ai_commands, weather_log)
+  #   - pgvector (vector extension, used for KB embeddings in shared.kb_articles)
+  # ----------------------------------------------------------------------------
+  db:
+    image: timescale/timescaledb:2.15.3-pg16
+    container_name: teivaka_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-teivaka_db}
+      POSTGRES_USER: ${POSTGRES_USER:-teivaka}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-in-production}
+      # TimescaleDB tuning for 2GB allocation on CAX21
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=en_US.UTF-8"
+      # PostgreSQL performance tuning
+      TIMESCALEDB_TELEMETRY: "off"
+    command: >
+      postgres
+      -c shared_preload_libraries='timescaledb,pg_stat_statements'
+      -c shared_buffers=512MB
+      -c effective_cache_size=1536MB
+      -c maintenance_work_mem=256MB
+      -c checkpoint_completion_target=0.9
+      -c wal_buffers=16MB
+      -c default_statistics_target=100
+      -c random_page_cost=1.1
+      -c effective_io_concurrency=200
+      -c work_mem=8MB
+      -c min_wal_size=1GB
+      -c max_wal_size=4GB
+      -c max_worker_processes=4
+      -c max_parallel_workers_per_gather=2
+      -c max_parallel_workers=4
+      -c max_connections=100
+      -c log_min_duration_statement=1000
+      -c log_checkpoints=on
+      -c timezone=Pacific/Fiji
+    volumes:
+      # Named volume for persistent database data
+      - postgres_data:/var/lib/postgresql/data
+      # Mount init scripts (run on first start only)
+      - ../02_database/init:/docker-entrypoint-initdb.d:ro
+    networks:
+      - teivaka-network
+    ports:
+      # Expose to localhost only — not external internet
+      # Use for: local db client access, migrations from dev machine
+      - "127.0.0.1:5432:5432"
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "${POSTGRES_USER:-teivaka}", "-d", "${POSTGRES_DB:-teivaka_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 2000M
+          cpus: "1.0"
+        reservations:
+          memory: 1024M
+          cpus: "0.25"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "5"
+
+  # ----------------------------------------------------------------------------
+  # REDIS — Redis 7.2 (Broker + Cache + Rate Limiting)
+  # Redis databases:
+  #   0 — General cache (session data, misc)
+  #   1 — Celery broker (task queue messages)
+  #   2 — Celery result backend
+  #   3 — TIS rate limiting counters
+  # ----------------------------------------------------------------------------
+  redis:
+    image: redis:7.2-alpine
+    container_name: teivaka_redis
+    restart: unless-stopped
+    command: >
+      redis-server
+      --maxmemory 400mb
+      --maxmemory-policy allkeys-lru
+      --save 900 1
+      --save 300 10
+      --save 60 10000
+      --appendonly yes
+      --appendfsync everysec
+      --loglevel notice
+      --tcp-backlog 511
+      --timeout 300
+      --tcp-keepalive 300
+    volumes:
+      - redis_data:/data
+    networks:
+      - teivaka-network
+    ports:
+      # Expose to localhost only for admin access
+      - "127.0.0.1:6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "0.25"
+        reservations:
+          memory: 128M
+          cpus: "0.05"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "3"
+
+  # ----------------------------------------------------------------------------
+  # CADDY — Reverse Proxy + Automatic HTTPS
+  # Caddy handles:
+  #   - TLS certificate management via Let's Encrypt (ACME)
+  #   - Reverse proxy to FastAPI (api.teivaka.com → localhost:8000)
+  #   - Static file serving for PWA (app.teivaka.com)
+  #   - HTTP to HTTPS redirect
+  #   - Security headers (HSTS, CSP, X-Frame-Options)
+  #   - Rate limiting at edge (complement to app-level limiting)
+  # ----------------------------------------------------------------------------
+  caddy:
+    image: caddy:2-alpine
+    container_name: teivaka_caddy
+    restart: unless-stopped
+    ports:
+      # HTTP — Caddy redirects to HTTPS
+      - "80:80"
+      # HTTPS — primary HTTPS traffic
+      - "443:443"
+      # Caddy admin API (localhost only — for caddy reload without restart)
+      - "127.0.0.1:2019:2019"
+    volumes:
+      # Caddyfile configuration
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # PWA static files (built frontend)
+      - ../frontend/dist:/srv/frontend:ro
+      # Caddy data: TLS certificates, ACME state
+      - caddy_data:/data
+      # Caddy config: internal Caddy configuration state
+      - caddy_config:/config
+    networks:
+      - teivaka-network
+    environment:
+      - DOMAIN=${DOMAIN:-app.teivaka.com}
+      - API_DOMAIN=${API_DOMAIN:-api.teivaka.com}
+      - CADDY_EMAIL=${CADDY_EMAIL:-cody@teivaka.com}
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:2019/metrics"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: "0.1"
+        reservations:
+          memory: 64M
+          cpus: "0.05"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "3"
+
+# ==============================================================================
+# VOLUMES
+# Named volumes persist across container restarts and recreations.
+# All volumes stored on the Hetzner server's SSD.
+# ==============================================================================
+
+volumes:
+  # PostgreSQL data directory — contains all database files
+  # BACKUP: pg_dump daily to Hetzner Object Storage or Supabase
+  postgres_data:
+    driver: local
+
+  # Redis AOF and RDB snapshot files — for Redis persistence
+  redis_data:
+    driver: local
+
+  # Caddy TLS certificates from Let's Encrypt
+  # CRITICAL: do not delete — losing this volume means certificate renewal issues
+  caddy_data:
+    driver: local
+
+  # Caddy internal configuration state
+  caddy_config:
+    driver: local
+
+  # Celery beat schedule database file
+  beat_data:
+    driver: local
+
+# ==============================================================================
+# NETWORKS
+# All services communicate over the internal 'teivaka-network' bridge network.
+# Only Caddy (ports 80/443) and specific services (db: 5432, redis: 6379 on localhost)
+# are accessible from outside the Docker network.
+# ==============================================================================
+
+networks:
+  teivaka-network:
+    driver: bridge
+    name: teivaka-network
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16

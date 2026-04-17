@@ -1,0 +1,301 @@
+# FILE: 04_environment/docker-compose.prototype.yml
+#
+# Teivaka TFOS — PROTOTYPE Configuration
+# Server: DigitalOcean Droplet (x86_64, 2GB RAM, 50GB SSD, Singapore)
+# Purpose: 3-farmer prototype, pitch demo, MVP validation
+#
+# DIFFERENCES FROM docker-compose.yml (production):
+#   - PostgreSQL tuned for 2GB RAM (shared_buffers 128MB vs 512MB)
+#   - Only essential services run (drops worker-automation, worker-notifications, beat)
+#   - Memory limits scaled down to fit 2GB
+#   - Caddy serves HTTP only on port 80 (no domain/HTTPS needed for prototype)
+#   - API runs 2 uvicorn workers instead of 4
+#   - All resource limits set to prevent OOM on 2GB server
+#
+# Services running:
+#   api               - FastAPI (2 workers)
+#   worker-ai         - TIS / WhatsApp AI responses
+#   db                - PostgreSQL 16 + TimescaleDB + pgvector (memory-tuned)
+#   redis             - Redis 7.2
+#   caddy             - HTTP-only reverse proxy
+#
+# Services NOT running (not needed for 3-farmer prototype):
+#   worker-automation - Rotation rules, alerts (add back at scale)
+#   worker-notifications - Separate notification queue (handled by worker-ai for now)
+#   beat              - Scheduled tasks (no periodic jobs needed at prototype stage)
+#
+# Usage:
+#   Start:   docker compose -f docker-compose.prototype.yml up -d
+#   Logs:    docker compose -f docker-compose.prototype.yml logs -f [service]
+#   Stop:    docker compose -f docker-compose.prototype.yml down
+#   Rebuild: docker compose -f docker-compose.prototype.yml up -d --build api
+
+version: "3.9"
+
+services:
+
+  # ----------------------------------------------------------------------------
+  # API — FastAPI Application (2 workers for 2GB RAM)
+  # ----------------------------------------------------------------------------
+  api:
+    build:
+      context: ../11_application_code
+      dockerfile: ../04_environment/Dockerfile
+      target: runtime
+    container_name: teivaka_api
+    restart: unless-stopped
+    command: >
+      uvicorn app.main:app
+      --host 0.0.0.0
+      --port 8000
+      --workers 2
+      --timeout-keep-alive 30
+      --access-log
+    env_file:
+      - .env.prototype.filled
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - ../logs:/app/logs
+    networks:
+      - teivaka-network
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          memory: 350M
+          cpus: "0.8"
+        reservations:
+          memory: 150M
+          cpus: "0.1"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "3"
+
+  # ----------------------------------------------------------------------------
+  # WORKER-AI — TIS queries + WhatsApp AI responses
+  # Handles both AI and notification work for the prototype
+  # ----------------------------------------------------------------------------
+  worker-ai:
+    build:
+      context: ../11_application_code
+      dockerfile: ../04_environment/Dockerfile
+      target: runtime
+    container_name: teivaka_worker_ai
+    restart: unless-stopped
+    command: >
+      celery -A app.workers.celery_app worker
+      --loglevel=info
+      --queues=ai,notifications
+      --concurrency=2
+      --hostname=worker-ai@%h
+      --max-tasks-per-child=100
+    env_file:
+      - .env.prototype.filled
+    environment:
+      - PYTHONUNBUFFERED=1
+      - C_FORCE_ROOT=false
+    volumes:
+      - ../logs:/app/logs
+    networks:
+      - teivaka-network
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 250M
+          cpus: "0.5"
+        reservations:
+          memory: 100M
+          cpus: "0.05"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ----------------------------------------------------------------------------
+  # DB — PostgreSQL 16 + TimescaleDB + pgvector
+  # Memory tuned for 2GB server (shared_buffers=128MB vs 512MB in production)
+  # ----------------------------------------------------------------------------
+  db:
+    image: timescale/timescaledb:2.15.3-pg16
+    container_name: teivaka_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-teivaka_db}
+      POSTGRES_USER: ${POSTGRES_USER:-teivaka}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-in-production}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=en_US.UTF-8"
+      TIMESCALEDB_TELEMETRY: "off"
+    command: >
+      postgres
+      -c shared_preload_libraries='timescaledb,pg_stat_statements'
+      -c shared_buffers=128MB
+      -c effective_cache_size=512MB
+      -c maintenance_work_mem=64MB
+      -c checkpoint_completion_target=0.9
+      -c wal_buffers=8MB
+      -c default_statistics_target=100
+      -c random_page_cost=1.1
+      -c effective_io_concurrency=200
+      -c work_mem=4MB
+      -c min_wal_size=256MB
+      -c max_wal_size=1GB
+      -c max_worker_processes=2
+      -c max_parallel_workers_per_gather=1
+      -c max_parallel_workers=2
+      -c max_connections=50
+      -c log_min_duration_statement=2000
+      -c timezone=Pacific/Fiji
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ../02_database/init:/docker-entrypoint-initdb.d:ro
+    networks:
+      - teivaka-network
+    ports:
+      - "127.0.0.1:5432:5432"
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "${POSTGRES_USER:-teivaka}", "-d", "${POSTGRES_DB:-teivaka_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 450M
+          cpus: "0.8"
+        reservations:
+          memory: 200M
+          cpus: "0.1"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "3"
+
+  # ----------------------------------------------------------------------------
+  # REDIS — Redis 7.2 (Broker + Cache)
+  # ----------------------------------------------------------------------------
+  redis:
+    image: redis:7.2-alpine
+    container_name: teivaka_redis
+    restart: unless-stopped
+    command: >
+      redis-server
+      --maxmemory 120mb
+      --maxmemory-policy allkeys-lru
+      --save 900 1
+      --save 300 10
+      --appendonly yes
+      --appendfsync everysec
+      --loglevel notice
+      --timeout 300
+      --tcp-keepalive 300
+    volumes:
+      - redis_data:/data
+    networks:
+      - teivaka-network
+    ports:
+      - "127.0.0.1:6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 150M
+          cpus: "0.2"
+        reservations:
+          memory: 50M
+          cpus: "0.05"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ----------------------------------------------------------------------------
+  # CADDY — HTTPS reverse proxy (Let's Encrypt auto-TLS for teivaka.com)
+  # ----------------------------------------------------------------------------
+  caddy:
+    image: caddy:2-alpine
+    container_name: teivaka_caddy
+    restart: unless-stopped
+    env_file:
+      - .env.prototype.filled
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"   # HTTP/3 (QUIC) support
+    volumes:
+      - ./Caddyfile.production:/etc/caddy/Caddyfile:ro
+      - ../frontend/dist:/srv/frontend:ro
+      - caddy_data:/data
+      - caddy_config:/config
+      - ../logs/caddy:/var/log/caddy
+    networks:
+      - teivaka-network
+    depends_on:
+      api:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 100M
+          cpus: "0.2"
+        reservations:
+          memory: 40M
+          cpus: "0.05"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+# ==============================================================================
+# VOLUMES
+# ==============================================================================
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  caddy_data:
+    driver: local
+  caddy_config:
+    driver: local
+
+# ==============================================================================
+# NETWORKS
+# ==============================================================================
+networks:
+  teivaka-network:
+    driver: bridge
+    name: teivaka-network
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16

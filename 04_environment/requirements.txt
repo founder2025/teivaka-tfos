@@ -1,0 +1,112 @@
+# FILE: 04_environment/requirements.txt
+# Teivaka Farm OS (TFOS) — Python dependency manifest
+# Backend: Python 3.12 | FastAPI 0.115+ | PostgreSQL 16 + TimescaleDB + pgvector
+# Last updated: 2025-07-01
+# Install: pip install -r requirements.txt
+
+# =============================================================================
+# Web Framework
+# =============================================================================
+fastapi==0.115.5
+uvicorn[standard]==0.32.1
+python-multipart==0.0.17          # file upload / form data parsing
+
+# =============================================================================
+# Database — SQLAlchemy async stack + PostgreSQL drivers
+# =============================================================================
+sqlalchemy[asyncio]==2.0.36       # ORM + Core with async support
+alembic==1.14.0                   # schema migrations
+asyncpg==0.30.0                   # async PostgreSQL driver (primary)
+psycopg2-binary==2.9.10           # sync driver (Alembic + migration scripts)
+pgvector==0.3.6                   # pgvector Python client (vector column type)
+
+# =============================================================================
+# Cache + Task Queue
+# =============================================================================
+redis==5.2.1                      # Redis client (cache + Celery broker/backend)
+celery[redis]==5.4.0              # distributed task queue
+kombu==5.4.2                      # messaging library used by Celery
+
+# =============================================================================
+# AI — Claude API + OpenAI Whisper + Embeddings
+# =============================================================================
+anthropic==0.40.0                 # Claude API (claude-3-5-sonnet, claude-3-haiku)
+openai==1.57.0                    # Whisper STT + text-embedding-3-small
+
+# =============================================================================
+# Authentication
+# =============================================================================
+python-jose[cryptography]==3.3.0  # JWT encode/decode
+passlib[bcrypt]==1.7.4
+bcrypt==4.0.1
+
+# =============================================================================
+# HTTP Client
+# =============================================================================
+httpx==0.27.2                     # async HTTP client (also used as test client)
+
+# =============================================================================
+# Storage + Configuration
+# =============================================================================
+supabase==2.10.0                  # Supabase Storage client (files, voice notes)
+python-dotenv==1.0.1              # .env file loading
+boto3==1.35.76                    # AWS S3 SDK (optional backup / presigned URLs)
+
+# =============================================================================
+# Data Validation + Settings
+# =============================================================================
+pydantic[email]==2.10.3           # request/response models, email validation
+pydantic-settings==2.6.1         # typed settings from env vars
+
+# =============================================================================
+# File Processing
+# =============================================================================
+pillow==11.0.0                    # image processing, GPS EXIF strip on upload
+python-magic==0.4.27              # MIME type detection for uploads
+
+# =============================================================================
+# Data Processing — used by migration scripts only
+# =============================================================================
+pandas==2.2.3                     # DataFrame I/O for xlsx sheet extraction
+openpyxl==3.1.5                   # xlsx read/write engine for pandas
+xlrd==2.0.1                       # legacy xls read engine (older exports)
+
+# =============================================================================
+# Notifications
+# =============================================================================
+# httpx (already listed above) handles all Meta Cloud API calls — no Twilio needed
+
+# =============================================================================
+# Payments
+# =============================================================================
+stripe==11.3.0                    # Stripe payments (FJD invoicing)
+
+# =============================================================================
+# Monitoring + Structured Logging
+# =============================================================================
+sentry-sdk[fastapi]==2.19.2       # error tracking + performance tracing
+structlog==24.4.0                 # structured JSON logging
+
+# =============================================================================
+# Testing
+# =============================================================================
+pytest==8.3.4
+pytest-asyncio==0.24.0            # async test support
+pytest-cov==6.0.0                 # code coverage reports
+# httpx==0.28.1 already listed above — serves as async test client
+factory-boy==3.3.1                # test fixture factories
+faker==33.1.0                     # realistic fake data generation
+
+# =============================================================================
+# Vector Search + Sentence Embeddings
+# =============================================================================
+sentence-transformers==3.3.1      # local embedding fallback / reranking
+
+# =============================================================================
+# Utilities
+# =============================================================================
+python-dateutil==2.9.0            # flexible date parsing
+pytz==2024.2                      # timezone handling (Pacific/Fiji = UTC+12)
+aiofiles==24.1.0                  # async file I/O
+tenacity==9.0.0                   # retry logic for external API calls
+orjson==3.10.12                   # fast JSON serialization (drop-in for stdlib)

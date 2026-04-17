@@ -1,0 +1,67 @@
+# OpenClaw Agent Configuration — Teivaka Agri-TOS
+# This file replaces OpenClaw's Google Sheets tools with TFOS FastAPI calls.
+# Drop this into your existing OpenClaw install and restart the agent.
+#
+# Architecture after integration:
+#   Farmer WhatsApp
+#        ↓
+#    OpenClaw (orchestration — this config)
+#        ↓
+#    TFOS FastAPI  ← Claude API + PostgreSQL + pgvector KB
+#        ↓
+#    Response → WhatsApp (Meta Cloud API)
+#
+# Your existing API keys (ANTHROPIC_API_KEY, OPENAI_API_KEY) remain unchanged.
+# OpenClaw's only new requirement: TFOS_API_URL and TFOS_SERVICE_TOKEN below.
+
+agent:
+  name: TIS
+  description: "Teivaka Intelligence System — AI assistant and operations partner for Teivaka Agri-TOS"
+  version: "1.0.0"
+  timezone: "Pacific/Fiji"
+  language_default: "en"
+
+  memory:
+    # OpenClaw MEMORY.md is session context only — never persistent farm data
+    # Persistent data lives in TFOS PostgreSQL
+    template_file: "./MEMORY_template.md"
+    refresh_interval_seconds: 300   # Re-pull farm context every 5 min
+    max_history_messages: 20        # Match tis_max_context_messages in TFOS config
+
+  system_prompt_file: "./system_prompt.md"
+
+  whatsapp:
+    provider: meta_cloud_api        # switched from CallMeBot
+    # Meta API vars come from your existing .env
+    token_env: META_WHATSAPP_TOKEN
+    phone_number_id_env: META_PHONE_NUMBER_ID
+    max_message_length: 1000        # WhatsApp limit is 4096 but keep farmer messages short
+    confirm_before_write: true      # Always confirm data with farmer before writing
+
+  # ── Authorized contacts ───────────────────────────────────────────────────
+  # Injected into system_prompt.md as {CODY_WHATSAPP_NUMBER} at agent startup.
+  # Never hardcode phone numbers in prompt files — rotate here if number changes.
+  authorized_contacts:
+    cody_whatsapp_number_env: CODY_WHATSAPP_NUMBER   # e.g. +6798730866 (E.164 format)
+
+  # ── TFOS API connection ───────────────────────────────────────────────────
+  # Point at your running TFOS FastAPI instance
+  tfos_api:
+    base_url_env: TFOS_API_URL           # e.g. https://api.teivaka.com or http://localhost:8000
+    service_token_env: TFOS_SERVICE_TOKEN # Long-lived JWT for OpenClaw → TFOS auth
+    api_prefix: /api/v1
+    timeout_seconds: 15
+    retry_attempts: 2
+
+  # ── Claude (already configured in your OpenClaw install) ─────────────────
+  claude:
+    api_key_env: ANTHROPIC_API_KEY        # Your existing key — no change needed
+    model: claude-sonnet-4-20250514
+    max_tokens: 2048
+    temperature: 0.3
+
+  # ── OpenAI Whisper (already configured) ──────────────────────────────────
+  whisper:
+    api_key_env: OPENAI_API_KEY           # Your existing key — no change needed
+    model: whisper-1
+    language: en

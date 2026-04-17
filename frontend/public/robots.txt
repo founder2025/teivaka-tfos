@@ -1,0 +1,10 @@
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /api/
+Disallow: /dashboard
+Disallow: /onboarding
+Disallow: /reset-password
+Disallow: /verify-email
+
+Sitemap: https://teivaka.com/sitemap.xml

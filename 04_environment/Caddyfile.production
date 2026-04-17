@@ -1,0 +1,149 @@
+# FILE: 04_environment/Caddyfile.production
+#
+# Teivaka TFOS — Production Caddyfile
+# Auto-HTTPS via Let's Encrypt, full security headers
+#
+# Required env vars in docker-compose or .env:
+#   DOMAIN      — teivaka.com
+#   CADDY_EMAIL — founder@teivaka.com
+
+{
+    email {$CADDY_EMAIL}
+
+    servers {
+        protocols h1 h2 h2c
+    }
+}
+
+# Main site — HTTPS with auto-TLS
+{$DOMAIN} {
+
+    # Compression
+    encode gzip {
+        minimum_length 1024
+    }
+
+    # Security headers
+    header {
+        X-Frame-Options "SAMEORIGIN"
+        X-Content-Type-Options "nosniff"
+        X-XSS-Protection "1; mode=block"
+        Referrer-Policy "strict-origin-when-cross-origin"
+        Permissions-Policy "camera=(), microphone=(self), geolocation=(self), payment=()"
+        Strict-Transport-Security "max-age=63072000; includeSubDomains; preload"
+        Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' wss://{$DOMAIN}; font-src 'self'; frame-ancestors 'self';"
+        -Server
+    }
+
+    # API routes — proxy to FastAPI
+    handle /tis/* {
+        uri strip_prefix /tis
+        reverse_proxy 172.20.0.1:18790
+    }
+
+
+    handle /api/* {
+        reverse_proxy api:8000 {
+            health_uri    /api/v1/health
+            health_interval 30s
+            health_timeout  5s
+            health_status   200
+
+            header_up Host              {upstream_hostport}
+            header_up X-Real-IP         {remote_host}
+            header_up X-Forwarded-For   {remote_host}
+            header_up X-Forwarded-Proto {scheme}
+
+            flush_interval -1
+
+            transport http {
+                dial_timeout            10s
+                response_header_timeout 120s
+            }
+        }
+
+        header Cache-Control "no-store, no-cache, must-revalidate"
+    }
+
+    # WebSocket routes — TIS real-time
+    handle /ws/* {
+        reverse_proxy api:8000 {
+            header_up Host            {upstream_hostport}
+            header_up X-Real-IP       {remote_host}
+            header_up X-Forwarded-For {remote_host}
+            header_up Connection      "Upgrade"
+            header_up Upgrade         "websocket"
+
+            transport http {
+                dial_timeout    10s
+                keepalive       1m
+                keepalive_idle_conns 10
+            }
+        }
+    }
+
+    # Webhook routes — WhatsApp callbacks
+    handle /webhooks/* {
+        reverse_proxy api:8000 {
+            header_up Host              {upstream_hostport}
+            header_up X-Real-IP         {remote_host}
+            header_up X-Forwarded-For   {remote_host}
+            header_up X-Forwarded-Proto {scheme}
+
+            transport http {
+                dial_timeout            10s
+                response_header_timeout 60s
+            }
+        }
+        header Cache-Control "no-store"
+    }
+
+    # Static assets — long cache (content-hashed filenames)
+    @static_assets {
+        path *.js *.css *.woff *.woff2 *.ttf *.ico *.png *.jpg *.jpeg *.gif *.svg *.webp *.avif
+    }
+    handle @static_assets {
+        root * /srv/frontend
+        file_server
+        header Cache-Control "public, max-age=31536000, immutable"
+    }
+
+    # React PWA — SPA fallback
+    handle {
+        root * /srv/frontend
+
+        @service_worker path /service-worker.js /sw.js /workbox-*.js
+        handle @service_worker {
+            file_server
+            header Cache-Control "no-store, max-age=0"
+        }
+
+        @manifest path /manifest.json /manifest.webmanifest
+        handle @manifest {
+            file_server
+            header Cache-Control "public, max-age=3600"
+        }
+
+        header /index.html Cache-Control "no-store, max-age=0"
+        try_files {path} /index.html
+        file_server
+    }
+
+    log {
+        output file /var/log/caddy/access.log {
+            roll_size     100MiB
+            roll_keep     5
+            roll_keep_for 720h
+        }
+        format json {
+            time_format  "iso8601"
+            duration_format "seconds"
+        }
+        level INFO
+    }
+}
+
+# www redirect → apex domain
+www.{$DOMAIN} {
+    redir https://{$DOMAIN}{uri} permanent
+}

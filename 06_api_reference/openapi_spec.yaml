@@ -1,0 +1,3791 @@
+# FILE: 06_api_reference/openapi_spec.yaml
+# Teivaka TFOS API — Complete OpenAPI 3.1 Specification
+# Platform: Teivaka Agricultural TOS (Agri-TOS), Fiji
+# Company: Teivaka PTE LTD (Company No. 2025RC001894)
+# Founder: Uraia Koroi Kama (Cody)
+# Version: 1.0.0
+
+openapi: 3.1.0
+
+info:
+  title: Teivaka TFOS API
+  description: |
+    Teivaka Agricultural Transformation Operating System (Agri-TOS) API.
+
+    **Platform:** Teivaka PTE LTD (Company No. 2025RC001894), Fiji
+    **Founder:** Uraia Koroi Kama (Cody)
+
+    ## Four Pillars
+    - **Knowledge Base (KB):** Validated agronomic protocols — RAG-grounded, no hallucination
+    - **Farm OS (TFOS):** Production cycles, harvests, labor, inputs, tasks, alerts
+    - **AI Intelligence (TIS):** Teivaka Intelligence System — Voice + Text AI for farmers
+    - **Community:** Shared protocols and benchmarks across Teivaka network
+
+    ## Authentication
+    - Bearer JWT (15-minute access token)
+    - httpOnly refresh cookie (7-day refresh token)
+    - Multi-tenancy: All operational endpoints enforce `tenant_id` via PostgreSQL RLS
+
+    ## Primary Financial Metric
+    **CoKG** (Cost per Kilogram) = (LaborCost + InputCost + OtherCost) / TotalHarvestQty_kg
+    CoKG is always the **first field** in financial response objects.
+
+    ## Fiji-Specific
+    - Currency: FJD (Fijian Dollar), all monetary fields suffixed `_fjd`
+    - Timezone: Pacific/Fiji (UTC+12)
+    - WhatsApp-first communication via Twilio
+    - Voice pipeline: Audio → Whisper → TIS → TFOS → Confirm (target: <5 seconds)
+
+    ## TIS Rate Limits (Redis-enforced)
+    | Tier | TIS Calls/Day |
+    |------|---------------|
+    | FREE | 5 |
+    | BASIC | 20 |
+    | PREMIUM | Unlimited |
+    | CUSTOM | Unlimited |
+
+    ## Real Farm Data (Reference)
+    - F001: Save-A-Lot, Korovou | F002: Viyasiyasi, Kadavu Island
+    - PUs: F001-PU002 (CRP-EGG), F001-PU001 (CRP-CAS), F002-PU004 (FRT-PIN)
+    - Workers: W-001 Laisenia Waqa, W-002 Maika Ratubaba
+    - Chemicals: CHEM-001 Dimethoate (7d WHD), CHEM-002 Mancozeb (7d WHD)
+
+  version: 1.0.0
+  contact:
+    name: Teivaka PTE LTD
+    email: cody@teivaka.com
+  license:
+    name: Proprietary
+
+servers:
+  - url: https://api.teivaka.com/api/v1
+    description: Production (Hetzner VPS CAX21, ARM64)
+  - url: http://localhost:8000/api/v1
+    description: Development
+
+tags:
+  - name: Auth
+    description: Authentication — login, logout, refresh, profile
+  - name: Farms
+    description: Farm management and dashboard
+  - name: ProductionUnits
+    description: Production unit management
+  - name: Cycles
+    description: Production cycle lifecycle — create, financials, close
+  - name: Rotation
+    description: Crop rotation validation
+  - name: Harvests
+    description: Harvest logging with chemical compliance enforcement
+  - name: Labor
+    description: Labor attendance and cost tracking
+  - name: Inputs
+    description: Field inputs, chemicals, inventory
+  - name: Alerts
+    description: System alerts (GREEN/AMBER/RED)
+  - name: Tasks
+    description: Task queue management
+  - name: Workers
+    description: Farm worker management
+  - name: TIS
+    description: Teivaka Intelligence System — chat, voice, conversations
+  - name: DecisionEngine
+    description: 10-signal Decision Engine snapshots (GREEN/AMBER/RED)
+  - name: Automation
+    description: Automation rules management (43 rules)
+  - name: Webhooks
+    description: External webhooks — Twilio WhatsApp
+  - name: KnowledgeBase
+    description: KB article management for TIS Knowledge Broker
+  - name: SharedReference
+    description: Shared reference data — productions, chemicals, rotation rules
+
+# ============================================================
+# SECURITY
+# ============================================================
+security:
+  - BearerAuth: []
+
+# ============================================================
+# COMPONENTS
+# ============================================================
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        JWT access token (15-minute expiry). Obtain from POST /auth/login.
+        Format: Authorization: Bearer <token>
+
+  schemas:
+
+    # ---- COMMON ----
+
+    SuccessResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          description: Response payload (varies by endpoint)
+      required: [success, data]
+
+    ErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+              example: VALIDATION_ERROR
+            message:
+              type: string
+              example: The provided data is invalid.
+            details:
+              type: object
+              nullable: true
+          required: [code, message]
+      required: [success, error]
+
+    PaginationMeta:
+      type: object
+      properties:
+        total:
+          type: integer
+          example: 42
+        page:
+          type: integer
+          example: 1
+        page_size:
+          type: integer
+          example: 20
+        total_pages:
+          type: integer
+          example: 3
+
+    # ---- AUTH ----
+
+    LoginRequest:
+      type: object
+      required: [username, password]
+      properties:
+        username:
+          type: string
+          description: Email address or phone number
+          example: cody@teivaka.com
+        password:
+          type: string
+          minLength: 8
+          example: SecurePassword123
+
+    LoginResponse:
+      type: object
+      properties:
+        access_token:
+          type: string
+          description: JWT access token (15-minute expiry)
+          example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        token_type:
+          type: string
+          example: bearer
+        expires_in:
+          type: integer
+          description: Access token lifetime in seconds
+          example: 900
+        refresh_token:
+          type: string
+          description: Refresh token (7-day expiry)
+          example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        user_info:
+          $ref: '#/components/schemas/UserProfile'
+
+    UserProfile:
+      type: object
+      properties:
+        user_id:
+          type: string
+          example: USR-001
+        full_name:
+          type: string
+          example: Uraia Koroi Kama
+        email:
+          type: string
+          example: cody@teivaka.com
+        phone:
+          type: string
+          example: "+6799XXXXXXX"
+        role:
+          type: string
+          enum: [FOUNDER, MANAGER, WORKER, AGRONOMIST]
+          example: FOUNDER
+        tenant_id:
+          type: string
+          example: TNT-001
+        subscription_tier:
+          type: string
+          enum: [FREE, BASIC, PREMIUM, CUSTOM]
+          example: PREMIUM
+        farms:
+          type: array
+          items:
+            type: object
+            properties:
+              farm_id:
+                type: string
+                example: F001
+              farm_name:
+                type: string
+                example: Save-A-Lot
+              location:
+                type: string
+                example: Korovou
+        tis_usage_today:
+          type: object
+          properties:
+            calls_used:
+              type: integer
+              example: 7
+            calls_limit:
+              type: integer
+              nullable: true
+              description: null for PREMIUM/CUSTOM (unlimited)
+              example: null
+            tier:
+              type: string
+              example: PREMIUM
+
+    ChangePasswordRequest:
+      type: object
+      required: [current_password, new_password]
+      properties:
+        current_password:
+          type: string
+          example: OldPassword123
+        new_password:
+          type: string
+          minLength: 8
+          example: NewPassword456
+
+    # ---- FARMS ----
+
+    Farm:
+      type: object
+      properties:
+        farm_id:
+          type: string
+          example: F001
+        farm_name:
+          type: string
+          example: Save-A-Lot
+        location:
+          type: string
+          example: Korovou
+        province:
+          type: string
+          example: Rewa
+        total_area_acres:
+          type: number
+          format: float
+          example: 12.5
+        gps_lat:
+          type: number
+          format: float
+          nullable: true
+          example: -17.9876
+        gps_lng:
+          type: number
+          format: float
+          nullable: true
+          example: 178.2345
+        subscription_tier:
+          type: string
+          enum: [FREE, BASIC, PREMIUM, CUSTOM]
+          example: BASIC
+        overall_rag:
+          type: string
+          enum: [GREEN, AMBER, RED]
+          nullable: true
+          example: AMBER
+        active_pu_count:
+          type: integer
+          example: 7
+        active_cycle_count:
+          type: integer
+          example: 2
+        tenant_id:
+          type: string
+          example: TNT-001
+        created_at:
+          type: string
+          format: date-time
+          example: "2025-06-01T09:00:00+12:00"
+        notes:
+          type: string
+          nullable: true
+
+    FarmCreate:
+      type: object
+      required: [farm_name, location, province, total_area_acres]
+      properties:
+        farm_name:
+          type: string
+          maxLength: 100
+          example: Save-A-Lot
+        location:
+          type: string
+          maxLength: 200
+          example: Korovou
+        province:
+          type: string
+          example: Rewa
+        total_area_acres:
+          type: number
+          format: float
+          minimum: 0.01
+          example: 12.5
+        gps_lat:
+          type: number
+          format: float
+          nullable: true
+        gps_lng:
+          type: number
+          format: float
+          nullable: true
+        notes:
+          type: string
+          nullable: true
+
+    FarmUpdate:
+      type: object
+      description: All fields optional — PATCH semantics
+      properties:
+        farm_name:
+          type: string
+          maxLength: 100
+        location:
+          type: string
+        province:
+          type: string
+        total_area_acres:
+          type: number
+          format: float
+          minimum: 0.01
+        gps_lat:
+          type: number
+          format: float
+          nullable: true
+        gps_lng:
+          type: number
+          format: float
+          nullable: true
+        notes:
+          type: string
+          nullable: true
+
+    # ---- PRODUCTION UNITS ----
+
+    ProductionUnit:
+      type: object
+      properties:
+        pu_id:
+          type: string
+          example: F001-PU002
+        pu_name:
+          type: string
+          example: Block B — Eggplant
+        farm_id:
+          type: string
+          example: F001
+        area_acres:
+          type: number
+          format: float
+          example: 1.2
+        production_type_code:
+          type: string
+          enum: [CRP, LIV, FRT, AQU, PIG]
+          example: CRP
+        current_production_id:
+          type: string
+          nullable: true
+          example: CRP-EGG
+        current_cycle_id:
+          type: string
+          nullable: true
+          example: CY-F001-26-002
+        current_stage:
+          type: string
+          nullable: true
+          example: Fruiting
+        last_harvest_date:
+          type: string
+          format: date
+          nullable: true
+          example: "2026-04-05"
+        open_alerts_count:
+          type: integer
+          example: 1
+
+    PUCreate:
+      type: object
+      required: [pu_name, area_acres, production_type_code]
+      properties:
+        pu_name:
+          type: string
+          example: Block D — New
+        area_acres:
+          type: number
+          format: float
+          minimum: 0.01
+          example: 1.0
+        production_type_code:
+          type: string
+          enum: [CRP, LIV, FRT, AQU, PIG]
+          example: CRP
+        notes:
+          type: string
+          nullable: true
+
+    # ---- PRODUCTION (shared reference) ----
+
+    Production:
+      type: object
+      description: Shared read-only production type from shared.productions
+      properties:
+        production_id:
+          type: string
+          example: CRP-EGG
+        production_name:
+          type: string
+          example: Eggplant
+        type:
+          type: string
+          enum: [CRP, LIV, FRT, AQU, PIG]
+          example: CRP
+        avg_cycle_days:
+          type: integer
+          nullable: true
+          example: 120
+        typical_stages:
+          type: array
+          items:
+            type: string
+          example: [Establishment, Vegetative, Fruiting]
+
+    # ---- CYCLES ----
+
+    ProductionCycle:
+      type: object
+      properties:
+        cycle_id:
+          type: string
+          example: CY-F001-26-002
+        pu_id:
+          type: string
+          example: F001-PU002
+        farm_id:
+          type: string
+          example: F001
+        production_id:
+          type: string
+          example: CRP-EGG
+        production_name:
+          type: string
+          example: Eggplant
+        planting_date:
+          type: string
+          format: date
+          example: "2026-02-21"
+        end_date:
+          type: string
+          format: date
+          nullable: true
+        status:
+          type: string
+          enum: [active, completed, failed, abandoned]
+          example: active
+        current_stage:
+          type: string
+          nullable: true
+          example: Fruiting
+        area_acres:
+          type: number
+          format: float
+          example: 1.2
+        days_active:
+          type: integer
+          example: 45
+        harvest_count:
+          type: integer
+          example: 3
+        last_harvest_date:
+          type: string
+          format: date
+          nullable: true
+          example: "2026-04-05"
+        cogk_fjd:
+          type: number
+          format: float
+          nullable: true
+          description: Cost per Kilogram (FJD). Null if no harvests yet.
+          example: 1.86
+        created_at:
+          type: string
+          format: date-time
+          example: "2026-02-21T08:00:00+12:00"
+
+    CycleCreate:
+      type: object
+      required: [production_id, planting_date]
+      properties:
+        production_id:
+          type: string
+          example: CRP-EGG
+        planting_date:
+          type: string
+          format: date
+          example: "2026-04-08"
+        area_acres:
+          type: number
+          format: float
+          nullable: true
+          description: Defaults to PU area if not provided
+        notes:
+          type: string
+          nullable: true
+
+    CycleFinancials:
+      type: object
+      description: |
+        Cycle P&L. cogk_fjd is ALWAYS the first field.
+        CoKG = (total_labor_cost_fjd + total_input_cost_fjd + total_other_cost_fjd) / total_harvest_qty_kg
+      properties:
+        cogk_fjd:
+          type: number
+          format: float
+          nullable: true
+          description: "PRIMARY METRIC — Cost per Kilogram (FJD). Always first field."
+          example: 1.86
+        gross_margin_pct:
+          type: number
+          format: float
+          nullable: true
+          example: 34.2
+        total_revenue_fjd:
+          type: number
+          format: float
+          example: 840.00
+        total_cost_fjd:
+          type: number
+          format: float
+          example: 553.00
+        net_profit_fjd:
+          type: number
+          format: float
+          example: 287.00
+        total_harvest_qty_kg:
+          type: number
+          format: float
+          example: 294.0
+        total_labor_cost_fjd:
+          type: number
+          format: float
+          example: 480.00
+        total_input_cost_fjd:
+          type: number
+          format: float
+          example: 73.00
+        total_other_cost_fjd:
+          type: number
+          format: float
+          example: 0.00
+        cycle_id:
+          type: string
+          example: CY-F001-26-002
+        pu_id:
+          type: string
+          example: F001-PU002
+        production_id:
+          type: string
+          example: CRP-EGG
+        production_name:
+          type: string
+          example: Eggplant
+        market_price_fjd:
+          type: number
+          format: float
+          nullable: true
+          example: 2.80
+        margin_per_kg_fjd:
+          type: number
+          format: float
+          nullable: true
+          example: 0.94
+        cogk_formula:
+          type: string
+          example: "FJD 553.00 / 294.0 kg = FJD 1.86/kg"
+        period_start:
+          type: string
+          format: date
+          example: "2026-02-21"
+        period_end:
+          type: string
+          format: date
+          nullable: true
+        harvest_breakdown:
+          type: array
+          items:
+            type: object
+            properties:
+              harvest_date:
+                type: string
+                format: date
+              qty_kg:
+                type: number
+                format: float
+              grade:
+                type: string
+              unit_price_fjd:
+                type: number
+                format: float
+              revenue_fjd:
+                type: number
+                format: float
+        computed_at:
+          type: string
+          format: date-time
+          example: "2026-04-07T06:05:00+12:00"
+
+    # ---- HARVESTS ----
+
+    HarvestLog:
+      type: object
+      properties:
+        harvest_id:
+          type: string
+          pattern: '^HRV-\d{8}-\d{3}$'
+          example: HRV-20260407-001
+        id:
+          type: string
+          format: uuid
+          example: 550e8400-e29b-41d4-a716-446655440000
+        pu_id:
+          type: string
+          example: F001-PU002
+        cycle_id:
+          type: string
+          example: CY-F001-26-002
+        qty_kg:
+          type: number
+          format: float
+          example: 42.0
+        grade:
+          type: string
+          enum: [A, B, C]
+          example: A
+        unit_price_fjd:
+          type: number
+          format: float
+          example: 2.80
+        total_value_fjd:
+          type: number
+          format: float
+          example: 117.60
+        harvest_date:
+          type: string
+          format: date
+          example: "2026-04-07"
+        compliance_status:
+          type: string
+          enum: [COMPLIANT, BLOCKED]
+          example: COMPLIANT
+        customer_id:
+          type: string
+          nullable: true
+          example: CUS-001
+        photo_url:
+          type: string
+          nullable: true
+        cogk_updated:
+          type: boolean
+          example: true
+        new_cogk_fjd:
+          type: number
+          format: float
+          nullable: true
+          example: 1.82
+
+    HarvestCreate:
+      type: object
+      required: [harvest_date, qty_kg]
+      properties:
+        harvest_date:
+          type: string
+          format: date
+          example: "2026-04-07"
+        qty_kg:
+          type: number
+          format: float
+          minimum: 0.1
+          example: 42.0
+        grade:
+          type: string
+          enum: [A, B, C]
+          default: A
+          example: A
+        unit_price_fjd:
+          type: number
+          format: float
+          nullable: true
+          example: 2.80
+        customer_id:
+          type: string
+          nullable: true
+          example: CUS-001
+        photo_url:
+          type: string
+          nullable: true
+        notes:
+          type: string
+          nullable: true
+
+    HarvestComplianceResult:
+      type: object
+      description: Chemical compliance check result returned on harvest block (HTTP 409)
+      properties:
+        compliance_blocked:
+          type: boolean
+          example: true
+        blocking_chemicals:
+          type: array
+          items:
+            type: object
+            properties:
+              chemical_id:
+                type: string
+                example: CHEM-001
+              chemical_name:
+                type: string
+                example: Dimethoate 40% EC
+              application_date:
+                type: string
+                format: date
+                example: "2026-04-03"
+              withholding_period_days:
+                type: integer
+                example: 7
+              days_since_application:
+                type: integer
+                example: 4
+              harvest_allowed_after:
+                type: string
+                format: date
+                example: "2026-04-10"
+        earliest_safe_harvest_date:
+          type: string
+          format: date
+          example: "2026-04-10"
+
+    # ---- LABOR ----
+
+    LaborAttendance:
+      type: object
+      properties:
+        labor_id:
+          type: string
+          pattern: '^LAB-\d{8}-\d{3}$'
+          example: LAB-20260407-001
+        id:
+          type: string
+          format: uuid
+        worker_id:
+          type: string
+          example: W-001
+        worker_name:
+          type: string
+          example: Laisenia Waqa
+        pu_id:
+          type: string
+          example: F001-PU002
+        cycle_id:
+          type: string
+          example: CY-F001-26-002
+        work_date:
+          type: string
+          format: date
+          example: "2026-04-07"
+        hours_worked:
+          type: number
+          format: float
+          example: 8.0
+        hourly_rate_fjd:
+          type: number
+          format: float
+          example: 6.00
+        total_cost_fjd:
+          type: number
+          format: float
+          example: 48.00
+        task_description:
+          type: string
+          nullable: true
+          example: weeding
+
+    LaborCreate:
+      type: object
+      required: [worker_id, work_date]
+      properties:
+        worker_id:
+          type: string
+          example: W-001
+        work_date:
+          type: string
+          format: date
+          example: "2026-04-07"
+        hours_worked:
+          type: number
+          format: float
+          default: 8.0
+          minimum: 0.5
+          maximum: 12.0
+          example: 8.0
+        task_description:
+          type: string
+          nullable: true
+          example: weeding
+        notes:
+          type: string
+          nullable: true
+
+    # ---- INPUTS / CHEMICALS ----
+
+    FieldInput:
+      type: object
+      properties:
+        input_id:
+          type: string
+          example: INP-20260403-001
+        id:
+          type: string
+          format: uuid
+        pu_id:
+          type: string
+          example: F001-PU002
+        input_type:
+          type: string
+          enum: [CHEMICAL, FERTILISER, SEED, OTHER]
+          example: CHEMICAL
+        chemical_id:
+          type: string
+          nullable: true
+          example: CHEM-001
+        chemical_name:
+          type: string
+          nullable: true
+          example: Dimethoate 40% EC
+        quantity_applied:
+          type: number
+          format: float
+          example: 1.5
+        unit:
+          type: string
+          example: L
+        cost_fjd:
+          type: number
+          format: float
+          example: 45.00
+        input_date:
+          type: string
+          format: date
+          example: "2026-04-03"
+        withholding_period_days:
+          type: integer
+          nullable: true
+          example: 7
+        safe_harvest_date:
+          type: string
+          format: date
+          nullable: true
+          example: "2026-04-10"
+        compliance_alert_created:
+          type: boolean
+          example: true
+
+    InputCreate:
+      type: object
+      required: [input_date, input_type, quantity_applied, unit]
+      properties:
+        input_date:
+          type: string
+          format: date
+          example: "2026-04-03"
+        input_type:
+          type: string
+          enum: [CHEMICAL, FERTILISER, SEED, OTHER]
+          example: CHEMICAL
+        chemical_id:
+          type: string
+          nullable: true
+          example: CHEM-001
+        quantity_applied:
+          type: number
+          format: float
+          minimum: 0.001
+          example: 1.5
+        unit:
+          type: string
+          example: L
+        cost_fjd:
+          type: number
+          format: float
+          nullable: true
+          example: 45.00
+        application_method:
+          type: string
+          nullable: true
+          enum: [foliar, soil, drench, broadcast]
+        notes:
+          type: string
+          nullable: true
+
+    StockStatus:
+      type: object
+      properties:
+        inventory_id:
+          type: string
+          format: uuid
+        input_name:
+          type: string
+          example: Dimethoate 40% EC
+        chemical_id:
+          type: string
+          nullable: true
+          example: CHEM-001
+        current_stock:
+          type: number
+          format: float
+          example: 2.5
+        unit:
+          type: string
+          example: L
+        reorder_point:
+          type: number
+          format: float
+          example: 5.0
+        below_reorder:
+          type: boolean
+          example: true
+        estimated_days_remaining:
+          type: integer
+          nullable: true
+          example: 14
+        cost_per_unit_fjd:
+          type: number
+          format: float
+          nullable: true
+          example: 30.00
+
+    # ---- WORKERS ----
+
+    Worker:
+      type: object
+      properties:
+        worker_id:
+          type: string
+          example: W-001
+        name:
+          type: string
+          example: Laisenia Waqa
+        role:
+          type: string
+          example: Field Worker
+        daily_rate_fjd:
+          type: number
+          format: float
+          example: 48.00
+        phone:
+          type: string
+          nullable: true
+          example: "+6799XXXXXXX"
+        farm_id:
+          type: string
+          example: F001
+        status:
+          type: string
+          enum: [active, inactive]
+          example: active
+        total_days_ytd:
+          type: integer
+          example: 85
+        total_cost_fjd_ytd:
+          type: number
+          format: float
+          example: 4080.00
+
+    WorkerCreate:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          example: Laisenia Waqa
+        role:
+          type: string
+          default: Field Worker
+          example: Field Worker
+        daily_rate_fjd:
+          type: number
+          format: float
+          default: 48.00
+          example: 48.00
+        phone:
+          type: string
+          nullable: true
+        start_date:
+          type: string
+          format: date
+          nullable: true
+
+    # ---- ALERTS ----
+
+    Alert:
+      type: object
+      properties:
+        alert_id:
+          type: string
+          example: ALT-20260403-001
+        rule_id:
+          type: string
+          example: RULE-038
+        title:
+          type: string
+          example: Chemical Compliance Block
+        description:
+          type: string
+          example: "Dimethoate (CHEM-001) applied 4 days ago. Safe to harvest after 2026-04-10."
+        severity:
+          type: string
+          enum: [Critical, High, Medium, Low]
+          example: Critical
+        rag_color:
+          type: string
+          enum: [RED, AMBER, GREEN]
+          example: RED
+        status:
+          type: string
+          enum: [open, acknowledged, resolved]
+          example: open
+        pu_id:
+          type: string
+          nullable: true
+          example: F001-PU002
+        cycle_id:
+          type: string
+          nullable: true
+          example: CY-F001-26-002
+        farm_id:
+          type: string
+          example: F001
+        created_at:
+          type: string
+          format: date-time
+          example: "2026-04-03T08:00:00+12:00"
+        acknowledged_at:
+          type: string
+          format: date-time
+          nullable: true
+        resolved_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    # ---- TASKS ----
+
+    TaskQueue:
+      type: object
+      properties:
+        task_id:
+          type: string
+          example: TSK-20260331-001
+        title:
+          type: string
+          example: Apply NPK fertiliser — F001-PU002 Fruiting stage
+        description:
+          type: string
+          nullable: true
+        due_date:
+          type: string
+          format: date
+          example: "2026-03-31"
+        status:
+          type: string
+          enum: [open, completed, overdue, cancelled]
+          example: open
+        is_overdue:
+          type: boolean
+          example: true
+        days_overdue:
+          type: integer
+          nullable: true
+          example: 7
+        priority:
+          type: string
+          enum: [HIGH, MEDIUM, LOW]
+          example: HIGH
+        pu_id:
+          type: string
+          nullable: true
+          example: F001-PU002
+        cycle_id:
+          type: string
+          nullable: true
+          example: CY-F001-26-002
+        rule_id:
+          type: string
+          nullable: true
+          example: RULE-005
+        assigned_to:
+          type: string
+          nullable: true
+          example: W-001
+        created_at:
+          type: string
+          format: date-time
+
+    # ---- DECISION SIGNALS ----
+
+    DecisionSignal:
+      type: object
+      description: One of 10 decision signals with GREEN/AMBER/RED RAG status
+      properties:
+        signal_id:
+          type: integer
+          minimum: 1
+          maximum: 10
+          example: 1
+        signal_name:
+          type: string
+          example: GrossMarginPct
+        label:
+          type: string
+          example: Gross Margin %
+        rag_status:
+          type: string
+          enum: [GREEN, AMBER, RED]
+          example: AMBER
+        score_0_10:
+          type: integer
+          minimum: 0
+          maximum: 10
+          example: 6
+        value:
+          type: number
+          format: float
+          nullable: true
+          example: 34.2
+        threshold_green:
+          type: number
+          format: float
+          nullable: true
+          example: 40.0
+        threshold_amber:
+          type: number
+          format: float
+          nullable: true
+          example: 25.0
+        action_at_red:
+          type: string
+          nullable: true
+          example: Review input costs and pricing strategy
+
+    DecisionEngineSnapshot:
+      type: object
+      description: Complete Decision Engine snapshot with all 10 signals
+      properties:
+        farm_id:
+          type: string
+          example: F001
+        snapshot_date:
+          type: string
+          format: date
+          example: "2026-04-07"
+        overall_rag:
+          type: string
+          enum: [GREEN, AMBER, RED]
+          example: AMBER
+        overall_score:
+          type: integer
+          minimum: 0
+          maximum: 100
+          example: 62
+        signals:
+          type: array
+          minItems: 10
+          maxItems: 10
+          items:
+            $ref: '#/components/schemas/DecisionSignal'
+        computed_at:
+          type: string
+          format: date-time
+          example: "2026-04-07T06:05:00+12:00"
+        next_computation:
+          type: string
+          format: date-time
+          example: "2026-04-08T06:05:00+12:00"
+
+    # ---- FARM DASHBOARD ----
+
+    FarmDashboard:
+      type: object
+      description: Complete farm dashboard response — single API call returns all data
+      properties:
+        farm_id:
+          type: string
+          example: F001
+        farm_name:
+          type: string
+          example: Save-A-Lot
+        subscription_tier:
+          type: string
+          example: BASIC
+        decision_signals:
+          type: object
+          description: All 10 decision signals keyed by signal name
+          additionalProperties:
+            type: object
+            properties:
+              rag:
+                type: string
+                enum: [GREEN, AMBER, RED]
+              value:
+                type: number
+                format: float
+                nullable: true
+              score:
+                type: integer
+              label:
+                type: string
+        open_alerts:
+          type: array
+          maxItems: 5
+          description: Top 5 open alerts (Critical first)
+          items:
+            $ref: '#/components/schemas/Alert'
+        active_cycles:
+          type: array
+          description: All active production cycles with financials
+          items:
+            type: object
+            properties:
+              cycle_id:
+                type: string
+                example: CY-F001-26-002
+              pu_id:
+                type: string
+                example: F001-PU002
+              production_name:
+                type: string
+                example: Eggplant
+              stage:
+                type: string
+                example: Fruiting
+              cogk_fjd:
+                type: number
+                format: float
+                nullable: true
+                example: 1.86
+              gross_margin_pct:
+                type: number
+                format: float
+                nullable: true
+                example: 34.2
+              days_active:
+                type: integer
+                example: 45
+              last_harvest_date:
+                type: string
+                format: date
+                nullable: true
+                example: "2026-04-05"
+        financial_summary_30d:
+          type: object
+          properties:
+            total_revenue_fjd:
+              type: number
+              format: float
+              example: 840.00
+            total_cost_fjd:
+              type: number
+              format: float
+              example: 553.00
+            net_profit_fjd:
+              type: number
+              format: float
+              example: 287.00
+            avg_cogk_fjd:
+              type: number
+              format: float
+              nullable: true
+              example: 1.86
+        open_tasks:
+          type: object
+          properties:
+            overdue_count:
+              type: integer
+              example: 2
+            due_today_count:
+              type: integer
+              example: 1
+            upcoming_count:
+              type: integer
+              example: 4
+        inventory_alerts:
+          type: array
+          description: Low-stock inventory items
+          items:
+            type: object
+            properties:
+              input_name:
+                type: string
+                example: Dimethoate 40% EC
+              current_stock:
+                type: number
+                format: float
+              unit:
+                type: string
+              reorder_point:
+                type: number
+                format: float
+              days_remaining:
+                type: integer
+                nullable: true
+        last_updated:
+          type: string
+          format: date-time
+          example: "2026-04-07T06:05:00+12:00"
+
+    # ---- ROTATION VALIDATION ----
+
+    RotationValidationRequest:
+      type: object
+      required: [pu_id, proposed_production_id, proposed_planting_date]
+      properties:
+        pu_id:
+          type: string
+          example: F001-PU002
+        proposed_production_id:
+          type: string
+          example: CRP-EGG
+        proposed_planting_date:
+          type: string
+          format: date
+          example: "2026-04-08"
+
+    RotationValidationResult:
+      type: object
+      properties:
+        allowed:
+          type: boolean
+          example: false
+        enforcement_decision:
+          type: string
+          enum: [APPROVED, BLOCKED, OVERRIDE_REQUIRED]
+          example: BLOCKED
+        rule_status:
+          type: string
+          enum: [PREF, OK, AVOID, BLOCK]
+          example: BLOCK
+        rotation_key:
+          type: string
+          description: "{last_production_id}:{proposed_production_id}"
+          example: CRP-EGG:CRP-EGG
+        min_rest_days:
+          type: integer
+          example: 60
+        days_since_last_harvest:
+          type: integer
+          example: 20
+        days_short:
+          type: integer
+          nullable: true
+          description: How many more days needed. Null if APPROVED.
+          example: 40
+        last_production_id:
+          type: string
+          example: CRP-EGG
+        last_cycle_end_date:
+          type: string
+          format: date
+          example: "2026-03-18"
+        proposed_planting_date:
+          type: string
+          format: date
+          example: "2026-04-08"
+        earliest_allowed_date:
+          type: string
+          format: date
+          nullable: true
+          example: "2026-05-17"
+        alternatives:
+          type: array
+          items:
+            type: object
+            properties:
+              production_id:
+                type: string
+                example: CRP-FRB
+              production_name:
+                type: string
+                example: French Beans
+              rule_status:
+                type: string
+                enum: [PREF, OK]
+              min_rest_days:
+                type: integer
+                example: 0
+              ready_now:
+                type: boolean
+                example: true
+              ready_date:
+                type: string
+                format: date
+                nullable: true
+        founder_can_override:
+          type: boolean
+          example: true
+
+    # ---- TIS ----
+
+    TisChatRequest:
+      type: object
+      required: [message, farm_id]
+      properties:
+        message:
+          type: string
+          maxLength: 1000
+          example: When should I fertilize my eggplant in the vegetative stage?
+        farm_id:
+          type: string
+          example: F001
+        pu_id:
+          type: string
+          nullable: true
+          example: F001-PU002
+        conversation_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: Continue an existing conversation
+
+    TisResponse:
+      type: object
+      properties:
+        response_text:
+          type: string
+          example: "During the Vegetative Growth stage of Eggplant (CRP-EGG), apply NPK (12-12-17) at 150 kg/ha every 14 days. [Source: Teivaka KB — Eggplant Vegetative Stage Protocol]"
+        tis_module:
+          type: string
+          enum: [knowledge_broker, operational_interpreter, command_executor]
+          example: knowledge_broker
+        kb_articles_cited:
+          type: array
+          items:
+            type: string
+          example: ["KB-001 — Eggplant Vegetative Stage Protocol"]
+        command_result:
+          type: object
+          nullable: true
+          description: Populated when tis_module = command_executor
+          properties:
+            command_type:
+              type: string
+              enum: [LOG_LABOR, LOG_HARVEST, LOG_INPUT, LOG_CASH, LOG_WEATHER, CHECK_TASKS, CHECK_ALERTS, CHECK_FINANCIALS, CREATE_CYCLE, CHECK_STOCK, GET_PROTOCOL, REPORT_INCIDENT]
+            harvest_id:
+              type: string
+              nullable: true
+            new_cogk_fjd:
+              type: number
+              format: float
+              nullable: true
+        conversation_id:
+          type: string
+          format: uuid
+          example: 550e8400-e29b-41d4-a716-446655440000
+        daily_calls_remaining:
+          type: integer
+          nullable: true
+          description: Null for PREMIUM/CUSTOM (unlimited)
+          example: 19
+        processing_time_ms:
+          type: integer
+          example: 1240
+
+    TisVoiceRequest:
+      type: object
+      description: multipart/form-data request for voice command submission
+      properties:
+        audio:
+          type: string
+          format: binary
+          description: Audio file (webm or mp4, max 10MB)
+        farm_id:
+          type: string
+          example: F001
+        pu_id:
+          type: string
+          nullable: true
+          example: F001-PU002
+
+    # ---- AUTOMATION RULES ----
+
+    AutomationRule:
+      type: object
+      description: One of 43 automation rules that drive task creation and alerting
+      properties:
+        rule_id:
+          type: string
+          pattern: '^RULE-\d{3}$'
+          example: RULE-038
+        name:
+          type: string
+          example: Chemical Compliance Block Alert
+        description:
+          type: string
+          example: Creates Critical alert when chemical applied within withholding period
+        trigger_category:
+          type: string
+          enum: [CYCLE_EVENT, INPUT_EVENT, HARVEST_EVENT, SCHEDULED, FINANCIAL, WEATHER]
+          example: INPUT_EVENT
+        is_active:
+          type: boolean
+          example: true
+        severity:
+          type: string
+          enum: [Critical, High, Medium, Low]
+          nullable: true
+          example: Critical
+        task_type:
+          type: string
+          nullable: true
+          example: null
+        frequency_days:
+          type: integer
+          nullable: true
+          description: For SCHEDULED rules — how often to trigger
+        applies_to:
+          type: array
+          items:
+            type: string
+            enum: [CRP, LIV, FRT, AQU, PIG]
+          example: [CRP, LIV, FRT]
+
+    # ---- SUBSCRIPTION ----
+
+    SubscriptionInfo:
+      type: object
+      properties:
+        tenant_id:
+          type: string
+          example: TNT-001
+        tier:
+          type: string
+          enum: [FREE, BASIC, PREMIUM, CUSTOM]
+          example: BASIC
+        tis_daily_limit:
+          type: integer
+          nullable: true
+          description: null = unlimited
+          example: 20
+        features:
+          type: object
+          properties:
+            dashboard_full:
+              type: boolean
+            decision_engine:
+              type: boolean
+            expansion_readiness:
+              type: boolean
+            kb_article_creation:
+              type: boolean
+            automation_manual_trigger:
+              type: boolean
+        expires_at:
+          type: string
+          format: date-time
+          nullable: true
+          example: "2027-01-01T00:00:00+12:00"
+
+# ============================================================
+# PATHS
+# ============================================================
+paths:
+
+  # ==================== AUTH ====================
+
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Authenticate user
+      description: |
+        Authenticate with username (email or phone) and password.
+        Returns JWT access token (15 min) and refresh token (7 days).
+        Refresh token also set as httpOnly cookie.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+            example:
+              username: cody@teivaka.com
+              password: SecurePassword123
+      responses:
+        '200':
+          description: Authentication successful
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/LoginResponse'
+              example:
+                success: true
+                data:
+                  access_token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+                  token_type: bearer
+                  expires_in: 900
+                  refresh_token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+                  user_info:
+                    user_id: USR-001
+                    full_name: Uraia Koroi Kama
+                    email: cody@teivaka.com
+                    role: FOUNDER
+                    tenant_id: TNT-001
+                    subscription_tier: PREMIUM
+                    farms:
+                      - farm_id: F001
+                        farm_name: Save-A-Lot
+                        location: Korovou
+                      - farm_id: F002
+                        farm_name: Viyasiyasi
+                        location: Kadavu Island
+        '401':
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                success: false
+                error:
+                  code: INVALID_CREDENTIALS
+                  message: Username or password is incorrect.
+        '429':
+          description: Too many login attempts
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                success: false
+                error:
+                  code: RATE_LIMIT_LOGIN
+                  message: Too many failed login attempts. Try again in 15 minutes.
+
+  /auth/logout:
+    post:
+      tags: [Auth]
+      summary: Logout — revoke refresh token
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                refresh_token:
+                  type: string
+      responses:
+        '200':
+          description: Logged out successfully
+          content:
+            application/json:
+              example:
+                success: true
+                data:
+                  message: Logged out successfully.
+
+  /auth/refresh:
+    post:
+      tags: [Auth]
+      summary: Refresh access token
+      security: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                refresh_token:
+                  type: string
+      responses:
+        '200':
+          description: New access token issued
+          content:
+            application/json:
+              example:
+                success: true
+                data:
+                  access_token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+                  token_type: bearer
+                  expires_in: 900
+        '401':
+          description: Refresh token invalid or expired
+          content:
+            application/json:
+              example:
+                success: false
+                error:
+                  code: REFRESH_TOKEN_EXPIRED
+                  message: Refresh token has expired. Please log in again.
+
+  /auth/me:
+    get:
+      tags: [Auth]
+      summary: Current user profile
+      description: Returns profile of authenticated user including TIS usage today.
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: User profile
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/UserProfile'
+              example:
+                success: true
+                data:
+                  user_id: USR-001
+                  full_name: Uraia Koroi Kama
+                  email: cody@teivaka.com
+                  role: FOUNDER
+                  subscription_tier: PREMIUM
+                  farms:
+                    - farm_id: F001
+                      farm_name: Save-A-Lot
+                  tis_usage_today:
+                    calls_used: 7
+                    calls_limit: null
+                    tier: PREMIUM
+
+  /auth/change-password:
+    put:
+      tags: [Auth]
+      summary: Change password
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangePasswordRequest'
+      responses:
+        '200':
+          description: Password changed; all other sessions revoked
+          content:
+            application/json:
+              example:
+                success: true
+                data:
+                  message: Password changed successfully. All other sessions have been logged out.
+        '400':
+          description: Wrong current password
+          content:
+            application/json:
+              example:
+                success: false
+                error:
+                  code: WRONG_CURRENT_PASSWORD
+                  message: Current password is incorrect.
+
+  # ==================== FARMS ====================
+
+  /farms:
+    get:
+      tags: [Farms]
+      summary: List all farms
+      description: Returns all farms accessible to the authenticated user's tenant.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: page_size
+          in: query
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+      responses:
+        '200':
+          description: Farm list
+          content:
+            application/json:
+              example:
+                success: true
+                data:
+                  - farm_id: F001
+                    farm_name: Save-A-Lot
+                    location: Korovou
+                    province: Rewa
+                    total_area_acres: 12.5
+                    active_pu_count: 7
+                    active_cycle_count: 2
+                    overall_rag: AMBER
+                  - farm_id: F002
+                    farm_name: Viyasiyasi
+                    location: Kadavu Island
+                    province: Kadavu
+                    total_area_acres: 8.0
+                    active_pu_count: 4
+                    active_cycle_count: 1
+                    overall_rag: GREEN
+                meta:
+                  total: 2
+                  page: 1
+                  page_size: 20
+                  total_pages: 1
+
+    post:
+      tags: [Farms]
+      summary: Create farm (FOUNDER only)
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FarmCreate'
+            example:
+              farm_name: Save-A-Lot
+              location: Korovou
+              province: Rewa
+              total_area_acres: 12.5
+              gps_lat: -17.9876
+              gps_lng: 178.2345
+      responses:
+        '201':
+          description: Farm created
+          content:
+            application/json:
+              example:
+                success: true
+                data:
+                  farm_id: F003
+                  farm_name: New Farm
+                  location: Labasa
+                  province: Macuata
+                  total_area_acres: 5.0
+                  tenant_id: TNT-001
+                  created_at: "2026-04-07T09:00:00+12:00"
+        '403':
+          description: Role is not FOUNDER
+          content:
+            application/json:
+              example:
+                success: false
+                error:
+                  code: FORBIDDEN
+                  message: Only FOUNDER role can create farms.
+
+  /farms/{farm_id}:
+    get:
+      tags: [Farms]
+      summary: Farm detail
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: farm_id
+          in: path
+          required: true
+          schema:
+            type: string
+          example: F001
+      responses:
+        '200':
+          description: Farm detail with PUs and workers
+          content:
+            application/json:
+              example:
+                success: true
+                data:
+                  farm_id: F001
+                  farm_name: Save-A-Lot
+                  location: Korovou
+                  province: Rewa
+                  total_area_acres: 12.5
+                  production_units:
+                    - pu_id: F001-PU001
+                      pu_name: Block A — Cassava
+                      current_production_id: CRP-CAS
+                      current_stage: Establishment
+                    - pu_id: F001-PU002
+                      pu_name: Block B — Eggplant
+                      current_production_id: CRP-EGG
+                      current_stage: Fruiting
+                    - pu_id: F001-PU011
+                      pu_name: Apiary
+                      current_production_id: LIV-API
+                      current_stage: Active
+                  workers:
+                    - worker_id: W-001
+                      name: Laisenia Waqa
+                    - worker_id: W-002
+                      name: Maika Ratubaba
+                  open_alerts_count: 1
+                  overall_rag: AMBER
+        '404':
+          description: Farm not found
+          content:
+            application/json:
+              example:
+                success: false
+                error:
+                  code: FARM_NOT_FOUND
+                  message: Farm F099 not found or you do not have access.
+
+    put:
+      tags: [Farms]
+      summary: Update farm (FOUNDER only)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: farm_id
+          in: path
+          required: true
+          schema:
+            type: string
+          example: F001
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FarmUpdate'
+      responses:
+        '200':
+          description: Farm updated
+          content:
+            application/json:
+              example:
+                success: true
+                data:
+                  farm_id: F001
+                  farm_name: Save-A-Lot (Updated)
+                  updated_at: "2026-04-07T10:00:00+12:00"
+
+  /farms/{farm_id}/dashboard:
+    get:
+      tags: [Farms]
+      summary: Complete farm dashboard (BASIC+)
+      description: |
+        Returns all dashboard data in a single API call:
+        - All 10 Decision Engine signals (GREEN/AMBER/RED)
+        - Top 5 open alerts
+        - All active cycles with CoKG
+        - 30-day financial summary
+        - Task counts (overdue/today/upcoming)
+        - Low-stock inventory alerts
+
+        **Redis cached (60-second TTL).** Use this endpoint for the main dashboard screen.
+
+        FREE tier receives a simplified version (alerts + cycles only, no decision signals).
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: farm_id
+          in: path
+          required: true
+          schema:
+            type: string
+          example: F001
+        - name: simplified
+          in: query
+          schema:
+            type: boolean
+            default: false
+          description: Force simplified response (useful for FREE tier)
+      responses:
+        '200':
+          description: Dashboard data
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/FarmDashboard'
+              example:
+                success: true
+                data:
+                  farm_id: F001
+                  farm_name: Save-A-Lot
+                  subscription_tier: BASIC
+                  decision_signals:
+                    signal_1_gross_margin:
+                      rag: AMBER
+                      value: 34.2
+                      score: 6
+                      label: Gross Margin %
+                    signal_2_cogk_vs_market:
+                      rag: GREEN
+                      value: 1.86
+                      score: 8
+                      label: CoKG vs Market Price
+                    signal_5_chemical_compliance:
+                      rag: RED
+                      value: 1
+                      score: 0
+                      label: Chemical Compliance Blocks
+                  open_alerts:
+                    - alert_id: ALT-20260403-001
+                      severity: Critical
+                      rule_id: RULE-038
+                      title: Chemical Compliance Block
+                      pu_id: F001-PU002
+                      created_at: "2026-04-03T08:00:00+12:00"
+                  active_cycles:
+                    - cycle_id: CY-F001-26-002
+                      pu_id: F001-PU002
+                      production_name: Eggplant
+                      stage: Fruiting
+                      cogk_fjd: 1.86
+                      gross_margin_pct: 34.2
+                      days_active: 45
+                      last_harvest_date: "2026-04-05"
+                    - cycle_id: CY-F001-26-001
+                      pu_id: F001-PU001
+                      production_name: Cassava
+                      stage: Establishment
+                      cogk_fjd: null
+                      gross_margin_pct: null
+                      days_active: 12
+                  financial_summary_30d:
+                    total_revenue_fjd: 840.00
+                    total_cost_fjd: 553.00
+                    net_profit_fjd: 287.00
+                    avg_cogk_fjd: 1.86
+                  open_tasks:
+                    overdue_count: 2
+                    due_today_count: 1
+                    upcoming_count: 4
+                  inventory_alerts:
+                    - input_name: Dimethoate 40% EC
+                      current_stock: 2.5
+                      unit: L
+                      reorder_point: 5.0
+                      days_remaining: 14
+                  last_updated: "2026-04-07T06:05:00+12:00"
+
+  /farms/{farm_id}/stats:
+    get:
+      tags: [Farms]
+      summary: Farm statistics summary (YTD totals)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: farm_id
+          in: path
+          required: true
+          schema:
+            type: string
+          example: F001
+      responses:
+        '200':
+          description: Farm statistics
+          content:
+            application/json:
+              example:
+                success: true
+                data:
+                  farm_id: F001
+                  total_harvests_kg_ytd: 1240.0
+                  total_revenue_fjd_ytd: 3472.00
+                  total_labor_cost_fjd_ytd: 1920.00
+                  total_input_cost_fjd_ytd: 292.00
+                  avg_cogk_fjd_ytd: 1.78
+                  completed_cycles_ytd: 3
+                  active_cycles: 2
+                  period: "2026-01-01 to 2026-04-07"
+
+  /farms/{farm_id}/expansion-readiness:
+    get:
+      tags: [Farms]
+      summary: 7-condition expansion readiness score (PREMIUM+)
+      description: |
+        Evaluates 7 conditions to determine if the farm is ready for expansion.
+        Returns condition-by-condition results with met/not-met status and explanations.
+        Requires PREMIUM or CUSTOM subscription.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: farm_id
+          in: path
+          required: true
+          schema:
+            type: string
+          example: F001
+      responses:
+        '200':
+          description: Expansion readiness assessment
+          content:
+            application/json:
+              example:
+                success: true
+                data:
+                  farm_id: F001
+                  overall_ready: false
+                  readiness_score: 5
+                  max_score: 7
+                  assessment_date: "2026-04-07"
+                  conditions:
+                    - condition: CoKG below market price on all active cycles
+                      met: true
+                      detail: "CoKG FJD 1.86/kg < market FJD 2.80/kg"
+                    - condition: No open Critical alerts
+                      met: false
+                      detail: "1 Critical alert (RULE-038 Chemical Compliance on F001-PU002)"
+                    - condition: Gross margin > 30% on at least 1 cycle
+                      met: true
+                      detail: "CY-F001-26-002 at 34.2%"
+                    - condition: Task completion rate > 80%
+                      met: false
+                      detail: "Current rate: 72.5%"
+                    - condition: No rotation blocks on any PU
+                      met: true
+                      detail: All PUs rotation-clear
+                    - condition: Harvest in last 14 days
+                      met: true
+                      detail: "Last harvest: 2026-04-05 (2 days ago)"
+                    - condition: 3 complete production cycles on record
+                      met: true
+                      detail: 3 completed cycles in system
+                  recommendation: Resolve the Chemical Compliance alert on F001-PU002 and improve task completion rate to reach expansion readiness.
+        '403':
+          description: PREMIUM subscription required
+          content:
+            application/json:
+              example:
+                success: false
+                error:
+                  code: TIER_REQUIRED
+                  message: Expansion Readiness requires PREMIUM subscription. Upgrade at teivaka.com.
+
+  # ==================== CYCLES ====================
+
+  /production-units/{pu_id}/cycles:
+    post:
+      tags: [Cycles]
+      summary: Create new production cycle
+      description: |
+        Creates a new cycle on a Production Unit.
+
+        **Rotation validation runs automatically before creation.** If rotation is BLOCKED,
+        returns HTTP 409 with details and suggested alternative crops.
+
+        **Enforcement decisions:**
+        - `APPROVED`: cycle created immediately
+        - `BLOCKED`: HTTP 409 returned — FOUNDER can manually override
+        - `OVERRIDE_REQUIRED`: FOUNDER can proceed, other roles receive 409
+
+        A first scheduled task is automatically created upon cycle creation.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: pu_id
+          in: path
+          required: true
+          schema:
+            type: string
+          example: F001-PU002
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CycleCreate'
+            examples:
+              approved_rotation:
+                summary: Approved rotation — Long Bean after Eggplant
+                value:
+                  production_id: CRP-LBN
+                  planting_date: "2026-04-08"
+                  area_acres: 1.2
+              blocked_rotation:
+                summary: Blocked rotation — Eggplant after Eggplant (20 days only, need 60)
+                value:
+                  production_id: CRP-EGG
+                  planting_date: "2026-04-08"
+      responses:
+        '201':
+          description: Cycle created successfully
+          content:
+            application/json:
+              example:
+                success: true
+                data:
+                  cycle_id: CY-F001-26-003
+                  pu_id: F001-PU002
+                  production_id: CRP-LBN
+                  production_name: Long Bean (Yardlong Bean)
+                  planting_date: "2026-04-08"
+                  stage: Establishment
+                  validation_result:
+                    allowed: true
+                    enforcement_decision: APPROVED
+                    rule_status: PREF
+                  first_task:
+                    task_id: TSK-20260408-001
+                    title: Establishment check — CRP-LBN on F001-PU002
+                    due_date: "2026-04-15"
+                  stage_protocols:
+                    - stage: Establishment
+                      duration_days: 14
+                      key_actions: [Weekly watering, Basal fertiliser application]
+                    - stage: Vegetative
+                      duration_days: 21
+                      key_actions: [NPK every 14 days, Pest scouting]
+                    - stage: Fruiting
+                      duration_days: 30
+                      key_actions: [Potassium top-up, Harvest monitoring]
+        '409':
+          description: Cycle blocked by rotation validation
+          content:
+            application/json:
+              example:
+                success: false
+                error:
+                  code: ROTATION_BLOCKED
+                  message: "Cannot plant CRP-EGG on F001-PU002. Same-family rotation block: 60 days required, only 20 days have passed."
+                  details:
+                    rotation_blocked: true
+                    rotation_validation:
+                      allowed: false
+                      enforcement_decision: BLOCKED
+                      rule_status: BLOCK
+                      min_rest_days: 60
+                      days_since_last_harvest: 20
+                      days_short: 40
+                      rotation_key: CRP-EGG:CRP-EGG
+                      earliest_allowed_date: "2026-05-17"
+                    alternatives:
+                      - production_id: CRP-FRB
+                        production_name: French Beans
+                        rule_status: PREF
+                        min_rest_days: 0
+                        ready_now: true
+                      - production_id: CRP-LBN
+                        production_name: Long Bean (Yardlong Bean)
+                        rule_status: PREF
+                        min_rest_days: 0
+                        ready_now: true
+                      - production_id: CRP-SCN
+                        production_name: Sweet Corn
+                        rule_status: OK
+                        min_rest_days: 30
+                        ready_now: false
+                        ready_date: "2026-04-17"
+
+  /cycles/{cycle_id}/financials:
+    get:
+      tags: [Cycles]
+      summary: Cycle financial summary with CoKG
+      description: |
+        Returns P&L for a production cycle with **CoKG as the first field**.
+
+        **CoKG formula:** (LaborCost + InputCost + OtherCost) / TotalHarvestQty_kg
+
+        CoKG is null if no harvests have been recorded yet.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: cycle_id
+          in: path
+          required: true
+          schema:
+            type: string
+          example: CY-F001-26-002
+      responses:
+        '200':
+          description: Cycle financials with CoKG first
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/CycleFinancials'
+              example:
+                success: true
+                data:
+                  cogk_fjd: 1.86
+                  gross_margin_pct: 34.2
+                  total_revenue_fjd: 840.00
+                  total_cost_fjd: 553.00
+                  net_profit_fjd: 287.00
+                  total_harvest_qty_kg: 294.0
+                  total_labor_cost_fjd: 480.00
+                  total_input_cost_fjd: 73.00
+                  total_other_cost_fjd: 0.00
+                  cycle_id: CY-F001-26-002
+                  pu_id: F001-PU002
+                  production_id: CRP-EGG
+                  production_name: Eggplant
+                  market_price_fjd: 2.80
+                  margin_per_kg_fjd: 0.94
+                  cogk_formula: "FJD 553.00 / 294.0 kg = FJD 1.86/kg"
+                  period_start: "2026-02-21"
+                  period_end: null
+                  harvest_breakdown:
+                    - harvest_date: "2026-03-15"
+                      qty_kg: 82.0
+                      grade: A
+                      unit_price_fjd: 2.80
+                      revenue_fjd: 229.60
+                    - harvest_date: "2026-03-29"
+                      qty_kg: 110.0
+                      grade: A
+                      unit_price_fjd: 2.80
+                      revenue_fjd: 308.00
+                    - harvest_date: "2026-04-05"
+                      qty_kg: 102.0
+                      grade: A
+                      unit_price_fjd: 2.96
+                      revenue_fjd: 301.92
+                  computed_at: "2026-04-07T06:05:00+12:00"
+
+  # ==================== ROTATION ====================
+
+  /rotation/validate:
+    post:
+      tags: [Rotation]
+      summary: Validate crop rotation before cycle creation
+      description: |
+        Pre-validates a proposed crop rotation. Use before POST /cycles to check feasibility.
+
+        **enforcement_decision values:**
+        - `APPROVED`: proceed with cycle creation
+        - `BLOCKED`: rotation blocked (same family, insufficient rest). FOUNDER can override.
+        - `OVERRIDE_REQUIRED`: soft block (AVOID rule), rotation allowed but flagged
+
+        **rule_status values:**
+        - `PREF`: Preferred next crop (best for soil health)
+        - `OK`: Acceptable rotation (meets minimum requirements)
+        - `AVOID`: Avoid this rotation (soft block)
+        - `BLOCK`: Never plant this after previous crop within min_rest_days
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RotationValidationRequest'
+            examples:
+              blocked_same_crop:
+                summary: Blocked — Eggplant after Eggplant (20 days, need 60)
+                value:
+                  pu_id: F001-PU002
+                  proposed_production_id: CRP-EGG
+                  proposed_planting_date: "2026-04-08"
+              approved_different_crop:
+                summary: Approved — French Beans after Eggplant
+                value:
+                  pu_id: F001-PU002
+                  proposed_production_id: CRP-FRB
+                  proposed_planting_date: "2026-04-08"
+      responses:
+        '200':
+          description: Rotation validation result
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/RotationValidationResult'
+              examples:
+                blocked:
+                  summary: BLOCKED result
+                  value:
+                    success: true
+                    data:
+                      allowed: false
+                      enforcement_decision: BLOCKED
+                      rule_status: BLOCK
+                      rotation_key: CRP-EGG:CRP-EGG
+                      min_rest_days: 60
+                      days_since_last_harvest: 20
+                      days_short: 40
+                      last_production_id: CRP-EGG
+                      last_cycle_end_date: "2026-03-18"
+                      proposed_planting_date: "2026-04-08"
+                      earliest_allowed_date: "2026-05-17"
+                      alternatives:
+                        - production_id: CRP-FRB
+                          production_name: French Beans
+                          rule_status: PREF
+                          min_rest_days: 0
+                          ready_now: true
+                        - production_id: CRP-LBN
+                          production_name: Long Bean (Yardlong Bean)
+                          rule_status: PREF
+                          min_rest_days: 0
+                          ready_now: true
+                        - production_id: CRP-SCN
+                          production_name: Sweet Corn
+                          rule_status: OK
+                          min_rest_days: 30
+                          ready_now: false
+                          ready_date: "2026-04-17"
+                      founder_can_override: true
+                approved:
+                  summary: APPROVED result
+                  value:
+                    success: true
+                    data:
+                      allowed: true
+                      enforcement_decision: APPROVED
+                      rule_status: PREF
+                      rotation_key: CRP-EGG:CRP-FRB
+                      min_rest_days: 0
+                      days_since_last_harvest: 20
+                      days_short: null
+                      alternatives: []
+                      founder_can_override: false
+
+  # ==================== HARVESTS ====================
+
+  /production-units/{pu_id}/harvests:
+    post:
+      tags: [Harvests]
+      summary: Log harvest with chemical compliance check
+      description: |
+        Creates a harvest record. **Chemical compliance is checked automatically.**
+
+        If any chemical applied to this PU has a withholding period that has not elapsed,
+        the harvest is **BLOCKED (HTTP 409)** with the blocking chemicals listed.
+
+        **Two enforcement layers:**
+        1. API-level check here
+        2. PostgreSQL trigger `trg_harvest_compliance_check` on `harvest_log` INSERT
+
+        On success: CoKG is recalculated and returned as `new_cogk_fjd`.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: pu_id
+          in: path
+          required: true
+          schema:
+            type: string
+          example: F001-PU002
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HarvestCreate'
+            examples:
+              compliant_harvest:
+                summary: Compliant harvest — after withholding period
+                value:
+                  harvest_date: "2026-04-15"
+                  qty_kg: 42.0
+                  grade: A
+                  unit_price_fjd: 2.80
+                  customer_id: CUS-001
+              blocked_harvest:
+                summary: Blocked harvest — within Dimethoate 7-day WHD
+                value:
+                  harvest_date: "2026-04-07"
+                  qty_kg: 42.0
+                  grade: A
+      responses:
+        '201':
+          description: Harvest logged successfully
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/HarvestLog'
+              example:
+                success: true
+                data:
+                  harvest_id: HRV-20260415-001
+                  id: 550e8400-e29b-41d4-a716-446655440001
+                  pu_id: F001-PU002
+                  cycle_id: CY-F001-26-002
+                  qty_kg: 42.0
+                  grade: A
+                  unit_price_fjd: 2.80
+                  total_value_fjd: 117.60
+                  harvest_date: "2026-04-15"
+                  compliance_status: COMPLIANT
+                  customer_id: CUS-001
+                  cogk_updated: true
+                  new_cogk_fjd: 1.82
+        '409':
+          description: Harvest blocked — chemical compliance violation
+          content:
+            application/json:
+              example:
+                success: false
+                error:
+                  code: COMPLIANCE_VIOLATION
+                  message: "Harvest blocked: Dimethoate 40% EC was applied 4 days ago. Withholding period: 7 days. Safe to harvest after 2026-04-10."
+                  details:
+                    compliance_blocked: true
+                    blocking_chemicals:
+                      - chemical_id: CHEM-001
+                        chemical_name: Dimethoate 40% EC
+                        application_date: "2026-04-03"
+                        withholding_period_days: 7
+                        days_since_application: 4
+                        harvest_allowed_after: "2026-04-10"
+                    earliest_safe_harvest_date: "2026-04-10"
+
+    get:
+      tags: [Harvests]
+      summary: List harvests for a production unit
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: pu_id
+          in: path
+          required: true
+          schema:
+            type: string
+          example: F001-PU002
+        - name: cycle_id
+          in: query
+          schema:
+            type: string
+        - name: from_date
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: to_date
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+      responses:
+        '200':
+          description: Harvest list
+          content:
+            application/json:
+              example:
+                success: true
+                data:
+                  - harvest_id: HRV-20260405-001
+                    qty_kg: 102.0
+                    grade: A
+                    unit_price_fjd: 2.96
+                    total_value_fjd: 301.92
+                    harvest_date: "2026-04-05"
+                    compliance_status: COMPLIANT
+                    customer_id: CUS-001
+                  - harvest_id: HRV-20260329-001
+                    qty_kg: 110.0
+                    grade: A
+                    unit_price_fjd: 2.80
+                    total_value_fjd: 308.00
+                    harvest_date: "2026-03-29"
+                    compliance_status: COMPLIANT
+                meta:
+                  total: 3
+                  page: 1
+                  page_size: 20
+                  total_pages: 1
+
+  # ==================== LABOR ====================
+
+  /production-units/{pu_id}/labor:
+    post:
+      tags: [Labor]
+      summary: Log labor attendance
+      description: |
+        Logs labor for a worker on a PU. Default hours = 8 (full day).
+        Total cost = hours_worked × (daily_rate / 8) FJD.
+        CoKG is recalculated after labor is logged.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: pu_id
+          in: path
+          required: true
+          schema:
+            type: string
+          example: F001-PU002
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LaborCreate'
+            example:
+              worker_id: W-001
+              work_date: "2026-04-07"
+              hours_worked: 8
+              task_description: weeding
+      responses:
+        '201':
+          description: Labor logged
+          content:
+            application/json:
+              example:
+                success: true
+                data:
+                  labor_id: LAB-20260407-001
+                  worker_id: W-001
+                  worker_name: Laisenia Waqa
+                  pu_id: F001-PU002
+                  cycle_id: CY-F001-26-002
+                  work_date: "2026-04-07"
+                  hours_worked: 8.0
+                  hourly_rate_fjd: 6.00
+                  total_cost_fjd: 48.00
+                  task_description: weeding
+
+  # ==================== INPUTS ====================
+
+  /production-units/{pu_id}/inputs:
+    post:
+      tags: [Inputs]
+      summary: Log field input (chemical, fertiliser, seed)
+      description: |
+        Logs a field input application. If the input is a chemical with a withholding period,
+        a **Chemical Compliance Block alert (RULE-038)** is automatically created.
+        Inventory stock is decremented. CoKG is recalculated.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: pu_id
+          in: path
+          required: true
+          schema:
+            type: string
+          example: F001-PU002
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InputCreate'
+            example:
+              input_date: "2026-04-03"
+              input_type: CHEMICAL
+              chemical_id: CHEM-001
+              quantity_applied: 1.5
+              unit: L
+              cost_fjd: 45.00
+              application_method: foliar
+      responses:
+        '201':
+          description: Input logged; compliance alert created if chemical has WHD
+          content:
+            application/json:
+              example:
+                success: true
+                data:
+                  input_id: INP-20260403-001
+                  pu_id: F001-PU002
+                  input_type: CHEMICAL
+                  chemical_id: CHEM-001
+                  chemical_name: Dimethoate 40% EC
+                  quantity_applied: 1.5
+                  unit: L
+                  cost_fjd: 45.00
+                  input_date: "2026-04-03"
+                  withholding_period_days: 7
+                  safe_harvest_date: "2026-04-10"
+                  compliance_alert_created: true
+                  alert_id: ALT-20260403-001
+
+  /farms/{farm_id}/inventory:
+    get:
+      tags: [Inputs]
+      summary: Current input inventory for farm
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: farm_id
+          in: path
+          required: true
+          schema:
+            type: string
+          example: F001
+      responses:
+        '200':
+          description: Inventory stock levels
+          content:
+            application/json:
+              example:
+                success: true
+                data:
+                  - input_name: Dimethoate 40% EC
+                    chemical_id: CHEM-001
+                    current_stock: 2.5
+                    unit: L
+                    reorder_point: 5.0
+                    below_reorder: true
+                    estimated_days_remaining: 14
+                    cost_per_unit_fjd: 30.00
+                  - input_name: Mancozeb 80% WP
+                    chemical_id: CHEM-002
+                    current_stock: 8.0
+                    unit: kg
+                    reorder_point: 3.0
+                    below_reorder: false
+                    estimated_days_remaining: 56
+
+  # ==================== ALERTS ====================
+
+  /farms/{farm_id}/alerts:
+    get:
+      tags: [Alerts]
+      summary: List farm alerts
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: farm_id
+          in: path
+          required: true
+          schema:
+            type: string
+          example: F001
+        - name: severity
+          in: query
+          schema:
+            type: string
+            enum: [Critical, High, Medium, Low]
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [open, acknowledged, resolved]
+            default: open
+        - name: pu_id
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Alert list
+          content:
+            application/json:
+              example:
+                success: true
+                data:
+                  - alert_id: ALT-20260403-001
+                    rule_id: RULE-038
+                    title: Chemical Compliance Block
+                    description: "Dimethoate (CHEM-001) applied 4 days ago. Safe to harvest after 2026-04-10."
+                    severity: Critical
+                    rag_color: RED
+                    status: open
+                    pu_id: F001-PU002
+                    cycle_id: CY-F001-26-002
+                    created_at: "2026-04-03T08:00:00+12:00"
+
+  /alerts/{alert_id}/acknowledge:
+    put:
+      tags: [Alerts]
+      summary: Acknowledge an alert
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: alert_id
+          in: path
+          required: true
+          schema:
+            type: string
+          example: ALT-20260403-001
+      responses:
+        '200':
+          description: Alert acknowledged
+          content:
+            application/json:
+              example:
+                success: true
+                data:
+                  alert_id: ALT-20260403-001
+                  status: acknowledged
+                  acknowledged_at: "2026-04-07T09:30:00+12:00"
+                  acknowledged_by: USR-001
+
+  /alerts/{alert_id}/resolve:
+    put:
+      tags: [Alerts]
+      summary: Manually resolve an alert (FOUNDER/MANAGER)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: alert_id
+          in: path
+          required: true
+          schema:
+            type: string
+          example: ALT-20260403-001
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                resolution_notes:
+                  type: string
+      responses:
+        '200':
+          description: Alert resolved
+          content:
+            application/json:
+              example:
+                success: true
+                data:
+                  alert_id: ALT-20260403-001
+                  status: resolved
+                  resolved_at: "2026-04-07T10:00:00+12:00"
+
+  # ==================== TASKS ====================
+
+  /farms/{farm_id}/tasks:
+    get:
+      tags: [Tasks]
+      summary: List farm tasks
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: farm_id
+          in: path
+          required: true
+          schema:
+            type: string
+          example: F001
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [open, completed, overdue]
+            default: open
+        - name: pu_id
+          in: query
+          schema:
+            type: string
+        - name: priority
+          in: query
+          schema:
+            type: string
+            enum: [HIGH, MEDIUM, LOW]
+      responses:
+        '200':
+          description: Task list
+          content:
+            application/json:
+              example:
+                success: true
+                data:
+                  - task_id: TSK-20260331-001
+                    title: Apply NPK fertiliser — F001-PU002 Fruiting stage
+                    due_date: "2026-03-31"
+                    status: open
+                    is_overdue: true
+                    days_overdue: 7
+                    priority: HIGH
+                    pu_id: F001-PU002
+                    cycle_id: CY-F001-26-002
+                    rule_id: RULE-005
+                meta:
+                  total: 5
+                  open: 5
+                  overdue: 2
+                  due_today: 1
+
+  /tasks/{task_id}/complete:
+    put:
+      tags: [Tasks]
+      summary: Mark task as completed
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: task_id
+          in: path
+          required: true
+          schema:
+            type: string
+          example: TSK-20260331-001
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                completion_notes:
+                  type: string
+                completed_date:
+                  type: string
+                  format: date
+      responses:
+        '200':
+          description: Task marked complete
+          content:
+            application/json:
+              example:
+                success: true
+                data:
+                  task_id: TSK-20260331-001
+                  status: completed
+                  completed_at: "2026-04-07T10:00:00+12:00"
+
+  # ==================== WORKERS ====================
+
+  /farms/{farm_id}/workers:
+    get:
+      tags: [Workers]
+      summary: List farm workers
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: farm_id
+          in: path
+          required: true
+          schema:
+            type: string
+          example: F001
+      responses:
+        '200':
+          description: Worker list
+          content:
+            application/json:
+              example:
+                success: true
+                data:
+                  - worker_id: W-001
+                    name: Laisenia Waqa
+                    role: Field Worker
+                    daily_rate_fjd: 48.00
+                    status: active
+                    total_days_ytd: 85
+                    total_cost_fjd_ytd: 4080.00
+                  - worker_id: W-002
+                    name: Maika Ratubaba
+                    role: Field Worker
+                    daily_rate_fjd: 48.00
+                    status: active
+                    total_days_ytd: 72
+                    total_cost_fjd_ytd: 3456.00
+
+    post:
+      tags: [Workers]
+      summary: Add worker to farm
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: farm_id
+          in: path
+          required: true
+          schema:
+            type: string
+          example: F001
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WorkerCreate'
+            example:
+              name: Timoci Rabukawaqa
+              role: Field Worker
+              daily_rate_fjd: 48.00
+              phone: "+6799XXXXXXX"
+      responses:
+        '201':
+          description: Worker added
+          content:
+            application/json:
+              example:
+                success: true
+                data:
+                  worker_id: W-003
+                  name: Timoci Rabukawaqa
+                  farm_id: F001
+                  created_at: "2026-04-07T09:00:00+12:00"
+
+  # ==================== TIS ====================
+
+  /tis/chat:
+    post:
+      tags: [TIS]
+      summary: Send message to TIS
+      description: |
+        Routes text message to one of three TIS modules:
+
+        **Knowledge Broker:** Agronomy questions — answers ONLY from validated Teivaka KB.
+        If no KB article matches (cosine similarity < 0.65), returns:
+        *"I cannot find a validated answer for that specific question in the Teivaka Knowledge Base.
+        Here is the closest protocol I can reference: [nearest article]."*
+
+        **Operational Interpreter:** Farm data questions — explains CoKG, alerts, P&L using
+        live TFOS data. Never uses general LLM knowledge.
+
+        **Command Executor:** 12 command types:
+        LOG_LABOR, LOG_HARVEST, LOG_INPUT, LOG_CASH, LOG_WEATHER,
+        CHECK_TASKS, CHECK_ALERTS, CHECK_FINANCIALS, CREATE_CYCLE,
+        CHECK_STOCK, GET_PROTOCOL, REPORT_INCIDENT
+
+        **Rate limits:** FREE=5/day, BASIC=20/day, PREMIUM/CUSTOM=unlimited (Redis-enforced)
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TisChatRequest'
+            examples:
+              kb_query:
+                summary: Knowledge Broker — agronomy question
+                value:
+                  message: When should I apply fertilizer to eggplant in the vegetative stage?
+                  farm_id: F001
+              interpreter_query:
+                summary: Operational Interpreter — explain farm data
+                value:
+                  message: Explain why my CoKG is so high on PU002
+                  farm_id: F001
+                  pu_id: F001-PU002
+              harvest_command:
+                summary: Command Executor — LOG_HARVEST
+                value:
+                  message: Log harvest of 42kg eggplant Grade A on PU002 today
+                  farm_id: F001
+              check_tasks:
+                summary: Command Executor — CHECK_TASKS
+                value:
+                  message: What are my tasks today?
+                  farm_id: F001
+              check_financials:
+                summary: Command Executor — CHECK_FINANCIALS
+                value:
+                  message: Show me my financials for PU002
+                  farm_id: F001
+                  pu_id: F001-PU002
+      responses:
+        '200':
+          description: TIS response
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/TisResponse'
+              examples:
+                kb_response:
+                  summary: Knowledge Broker response (KB article found)
+                  value:
+                    success: true
+                    data:
+                      response_text: "During the Vegetative Growth stage of Eggplant (CRP-EGG), apply NPK (12-12-17) at 150 kg/ha every 14 days. [Source: Teivaka KB — Eggplant Vegetative Stage Protocol]"
+                      tis_module: knowledge_broker
+                      kb_articles_cited:
+                        - KB-001 — Eggplant Vegetative Stage Protocol
+                      command_result: null
+                      conversation_id: 550e8400-e29b-41d4-a716-446655440000
+                      daily_calls_remaining: 19
+                      processing_time_ms: 1240
+                kb_not_found:
+                  summary: Knowledge Broker — no KB match (below threshold)
+                  value:
+                    success: true
+                    data:
+                      response_text: "I cannot find a validated answer for that specific question in the Teivaka Knowledge Base. Here is the closest protocol I can reference: Eggplant Vegetative Stage Protocol"
+                      tis_module: knowledge_broker
+                      kb_articles_cited: []
+                      command_result: null
+                      daily_calls_remaining: 18
+                harvest_command:
+                  summary: Command Executor — LOG_HARVEST response
+                  value:
+                    success: true
+                    data:
+                      response_text: "Harvest logged: 42kg Eggplant Grade A on F001-PU002. ID: HRV-20260407-001. CoKG updated to FJD 1.82/kg."
+                      tis_module: command_executor
+                      kb_articles_cited: []
+                      command_result:
+                        command_type: LOG_HARVEST
+                        harvest_id: HRV-20260407-001
+                        qty_kg: 42.0
+                        grade: A
+                        new_cogk_fjd: 1.82
+                        compliance_status: COMPLIANT
+                      daily_calls_remaining: 17
+        '429':
+          description: Daily TIS limit reached
+          content:
+            application/json:
+              example:
+                success: false
+                error:
+                  code: TIS_RATE_LIMIT
+                  message: "Daily TIS limit reached (5/5). Upgrade to BASIC for 20 queries/day."
+                  details:
+                    calls_used: 5
+                    calls_limit: 5
+                    tier: FREE
+                    resets_at: "2026-04-08T00:00:00+12:00"
+
+  /tis/command:
+    post:
+      tags: [TIS]
+      summary: Submit voice command (audio → Whisper → TIS)
+      description: |
+        Accepts audio file. Voice pipeline:
+        Audio → Supabase Storage → Whisper transcription → TIS routing → TFOS action → confirmation
+
+        Returns immediately with `voice_log_id`. Poll `/tis/voice-status/{id}` for result.
+        Target processing time: **< 5 seconds** end-to-end.
+
+        Whisper API called with `model='whisper-1'`, `language='en'`, and agricultural vocabulary prompt.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [audio, farm_id]
+              properties:
+                audio:
+                  type: string
+                  format: binary
+                  description: Audio file (webm or mp4, max 10MB)
+                farm_id:
+                  type: string
+                  example: F001
+                pu_id:
+                  type: string
+                  nullable: true
+                  example: F001-PU002
+      responses:
+        '202':
+          description: Voice command accepted for processing
+          content:
+            application/json:
+              example:
+                success: true
+                data:
+                  voice_log_id: 550e8400-e29b-41d4-a716-446655440000
+                  status: processing
+                  check_status_url: /api/v1/tis/voice-status/550e8400-e29b-41d4-a716-446655440000
+                  estimated_seconds: 5
+        '422':
+          description: Invalid audio file
+          content:
+            application/json:
+              example:
+                success: false
+                error:
+                  code: FILE_TOO_LARGE
+                  message: Audio file exceeds 10MB limit.
+
+  /tis/voice-status/{voice_log_id}:
+    get:
+      tags: [TIS]
+      summary: Poll voice command processing status
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: voice_log_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          example: 550e8400-e29b-41d4-a716-446655440000
+      responses:
+        '200':
+          description: Voice processing status
+          content:
+            application/json:
+              examples:
+                processing:
+                  summary: Still processing
+                  value:
+                    success: true
+                    data:
+                      voice_log_id: 550e8400-e29b-41d4-a716-446655440000
+                      status: processing
+                      whisper_transcript: null
+                      response_text: null
+                      command_type: null
+                completed:
+                  summary: Completed successfully
+                  value:
+                    success: true
+                    data:
+                      voice_log_id: 550e8400-e29b-41d4-a716-446655440000
+                      status: completed
+                      whisper_transcript: Harvested 42 kilograms eggplant Grade A on PU002
+                      response_text: "Harvest logged: 42kg Eggplant Grade A on F001-PU002. ID: HRV-20260407-001. CoKG: FJD 1.82/kg."
+                      command_type: LOG_HARVEST
+                      tis_module: command_executor
+                      processing_time_ms: 3240
+                failed:
+                  summary: Failed — empty transcript
+                  value:
+                    success: true
+                    data:
+                      voice_log_id: 550e8400-e29b-41d4-a716-446655440000
+                      status: failed
+                      whisper_transcript: ""
+                      response_text: Could not understand audio. Please try again or type your message.
+                      error: EMPTY_TRANSCRIPT
+
+  # ==================== DECISION ENGINE ====================
+
+  /farms/{farm_id}/decision-engine/current:
+    get:
+      tags: [DecisionEngine]
+      summary: Current Decision Engine snapshot (10 signals, GREEN/AMBER/RED)
+      description: |
+        Returns the most recent Decision Engine snapshot for the farm.
+
+        **Signals are computed daily at 06:05 Fiji time** by Celery beat task `compute_decision_signals`.
+        They are **NEVER computed on-demand** — always returned from stored snapshot in `decision_signals` table.
+
+        Requires BASIC+ subscription.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: farm_id
+          in: path
+          required: true
+          schema:
+            type: string
+          example: F001
+      responses:
+        '200':
+          description: Decision Engine snapshot with all 10 signals
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/DecisionEngineSnapshot'
+              example:
+                success: true
+                data:
+                  farm_id: F001
+                  snapshot_date: "2026-04-07"
+                  overall_rag: AMBER
+                  overall_score: 62
+                  signals:
+                    - signal_id: 1
+                      signal_name: GrossMarginPct
+                      label: Gross Margin %
+                      rag_status: AMBER
+                      score_0_10: 6
+                      value: 34.2
+                      threshold_green: 40.0
+                      threshold_amber: 25.0
+                      action_at_red: Review input costs and pricing strategy
+                    - signal_id: 2
+                      signal_name: CoKGVsMarket
+                      label: CoKG vs Market Price
+                      rag_status: GREEN
+                      score_0_10: 8
+                      value: 1.86
+                      market_price: 2.80
+                      action_at_red: Reduce labor or input costs immediately
+                    - signal_id: 3
+                      signal_name: DaysSinceLastHarvest
+                      label: Days Since Last Harvest
+                      rag_status: GREEN
+                      score_0_10: 9
+                      value: 2
+                      threshold_amber: 14
+                      threshold_red: 21
+                    - signal_id: 4
+                      signal_name: TaskCompletionRate
+                      label: Task Completion Rate %
+                      rag_status: AMBER
+                      score_0_10: 5
+                      value: 72.5
+                    - signal_id: 5
+                      signal_name: ChemicalComplianceBlocks
+                      label: Chemical Compliance Blocks
+                      rag_status: RED
+                      score_0_10: 0
+                      value: 1
+                      action_at_red: Resolve all compliance blocks before harvesting
+                    - signal_id: 6
+                      signal_name: InputCostRatio
+                      label: Input Cost % of Revenue
+                      rag_status: GREEN
+                      score_0_10: 8
+                      value: 13.2
+                    - signal_id: 7
+                      signal_name: LaborCostRatio
+                      label: Labor Cost % of Revenue
+                      rag_status: AMBER
+                      score_0_10: 5
+                      value: 57.1
+                    - signal_id: 8
+                      signal_name: RotationHealth
+                      label: Crop Rotation Health
+                      rag_status: GREEN
+                      score_0_10: 10
+                      value: 1.0
+                    - signal_id: 9
+                      signal_name: HarvestWeightTrend
+                      label: Harvest Weight Trend %
+                      rag_status: AMBER
+                      score_0_10: 4
+                      value: -5.2
+                      action_at_red: Investigate yield decline
+                    - signal_id: 10
+                      signal_name: CycleAgeHealth
+                      label: Active Cycle Age (days)
+                      rag_status: GREEN
+                      score_0_10: 7
+                      value: 45
+                  computed_at: "2026-04-07T06:05:00+12:00"
+                  next_computation: "2026-04-08T06:05:00+12:00"
+        '403':
+          description: BASIC subscription required
+          content:
+            application/json:
+              example:
+                success: false
+                error:
+                  code: TIER_REQUIRED
+                  message: Decision Engine requires BASIC subscription or above.
+
+  # ==================== AUTOMATION ====================
+
+  /automation/rules:
+    get:
+      tags: [Automation]
+      summary: List all 43 automation rules
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: All automation rules
+          content:
+            application/json:
+              example:
+                success: true
+                data:
+                  - rule_id: RULE-001
+                    name: Planting Task Scheduler
+                    trigger_category: CYCLE_EVENT
+                    is_active: true
+                    severity: Medium
+                    applies_to: [CRP, FRT]
+                  - rule_id: RULE-038
+                    name: Chemical Compliance Block Alert
+                    trigger_category: INPUT_EVENT
+                    is_active: true
+                    severity: Critical
+                    applies_to: [CRP, LIV, FRT]
+                  - rule_id: RULE-024
+                    name: Pond Water Quality Check
+                    description: "INACTIVE — pending aquaculture rollout"
+                    trigger_category: SCHEDULED
+                    is_active: false
+                    severity: High
+                    frequency_days: 3
+                    applies_to: [AQU]
+                meta:
+                  total: 43
+                  active: 38
+                  inactive: 5
+
+  /automation/rules/{rule_id}/trigger-manual:
+    post:
+      tags: [Automation]
+      summary: Manually trigger automation rule (PREMIUM+)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: rule_id
+          in: path
+          required: true
+          schema:
+            type: string
+          example: RULE-038
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [farm_id, reason]
+              properties:
+                farm_id:
+                  type: string
+                  example: F001
+                pu_id:
+                  type: string
+                  nullable: true
+                  example: F001-PU002
+                reason:
+                  type: string
+                  example: Manual compliance check after farm visit
+      responses:
+        '200':
+          description: Rule triggered
+          content:
+            application/json:
+              example:
+                success: true
+                data:
+                  rule_id: RULE-038
+                  triggered_at: "2026-04-07T10:00:00+12:00"
+                  tasks_created: 0
+                  alerts_created: 1
+                  alert_ids:
+                    - ALT-20260407-002
+
+  /automation/rules/{rule_id}/toggle:
+    put:
+      tags: [Automation]
+      summary: Toggle rule active/inactive (FOUNDER only)
+      description: |
+        Toggles `is_active` for an automation rule.
+        Rules RULE-024 to RULE-028 are reserved for aquaculture/pig when those
+        production types are rolled out. Activating them will return an advisory note.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: rule_id
+          in: path
+          required: true
+          schema:
+            type: string
+          example: RULE-024
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [is_active]
+              properties:
+                is_active:
+                  type: boolean
+                  example: true
+                reason:
+                  type: string
+                  nullable: true
+      responses:
+        '200':
+          description: Rule toggled
+          content:
+            application/json:
+              example:
+                success: true
+                data:
+                  rule_id: RULE-024
+                  is_active: true
+                  updated_at: "2026-04-07T10:00:00+12:00"
+                  note: "RULE-024 (Aquaculture) activated. Ensure aquaculture PUs are configured before use."
+
+  # ==================== WEBHOOKS ====================
+
+  /webhooks/whatsapp:
+    post:
+      tags: [Webhooks]
+      summary: Twilio WhatsApp inbound webhook
+      description: |
+        Receives inbound WhatsApp messages from Twilio.
+
+        **Security:** Twilio HMAC-SHA1 signature verified via `X-Twilio-Signature` header
+        using `TWILIO_AUTH_TOKEN`. Requests with invalid signatures return HTTP 403.
+
+        **Flow:**
+        1. Verify Twilio signature
+        2. Lookup farmer by WhatsApp phone number
+        3. Route message text through TIS chat pipeline
+        4. Send TIS response back via Twilio API
+
+        **Not a JWT-secured endpoint** — public URL, secured by Twilio signature only.
+        Rate limit: 80 messages/minute (Twilio platform limit).
+      security: []
+      parameters:
+        - name: X-Twilio-Signature
+          in: header
+          required: true
+          schema:
+            type: string
+          description: HMAC-SHA1 signature from Twilio for request validation
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                From:
+                  type: string
+                  description: Sender's WhatsApp number (format "whatsapp:+679XXXXXXX")
+                  example: "whatsapp:+6799XXXXXXX"
+                To:
+                  type: string
+                  description: Teivaka Twilio number
+                  example: "whatsapp:+18055551234"
+                Body:
+                  type: string
+                  description: Message text from farmer
+                  example: "Harvested 42 kilograms eggplant Grade A on PU002"
+                MessageSid:
+                  type: string
+                  example: SMxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+      responses:
+        '200':
+          description: |
+            Webhook processed. Empty TwiML response — TIS reply sent separately via Twilio API.
+          content:
+            application/xml:
+              example: |
+                <?xml version="1.0" encoding="UTF-8"?>
+                <Response></Response>
+        '403':
+          description: Invalid Twilio signature
+          content:
+            text/plain:
+              example: Forbidden
+
+  # ==================== KNOWLEDGE BASE ====================
+
+  /kb/articles:
+    get:
+      tags: [KnowledgeBase]
+      summary: List published KB articles
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: production_id
+          in: query
+          schema:
+            type: string
+          example: CRP-EGG
+        - name: stage
+          in: query
+          schema:
+            type: string
+          example: Vegetative
+        - name: search
+          in: query
+          schema:
+            type: string
+          description: Full-text search in title and content
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+      responses:
+        '200':
+          description: KB articles
+          content:
+            application/json:
+              example:
+                success: true
+                data:
+                  - article_id: KB-001
+                    title: Eggplant Vegetative Stage Protocol
+                    production_id: CRP-EGG
+                    stage: Vegetative
+                    summary: NPK application schedule and pest management for eggplant vegetative stage.
+                    published: true
+                    created_at: "2026-01-15T09:00:00+12:00"
+                  - article_id: KB-002
+                    title: Eggplant Fruiting Stage Protocol
+                    production_id: CRP-EGG
+                    stage: Fruiting
+                    summary: Potassium management, fungicide schedule, and harvest timing for eggplant fruiting.
+                    published: true
+
+    post:
+      tags: [KnowledgeBase]
+      summary: Create KB article (FOUNDER/AGRONOMIST, PREMIUM+)
+      description: |
+        Creates and optionally publishes a new KB article.
+        If `publish=true`, OpenAI embeddings API is called to generate
+        the 1536-dimensional `embedding_vector` for RAG search.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title, content, production_id]
+              properties:
+                title:
+                  type: string
+                  example: Kava Juvenile Stage Protocol
+                content:
+                  type: string
+                  description: Full protocol text
+                production_id:
+                  type: string
+                  example: CRP-KAV
+                stage:
+                  type: string
+                  nullable: true
+                  example: Juvenile
+                publish:
+                  type: boolean
+                  default: false
+                  description: If true, triggers embedding generation and publishes immediately
+      responses:
+        '201':
+          description: KB article created
+          content:
+            application/json:
+              example:
+                success: true
+                data:
+                  article_id: KB-050
+                  title: Kava Juvenile Stage Protocol
+                  production_id: CRP-KAV
+                  stage: Juvenile
+                  published: true
+                  embedding_generated: true
+                  created_at: "2026-04-07T10:00:00+12:00"
+
+  # ==================== SHARED REFERENCE ====================
+
+  /shared/productions:
+    get:
+      tags: [SharedReference]
+      summary: List all production types (crops, livestock, etc.)
+      description: Shared reference data from shared.productions — read-only.
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Production types
+          content:
+            application/json:
+              example:
+                success: true
+                data:
+                  - production_id: CRP-EGG
+                    production_name: Eggplant
+                    type: CRP
+                    avg_cycle_days: 120
+                    typical_stages: [Establishment, Vegetative, Fruiting]
+                  - production_id: CRP-CAS
+                    production_name: Cassava
+                    type: CRP
+                    avg_cycle_days: 300
+                    typical_stages: [Establishment, Vegetative, Tuber Bulking, Maturation]
+                  - production_id: CRP-KAV
+                    production_name: Kava
+                    type: CRP
+                    avg_cycle_days: 1095
+                    typical_stages: [Establishment, Juvenile, Mature]
+                  - production_id: CRP-TOM
+                    production_name: Tomato
+                    type: CRP
+                    avg_cycle_days: 90
+                  - production_id: FRT-PIN
+                    production_name: Pineapple
+                    type: FRT
+                    avg_cycle_days: 540
+                  - production_id: LIV-API
+                    production_name: Apiculture (Honey Bee)
+                    type: LIV
+                    avg_cycle_days: null
+
+  /shared/chemicals:
+    get:
+      tags: [SharedReference]
+      summary: List registered chemicals with withholding periods
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Chemical list
+          content:
+            application/json:
+              example:
+                success: true
+                data:
+                  - chemical_id: CHEM-001
+                    chemical_name: Dimethoate 40% EC
+                    active_ingredient: Dimethoate
+                    withholding_period_days: 7
+                    type: Insecticide
+                    registered_fiji: true
+                  - chemical_id: CHEM-002
+                    chemical_name: Mancozeb 80% WP
+                    active_ingredient: Mancozeb
+                    withholding_period_days: 7
+                    type: Fungicide
+                    registered_fiji: true

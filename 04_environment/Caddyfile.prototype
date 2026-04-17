@@ -1,0 +1,111 @@
+# FILE: 04_environment/Caddyfile.prototype
+#
+# Teivaka TFOS — PROTOTYPE Caddyfile
+# HTTP only — no domain, no HTTPS, accessed via IP address
+# Upgrade to Caddyfile (production) once domain DNS is pointed at server
+#
+# Access: http://168.144.36.120
+
+:80 {
+
+    # Compression
+    encode gzip {
+        minimum_length 1024
+    }
+
+    # Basic security headers (no HSTS — HTTP only on prototype)
+    header {
+        X-Frame-Options "SAMEORIGIN"
+        X-Content-Type-Options "nosniff"
+        X-XSS-Protection "1; mode=block"
+        Referrer-Policy "strict-origin-when-cross-origin"
+        -Server
+    }
+
+    # Health check — proxy to FastAPI
+    handle /health {
+        reverse_proxy api:8000
+    }
+
+    # API routes — proxy to FastAPI
+    handle /api/* {
+        reverse_proxy api:8000 {
+            header_up Host              {upstream_hostport}
+            header_up X-Real-IP         {remote_host}
+            header_up X-Forwarded-For   {remote_host}
+            header_up X-Forwarded-Proto http
+
+            flush_interval -1
+
+            transport http {
+                dial_timeout            10s
+                response_header_timeout 120s
+            }
+        }
+        header Cache-Control "no-store, no-cache, must-revalidate"
+    }
+
+    # WebSocket routes — TIS real-time
+    handle /ws/* {
+        reverse_proxy api:8000 {
+            header_up Host            {upstream_hostport}
+            header_up X-Real-IP       {remote_host}
+            header_up X-Forwarded-For {remote_host}
+            header_up Connection      "Upgrade"
+            header_up Upgrade         "websocket"
+
+            transport http {
+                dial_timeout     10s
+                keepalive        1m
+                keepalive_idle_conns 10
+            }
+        }
+    }
+
+    # WhatsApp webhook route
+    handle /webhooks/* {
+        reverse_proxy api:8000 {
+            header_up Host              {upstream_hostport}
+            header_up X-Real-IP         {remote_host}
+            header_up X-Forwarded-For   {remote_host}
+            header_up X-Forwarded-Proto http
+
+            transport http {
+                dial_timeout            10s
+                response_header_timeout 60s
+            }
+        }
+        header Cache-Control "no-store"
+    }
+
+    # Static assets — React build output
+    @static_assets {
+        path *.js *.css *.woff *.woff2 *.ttf *.ico *.png *.jpg *.jpeg *.gif *.svg *.webp
+    }
+    handle @static_assets {
+        root * /srv/frontend
+        file_server
+        header Cache-Control "public, max-age=3600"
+    }
+
+    # React PWA — SPA fallback
+    handle {
+        root * /srv/frontend
+
+        @service_worker path /service-worker.js /sw.js
+        handle @service_worker {
+            file_server
+            header Cache-Control "no-store, max-age=0"
+        }
+
+        header /index.html Cache-Control "no-store, max-age=0"
+        try_files {path} /index.html
+        file_server
+    }
+
+    log {
+        output stdout
+        format console
+        level INFO
+    }
+}

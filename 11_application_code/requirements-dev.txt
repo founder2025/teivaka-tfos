@@ -1,0 +1,16 @@
+# TFOS local development extras — NOT shipped in the production image.
+# Install: pip install -r requirements-api.txt -r requirements-dev.txt
+
+-r requirements-api.txt
+
+# Test
+pytest==8.3.4
+pytest-asyncio==0.24.0
+pytest-cov==6.0.0
+factory-boy==3.3.1
+faker==33.1.0
+
+# Data migration scripts (05_data_migration/) only — not imported by app/
+pandas==2.2.3
+openpyxl==3.1.5
+xlrd==2.0.1

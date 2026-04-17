@@ -1,0 +1,320 @@
+# FILE: 04_environment/Caddyfile
+# Teivaka Farm OS (TFOS) — Caddy v2 reverse proxy + TLS termination
+#
+# Deployment: Hetzner CAX21 (ARM64) running Docker Compose
+# Caddy handles: auto-HTTPS (Let's Encrypt), routing, security headers,
+#                gzip compression, static PWA serving, WebSocket proxying
+#
+# Required environment variables (set in docker-compose.yml or .env):
+#   DOMAIN       — e.g. app.teivaka.com  (serves React PWA)
+#   API_DOMAIN   — e.g. api.teivaka.com  (serves FastAPI backend; optional separate subdomain)
+#   CADDY_EMAIL  — e.g. admin@teivaka.com  (Let's Encrypt account email)
+#
+# Usage inside Docker Compose:
+#   image: caddy:2-alpine
+#   volumes:
+#     - ./Caddyfile:/etc/caddy/Caddyfile:ro
+#     - caddy_data:/data
+#     - caddy_config:/config
+#     - frontend_dist:/srv/frontend:ro
+#     - caddy_logs:/var/log/caddy
+
+# =============================================================================
+# Global Options
+# =============================================================================
+{
+    # Let's Encrypt account email — required for auto-HTTPS notifications
+    email {$CADDY_EMAIL}
+
+    # ACME CA — default is Let's Encrypt production.
+    # Uncomment the line below during local/staging testing to avoid rate limits:
+    # acme_ca https://acme-staging-v02.api.letsencrypt.org/directory
+
+    # Allow HTTP on port 80 for ACME HTTP-01 challenge redirect only
+    # Caddy upgrades all HTTP → HTTPS automatically
+
+    # Default server options
+    servers {
+        # Enable full duplex HTTP/2 for long-lived WebSocket connections (TIS real-time)
+        protocols h1 h2 h2c
+    }
+}
+
+# =============================================================================
+# Main Application — {$DOMAIN}
+# =============================================================================
+{$DOMAIN} {
+
+    # -------------------------------------------------------------------------
+    # TLS — Caddy obtains and auto-renews certificates via Let's Encrypt
+    # -------------------------------------------------------------------------
+    # No tls directive needed; auto-HTTPS is the default when a real hostname
+    # is used and email is set in the global block.
+
+    # -------------------------------------------------------------------------
+    # Compression — gzip all text responses
+    # -------------------------------------------------------------------------
+    # Applied globally here so it covers all routes below
+    encode gzip {
+        minimum_length 1024   # only compress responses >= 1 KB
+    }
+
+    # -------------------------------------------------------------------------
+    # Security Headers — applied to all responses
+    # -------------------------------------------------------------------------
+    header {
+        # Prevent clickjacking — only allow framing from same origin
+        X-Frame-Options "SAMEORIGIN"
+
+        # Prevent MIME-type sniffing
+        X-Content-Type-Options "nosniff"
+
+        # Legacy XSS filter (belt-and-suspenders for older browsers)
+        X-XSS-Protection "1; mode=block"
+
+        # Control referrer information sent with requests
+        Referrer-Policy "strict-origin-when-cross-origin"
+
+        # Restrict browser feature permissions
+        # Camera blocked (no video use case), microphone allowed for self (voice notes),
+        # geolocation allowed for self (GPS farm field capture)
+        Permissions-Policy "camera=(), microphone=(self), geolocation=(self), payment=()"
+
+        # Enforce HTTPS for 2 years, include subdomains
+        Strict-Transport-Security "max-age=63072000; includeSubDomains; preload"
+
+        # Content Security Policy — tighten in production after audit
+        # 'unsafe-inline' included for React; tighten with nonce once CSP is stable
+        Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' wss://{$DOMAIN}; font-src 'self'; frame-ancestors 'self';"
+
+        # Remove the Server header to avoid fingerprinting
+        -Server
+    }
+
+    # -------------------------------------------------------------------------
+    # API Routes — proxy to FastAPI backend container
+    # -------------------------------------------------------------------------
+    handle /api/* {
+        # Strip any trailing-slash normalisation issues
+        uri replace /api// /api/
+
+        reverse_proxy api:8000 {
+            # Active health checking — Caddy will stop sending traffic to backend
+            # if health check fails, allowing zero-downtime restarts
+            health_uri    /api/v1/health
+            health_interval 30s
+            health_timeout  5s
+            health_status   200
+
+            # Headers passed to FastAPI so it can build correct absolute URLs
+            header_up Host              {upstream_hostport}
+            header_up X-Real-IP         {remote_host}
+            header_up X-Forwarded-For   {remote_host}
+            header_up X-Forwarded-Proto {scheme}
+
+            # Disable response buffering for SSE / streaming AI responses
+            flush_interval -1
+
+            # Upstream timeout — allow long AI inference requests (e.g. OpenClaw)
+            transport http {
+                dial_timeout       10s
+                response_header_timeout 120s
+                read_buffer_size   8192
+            }
+        }
+
+        # API responses must NOT be cached by browsers or CDNs
+        header Cache-Control "no-store, no-cache, must-revalidate, proxy-revalidate"
+        header Pragma "no-cache"
+        header Expires "0"
+    }
+
+    # -------------------------------------------------------------------------
+    # WebSocket Routes — TIS real-time farm intelligence stream
+    # -------------------------------------------------------------------------
+    handle /ws/* {
+        reverse_proxy api:8000 {
+            # WebSocket upgrade headers
+            header_up Host            {upstream_hostport}
+            header_up X-Real-IP       {remote_host}
+            header_up X-Forwarded-For {remote_host}
+            header_up Connection      "Upgrade"
+            header_up Upgrade         "websocket"
+
+            # No response timeout for persistent WS connections
+            transport http {
+                dial_timeout    10s
+                read_buffer_size 8192
+                # Keep-alive for long-lived farm sensor streams
+                keepalive 1m
+                keepalive_idle_conns 10
+            }
+        }
+    }
+
+    # -------------------------------------------------------------------------
+    # Webhook Routes — Meta WhatsApp callbacks, Stripe webhooks
+    # -------------------------------------------------------------------------
+    handle /webhooks/* {
+        reverse_proxy api:8000 {
+            header_up Host            {upstream_hostport}
+            header_up X-Real-IP       {remote_host}
+            header_up X-Forwarded-For {remote_host}
+            header_up X-Forwarded-Proto {scheme}
+
+            # Webhooks can be slow to process; allow extra time
+            transport http {
+                dial_timeout            10s
+                response_header_timeout 60s
+            }
+        }
+
+        # Webhooks are sensitive — never cache
+        header Cache-Control "no-store"
+    }
+
+    # -------------------------------------------------------------------------
+    # Static Asset Caching — long-lived cache for hashed JS/CSS/image bundles
+    # -------------------------------------------------------------------------
+    # React build output uses content-hashed filenames (e.g. main.abc123.js)
+    # so it is safe to cache these for 1 year.
+    @static_assets {
+        path *.js *.css *.woff *.woff2 *.ttf *.ico *.png *.jpg *.jpeg *.gif *.svg *.webp *.avif
+    }
+    handle @static_assets {
+        root * /srv/frontend
+        file_server
+        header Cache-Control "public, max-age=31536000, immutable"
+    }
+
+    # -------------------------------------------------------------------------
+    # React PWA — SPA fallback (all non-API routes → index.html)
+    # -------------------------------------------------------------------------
+    handle {
+        root * /srv/frontend
+
+        # Service worker must be served with no-cache so updates propagate
+        @service_worker path /service-worker.js /sw.js /workbox-*.js
+        handle @service_worker {
+            file_server
+            header Cache-Control "no-store, max-age=0"
+        }
+
+        # manifest.json for PWA install — short cache
+        @manifest path /manifest.json /manifest.webmanifest
+        handle @manifest {
+            file_server
+            header Cache-Control "public, max-age=3600"
+        }
+
+        # index.html — no cache so deploys take effect immediately
+        header /index.html Cache-Control "no-store, max-age=0"
+
+        # SPA routing: serve index.html for all unknown paths (React Router)
+        try_files {path} /index.html
+        file_server
+    }
+
+    # -------------------------------------------------------------------------
+    # Rate Limiting Hints — informational headers (actual limiting in FastAPI)
+    # -------------------------------------------------------------------------
+    # Caddy does not enforce these; they are hints for clients and the FastAPI
+    # SlowAPI middleware enforces the actual limits.
+    header /api/* {
+        X-RateLimit-Policy "100 requests per minute per IP; see /api/v1/docs for endpoint-level limits"
+    }
+
+    # -------------------------------------------------------------------------
+    # Access Logging — structured JSON log for log aggregation
+    # -------------------------------------------------------------------------
+    log {
+        output file /var/log/caddy/access.log {
+            roll_size     100MiB   # rotate when file exceeds 100 MB
+            roll_keep     10       # keep 10 rotated files
+            roll_keep_for 720h     # keep logs for 30 days
+        }
+        format json {
+            time_format  "iso8601"
+            duration_format "seconds"
+        }
+        # Log level: INFO for production (use DEBUG only during troubleshooting)
+        level INFO
+    }
+}
+
+# =============================================================================
+# HTTP → HTTPS redirect (Caddy handles this automatically for named hosts,
+# but the block below makes it explicit and allows a custom log if needed)
+# =============================================================================
+http://{$DOMAIN} {
+    redir https://{$DOMAIN}{uri} permanent
+}
+
+# =============================================================================
+# API Subdomain — {$API_DOMAIN}  (e.g. api.teivaka.com)
+#
+# Dedicated subdomain for FastAPI backend.
+# Mobile apps and third-party integrations should point here directly.
+# Cross-origin requests from {$DOMAIN} → {$API_DOMAIN} are allowed via
+# the CORS_ORIGINS setting in FastAPI.
+#
+# If you don't want a separate subdomain, this block can be removed — the
+# main {$DOMAIN} block above already handles /api/* via path-based routing.
+# =============================================================================
+{$API_DOMAIN} {
+
+    encode gzip {
+        minimum_length 1024
+    }
+
+    header {
+        X-Frame-Options "DENY"
+        X-Content-Type-Options "nosniff"
+        Referrer-Policy "strict-origin-when-cross-origin"
+        Strict-Transport-Security "max-age=63072000; includeSubDomains; preload"
+        # API responses: no framing, no caching by default
+        -Server
+    }
+
+    # Proxy all traffic to FastAPI
+    reverse_proxy api:8000 {
+        health_uri      /api/v1/health
+        health_interval 30s
+        health_timeout  5s
+        health_status   200
+
+        header_up Host              {upstream_hostport}
+        header_up X-Real-IP         {remote_host}
+        header_up X-Forwarded-For   {remote_host}
+        header_up X-Forwarded-Proto {scheme}
+
+        # Disable response buffering for SSE / streaming AI responses
+        flush_interval -1
+
+        transport http {
+            dial_timeout            10s
+            response_header_timeout 120s
+            read_buffer_size        8192
+        }
+    }
+
+    # No caching for API responses
+    header Cache-Control "no-store, no-cache, must-revalidate"
+
+    log {
+        output file /var/log/caddy/api_access.log {
+            roll_size     100MiB
+            roll_keep     10
+            roll_keep_for 720h
+        }
+        format json {
+            time_format     "iso8601"
+            duration_format "seconds"
+        }
+        level INFO
+    }
+}
+
+http://{$API_DOMAIN} {
+    redir https://{$API_DOMAIN}{uri} permanent
+}

@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.backends.legacy:build"
+
+[project]
+name = "teivaka-agrios"
+version = "1.0.0"
+description = "Teivaka Agricultural Transformation Operating System — Backend API"
+requires-python = ">=3.12"
+readme = "README.md"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["app*"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["../07_testing/tests"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+addopts = "-v --tb=short"
+filterwarnings = [
+    "ignore::DeprecationWarning",
+    "ignore::PendingDeprecationWarning",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+select = ["E", "F", "W", "I", "N", "UP", "B", "A", "C4", "T20"]
+ignore = ["E501", "B008", "N818"]
+
+[tool.ruff.per-file-ignores]
+"alembic/*" = ["F401"]
+"app/routers/*" = ["B008"]  # FastAPI Depends() in defaults is intentional
+
+[tool.mypy]
+python_version = "3.12"
+warn_return_any = false
+ignore_missing_imports = true
