@@ -43,6 +43,11 @@ const Members       = lazy(() => import("./pages/farmer/Members"));
 const Leaderboard   = lazy(() => import("./pages/farmer/Leaderboard"));
 const HarvestLog    = lazy(() => import("./pages/farmer/HarvestLog"));
 
+// ── Phase 4b Week 1 shell + pages (5-tab FarmerShell) ─────────────────────────
+const FarmerShell   = lazy(() => import("./layouts/FarmerShell"));
+const FarmDashboard = lazy(() => import("./pages/farmer/FarmDashboard"));
+const HarvestNew    = lazy(() => import("./pages/farmer/HarvestNew"));
+
 // ── Admin pages (lazy — admin bundle never downloaded by farmers) ─────────────
 // React.lazy() means these are separate JS chunks. A farmer session will
 // never request or receive admin code, even if they know the URL.
@@ -122,9 +127,10 @@ export default function App() {
           <Route path="/kb" element={
             <FarmerRoute><KnowledgeBase /></FarmerRoute>
           } />
-          <Route path="/farm" element={
-            <FarmerRoute><FarmManager /></FarmerRoute>
-          } />
+          <Route element={<FarmerRoute><FarmerShell /></FarmerRoute>}>
+            <Route path="/farm"              element={<FarmDashboard />} />
+            <Route path="/farm/harvest/new"  element={<HarvestNew    />} />
+          </Route>
           <Route path="/harvest" element={
             <FarmerRoute><HarvestLog /></FarmerRoute>
           } />
