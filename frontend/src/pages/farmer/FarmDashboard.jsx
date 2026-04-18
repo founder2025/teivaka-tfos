@@ -165,7 +165,7 @@ export default function FarmDashboard() {
               Most recent harvest
             </div>
             <div className="text-sm mt-1" style={{ color: C.soil }}>
-              {harvest.qty_kg ?? harvest.quantity_kg ?? "—"} kg
+              {harvest.gross_yield_kg != null ? Number(harvest.gross_yield_kg).toFixed(2) : "—"} kg
               {harvest.grade ? ` · Grade ${harvest.grade}` : ""}
               {harvest.destination ? ` · ${harvest.destination}` : ""}
             </div>

@@ -47,6 +47,8 @@ const HarvestLog    = lazy(() => import("./pages/farmer/HarvestLog"));
 const FarmerShell   = lazy(() => import("./layouts/FarmerShell"));
 const FarmDashboard = lazy(() => import("./pages/farmer/FarmDashboard"));
 const HarvestNew    = lazy(() => import("./pages/farmer/HarvestNew"));
+const Classroom     = lazy(() => import("./pages/farmer/Classroom"));
+const Me            = lazy(() => import("./pages/farmer/Me"));
 
 // ── Admin pages (lazy — admin bundle never downloaded by farmers) ─────────────
 // React.lazy() means these are separate JS chunks. A farmer session will
@@ -130,6 +132,8 @@ export default function App() {
           <Route element={<FarmerRoute><FarmerShell /></FarmerRoute>}>
             <Route path="/farm"              element={<FarmDashboard />} />
             <Route path="/farm/harvest/new"  element={<HarvestNew    />} />
+            <Route path="/classroom"         element={<Classroom     />} />
+            <Route path="/me"                element={<Me            />} />
           </Route>
           <Route path="/harvest" element={
             <FarmerRoute><HarvestLog /></FarmerRoute>

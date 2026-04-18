@@ -81,7 +81,7 @@ const TABS = [
   { path: "/classroom", label: "Classroom", Icon: IconBookOpen, end: false },
   { path: "/farm",      label: "Farm",      Icon: IconTractor,  end: false, center: true },
   { path: "/tis",       label: "Tei",       Icon: IconSparkles, end: false },
-  { path: "/profile",   label: "Me",        Icon: IconUser,     end: false },
+  { path: "/me",        label: "Me",        Icon: IconUser,     end: false },
 ];
 
 function NavItem({ tab }) {
