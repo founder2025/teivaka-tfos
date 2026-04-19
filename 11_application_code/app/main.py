@@ -1,6 +1,7 @@
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from contextlib import asynccontextmanager
 import logging
 import sentry_sdk
@@ -282,8 +283,35 @@ app.include_router(health_router.router,      prefix=f"{PREFIX}/system",        
 
 # ─── Global exception handlers ─────────────────────────────────────────────────
 
+def _http_exception_response(request: Request, exc: StarletteHTTPException) -> JSONResponse:
+    if exc.status_code >= 500:
+        logger.warning(
+            f"HTTP {exc.status_code} on {request.method} {request.url.path}: {exc.detail}"
+        )
+    else:
+        logger.info(
+            f"HTTP {exc.status_code} on {request.method} {request.url.path}: {exc.detail}"
+        )
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": exc.detail},
+        headers=getattr(exc, "headers", None),
+    )
+
+
+@app.exception_handler(StarletteHTTPException)
+async def http_exception_handler(request: Request, exc: StarletteHTTPException):
+    return _http_exception_response(request, exc)
+
+
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
+    # BaseHTTPMiddleware-raised HTTPExceptions bypass the ExceptionMiddleware
+    # and land here via Starlette's ServerErrorMiddleware. Pass them through
+    # with their original status code instead of collapsing to 500.
+    if isinstance(exc, StarletteHTTPException):
+        return _http_exception_response(request, exc)
+
     logger.error(
         f"Unhandled exception on {request.method} {request.url.path}: {exc}",
         exc_info=True,
