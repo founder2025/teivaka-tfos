@@ -1,5 +1,6 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
 from decimal import Decimal
 from typing import Optional
 from datetime import date
@@ -11,6 +12,11 @@ from app.core.audit_chain import emit_audit_event
 from app.services.rotation_service import validate_rotation, CAN_START, log_rotation_override
 
 logger = logging.getLogger(__name__)
+
+
+# Migration 026 partial unique index name — checked to map IntegrityError
+# into the application's PU_ALREADY_HAS_ACTIVE_CYCLE sentinel.
+_ACTIVE_PU_INDEX = "ix_cycles_one_active_per_pu"
 
 
 # ─── State machine ────────────────────────────────────────────────────────────
@@ -116,34 +122,50 @@ async def create_cycle(
     # 4. Generate cycle_id
     cycle_id = generate_cycle_id(farm_id, pu_id, planting_date.year, seq)
 
-    # 5. Insert cycle
-    await session.execute(
-        text("""
-            INSERT INTO tenant.production_cycles
-                (cycle_id, tenant_id, pu_id, zone_id, farm_id, production_id,
-                 cycle_status, planting_date, planned_area_sqm, planned_yield_kg,
-                 cycle_notes, created_by, total_labor_cost_fjd, total_input_cost_fjd,
-                 total_other_cost_fjd, total_revenue_fjd)
-            SELECT
-                :cycle_id, :tenant_id, :pu_id, pu.zone_id, :farm_id, :production_id,
-                'ACTIVE', :planting_date, :planned_area_sqm, :planned_yield_kg,
-                :cycle_notes, :created_by, 0, 0, 0, 0
-            FROM tenant.production_units pu
-            WHERE pu.pu_id = :pu_id
-        """),
-        {
-            "cycle_id": cycle_id,
-            "tenant_id": tenant_id,
-            "pu_id": pu_id,
-            "farm_id": farm_id,
-            "production_id": production_id,
-            "planting_date": planting_date,
-            "planned_area_sqm": planned_area_sqm,
-            "planned_yield_kg": planned_yield_kg,
-            "cycle_notes": cycle_notes,
-            "created_by": created_by_user_id,
-        }
-    )
+    final_status = "ACTIVE"
+
+    # 5. Insert cycle. Migration 026 partial unique index on
+    #    (pu_id) WHERE cycle_status IN (ACTIVE,HARVESTING,CLOSING) blocks
+    #    a second live cycle on the same PU; translate that specific
+    #    IntegrityError into PU_ALREADY_HAS_ACTIVE_CYCLE so the router
+    #    surfaces a 4xx rather than a 500.
+    try:
+        await session.execute(
+            text("""
+                INSERT INTO tenant.production_cycles
+                    (cycle_id, tenant_id, pu_id, zone_id, farm_id, production_id,
+                     cycle_status, planting_date, planned_area_sqm, planned_yield_kg,
+                     cycle_notes, created_by, total_labor_cost_fjd, total_input_cost_fjd,
+                     total_other_cost_fjd, total_revenue_fjd)
+                SELECT
+                    :cycle_id, :tenant_id, :pu_id, pu.zone_id, :farm_id, :production_id,
+                    :final_status, :planting_date, :planned_area_sqm, :planned_yield_kg,
+                    :cycle_notes, :created_by, 0, 0, 0, 0
+                FROM tenant.production_units pu
+                WHERE pu.pu_id = :pu_id
+            """),
+            {
+                "cycle_id": cycle_id,
+                "tenant_id": tenant_id,
+                "pu_id": pu_id,
+                "farm_id": farm_id,
+                "production_id": production_id,
+                "planting_date": planting_date,
+                "planned_area_sqm": planned_area_sqm,
+                "planned_yield_kg": planned_yield_kg,
+                "cycle_notes": cycle_notes,
+                "created_by": created_by_user_id,
+                "final_status": final_status,
+            }
+        )
+    except IntegrityError as e:
+        if _ACTIVE_PU_INDEX in str(getattr(e, "orig", e)):
+            raise ValueError(
+                f"PU_ALREADY_HAS_ACTIVE_CYCLE: pu_id={pu_id} already has a "
+                "non-terminal cycle. Close or fail the existing cycle before "
+                "starting a new one."
+            ) from e
+        raise
 
     # 6. Update PU current cycle
     await session.execute(
@@ -164,12 +186,36 @@ async def create_cycle(
             override_reason, created_by_user_id, cycle_id, tenant_id
         )
 
+    # 8. Emit audit.events (v4.1 Bank Evidence spine — non-negotiable).
+    #    Step 5-6 smoke test exposed that create_cycle did not hash-chain
+    #    into audit.events. from_status=None reflects the genesis
+    #    transition into final_status (typically ACTIVE). The hash is NOT
+    #    plumbed back into the response envelope — create responses are
+    #    narrower than PATCH transition responses by design.
+    await emit_audit_event(
+        db=session,
+        tenant_id=UUID(tenant_id),
+        actor_user_id=UUID(created_by_user_id),
+        event_type="CYCLE_TRANSITION",
+        entity_type="production_cycle",
+        entity_id=cycle_id,
+        payload={
+            "from_status": None,
+            "to_status": final_status,
+            "pu_id": pu_id,
+            "production_id": production_id,
+            "planting_date": planting_date.isoformat(),
+            "rotation_status": rotation["rotation_status"],
+            "override_reason": override_reason,
+        },
+    )
+
     return {
         "cycle_id": cycle_id,
         "pu_id": pu_id,
         "farm_id": farm_id,
         "production_id": production_id,
-        "cycle_status": "ACTIVE",
+        "cycle_status": final_status,
         "planting_date": planting_date.isoformat(),
         "rotation_status": rotation["rotation_status"],
         "override_applied": rotation["rotation_status"] == "AVOID",
@@ -410,7 +456,7 @@ async def transition_cycle_status(
         db=session,
         tenant_id=UUID(tenant_id),
         event_type="CYCLE_TRANSITION",
-        entity_type="cycle",
+        entity_type="production_cycle",
         entity_id=cycle_id,
         actor_user_id=UUID(actor_user_id),
         payload={

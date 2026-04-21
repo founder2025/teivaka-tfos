@@ -235,6 +235,87 @@ async def test_create_cycle_ok(client, tenant_and_pu):
     assert data["override_applied"] is False
 
 
+async def test_create_cycle_emits_audit_event(client, tenant_and_pu):
+    """Phase 4 Part 2 regression: create_cycle must hash-chain into
+    audit.events (v4.1 Bank Evidence spine). Before the fix, zero rows
+    were written for the genesis transition on successful create."""
+    ctx = tenant_and_pu
+    token = await _mint_token(ctx["user_id"], ctx["tenant_id"])
+
+    resp = await _create_cycle_via_api(client, token, ctx["pu_id"], "CRP-CAB")
+    assert resp.status_code == 201, resp.text
+    cycle_id = resp.json()["data"]["cycle_id"]
+
+    async with AsyncSessionLocal() as db:
+        row = (await db.execute(
+            text(
+                """
+                SELECT event_type, payload_jsonb
+                FROM audit.events
+                WHERE tenant_id = :tid AND entity_id = :cid
+                """
+            ),
+            {"tid": str(ctx["tenant_id"]), "cid": cycle_id},
+        )).mappings().all()
+        assert len(row) == 1, f"expected exactly 1 audit row, got {len(row)}"
+        assert row[0]["event_type"] == "CYCLE_TRANSITION"
+        payload = row[0]["payload_jsonb"]
+        assert payload["from_status"] is None
+        assert payload["to_status"] == "ACTIVE"
+        assert payload["pu_id"] == ctx["pu_id"]
+
+
+async def test_create_cycle_blocks_duplicate_active(client, tenant_and_pu):
+    """Partial unique index ix_cycles_one_active_per_pu (migration 026)
+    prevents a second non-terminal cycle on the same PU."""
+    ctx = tenant_and_pu
+    token = await _mint_token(ctx["user_id"], ctx["tenant_id"])
+
+    r1 = await _create_cycle_via_api(client, token, ctx["pu_id"], "CRP-CAB")
+    assert r1.status_code == 201, r1.text
+
+    r2 = await _create_cycle_via_api(client, token, ctx["pu_id"], "CRP-DAL")
+    assert r2.status_code == 400, r2.text
+    err = r2.json()["detail"]["error"]
+    assert err["code"] == "CYCLE_CREATE_FAILED"
+    assert "PU_ALREADY_HAS_ACTIVE_CYCLE" in err["message"]
+
+
+async def test_create_cycle_allowed_after_predecessor_failed(client, tenant_and_pu):
+    """Once a cycle transitions to a terminal status (FAILED here), the
+    partial unique index no longer covers it and a new cycle on the same
+    PU is allowed."""
+    ctx = tenant_and_pu
+    token = await _mint_token(ctx["user_id"], ctx["tenant_id"])
+
+    r1 = await _create_cycle_via_api(client, token, ctx["pu_id"], "CRP-CAB")
+    assert r1.status_code == 201, r1.text
+    first_cycle_id = r1.json()["data"]["cycle_id"]
+
+    # Mark FAILED directly — keeps the test tight to the index behaviour
+    # rather than exercising the PATCH state machine end-to-end.
+    async with AsyncSessionLocal() as db:
+        await db.execute(
+            text(
+                "UPDATE tenant.production_cycles "
+                "SET cycle_status = 'FAILED' WHERE cycle_id = :cid"
+            ),
+            {"cid": first_cycle_id},
+        )
+        await db.execute(
+            text(
+                "UPDATE tenant.production_units "
+                "SET current_cycle_id = NULL WHERE pu_id = :puid"
+            ),
+            {"puid": ctx["pu_id"]},
+        )
+        await db.commit()
+
+    r2 = await _create_cycle_via_api(client, token, ctx["pu_id"], "CRP-CAB")
+    assert r2.status_code == 201, r2.text
+    assert r2.json()["data"]["cycle_id"] != first_cycle_id
+
+
 async def test_create_cycle_rotation_block_returns_409(client, tenant_and_pu):
     ctx = tenant_and_pu
     token = await _mint_token(ctx["user_id"], ctx["tenant_id"])
@@ -505,12 +586,17 @@ async def test_patch_any_to_failed_skips_cogk(client, tenant_and_pu):
         )).first()
         assert pu.current_cycle_id is None
 
+        # Phase 4 Part 2: create_cycle now also emits a CYCLE_TRANSITION
+        # (from_status=None → to_status=ACTIVE). Filter to the FAILED
+        # transition specifically to keep this test focused on the
+        # PATCH→FAILED side effect, not the genesis write.
         audit = (await db.execute(
             text(
                 """
                 SELECT COUNT(*) FROM audit.events
                 WHERE tenant_id = :tid AND event_type = 'CYCLE_TRANSITION'
                   AND entity_id = :cid
+                  AND payload_jsonb->>'to_status' = 'FAILED'
                 """
             ),
             {"tid": str(ctx["tenant_id"]), "cid": cycle_id},
