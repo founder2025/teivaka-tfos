@@ -1,266 +1,479 @@
-"""
-tasks.py — Task queue management.
+"""Phase 4.2 Step 5-6 — Task API endpoints.
 
-Routes:
-  GET  /tasks                → list tasks (filter by assignee, status, farm, priority)
-  POST /tasks                → create task
-  GET  /tasks/{task_id}      → task detail
-  PATCH /tasks/{task_id}     → update task (notes, status, assignee)
-  PATCH /tasks/{task_id}/complete → mark complete
-  DELETE /tasks/{task_id}    → delete task (FOUNDER/MANAGER only)
-"""
+Five endpoints that farmers (and UI) hit for the Task Engine:
+  GET  /api/v1/tasks/next                 — Solo-mode single card
+  GET  /api/v1/tasks                      — Growth/Commercial list w/ filters
+  POST /api/v1/tasks/{id}/complete        — Mark COMPLETED, emit audit
+  POST /api/v1/tasks/{id}/skip            — Mark SKIPPED, emit audit
+  POST /api/v1/tasks/{id}/help            — Return body_md + KB refs (no state change)
 
-from fastapi import APIRouter, Depends, HTTPException, status, Query
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import text
-from pydantic import BaseModel
-from typing import Optional
+All endpoints:
+  - Require authentication (get_current_user)
+  - Set tenant context for RLS (set_tenant_context)
+  - Wrap responses in the Part 13 envelope: {status, data, meta}
+  - Emit audit.events for every state-changing action (COMPLETE/SKIP)
+
+Deployment target: /opt/teivaka/11_application_code/app/routers/tasks.py
+"""
+from __future__ import annotations
+
+from datetime import datetime, timezone
+from typing import Annotated
 from uuid import UUID
-from datetime import date
-import logging
 
-from app.middleware.rls import get_current_user, get_tenant_db, require_role
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession
 
-logger = logging.getLogger(__name__)
-router = APIRouter()
-
-
-# ─── Schemas ──────────────────────────────────────────────────────────────────
-
-class TaskCreate(BaseModel):
-    farm_id: UUID
-    title: str
-    description: Optional[str] = None
-    assigned_to: Optional[UUID] = None
-    due_date: Optional[date] = None
-    priority: str = "MEDIUM"  # LOW, MEDIUM, HIGH, URGENT
-    task_type: Optional[str] = None
-    zone_id: Optional[UUID] = None
-    cycle_id: Optional[UUID] = None
-
-
-class TaskUpdate(BaseModel):
-    title: Optional[str] = None
-    description: Optional[str] = None
-    assigned_to: Optional[UUID] = None
-    due_date: Optional[date] = None
-    priority: Optional[str] = None
-    task_type: Optional[str] = None
-    status: Optional[str] = None
-
-
-class TaskComplete(BaseModel):
-    completion_note: Optional[str] = None
+# Deployed layout: get_current_user is provided by app.middleware.rls
+# and returns a dict (keys: tenant_id, user_id, role, tier). All
+# user.X attribute access in this file is user["X"].
+from app.middleware.rls import get_current_user
+from app.core.audit_chain import emit_audit_event
+from app.db.session import get_db
+from app.deps.tasks import (
+    derive_mode,
+    get_current_mode,
+    load_open_task,
+    set_tenant_context,
+)
+from app.schemas.tasks import (
+    FarmerMode,
+    KBArticleRef,
+    RANK_BAND_RANGES,
+    RankBand,
+    SourceModule,
+    TaskCompleteIn,
+    TaskCompleteOut,
+    TaskHelpOut,
+    TaskListOut,
+    TaskOut,
+    TaskSkipIn,
+    TaskSkipOut,
+    TaskStatus,
+)
 
 
-# ─── Endpoints ────────────────────────────────────────────────────────────────
+# Prefix is applied in app/main.py via include_router(..., prefix=f"{PREFIX}/tasks")
+# — matches the convention of all other routers in this repo. Do NOT set a prefix
+# here; it concatenates with main.py's prefix and produces /api/v1/tasks/api/v1/tasks/...
+router = APIRouter(tags=["tasks"])
 
-@router.get("", summary="List tasks")
+
+# --- Helpers ---------------------------------------------------------
+
+def _envelope_ok(data):
+    return {
+        "status": "success",
+        "data": data,
+        "meta": {"timestamp": datetime.now(timezone.utc).isoformat()},
+    }
+
+
+def _row_to_task_out(row) -> TaskOut:
+    """Map an asyncpg row into the TaskOut schema."""
+    return TaskOut(
+        task_id=row.task_id,
+        imperative=row.imperative,
+        task_rank=row.task_rank,
+        icon_key=row.icon_key,
+        input_hint=row.input_hint or "none",
+        body_md=row.body_md,
+        expires_at=row.expires_at,
+        default_outcome=row.default_outcome,
+        entity_type=row.entity_type,
+        entity_id=row.entity_id,
+        source_module=row.source_module,
+        source_reference=row.source_reference,
+        voice_playback_url=row.voice_playback_url,
+        status=row.status,
+        created_at=row.created_at,
+    )
+
+
+async def _fetch_next_task(db: AsyncSession, tenant_id: UUID) -> TaskOut | None:
+    """Return the lowest-rank OPEN task for the tenant, or None."""
+    row = (
+        await db.execute(
+            text(
+                """
+                SELECT task_id, imperative, task_rank, icon_key, input_hint,
+                       body_md, expires_at, default_outcome, entity_type,
+                       entity_id, source_module, source_reference,
+                       voice_playback_url, status, created_at
+                FROM tenant.task_queue
+                WHERE tenant_id = :tid
+                  AND status = 'OPEN'
+                  AND (expires_at IS NULL OR expires_at > NOW())
+                ORDER BY task_rank ASC, created_at ASC
+                LIMIT 1
+                """
+            ),
+            {"tid": str(tenant_id)},
+        )
+    ).first()
+    return _row_to_task_out(row) if row else None
+
+
+def _validate_input_against_hint(hint: str, value):
+    """Raise 422 if the completion input_value doesn't match the task's hint."""
+    if hint == "none":
+        if value is not None:
+            raise HTTPException(422, {"code": "INVALID_INPUT", "message": "Task requires no input; input_value must be null"})
+        return
+    if hint == "numeric_kg" or hint == "numeric_fjd":
+        if not isinstance(value, str):
+            raise HTTPException(422, {"code": "INVALID_INPUT", "message": f"{hint} requires a decimal string"})
+        try:
+            n = float(value)
+        except (TypeError, ValueError):
+            raise HTTPException(422, {"code": "INVALID_INPUT", "message": f"{hint} value is not a decimal"})
+        if n < 0:
+            raise HTTPException(422, {"code": "INVALID_INPUT", "message": f"{hint} must be non-negative"})
+        return
+    if hint == "text_short":
+        if not isinstance(value, str) or len(value) > 200:
+            raise HTTPException(422, {"code": "INVALID_INPUT", "message": "text_short must be a string ≤ 200 chars"})
+        return
+    if hint == "photo":
+        if not isinstance(value, str) or not value.startswith(("http://", "https://")):
+            raise HTTPException(422, {"code": "INVALID_INPUT", "message": "photo value must be an http(s) URL"})
+        return
+    if hint == "checklist":
+        if not isinstance(value, list) or not all(isinstance(b, bool) for b in value):
+            raise HTTPException(422, {"code": "INVALID_INPUT", "message": "checklist must be a list of booleans"})
+        return
+    if hint == "confirm_yn":
+        if not isinstance(value, bool):
+            raise HTTPException(422, {"code": "INVALID_INPUT", "message": "confirm_yn must be true/false"})
+        return
+
+
+# --- Endpoints -------------------------------------------------------
+
+@router.get("/next", response_model=None)
+async def get_next_task(
+    user=Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Solo-mode single card. Returns the highest-priority OPEN task.
+
+    Returns null data if no OPEN tasks exist.
+    """
+    await set_tenant_context(db, user["tenant_id"])
+    task = await _fetch_next_task(db, user["tenant_id"])
+    return _envelope_ok(task.model_dump(mode="json") if task else None)
+
+
+@router.get("", response_model=None)
 async def list_tasks(
-    farm_id: Optional[UUID] = Query(None),
-    assigned_to: Optional[UUID] = Query(None),
-    task_status: Optional[str] = Query(None, alias="status"),
-    priority: Optional[str] = Query(None),
-    due_before: Optional[date] = Query(None),
-    limit: int = Query(50, ge=1, le=500),
-    offset: int = Query(0, ge=0),
-    user: dict = Depends(get_current_user),
-    db: AsyncSession = Depends(get_tenant_db),
+    user=Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    status_filter: TaskStatus | None = Query(default=TaskStatus.OPEN, alias="status"),
+    rank_band: RankBand | None = None,
+    source_module: SourceModule | None = None,
+    entity_type: str | None = None,
+    entity_id: str | None = None,
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
 ):
-    filters = []
-    params: dict = {"limit": limit, "offset": offset}
+    """Growth/Commercial list view with filters.
 
-    if farm_id:
-        filters.append("t.farm_id = :farm_id")
-        params["farm_id"] = str(farm_id)
-    if assigned_to:
-        filters.append("t.assigned_to = :assigned_to")
-        params["assigned_to"] = str(assigned_to)
-    if task_status:
-        filters.append("t.status = :task_status")
-        params["task_status"] = task_status.upper()
-    if priority:
-        filters.append("t.priority = :priority")
-        params["priority"] = priority.upper()
-    if due_before:
-        filters.append("t.due_date <= :due_before")
-        params["due_before"] = due_before.isoformat()
+    Default: status='OPEN', sorted by task_rank ASC, limit 50.
+    """
+    await set_tenant_context(db, user["tenant_id"])
 
-    where_clause = f"WHERE {' AND '.join(filters)}" if filters else ""
+    where_clauses = ["tenant_id = :tid"]
+    params: dict = {"tid": str(user["tenant_id"]), "limit": limit, "offset": offset}
 
-    result = await db.execute(
-        text(f"""
-            SELECT
-                t.task_id,
-                t.farm_id,
-                f.farm_code,
-                t.title,
-                t.description,
-                t.task_type,
-                t.status,
-                t.priority,
-                t.assigned_to,
-                w.full_name AS assigned_to_name,
-                t.due_date,
-                t.completed_at,
-                t.zone_id,
-                z.zone_code,
-                t.cycle_id,
-                t.created_at,
-                CASE
-                    WHEN t.due_date IS NOT NULL AND t.due_date < CURRENT_DATE AND t.status != 'COMPLETE'
-                    THEN true ELSE false
-                END AS is_overdue
-            FROM tenant.tasks t
-            JOIN tenant.farms f ON f.farm_id = t.farm_id
-            LEFT JOIN tenant.workers w ON w.worker_id = t.assigned_to
-            LEFT JOIN tenant.zones z ON z.zone_id = t.zone_id
-            {where_clause}
-            ORDER BY
-                CASE t.priority WHEN 'URGENT' THEN 0 WHEN 'HIGH' THEN 1 WHEN 'MEDIUM' THEN 2 ELSE 3 END,
-                t.due_date ASC NULLS LAST,
-                t.created_at DESC
-            LIMIT :limit OFFSET :offset
-        """),
-        params,
+    if status_filter is not None:
+        where_clauses.append("status = :status")
+        params["status"] = status_filter.value
+
+    if rank_band is not None:
+        lo, hi = RANK_BAND_RANGES[rank_band]
+        where_clauses.append("task_rank BETWEEN :rank_lo AND :rank_hi")
+        params["rank_lo"] = lo
+        params["rank_hi"] = hi
+
+    if source_module is not None:
+        where_clauses.append("source_module = :sm")
+        params["sm"] = source_module.value
+
+    if entity_type is not None:
+        where_clauses.append("entity_type = :etype")
+        params["etype"] = entity_type
+
+    if entity_id is not None:
+        where_clauses.append("entity_id = :eid")
+        params["eid"] = entity_id
+
+    where_sql = " AND ".join(where_clauses)
+
+    count_row = (
+        await db.execute(
+            text(f"SELECT COUNT(*) FROM tenant.task_queue WHERE {where_sql}"),
+            params,
+        )
+    ).scalar_one()
+
+    rows = (
+        await db.execute(
+            text(
+                f"""
+                SELECT task_id, imperative, task_rank, icon_key, input_hint,
+                       body_md, expires_at, default_outcome, entity_type,
+                       entity_id, source_module, source_reference,
+                       voice_playback_url, status, created_at
+                FROM tenant.task_queue
+                WHERE {where_sql}
+                ORDER BY task_rank ASC, created_at ASC
+                LIMIT :limit OFFSET :offset
+                """
+            ),
+            params,
+        )
+    ).fetchall()
+
+    tasks = [_row_to_task_out(r) for r in rows]
+    return _envelope_ok(
+        TaskListOut(total=int(count_row), tasks=tasks).model_dump(mode="json")
     )
-    rows = result.mappings().all()
-    return {"tasks": [dict(r) for r in rows], "limit": limit, "offset": offset}
 
 
-@router.post("", status_code=status.HTTP_201_CREATED, summary="Create task")
-async def create_task(
-    payload: TaskCreate,
-    user: dict = Depends(get_current_user),
-    db: AsyncSession = Depends(get_tenant_db),
-):
-    result = await db.execute(
-        text("""
-            INSERT INTO tenant.tasks
-                (farm_id, title, description, assigned_to, due_date,
-                 priority, task_type, zone_id, cycle_id, created_by)
-            VALUES
-                (:farm_id, :title, :description, :assigned_to, :due_date,
-                 :priority, :task_type, :zone_id, :cycle_id, :created_by)
-            RETURNING task_id, farm_id, title, status, priority, due_date, created_at
-        """),
-        {
-            "farm_id": str(payload.farm_id),
-            "title": payload.title,
-            "description": payload.description,
-            "assigned_to": str(payload.assigned_to) if payload.assigned_to else None,
-            "due_date": payload.due_date.isoformat() if payload.due_date else None,
-            "priority": payload.priority.upper(),
-            "task_type": payload.task_type,
-            "zone_id": str(payload.zone_id) if payload.zone_id else None,
-            "cycle_id": str(payload.cycle_id) if payload.cycle_id else None,
-            "created_by": str(user["user_id"]),
-        },
-    )
-    row = result.mappings().first()
-    return dict(row)
-
-
-@router.get("/{task_id}", summary="Task detail")
-async def get_task(
-    task_id: UUID,
-    user: dict = Depends(get_current_user),
-    db: AsyncSession = Depends(get_tenant_db),
-):
-    result = await db.execute(
-        text("""
-            SELECT t.*, f.farm_code, z.zone_code,
-                   w.full_name AS assigned_to_name
-            FROM tenant.tasks t
-            JOIN tenant.farms f ON f.farm_id = t.farm_id
-            LEFT JOIN tenant.zones z ON z.zone_id = t.zone_id
-            LEFT JOIN tenant.workers w ON w.worker_id = t.assigned_to
-            WHERE t.task_id = :task_id
-        """),
-        {"task_id": str(task_id)},
-    )
-    row = result.mappings().first()
-    if not row:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
-    return dict(row)
-
-
-@router.patch("/{task_id}", summary="Update task")
-async def update_task(
-    task_id: UUID,
-    payload: TaskUpdate,
-    user: dict = Depends(get_current_user),
-    db: AsyncSession = Depends(get_tenant_db),
-):
-    updates = {k: v for k, v in payload.model_dump().items() if v is not None}
-    if not updates:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No fields to update")
-
-    set_clauses = ", ".join(f"{col} = :{col}" for col in updates)
-    updates["task_id"] = str(task_id)
-
-    result = await db.execute(
-        text(f"""
-            UPDATE tenant.tasks
-            SET {set_clauses}, updated_at = NOW()
-            WHERE task_id = :task_id
-            RETURNING task_id, title, status, priority, updated_at
-        """),
-        updates,
-    )
-    row = result.mappings().first()
-    if not row:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
-    return dict(row)
-
-
-@router.patch("/{task_id}/complete", summary="Mark task complete")
+@router.post("/{task_id}/complete", response_model=None)
 async def complete_task(
     task_id: UUID,
-    payload: TaskComplete = TaskComplete(),
-    user: dict = Depends(get_current_user),
-    db: AsyncSession = Depends(get_tenant_db),
+    body: TaskCompleteIn,
+    user=Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ):
-    result = await db.execute(
-        text("""
-            UPDATE tenant.tasks
-            SET
-                status = 'COMPLETE',
-                completed_at = NOW(),
-                completed_by = :user_id,
-                completion_note = :completion_note,
+    """Mark task COMPLETED.
+
+    - Validates input_value against task.input_hint
+    - Updates task_queue row
+    - Emits audit.events TASK_COMPLETED (hash chain continues)
+    - Returns the next OPEN task in the same response (Solo-mode preload)
+    - Idempotent on offline_id: if the same offline_id is received twice,
+      return the prior result instead of double-emitting audit
+    """
+    await set_tenant_context(db, user["tenant_id"])
+
+    # Idempotency check via offline_id — dedupe before touching state
+    if body.offline_id:
+        prior = (
+            await db.execute(
+                text(
+                    """
+                    SELECT e.event_id, e.this_hash
+                    FROM audit.events e
+                    WHERE e.tenant_id = :tid
+                      AND e.client_offline_id = :oid
+                      AND e.event_type = 'TASK_COMPLETED'
+                    LIMIT 1
+                    """
+                ),
+                {"tid": str(user["tenant_id"]), "oid": body.offline_id},
+            )
+        ).first()
+        if prior is not None:
+            next_task = await _fetch_next_task(db, user["tenant_id"])
+            return _envelope_ok(
+                TaskCompleteOut(
+                    task_id=task_id,
+                    status="COMPLETED",
+                    audit_event_id=prior.event_id,
+                    audit_this_hash=prior.this_hash,
+                    next_task=next_task,
+                ).model_dump(mode="json")
+            )
+
+    task = await load_open_task(db, task_id, user["tenant_id"])
+    _validate_input_against_hint(task.input_hint or "none", body.input_value)
+
+    # Update task row to COMPLETED
+    await db.execute(
+        text(
+            """
+            UPDATE tenant.task_queue
+            SET status = 'COMPLETED',
                 updated_at = NOW()
-            WHERE task_id = :task_id AND status != 'COMPLETE'
-            RETURNING task_id, status, completed_at, completed_by
-        """),
-        {
+            WHERE task_id = :tid AND tenant_id = :tenant
+            """
+        ),
+        {"tid": str(task_id), "tenant": str(user["tenant_id"])},
+    )
+
+    # Emit audit.events — hash chain continues
+    event_id, this_hash = await emit_audit_event(
+        db=db,
+        tenant_id=user["tenant_id"],
+        actor_user_id=user["user_id"],
+        event_type="TASK_COMPLETED",
+        entity_type=task.entity_type,
+        entity_id=task.entity_id,
+        payload={
             "task_id": str(task_id),
-            "user_id": str(user["user_id"]),
-            "completion_note": payload.completion_note,
+            "imperative": task.imperative,
+            "source_module": task.source_module,
+            "source_reference": task.source_reference,
+            "input_value": body.input_value,
+            "note": body.note,
         },
+        client_offline_id=body.offline_id,
     )
-    row = result.mappings().first()
-    if not row:
-        check = await db.execute(
-            text("SELECT task_id, status FROM tenant.tasks WHERE task_id = :tid"),
-            {"tid": str(task_id)},
-        )
-        existing = check.mappings().first()
-        if not existing:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Task is already complete")
-    return dict(row)
+
+    await db.commit()
+
+    # Fetch next task for Solo preload
+    next_task = await _fetch_next_task(db, user["tenant_id"])
+
+    return _envelope_ok(
+        TaskCompleteOut(
+            task_id=task_id,
+            status="COMPLETED",
+            audit_event_id=event_id,
+            audit_this_hash=this_hash,
+            next_task=next_task,
+        ).model_dump(mode="json")
+    )
 
 
-@router.delete("/{task_id}", status_code=status.HTTP_204_NO_CONTENT, summary="Delete task")
-async def delete_task(
+@router.post("/{task_id}/skip", response_model=None)
+async def skip_task(
     task_id: UUID,
-    user: dict = Depends(require_role("FOUNDER", "MANAGER")),
-    db: AsyncSession = Depends(get_tenant_db),
+    body: TaskSkipIn,
+    user=Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ):
-    result = await db.execute(
-        text("DELETE FROM tenant.tasks WHERE task_id = :task_id RETURNING task_id"),
-        {"task_id": str(task_id)},
+    """Mark task SKIPPED with required reason.
+
+    Same idempotency contract as /complete via offline_id.
+    """
+    await set_tenant_context(db, user["tenant_id"])
+
+    if body.offline_id:
+        prior = (
+            await db.execute(
+                text(
+                    """
+                    SELECT e.event_id, e.this_hash
+                    FROM audit.events e
+                    WHERE e.tenant_id = :tid
+                      AND e.client_offline_id = :oid
+                      AND e.event_type = 'TASK_SKIPPED'
+                    LIMIT 1
+                    """
+                ),
+                {"tid": str(user["tenant_id"]), "oid": body.offline_id},
+            )
+        ).first()
+        if prior is not None:
+            next_task = await _fetch_next_task(db, user["tenant_id"])
+            return _envelope_ok(
+                TaskSkipOut(
+                    task_id=task_id,
+                    status="SKIPPED",
+                    audit_event_id=prior.event_id,
+                    audit_this_hash=prior.this_hash,
+                    next_task=next_task,
+                ).model_dump(mode="json")
+            )
+
+    task = await load_open_task(db, task_id, user["tenant_id"])
+
+    await db.execute(
+        text(
+            """
+            UPDATE tenant.task_queue
+            SET status = 'SKIPPED',
+                updated_at = NOW()
+            WHERE task_id = :tid AND tenant_id = :tenant
+            """
+        ),
+        {"tid": str(task_id), "tenant": str(user["tenant_id"])},
     )
-    if not result.first():
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
+
+    event_id, this_hash = await emit_audit_event(
+        db=db,
+        tenant_id=user["tenant_id"],
+        actor_user_id=user["user_id"],
+        event_type="TASK_SKIPPED",
+        entity_type=task.entity_type,
+        entity_id=task.entity_id,
+        payload={
+            "task_id": str(task_id),
+            "imperative": task.imperative,
+            "source_module": task.source_module,
+            "source_reference": task.source_reference,
+            "reason": body.reason.value,
+            "note": body.note,
+        },
+        client_offline_id=body.offline_id,
+    )
+
+    await db.commit()
+
+    next_task = await _fetch_next_task(db, user["tenant_id"])
+
+    return _envelope_ok(
+        TaskSkipOut(
+            task_id=task_id,
+            status="SKIPPED",
+            audit_event_id=event_id,
+            audit_this_hash=this_hash,
+            next_task=next_task,
+        ).model_dump(mode="json")
+    )
+
+
+@router.post("/{task_id}/help", response_model=None)
+async def task_help(
+    task_id: UUID,
+    user=Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Return body_md + KB article pointers for this task. No state change.
+
+    KB lookup strategy:
+      Phase 4.2 Step 5-6 (current): body_md only, kb_articles returns empty list.
+      Reason: deployed shared.kb_articles schema (columns article_id, article_type,
+      title, content_md, content_summary, embedding_vector, validated_by,
+      validated_date, published, created_at) does not have slug/layer/status/
+      tags/updated_at. The original lookup strategy was written against an
+      earlier schema draft. KB reconciliation is a Phase 4.3 task.
+      Phase 4.3+: rebuild KB lookup against real columns — either published=true
+      filter + entity_type match, or pgvector similarity on task imperative.
+    """
+    await set_tenant_context(db, user["tenant_id"])
+
+    # Load task (any status — help is read-only)
+    row = (
+        await db.execute(
+            text(
+                """
+                SELECT task_id, body_md, source_module, entity_type, entity_id
+                FROM tenant.task_queue
+                WHERE task_id = :tid AND tenant_id = :tenant
+                """
+            ),
+            {"tid": str(task_id), "tenant": str(user["tenant_id"])},
+        )
+    ).first()
+
+    if row is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "TASK_NOT_FOUND", "message": "Task not found"},
+        )
+
+    # KB article lookup deferred to Phase 4.3 — see docstring.
+    kb_articles: list[KBArticleRef] = []
+
+    help_out = TaskHelpOut(
+        task_id=task_id,
+        body_md=row.body_md,
+        kb_articles=kb_articles,
+        escalation=None,  # Phase 4.3+: populate from task's entity owner / farm manager
+    )
+    return _envelope_ok(help_out.model_dump(mode="json"))

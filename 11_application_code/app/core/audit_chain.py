@@ -8,7 +8,7 @@ Provides:
 Usage:
     from app.core.audit_chain import emit_audit_event
 
-    event_id = await emit_audit_event(
+    event_id, this_hash = await emit_audit_event(
         db=db,
         tenant_id=tenant_id,
         actor_user_id=user_id,
@@ -108,10 +108,16 @@ async def emit_audit_event(
     entity_id: str | None = None,
     occurred_at: datetime | None = None,
     client_offline_id: str | None = None,
-) -> UUID:
+) -> tuple[UUID, str]:
     """Insert one audit.events row with correct hash-chain linkage.
 
-    Returns: event_id (UUID)
+    Returns: (event_id, this_hash)
+
+    Callers often need this_hash immediately for response envelopes or
+    observability (e.g. the Task API returns audit_this_hash on COMPLETE
+    and SKIP). Returning it here avoids a follow-up SELECT and guarantees
+    the caller gets the exact hash that was just written, not a stale
+    lookup racing a concurrent insert.
 
     This function:
       1. Resolves previous_hash by looking up the most-recent audit row
@@ -134,6 +140,11 @@ async def emit_audit_event(
     (tenant_id, this_hash) index is sufficient — a conflicting insert
     will raise IntegrityError and the caller should retry.
     """
+    # NOTE: previous usage example in the module docstring (top of file)
+    # shows `event_id = await emit_audit_event(...)` — that reflects the
+    # pre-tuple return. Any call site that unpacks only a single value will
+    # now see a TypeError. Current callers (routers/tasks.py:complete + skip)
+    # already expect the tuple. No other callers exist.
     if occurred_at is None:
         occurred_at = datetime.now(timezone.utc)
 
@@ -198,7 +209,7 @@ async def emit_audit_event(
         },
     )
 
-    return event_id
+    return event_id, this_hash
 
 
 # -- 4. Chain verification -------------------------------------------------
