@@ -3,12 +3,33 @@ from sqlalchemy import text
 from decimal import Decimal
 from typing import Optional
 from datetime import date
+from uuid import UUID
 import uuid
 import logging
 
+from app.core.audit_chain import emit_audit_event
 from app.services.rotation_service import validate_rotation, CAN_START, log_rotation_override
 
 logger = logging.getLogger(__name__)
+
+
+# ─── State machine ────────────────────────────────────────────────────────────
+# Phase 4.2 Step 5-6 addendum. Rotation validation runs on CREATE only;
+# transitions do NOT re-validate rotation (PU crop does not change during
+# a cycle lifecycle, so rotation is a create-time invariant).
+
+_ALLOWED_TRANSITIONS: dict[str, set[str]] = {
+    "PLANNED":    {"ACTIVE", "FAILED"},
+    "ACTIVE":     {"HARVESTING", "CLOSING", "FAILED"},
+    "HARVESTING": {"CLOSING", "FAILED"},
+    "CLOSING":    {"CLOSED", "FAILED"},
+    "CLOSED":     set(),
+    "FAILED":     set(),
+}
+
+
+def is_valid_transition(from_status: str, to_status: str) -> bool:
+    return to_status in _ALLOWED_TRANSITIONS.get(from_status, set())
 
 
 def generate_cycle_id(farm_id: str, pu_id: str, year: int, seq: int) -> str:
@@ -218,56 +239,226 @@ async def get_cycle_financials(
     return dict(row)
 
 
+async def transition_cycle_status(
+    session: AsyncSession,
+    cycle_id: str,
+    target_status: str,
+    actor_user_id: str,
+    tenant_id: str,
+    notes: Optional[str] = None,
+) -> dict:
+    """Advance a cycle through the allowed state machine.
+
+    Side effects per target:
+      HARVESTING → sets actual_harvest_start = CURRENT_DATE if NULL
+      CLOSING    → sets actual_harvest_end   = CURRENT_DATE if NULL
+      CLOSED     → compute_cogk, UPSERT tenant.cycle_financials row,
+                   set closed_by/closed_at, clear PU.current_cycle_id
+      FAILED     → set closed_by/closed_at, clear PU.current_cycle_id
+                   (skip compute_cogk — FAILED cycles carry no harvest.
+                    TODO: once cycle_financials gains a sunk_cost_fjd
+                    field, write a partial roll-up here.)
+
+    No rotation re-validation: the rotation gate is create-time only.
+
+    Emits one audit.events row with event_type='CYCLE_TRANSITION' and
+    payload {cycle_id, farm_id, from_status, to_status, notes,
+    actor_user_id}. Returns (cycle_id, from_status, to_status,
+    audit_event_id, audit_this_hash).
+    """
+    # App-layer tenant scope: teivaka DB role currently bypasses RLS, so
+    # enforce the tenant boundary here rather than rely on policies.
+    row = (await session.execute(
+        text("""
+            SELECT pu_id, farm_id, cycle_status
+            FROM tenant.production_cycles
+            WHERE cycle_id = :cid AND tenant_id = :tid
+        """),
+        {"cid": cycle_id, "tid": tenant_id},
+    )).mappings().first()
+    if not row:
+        raise LookupError(f"Cycle {cycle_id} not found")
+
+    from_status = row["cycle_status"]
+    if from_status == target_status:
+        raise ValueError(
+            f"CYCLE_TRANSITION_NOOP: cycle already in status {target_status}"
+        )
+    if not is_valid_transition(from_status, target_status):
+        raise ValueError(
+            f"CYCLE_TRANSITION_INVALID: {from_status} → {target_status} not allowed"
+        )
+
+    if target_status == "HARVESTING":
+        await session.execute(
+            text("""
+                UPDATE tenant.production_cycles
+                SET cycle_status = 'HARVESTING',
+                    actual_harvest_start = COALESCE(actual_harvest_start, CURRENT_DATE),
+                    updated_at = NOW()
+                WHERE cycle_id = :cid
+            """),
+            {"cid": cycle_id},
+        )
+    elif target_status == "CLOSING":
+        await session.execute(
+            text("""
+                UPDATE tenant.production_cycles
+                SET cycle_status = 'CLOSING',
+                    actual_harvest_end = COALESCE(actual_harvest_end, CURRENT_DATE),
+                    updated_at = NOW()
+                WHERE cycle_id = :cid
+            """),
+            {"cid": cycle_id},
+        )
+    elif target_status == "CLOSED":
+        # Compute CoKG inline from production_cycles.* totals (which are
+        # maintained by the existing update_cycle_on_harvest /
+        # recompute_cycle_financials triggers). The tenant.compute_cogk()
+        # DB function references unqualified `labor_log` / `cash_ledger`
+        # and cannot run — that's a latent schema-drift bug that needs
+        # its own migration; not fixing it here (scope = transition path).
+        await session.execute(
+            text("""
+                INSERT INTO tenant.cycle_financials (
+                    financial_id, tenant_id, cycle_id, farm_id,
+                    total_labor_cost_fjd, total_input_cost_fjd, total_other_cost_fjd,
+                    total_cost_fjd, total_revenue_fjd, total_harvest_kg,
+                    cogk_fjd_per_kg, last_computed_at
+                )
+                SELECT
+                    'CFN-' || pc.cycle_id, pc.tenant_id, pc.cycle_id, pc.farm_id,
+                    pc.total_labor_cost_fjd, pc.total_input_cost_fjd, pc.total_other_cost_fjd,
+                    pc.total_labor_cost_fjd + pc.total_input_cost_fjd + pc.total_other_cost_fjd,
+                    pc.total_revenue_fjd, COALESCE(pc.actual_yield_kg, 0),
+                    CASE WHEN pc.actual_yield_kg IS NOT NULL AND pc.actual_yield_kg > 0
+                         THEN ROUND(
+                             (pc.total_labor_cost_fjd + pc.total_input_cost_fjd
+                              + pc.total_other_cost_fjd) / pc.actual_yield_kg, 4)
+                         ELSE NULL END,
+                    NOW()
+                FROM tenant.production_cycles pc
+                WHERE pc.cycle_id = :cid
+                ON CONFLICT (cycle_id) DO UPDATE SET
+                    total_labor_cost_fjd = EXCLUDED.total_labor_cost_fjd,
+                    total_input_cost_fjd = EXCLUDED.total_input_cost_fjd,
+                    total_other_cost_fjd = EXCLUDED.total_other_cost_fjd,
+                    total_cost_fjd       = EXCLUDED.total_cost_fjd,
+                    total_revenue_fjd    = EXCLUDED.total_revenue_fjd,
+                    total_harvest_kg     = EXCLUDED.total_harvest_kg,
+                    cogk_fjd_per_kg      = EXCLUDED.cogk_fjd_per_kg,
+                    last_computed_at     = NOW()
+            """),
+            {"cid": cycle_id},
+        )
+        await session.execute(
+            text("""
+                UPDATE tenant.production_cycles pc
+                SET cycle_status = 'CLOSED',
+                    closed_by = :actor,
+                    closed_at = NOW(),
+                    cogk_fjd_per_kg = CASE
+                        WHEN pc.actual_yield_kg IS NOT NULL AND pc.actual_yield_kg > 0
+                        THEN ROUND(
+                            (pc.total_labor_cost_fjd + pc.total_input_cost_fjd
+                             + pc.total_other_cost_fjd) / pc.actual_yield_kg, 4)
+                        ELSE NULL END,
+                    updated_at = NOW()
+                WHERE pc.cycle_id = :cid
+            """),
+            {"cid": cycle_id, "actor": actor_user_id},
+        )
+        await session.execute(
+            text("""
+                UPDATE tenant.production_units
+                SET current_cycle_id = NULL, updated_at = NOW()
+                WHERE pu_id = :puid AND current_cycle_id = :cid
+            """),
+            {"puid": row["pu_id"], "cid": cycle_id},
+        )
+    elif target_status == "FAILED":
+        await session.execute(
+            text("""
+                UPDATE tenant.production_cycles
+                SET cycle_status = 'FAILED',
+                    closed_by = :actor,
+                    closed_at = NOW(),
+                    updated_at = NOW()
+                WHERE cycle_id = :cid
+            """),
+            {"cid": cycle_id, "actor": actor_user_id},
+        )
+        await session.execute(
+            text("""
+                UPDATE tenant.production_units
+                SET current_cycle_id = NULL, updated_at = NOW()
+                WHERE pu_id = :puid AND current_cycle_id = :cid
+            """),
+            {"puid": row["pu_id"], "cid": cycle_id},
+        )
+    else:  # ACTIVE
+        await session.execute(
+            text("""
+                UPDATE tenant.production_cycles
+                SET cycle_status = :ts, updated_at = NOW()
+                WHERE cycle_id = :cid
+            """),
+            {"cid": cycle_id, "ts": target_status},
+        )
+
+    event_id, this_hash = await emit_audit_event(
+        db=session,
+        tenant_id=UUID(tenant_id),
+        event_type="CYCLE_TRANSITION",
+        entity_type="cycle",
+        entity_id=cycle_id,
+        actor_user_id=UUID(actor_user_id),
+        payload={
+            "cycle_id": cycle_id,
+            "farm_id": row["farm_id"],
+            "from_status": from_status,
+            "to_status": target_status,
+            "notes": notes,
+            "actor_user_id": actor_user_id,
+        },
+    )
+
+    return {
+        "cycle_id": cycle_id,
+        "from_status": from_status,
+        "to_status": target_status,
+        "audit_event_id": str(event_id),
+        "audit_this_hash": this_hash,
+    }
+
+
 async def close_cycle(
     session: AsyncSession,
     cycle_id: str,
     closed_by_user_id: str,
     closing_notes: Optional[str] = None,
+    tenant_id: Optional[str] = None,
 ) -> dict:
+    """Sugar wrapper around transition_cycle_status(target_status='CLOSED').
+
+    Kept for the PATCH /{id}/close endpoint. All close-time semantics
+    (compute_cogk + cycle_financials UPSERT + PU clear + audit) live in
+    transition_cycle_status — this function is a single delegating call.
     """
-    Closes a cycle: sets status to CLOSING -> triggers final CoKG compute.
-    Also clears current_cycle_id on the PU.
-    """
-    # Get cycle info
-    result = await session.execute(
-        text("SELECT pu_id, cycle_status, actual_yield_kg FROM tenant.production_cycles WHERE cycle_id = :cycle_id"),
-        {"cycle_id": cycle_id}
+    if tenant_id is None:
+        # Resolve tenant_id from the cycle row if the caller didn't pass it.
+        tid_row = (await session.execute(
+            text("SELECT tenant_id FROM tenant.production_cycles WHERE cycle_id = :cid"),
+            {"cid": cycle_id},
+        )).scalar()
+        if tid_row is None:
+            raise ValueError(f"Cycle {cycle_id} not found")
+        tenant_id = str(tid_row)
+    return await transition_cycle_status(
+        session,
+        cycle_id=cycle_id,
+        target_status="CLOSED",
+        actor_user_id=closed_by_user_id,
+        tenant_id=tenant_id,
+        notes=closing_notes,
     )
-    cycle = result.mappings().first()
-    if not cycle:
-        raise ValueError(f"Cycle {cycle_id} not found")
-    if cycle["cycle_status"] in ("CLOSED", "FAILED"):
-        raise ValueError(f"Cycle {cycle_id} is already {cycle['cycle_status']}")
-
-    # Compute final CoKG via DB function
-    await session.execute(
-        text("SELECT tenant.compute_cogk(:cycle_id)"),
-        {"cycle_id": cycle_id}
-    )
-
-    # Set status to CLOSED
-    await session.execute(
-        text("""
-            UPDATE tenant.production_cycles
-            SET cycle_status = 'CLOSED',
-                closed_by = :closed_by,
-                closed_at = NOW(),
-                cycle_notes = COALESCE(:notes, cycle_notes),
-                updated_at = NOW()
-            WHERE cycle_id = :cycle_id
-        """),
-        {"cycle_id": cycle_id, "closed_by": closed_by_user_id, "notes": closing_notes}
-    )
-
-    # Clear PU current cycle
-    await session.execute(
-        text("""
-            UPDATE tenant.production_units
-            SET current_cycle_id = NULL,
-                updated_at = NOW()
-            WHERE pu_id = :pu_id AND current_cycle_id = :cycle_id
-        """),
-        {"pu_id": cycle["pu_id"], "cycle_id": cycle_id}
-    )
-
-    return {"cycle_id": cycle_id, "status": "CLOSED", "closed_at": "now"}

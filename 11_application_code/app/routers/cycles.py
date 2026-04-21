@@ -21,6 +21,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.middleware.rls import get_current_user, get_tenant_db
+from app.schemas.envelope import error_envelope, success_envelope
 from app.services import cycle_service
 from app.services.rotation_service import validate_rotation as rotation_check
 
@@ -45,6 +46,16 @@ class CycleClose(BaseModel):
     closing_notes: Optional[str] = None
 
 
+class CyclePatch(BaseModel):
+    cycle_status: str
+    notes: Optional[str] = None  # emitted into audit payload, NOT appended to cycle_notes
+
+    @field_validator("cycle_status")
+    @classmethod
+    def _uppercase_status(cls, v: str) -> str:
+        return v.upper() if v else v
+
+
 # ─── Endpoints ────────────────────────────────────────────────────────────────
 
 @router.get("", summary="List production cycles")
@@ -58,13 +69,21 @@ async def list_cycles(
     db: AsyncSession = Depends(get_tenant_db),
 ):
     if cycle_status and cycle_status not in _VALID_STATUSES:
-        raise HTTPException(422, detail=f"cycle_status must be one of {sorted(_VALID_STATUSES)}")
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=error_envelope(
+                "INVALID_CYCLE_STATUS",
+                f"cycle_status must be one of {sorted(_VALID_STATUSES)}",
+            ),
+        )
 
-    filters, params = [], {"limit": limit, "offset": offset}
+    # App-layer tenant scope (see get_cycle note on RLS bypass).
+    filters = ["pc.tenant_id = :tid"]
+    params: dict = {"limit": limit, "offset": offset, "tid": str(user["tenant_id"])}
     if farm_id:      filters.append("pc.farm_id = :farm_id");           params["farm_id"] = farm_id
     if pu_id:        filters.append("pc.pu_id = :pu_id");               params["pu_id"] = pu_id
     if cycle_status: filters.append("pc.cycle_status = :cycle_status"); params["cycle_status"] = cycle_status
-    where = f"WHERE {' AND '.join(filters)}" if filters else ""
+    where = f"WHERE {' AND '.join(filters)}"
 
     rows = (await db.execute(
         text(f"""
@@ -80,7 +99,11 @@ async def list_cycles(
         """),
         params,
     )).mappings().all()
-    return {"cycles": [dict(r) for r in rows], "limit": limit, "offset": offset}
+    cycles = [dict(r) for r in rows]
+    return success_envelope(
+        {"cycles": cycles},
+        meta={"limit": limit, "offset": offset, "count": len(cycles)},
+    )
 
 
 @router.post("/rotation-check", summary="Pre-flight rotation check (no insert)")
@@ -89,13 +112,14 @@ async def rotation_pre_check(
     user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_tenant_db),
 ):
-    return await rotation_check(
+    result = await rotation_check(
         db,
         pu_id=payload.pu_id,
         production_id=payload.production_id,
         planting_date=payload.planting_date,
         tenant_id=str(user["tenant_id"]),
     )
+    return success_envelope(result)
 
 
 @router.post("", status_code=status.HTTP_201_CREATED, summary="Create production cycle")
@@ -130,18 +154,14 @@ async def create_cycle(
             )
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail={
-                    "status": "error",
-                    "error": {
-                        "code": "ROTATION_VIOLATION",
-                        "message": msg,
-                        "data": payload_data,
-                    },
-                },
+                detail=error_envelope("ROTATION_VIOLATION", msg, data=payload_data),
             )
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=msg)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=error_envelope("CYCLE_CREATE_FAILED", msg),
+        )
     await db.commit()
-    return result
+    return success_envelope(result)
 
 
 @router.get("/{cycle_id}", summary="Cycle detail")
@@ -150,18 +170,24 @@ async def get_cycle(
     user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_tenant_db),
 ):
+    # App-layer tenant scope. RLS is currently bypassed by the teivaka DB
+    # role (SUPERUSER+BYPASSRLS — see Phase 4.2 Step 5-6 deferred notes),
+    # so explicit tenant_id filter is the enforced isolation boundary.
     row = (await db.execute(
         text("""
             SELECT pc.*, p.production_name
             FROM   tenant.production_cycles pc
             JOIN   shared.productions p ON p.production_id = pc.production_id
-            WHERE  pc.cycle_id = :cid
+            WHERE  pc.cycle_id = :cid AND pc.tenant_id = :tid
         """),
-        {"cid": cycle_id},
+        {"cid": cycle_id, "tid": str(user["tenant_id"])},
     )).mappings().first()
     if not row:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=f"Cycle '{cycle_id}' not found")
-    return dict(row)
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=error_envelope("CYCLE_NOT_FOUND", f"Cycle {cycle_id!r} not found"),
+        )
+    return success_envelope(dict(row))
 
 
 @router.get("/{cycle_id}/financials", summary="Cycle financials — CoKG first")
@@ -171,12 +197,56 @@ async def get_cycle_financials(
     db: AsyncSession = Depends(get_tenant_db),
 ):
     try:
-        return await cycle_service.get_cycle_financials(db, cycle_id=cycle_id)
+        result = await cycle_service.get_cycle_financials(db, cycle_id=cycle_id)
     except ValueError as e:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=error_envelope("CYCLE_NOT_FOUND", str(e)),
+        )
+    return success_envelope(result)
 
 
-@router.patch("/{cycle_id}/close", summary="Close production cycle")
+@router.patch("/{cycle_id}", summary="Transition cycle_status (state machine)")
+async def patch_cycle(
+    cycle_id: str,
+    payload: CyclePatch,
+    user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_tenant_db),
+):
+    if payload.cycle_status not in _VALID_STATUSES:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=error_envelope(
+                "INVALID_CYCLE_STATUS",
+                f"cycle_status must be one of {sorted(_VALID_STATUSES)}",
+            ),
+        )
+    try:
+        result = await cycle_service.transition_cycle_status(
+            db,
+            cycle_id=cycle_id,
+            target_status=payload.cycle_status,
+            actor_user_id=str(user["user_id"]),
+            tenant_id=str(user["tenant_id"]),
+            notes=payload.notes,
+        )
+    except LookupError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=error_envelope("CYCLE_NOT_FOUND", f"Cycle {cycle_id!r} not found"),
+        )
+    except ValueError as e:
+        msg = str(e)
+        code = msg.split(":", 1)[0] if ":" in msg else "CYCLE_TRANSITION_INVALID"
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=error_envelope(code, msg),
+        )
+    await db.commit()
+    return success_envelope(result)
+
+
+@router.patch("/{cycle_id}/close", summary="Close production cycle (sugar → PATCH)")
 async def close_cycle(
     cycle_id: str,
     payload: CycleClose,
@@ -189,8 +259,17 @@ async def close_cycle(
             cycle_id=cycle_id,
             closed_by_user_id=str(user["user_id"]),
             closing_notes=payload.closing_notes,
+            tenant_id=str(user["tenant_id"]),
+        )
+    except LookupError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=error_envelope("CYCLE_NOT_FOUND", f"Cycle {cycle_id!r} not found"),
         )
     except ValueError as e:
-        raise HTTPException(status.HTTP_409_CONFLICT, detail=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=error_envelope("CYCLE_CLOSE_FAILED", str(e)),
+        )
     await db.commit()
-    return result
+    return success_envelope(result)
