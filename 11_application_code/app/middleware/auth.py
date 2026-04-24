@@ -60,20 +60,21 @@ class AuthMiddleware:
         if path in self.PUBLIC_PATHS or any(path.startswith(p) for p in self.PUBLIC_PREFIXES):
             return await call_next(request)
 
-        # Extract Bearer token
+        # Extract Bearer token.
+        # SSE endpoints (EventSource) cannot set custom headers, so for the
+        # TIS advisory stream we also accept ?access_token= as a fallback.
+        # This is narrowly scoped by path — no other endpoint reads query auth.
         auth_header = request.headers.get("Authorization", "")
-        if not auth_header.startswith("Bearer "):
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Missing or malformed authorization header. Expected: Bearer <token>",
-                headers={"WWW-Authenticate": "Bearer"},
-            )
+        token: str | None = None
+        if auth_header.startswith("Bearer "):
+            token = auth_header.split(" ", 1)[1].strip()
+        elif path == "/api/v1/tis/stream":
+            token = (request.query_params.get("access_token") or "").strip() or None
 
-        token = auth_header.split(" ", 1)[1].strip()
         if not token:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Empty authorization token",
+                detail="Missing or malformed authorization header. Expected: Bearer <token>",
                 headers={"WWW-Authenticate": "Bearer"},
             )
 

@@ -51,6 +51,9 @@ const HarvestNew    = lazy(() => import("./pages/farmer/HarvestNew"));
 const Classroom     = lazy(() => import("./pages/farmer/Classroom"));
 const Me            = lazy(() => import("./pages/farmer/Me"));
 
+// ── Day 3a — Nav v2.1 structural stubs ───────────────────────────────────────
+import ComingSoon from "./pages/ComingSoon";
+
 // ── Admin pages (lazy — admin bundle never downloaded by farmers) ─────────────
 // React.lazy() means these are separate JS chunks. A farmer session will
 // never request or receive admin code, even if they know the URL.
@@ -136,12 +139,46 @@ export default function App() {
             <Route path="/farm/harvest/new"  element={<HarvestNew    />} />
             <Route path="/classroom"         element={<Classroom     />} />
             <Route path="/me"                element={<Me            />} />
+            <Route path="/tis"               element={<TIS           />} />
+
+            {/* Nav v2.1 structural stubs — every sub-nav path resolves */}
+            <Route path="/home/following"        element={<ComingSoon title="Following"     phase="4.3" />} />
+            <Route path="/home/marketplace"      element={<ComingSoon title="Marketplace"   phase="8"   />} />
+            <Route path="/home/directory"        element={<ComingSoon title="Directory"     phase="8"   />} />
+            <Route path="/home/saved"            element={<ComingSoon title="Saved"         phase="4.3" />} />
+
+            <Route path="/classroom/progress"       element={<ComingSoon title="Progress"       phase="4.3" />} />
+            <Route path="/classroom/certifications" element={<ComingSoon title="Certifications" phase="6"   />} />
+
+            <Route path="/farm/tasks"        element={<ComingSoon title="Tasks"        phase="4.2" />} />
+            <Route path="/farm/cycles"       element={<ComingSoon title="Cycles"       phase="4.3" />} />
+            <Route path="/farm/harvests"     element={<ComingSoon title="Harvests"     phase="4.3" />} />
+            <Route path="/farm/field-events" element={<ComingSoon title="Field Events" phase="4.2" />} />
+            <Route path="/farm/inventory"    element={<ComingSoon title="Inventory"    phase="5"   />} />
+            <Route path="/farm/labor"        element={<ComingSoon title="Labor"        phase="4.2" />} />
+            <Route path="/farm/cash"         element={<ComingSoon title="Cash"         phase="4.2" />} />
+            <Route path="/farm/buyers"       element={<ComingSoon title="Buyers"       phase="6"   />} />
+            <Route path="/farm/equipment"    element={<ComingSoon title="Equipment"    phase="6.5" />} />
+            <Route path="/farm/compliance"   element={<ComingSoon title="Compliance"   phase="4.2" />} />
+            <Route path="/farm/analytics"    element={<ComingSoon title="Analytics"    phase="4.2" />} />
+            <Route path="/farm/reports"      element={<ComingSoon title="Reports"      phase="6"   />} />
+            <Route path="/farm/locations"    element={<ComingSoon title="Locations"    phase="5.5" />} />
+
+            <Route path="/tis/history" element={<ComingSoon title="TIS History" phase="4.3" />} />
+            <Route path="/tis/voice"   element={<ComingSoon title="TIS Voice"   phase="5"   />} />
+            <Route path="/tis/usage"   element={<ComingSoon title="TIS Usage"   phase="4.3" />} />
+
+            <Route path="/me/settings"      element={<ComingSoon title="Settings"     phase="4.3" />} />
+            <Route path="/me/settings/mode" element={<ComingSoon title="Switch mode"  phase="4.3" />} />
+            <Route path="/me/subscription"  element={<ComingSoon title="Subscription" phase="4.3" />} />
+            <Route path="/me/referrals"     element={<ComingSoon title="Referrals"    phase="4.3" />} />
+            <Route path="/me/team"          element={<ComingSoon title="Team"         phase="4.3" />} />
+            <Route path="/me/data"          element={<ComingSoon title="Export data"  phase="4.3" />} />
+
+            <Route path="/stub/phase-:phaseNum" element={<ComingSoon dynamic />} />
           </Route>
           <Route path="/harvest" element={
             <FarmerRoute><HarvestLog /></FarmerRoute>
-          } />
-          <Route path="/tis" element={
-            <FarmerRoute><TIS /></FarmerRoute>
           } />
           <Route path="/calendar" element={
             <FarmerRoute><Calendar /></FarmerRoute>
