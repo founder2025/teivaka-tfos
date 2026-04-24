@@ -58,6 +58,8 @@ from app.routers import (
     me as me_router,
     health as health_router,
     admin_monitoring,
+    onboarding,
+    tis_stream,
 )
 
 logging.basicConfig(
@@ -222,6 +224,9 @@ app.include_router(admin.router,              prefix=f"{PREFIX}/admin",         
 # Admin monitoring (FOUNDER role — infra health dashboard)
 app.include_router(admin_monitoring.router,   prefix=f"{PREFIX}/admin/monitoring",   tags=["Admin Monitoring"])
 
+# Onboarding wizard (fresh-farm flow — Option 3 Day 2)
+app.include_router(onboarding.router,         prefix=f"{PREFIX}/onboarding",          tags=["Onboarding"])
+
 # Farm OS — core
 app.include_router(farms.router,              prefix=f"{PREFIX}/farms",              tags=["Farms"])
 app.include_router(zones.router,              prefix=f"{PREFIX}/zones",              tags=["Zones"])
@@ -251,6 +256,8 @@ app.include_router(automation_rules.router,   prefix=f"{PREFIX}/automation-rules
 # Intelligence
 app.include_router(decision_engine.router,    prefix=f"{PREFIX}/decision-engine",    tags=["Decision Engine"])
 app.include_router(tis.router,                prefix=f"{PREFIX}/tis",                tags=["TIS — AI Assistant"])
+# TIS advisory SSE stream + read handler (Option 3 Day 2)
+app.include_router(tis_stream.router,         prefix=f"{PREFIX}/tis",                tags=["TIS — Advisory Stream"])
 app.include_router(voice.router,              prefix=f"{PREFIX}/voice",              tags=["Voice Pipeline"])
 
 # Specialised farm types
