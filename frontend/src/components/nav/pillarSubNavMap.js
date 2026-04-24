@@ -13,7 +13,7 @@ import {
   BookOpen, TrendingUp, Award,
   Tractor, ListTodo, Sprout, Package, CloudRain, Warehouse,
   Users2, Coins, Truck, Shield, BarChart3, FileText, MapPin,
-  Sparkles, History, Mic, Gauge,
+  Sparkles, Clock, Mic, Activity,
   User, Settings, RefreshCw, CreditCard, Gift, Download,
 } from "lucide-react";
 
@@ -59,9 +59,9 @@ export const PILLAR_SUB_NAV = {
     label: "TIS",
     items: [
       { path: "/tis",         label: "Chat",    icon: Sparkles },
-      { path: "/tis/history", label: "History", icon: History },
+      { path: "/tis/history", label: "History", icon: Clock },
       { path: "/tis/voice",   label: "Voice",   icon: Mic,    phase: "5" },
-      { path: "/tis/usage",   label: "Usage",   icon: Gauge },
+      { path: "/tis/usage",   label: "Usage",   icon: Activity },
     ],
   },
 };
