@@ -66,7 +66,7 @@ export default function TopAppBar() {
       }}
     >
       <div className="max-w-screen-md mx-auto h-12 px-4 flex items-center justify-between md:ml-56">
-        <Link to="/community" className="flex items-center gap-2">
+        <Link to="/home" className="flex items-center gap-2">
           <span
             className="font-bold tracking-tight text-base"
             style={{ color: C.soil, fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, sans-serif" }}

@@ -123,7 +123,8 @@ export default function HarvestLog() {
       if (!res.ok) {
         setError(data?.detail || `Check failed (HTTP ${res.status})`);
       } else {
-        setCompliance(data);
+        // Tolerate both raw body (legacy) and Part 13 envelope.
+        setCompliance(data?.data ?? data);
       }
     } catch (e) {
       setError(`Network error: ${e.message}`);
@@ -165,7 +166,8 @@ export default function HarvestLog() {
       });
       const data = await res.json();
       if (res.status === 201) {
-        navigate(`/farm#harvest-logged=${encodeURIComponent(data.harvest_id)}`);
+        const payload = data?.data ?? data;
+        navigate(`/farm#harvest-logged=${encodeURIComponent(payload.harvest_id)}`);
         return;
       }
       if (res.status === 409 && data?.detail?.error?.code === "CHEMICAL_COMPLIANCE_VIOLATION") {

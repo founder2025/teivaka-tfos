@@ -30,6 +30,7 @@ import Terms    from "./pages/Terms";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
 import VerifyEmail from "./pages/VerifyEmail";
+import Home from "./pages/farmer/Home";
 
 // ── Farmer pages (lazy — farmer bundle does NOT include admin code) ───────────
 const Community     = lazy(() => import("./pages/farmer/Community"));
@@ -130,6 +131,7 @@ export default function App() {
             <FarmerRoute><KnowledgeBase /></FarmerRoute>
           } />
           <Route element={<FarmerRoute><FarmerShell /></FarmerRoute>}>
+            <Route path="/home"              element={<Home          />} />
             <Route path="/farm"              element={<FarmDashboard />} />
             <Route path="/farm/harvest/new"  element={<HarvestNew    />} />
             <Route path="/classroom"         element={<Classroom     />} />

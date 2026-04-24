@@ -188,7 +188,9 @@ export default function HarvestNew() {
       })
       .then((body) => {
         if (cancelled) return;
-        const list = Array.isArray(body?.cycles) ? body.cycles : [];
+        // Tolerate Part 13 envelope: {status, data:{cycles:[...]}, meta} or legacy {cycles:[...]}.
+        const payload = body?.data ?? body;
+        const list = Array.isArray(payload?.cycles) ? payload.cycles : [];
         setCycles(list);
         if (list.length === 1) setCycleId(list[0].cycle_id);
       })

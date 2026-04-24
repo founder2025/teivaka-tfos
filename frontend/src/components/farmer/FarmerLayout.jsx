@@ -20,7 +20,7 @@ import { clearStoredTokens, getCurrentUser } from "../../utils/auth";
 import TISWidget from "../TISWidget";
 
 const TABS = [
-  { path: "/community",            label: "Community"      },
+  { path: "/home",            label: "Community"      },
   { path: "/kb",                   label: "Knowledge Base" },
   { path: "/classroom",            label: "Classroom"      },
   { path: "/farm",                 label: "Farm Manager"   },
@@ -192,7 +192,7 @@ export default function FarmerLayout({ children }) {
 
           {/* Logo + wordmark + farm dropdown */}
           <div className="flex items-center gap-3 shrink-0">
-            <Link to="/community" className="flex items-center gap-2">
+            <Link to="/home" className="flex items-center gap-2">
               <span className="text-2xl leading-none">🌿</span>
               <span className="text-white font-bold tracking-tight"
                 style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: "1.1rem" }}>
@@ -242,7 +242,7 @@ export default function FarmerLayout({ children }) {
             <NavLink
               key={tab.path}
               to={tab.path}
-              end={tab.path === "/community"}
+              end={tab.path === "/home"}
               className={({ isActive }) =>
                 `px-4 py-3.5 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
                   isActive

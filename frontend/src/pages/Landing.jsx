@@ -36,7 +36,7 @@ export default function Landing() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (isAuthenticated()) navigate("/community", { replace: true });
+    if (isAuthenticated()) navigate("/home", { replace: true });
   }, [navigate]);
 
   useEffect(() => {

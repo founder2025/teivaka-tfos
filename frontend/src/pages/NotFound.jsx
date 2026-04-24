@@ -13,7 +13,7 @@ export default function NotFound() {
   function goHome() {
     if (!isAuthenticated()) navigate("/login");
     else if (isAdmin()) navigate("/admin");
-    else navigate("/community");
+    else navigate("/home");
   }
 
   return (

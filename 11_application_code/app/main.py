@@ -22,6 +22,7 @@ from app.routers import (
     cycles,
     rotation,
     harvests,
+    field_events,
     income,
     labor,
     inputs,
@@ -56,6 +57,7 @@ from app.routers import (
     attribution,
     me as me_router,
     health as health_router,
+    admin_monitoring,
 )
 
 logging.basicConfig(
@@ -217,6 +219,8 @@ app.include_router(me_router.router,          prefix=f"{PREFIX}/me",            
 
 # Admin (ADMIN role only — require_admin() enforced inside each route)
 app.include_router(admin.router,              prefix=f"{PREFIX}/admin",              tags=["Admin"])
+# Admin monitoring (FOUNDER role — infra health dashboard)
+app.include_router(admin_monitoring.router,   prefix=f"{PREFIX}/admin/monitoring",   tags=["Admin Monitoring"])
 
 # Farm OS — core
 app.include_router(farms.router,              prefix=f"{PREFIX}/farms",              tags=["Farms"])
@@ -225,6 +229,7 @@ app.include_router(production_units.router,   prefix=f"{PREFIX}/production-units
 app.include_router(cycles.router,             prefix=f"{PREFIX}/cycles",             tags=["Production Cycles"])
 app.include_router(rotation.router,           prefix=f"{PREFIX}/rotation",           tags=["Rotation Engine"])
 app.include_router(harvests.router,           prefix=f"{PREFIX}/harvests",           tags=["Harvests"])
+app.include_router(field_events.router,       prefix=f"{PREFIX}/field-events",       tags=["Field Events"])
 
 # Farm OS — financials
 app.include_router(income.router,             prefix=f"{PREFIX}/income",             tags=["Income"])

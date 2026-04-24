@@ -168,7 +168,7 @@ export default function Onboarding() {
 
       // Mark onboarding complete locally — unlocks all farmer routes
       setOnboardingComplete();
-      navigate("/community");
+      navigate("/home");
     } finally {
       setSubmitting(false);
     }

@@ -11,10 +11,13 @@
  * them inside the parent component function causes focus loss on every keystroke
  * in child <input> elements because React treats each render as a new type.
  */
-import { NavLink, Outlet } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { NavLink, Outlet, useLocation } from "react-router-dom";
 
 import TopAppBar from "../components/nav/TopAppBar";
 import BottomNav, { FARMER_TABS } from "../components/nav/BottomNav";
+import TisFab from "../components/tis/TisFab";
+import TisModal from "../components/tis/TisModal";
 
 const C = {
   soil:   "#5C4033",
@@ -67,6 +70,23 @@ function Sidebar() {
 }
 
 export default function FarmerShell() {
+  const [tisOpen, setTisOpen] = useState(false);
+  const location = useLocation();
+  const hideFab = location.pathname === "/tis";
+
+  // Cmd/Ctrl+K toggles the TIS modal — desktop only.
+  useEffect(() => {
+    function onKey(e) {
+      if (typeof window !== "undefined" && window.innerWidth < 768) return;
+      const isToggle = (e.metaKey || e.ctrlKey) && (e.key === "k" || e.key === "K");
+      if (!isToggle) return;
+      e.preventDefault();
+      setTisOpen((o) => !o);
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
   return (
     <div
       className="min-h-screen"
@@ -86,6 +106,8 @@ export default function FarmerShell() {
         </main>
       </div>
       <BottomNav />
+      {!hideFab && <TisFab onClick={() => setTisOpen(true)} />}
+      <TisModal open={tisOpen} onClose={() => setTisOpen(false)} />
     </div>
   );
 }

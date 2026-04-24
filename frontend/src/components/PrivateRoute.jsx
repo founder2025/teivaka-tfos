@@ -78,7 +78,7 @@ export function OnboardingRoute({ children }) {
     return <Navigate to="/admin" replace />;
   }
   if (getOnboardingComplete()) {
-    return <Navigate to="/community" replace />;
+    return <Navigate to="/home" replace />;
   }
   return children;
 }

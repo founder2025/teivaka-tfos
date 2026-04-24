@@ -83,7 +83,7 @@ export default function Login() {
       const needsOnboarding = !getOnboardingComplete();
       const destination = from && from !== "/login" && from !== "/register"
         ? from
-        : needsOnboarding ? "/onboarding" : "/community";
+        : needsOnboarding ? "/onboarding" : "/home";
 
       navigate(destination, { replace: true });
 

@@ -101,8 +101,10 @@ export default function FarmDashboard() {
         let nextHarvest = null;
         if (harvestsRes.ok) {
           const body = await harvestsRes.json();
-          if (Array.isArray(body?.harvests) && body.harvests.length > 0) {
-            nextHarvest = body.harvests[0];
+          // Tolerate Part 13 envelope or legacy raw body.
+          const payload = body?.data ?? body;
+          if (Array.isArray(payload?.harvests) && payload.harvests.length > 0) {
+            nextHarvest = payload.harvests[0];
           }
         }
 

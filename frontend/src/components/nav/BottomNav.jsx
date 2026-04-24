@@ -77,10 +77,10 @@ function IconUser({ size = 22 }) {
 }
 
 const TABS = [
-  { path: "/community", label: "Home",      Icon: IconUsers,    end: true  },
+  { path: "/home",      label: "Home",      Icon: IconUsers,    end: true  },
   { path: "/classroom", label: "Classroom", Icon: IconBookOpen, end: false },
   { path: "/farm",      label: "Farm",      Icon: IconTractor,  end: false, center: true },
-  { path: "/tis",       label: "Tei",       Icon: IconSparkles, end: false },
+  { path: "/tis",       label: "TIS",       Icon: IconSparkles, end: false },
   { path: "/me",        label: "Me",        Icon: IconUser,     end: false },
 ];
 

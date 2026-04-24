@@ -13,6 +13,7 @@ app = Celery(
         "app.workers.notification_worker",
         "app.workers.ai_worker",
         "app.workers.maintenance_worker",
+        "app.tasks.health_monitor",
     ]
 )
 
@@ -90,6 +91,18 @@ app.conf.update(
         "ai-insights-weekly": {
             "task": "app.workers.ai_worker.generate_weekly_insights",
             "schedule": crontab(hour=18, minute=0, day_of_week=6),
+            "options": {"queue": "ai"},
+        },
+        # Infra health monitor — cheap probes every 15 min at :00 :15 :30 :45
+        "ops-run-cheap-checks": {
+            "task": "ops.run_cheap_checks",
+            "schedule": crontab(minute="0,15,30,45"),
+            "options": {"queue": "ai"},
+        },
+        # Infra health monitor — expensive (OpenClaw) probes every 4 h
+        "ops-run-expensive-checks": {
+            "task": "ops.run_expensive_checks",
+            "schedule": crontab(minute=0, hour="0,4,8,12,16,20"),
             "options": {"queue": "ai"},
         },
     },

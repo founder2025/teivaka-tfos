@@ -11,7 +11,7 @@ const C = { soil: "#2C1A0E", green: "#3D8C40", cream: "#F5EFE0", border: "#E0D5C
 export default function Forbidden() {
   const navigate = useNavigate();
   // Route them back somewhere sensible
-  const home = isAdmin() ? "/admin" : "/community";
+  const home = isAdmin() ? "/admin" : "/home";
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-6"
