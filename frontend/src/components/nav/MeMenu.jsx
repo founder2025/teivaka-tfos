@@ -4,22 +4,41 @@ import { Lock, LogOut } from "lucide-react";
 import { ME_MENU_ITEMS } from "./pillarSubNavMap";
 
 const C = {
-  soil:   "#5C4033",
-  cream:  "#F8F3E9",
-  border: "#E6DED0",
-  tint:   "#EAF3DE",
-  amber:  "#BF9000",
-  green:  "#6AA84F",
+  soil:    "#5C4033",
+  cream:   "#F8F3E9",
+  border:  "#D4CFC3",
+  hoverBg: "rgba(92, 64, 51, 0.04)",
+  amber:   "#BF9000",
+  green:   "#6AA84F",
+  greenDk: "#3E7B1F",
+  muted:   "#8A7B6F",
 };
 
-function trialCopy(tier, endsAtIso) {
-  if ((tier || "").toUpperCase() !== "BASIC" || !endsAtIso) return null;
-  const ends = new Date(endsAtIso);
-  if (Number.isNaN(ends.getTime())) return null;
-  const now = new Date();
-  if (now >= ends) return null;
-  const days = Math.max(1, Math.ceil((ends - now) / 86400000));
-  return { days, critical: days <= 3 };
+function initialsFrom(name, fallback = "UK") {
+  if (!name) return fallback;
+  const parts = String(name).trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return fallback;
+  const first = parts[0][0] || "";
+  const last  = parts.length > 1 ? parts[parts.length - 1][0] : "";
+  return (first + last).toUpperCase() || fallback;
+}
+
+function tierBadgeColor(tier) {
+  const t = (tier || "").toUpperCase();
+  if (t === "PREMIUM") return C.green;
+  if (t === "CUSTOM") return C.greenDk;
+  // TRIAL, BASIC, FREE, PROFESSIONAL → amber default
+  return C.amber;
+}
+
+function tierLabel(tier, trialEndsAt) {
+  const t = (tier || "").toUpperCase();
+  if (!t) return "TRIAL";
+  if (t === "BASIC" && trialEndsAt) {
+    const ends = new Date(trialEndsAt);
+    if (!Number.isNaN(ends.getTime()) && ends > new Date()) return "TRIAL";
+  }
+  return t;
 }
 
 export default function MeMenu({ onClose }) {
@@ -71,7 +90,11 @@ export default function MeMenu({ onClose }) {
     navigate("/login", { replace: true });
   }
 
-  const trial = trialCopy(me?.subscription_tier, me?.trial_ends_at);
+  const displayName = me?.display_name || me?.full_name || me?.email || "User";
+  const email = me?.email || "";
+  const initials = initialsFrom(displayName, "UK");
+  const tier = tierLabel(me?.subscription_tier, me?.trial_ends_at);
+  const badgeBg = tierBadgeColor(me?.subscription_tier);
 
   return (
     <div
@@ -80,56 +103,94 @@ export default function MeMenu({ onClose }) {
       aria-label="Account menu"
       className="absolute right-0 top-full mt-2 z-50 rounded-lg shadow-xl overflow-hidden"
       style={{
-        width: 240,
-        background: C.cream,
+        width: 280,
+        background: "#FFFFFF",
         border: `1px solid ${C.border}`,
         color: C.soil,
       }}
     >
+      {/* Header */}
+      <div
+        className="flex items-center gap-3 px-3 py-3 border-b"
+        style={{ borderColor: C.border, background: C.cream }}
+      >
+        <span
+          aria-hidden
+          className="rounded-full flex items-center justify-center text-white flex-shrink-0"
+          style={{ width: 40, height: 40, background: C.green, fontSize: 14, fontWeight: 600 }}
+        >
+          {initials}
+        </span>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-semibold truncate" style={{ color: C.soil }}>
+              {displayName}
+            </span>
+            <span
+              aria-label={`Subscription tier ${tier}`}
+              style={{
+                background: badgeBg,
+                color: "#FFFFFF",
+                fontSize: 10,
+                fontWeight: 700,
+                padding: "2px 8px",
+                borderRadius: 4,
+                letterSpacing: "0.03em",
+                flexShrink: 0,
+              }}
+            >
+              {tier}
+            </span>
+          </div>
+          {email && (
+            <div
+              className="text-[11px] truncate mt-0.5"
+              style={{ color: C.muted }}
+            >
+              {email}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Items */}
       <ul className="py-1">
         {ME_MENU_ITEMS.map((item) => {
           const Icon = item.icon;
           const href = item.phase ? `/stub/phase-${item.phase}` : item.path;
-          const subtitle =
-            item.path === "/me/subscription" && trial
-              ? `Trial: ${trial.days}d left`
-              : null;
           return (
             <li key={item.path} role="none">
               <Link
                 to={href}
                 role="menuitem"
                 onClick={onClose}
-                className="flex items-center gap-3 px-3 py-2 text-sm hover:brightness-95"
-                style={{ background: "transparent" }}
-                onMouseEnter={(e) => { e.currentTarget.style.background = C.tint; }}
+                className="flex items-center gap-3 text-sm"
+                style={{
+                  height: 36,
+                  padding: "8px 12px",
+                  color: C.soil,
+                  background: "transparent",
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = C.hoverBg; }}
                 onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
               >
                 <Icon size={16} strokeWidth={1.75} />
-                <span className="flex-1">
-                  <span className="block">{item.label}</span>
-                  {subtitle && (
-                    <span
-                      className="block text-[11px]"
-                      style={{ color: trial?.critical ? C.amber : C.green, fontWeight: 600 }}
-                    >
-                      {subtitle}
-                    </span>
-                  )}
-                </span>
+                <span className="flex-1">{item.label}</span>
                 {item.phase && <Lock size={12} style={{ opacity: 0.6 }} />}
               </Link>
             </li>
           );
         })}
       </ul>
+
       <div className="border-t" style={{ borderColor: C.border }}>
         <button
           type="button"
           role="menuitem"
           onClick={handleSignOut}
-          className="w-full flex items-center gap-3 px-3 py-2 text-sm text-left"
-          onMouseEnter={(e) => { e.currentTarget.style.background = C.tint; }}
+          className="w-full flex items-center gap-3 text-sm text-left"
+          style={{ height: 36, padding: "8px 12px", background: "transparent", color: C.soil }}
+          onMouseEnter={(e) => { e.currentTarget.style.background = C.hoverBg; }}
           onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
         >
           <LogOut size={16} strokeWidth={1.75} />
