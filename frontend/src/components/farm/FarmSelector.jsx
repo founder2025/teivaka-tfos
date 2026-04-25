@@ -76,12 +76,15 @@ export default function FarmSelector() {
         aria-label="Select farm"
       >
         {farms.map((f) => {
-          const parts = [f.farm_id];
+          // Display layer: farm_id is operational; never show it as label.
+          // Falls back to farm_id only if both farm_name and location are missing.
+          const parts = [];
           if (f.farm_name) parts.push(f.farm_name);
           if (f.location_island) parts.push(f.location_island);
+          const display = parts.length ? parts.join(" · ") : f.farm_id;
           return (
             <option key={f.farm_id} value={f.farm_id}>
-              {parts.join(" · ")}
+              {display}
             </option>
           );
         })}
