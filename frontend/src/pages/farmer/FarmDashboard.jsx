@@ -20,6 +20,8 @@
  * Sub-components stay at module scope (Standing Rule 9). Trial chip lives in
  * TopAppBar — do NOT duplicate here.
  */
+import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   QueryClient,
   QueryClientProvider,
@@ -34,6 +36,7 @@ import ActiveCyclesTable from "../../components/farm/ActiveCyclesTable";
 import FarmSelector     from "../../components/farm/FarmSelector";
 import ModeDropdown     from "../../components/farm/ModeDropdown";
 import NewCycleButton   from "../../components/farm/NewCycleButton";
+import NewCycleModal    from "../../components/farm/NewCycleModal";
 
 const C = {
   soil:   "#5C4033",
@@ -96,6 +99,20 @@ async function fetchTasksOpenCount() {
 function FarmOverview() {
   const { farmId } = useCurrentFarm();
   const queryClient = useQueryClient();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [cycleModalOpen, setCycleModalOpen] = useState(false);
+
+  // Auto-open the cycle modal when LogSheet's "Start cycle" tile lands
+  // here via /farm?action=new-cycle. Strip the param after opening so
+  // refresh / back-button doesn't keep retriggering it.
+  useEffect(() => {
+    if (searchParams.get("action") === "new-cycle") {
+      setCycleModalOpen(true);
+      const next = new URLSearchParams(searchParams);
+      next.delete("action");
+      setSearchParams(next, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
 
   const handleCycleCreated = () => {
     // Refresh everything that depends on cycle state.
@@ -222,10 +239,23 @@ function FarmOverview() {
           >
             Active cycles
           </h2>
-          <NewCycleButton farmId={farmId} onCreated={handleCycleCreated} />
+          <NewCycleButton
+            disabled={!farmId}
+            onClick={() => setCycleModalOpen(true)}
+          />
         </div>
         <ActiveCyclesTable farmId={farmId} />
       </section>
+
+      <NewCycleModal
+        isOpen={cycleModalOpen}
+        onClose={() => setCycleModalOpen(false)}
+        onCreated={() => {
+          handleCycleCreated();
+          setCycleModalOpen(false);
+        }}
+        farmId={farmId}
+      />
     </div>
   );
 }

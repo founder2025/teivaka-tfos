@@ -1,43 +1,41 @@
 import { useEffect } from "react";
 import { Plus } from "lucide-react";
 
+import { useLauncher } from "../../context/LauncherContext";
+
 const C = {
   green:     "#6AA84F",
   greenDark: "#568A3F",
 };
 
-function fire() {
-  window.dispatchEvent(
-    new CustomEvent("tfos:toast", {
-      detail: { message: "Log sheet launches tomorrow (Day 3b)." },
-    }),
-  );
-}
-
 /**
- * Day 3a stub — Cmd/Ctrl+L triggers the same toast. Day 3b swaps to open
- * <LogSheet /> without changing any callers.
+ * Cmd/Ctrl+L opens the LogSheet (mounted in FarmerShell). The hook must
+ * be used inside LauncherProvider — that's why FarmerShell wraps the
+ * shell content with the provider before mounting this hook.
  */
 export function useUniversalLogShortcut() {
+  const { open } = useLauncher();
   useEffect(() => {
     function onKey(e) {
       const isL = (e.metaKey || e.ctrlKey) && (e.key === "l" || e.key === "L");
       if (!isL) return;
       e.preventDefault();
-      fire();
+      open();
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, []);
+  }, [open]);
 }
 
 export default function UniversalLogButton({ variant = "pill" }) {
+  const { open } = useLauncher();
+
   if (variant === "center") {
     return (
       <button
         type="button"
-        onClick={fire}
-        aria-label="Log action"
+        onClick={open}
+        aria-label="Open log sheet"
         className="rounded-full flex items-center justify-center text-white"
         style={{
           width: 56,
@@ -55,8 +53,8 @@ export default function UniversalLogButton({ variant = "pill" }) {
   return (
     <button
       type="button"
-      onClick={fire}
-      aria-label="Log action"
+      onClick={open}
+      aria-label="Open log sheet"
       className="inline-flex items-center gap-1 px-3 rounded-full text-sm font-semibold text-white"
       style={{
         height: 32,

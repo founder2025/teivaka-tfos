@@ -25,7 +25,9 @@ import LeftRail from "../components/nav/LeftRail";
 import { useUniversalLogShortcut } from "../components/nav/UniversalLogButton";
 import TisChatPanel from "../components/tis/TisChatPanel";
 import Toast from "../components/ui/Toast";
+import LogSheet from "../components/launcher/LogSheet";
 import { LeftRailProvider, useLeftRail } from "../context/LeftRailContext";
+import { LauncherProvider, useLauncher } from "../context/LauncherContext";
 
 const C = {
   soil:    "#5C4033",
@@ -280,15 +282,26 @@ function ShellContent() {
           onSend={handleSend}
         />
       )}
+      <LauncherSheet />
       <Toast />
     </div>
   );
 }
 
+// LogSheet host — reads launcher state from context. Lives at the shell
+// level so the (+) button on every page (mobile center + desktop pill +
+// Cmd/Ctrl+L) converges on one sheet instance.
+function LauncherSheet() {
+  const { sheetOpen, close, mode } = useLauncher();
+  return <LogSheet isOpen={sheetOpen} onClose={close} mode={mode} />;
+}
+
 export default function FarmerShell() {
   return (
     <LeftRailProvider>
-      <ShellContent />
+      <LauncherProvider>
+        <ShellContent />
+      </LauncherProvider>
     </LeftRailProvider>
   );
 }

@@ -13,7 +13,8 @@
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { X } from "lucide-react";
+
+import Modal from "../ui/Modal";
 
 const C = {
   soil:    "#5C4033",
@@ -317,39 +318,32 @@ export default function NewCycleModal({ isOpen, onClose, onCreated, farmId }) {
   const pus = pusQuery.data || [];
   const productions = productionsQuery.data || [];
 
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center px-3"
-      style={{ background: "rgba(0,0,0,0.4)" }}
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="new-cycle-title"
-    >
-      <div
-        className="w-full max-w-md rounded-2xl overflow-hidden"
-        style={{ background: "white", border: `1px solid ${C.border}`, maxHeight: "92vh", display: "flex", flexDirection: "column" }}
+  const footer = (
+    <>
+      <button
+        type="button"
+        onClick={onClose}
+        disabled={submitting}
+        className="text-sm font-medium px-3 py-2 rounded-lg disabled:opacity-40"
+        style={{ background: "white", border: `1px solid ${C.border}`, color: C.soil }}
       >
-        {/* Header */}
-        <div
-          className="flex items-center justify-between px-5 py-4"
-          style={{ borderBottom: `1px solid ${C.border}` }}
-        >
-          <h2 id="new-cycle-title" className="text-base font-bold" style={{ color: C.soil }}>
-            Start a new cycle
-          </h2>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close"
-            className="rounded-lg p-1"
-            style={{ color: C.muted }}
-          >
-            <X size={18} />
-          </button>
-        </div>
+        Cancel
+      </button>
+      <button
+        type="button"
+        onClick={submit}
+        disabled={submitDisabled}
+        className="text-sm font-semibold px-4 py-2 rounded-lg text-white disabled:opacity-40"
+        style={{ background: C.green }}
+      >
+        {submitting ? "Creating…" : "Create cycle"}
+      </button>
+    </>
+  );
 
-        {/* Body */}
-        <div className="px-5 py-4 space-y-4 overflow-y-auto" style={{ flex: 1 }}>
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} title="Start a new cycle" footer={footer}>
+      <div className="space-y-4">
           {/* Block selector */}
           <div>
             <label className="text-xs uppercase tracking-wider font-medium block mb-1" style={{ color: C.muted }}>
@@ -466,33 +460,7 @@ export default function NewCycleModal({ isOpen, onClose, onCreated, farmId }) {
               {submitError}
             </div>
           )}
-        </div>
-
-        {/* Footer */}
-        <div
-          className="flex items-center justify-end gap-2 px-5 py-3"
-          style={{ borderTop: `1px solid ${C.border}`, background: C.cream }}
-        >
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={submitting}
-            className="text-sm font-medium px-3 py-2 rounded-lg disabled:opacity-40"
-            style={{ background: "white", border: `1px solid ${C.border}`, color: C.soil }}
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={submit}
-            disabled={submitDisabled}
-            className="text-sm font-semibold px-4 py-2 rounded-lg text-white disabled:opacity-40"
-            style={{ background: C.green }}
-          >
-            {submitting ? "Creating…" : "Create cycle"}
-          </button>
-        </div>
       </div>
-    </div>
+    </Modal>
   );
 }
