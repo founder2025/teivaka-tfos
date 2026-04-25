@@ -175,7 +175,7 @@ function FarmOverview() {
 
       <div
         className="grid gap-2"
-        style={{ gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))" }}
+        style={{ gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))" }}
       >
         {liveCards.map((c) => (
           <MetricCard
