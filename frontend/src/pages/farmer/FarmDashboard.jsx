@@ -1,26 +1,50 @@
 /**
- * FarmDashboard.jsx — /farm (Phase 4b MVP Week 1).
+ * FarmDashboard.jsx — /farm Farm Overview content.
  *
- * MVP contents only. No decision_signals (Phase 5).
- *   • Farm name + active cycle count (GET /api/v1/farms, takes first farm)
- *   • Today card: most recent harvest + most recent field event (harvest for now;
- *     field_events endpoint not surfaced in MVP)
- *   • Primary CTA: "Record harvest" → /farm/harvest/new
+ * Day 3b-Farm rebuild (sacred §280 dispensation, in scope).
+ * Layout per locked prototype + Boss decisions:
+ *   1. Page title (Farm overview)
+ *   2. Header row: FarmSelector (left) + ModeDropdown (right)
+ *   3. Top Task banner (full width)
+ *   4. 10-card metric grid (responsive auto-fit)
+ *      - 4 cards have live data: Active cycles, Open tasks, Open alerts,
+ *        Total area
+ *      - 6 are phase-tagged stubs (Phase 5 / Phase 6) — dimmed with a corner
+ *        badge
+ *   5. Active cycles section: header + NewCycleButton + table
  *
- * Trial chip lives in TopAppBar — do NOT duplicate here.
- * Sub-components stay at module scope to avoid input focus loss.
+ * Hydration is client-side parallel React Query (no /farms/{id}/overview
+ * endpoint built today). QueryClientProvider is scoped to this page so we
+ * don't have to touch FarmerShell or App.jsx.
+ *
+ * Sub-components stay at module scope (Standing Rule 9). Trial chip lives in
+ * TopAppBar — do NOT duplicate here.
  */
-import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
+
+import { CurrentFarmProvider, useCurrentFarm } from "../../context/CurrentFarmContext";
+import MetricCard       from "../../components/farm/MetricCard";
+import TopTaskBanner    from "../../components/farm/TopTaskBanner";
+import ActiveCyclesTable from "../../components/farm/ActiveCyclesTable";
+import FarmSelector     from "../../components/farm/FarmSelector";
+import ModeDropdown     from "../../components/farm/ModeDropdown";
+import NewCycleButton   from "../../components/farm/NewCycleButton";
 
 const C = {
   soil:   "#5C4033",
-  green:  "#6AA84F",
-  amber:  "#BF9000",
-  cream:  "#F8F3E9",
   border: "#E6DED0",
   muted:  "#8A7863",
 };
+
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: 1,
+      refetchOnWindowFocus: false,
+      staleTime: 60_000,
+    },
+  },
+});
 
 function authHeaders() {
   const tok = localStorage.getItem("tfos_access_token");
@@ -29,176 +53,175 @@ function authHeaders() {
     : { "Content-Type": "application/json" };
 }
 
-function formatDate(iso) {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  if (isNaN(d.getTime())) return iso;
-  return d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+async function fetchFarmDetail(farmId) {
+  if (!farmId) return null;
+  const res = await fetch(`/api/v1/farms/${encodeURIComponent(farmId)}`, {
+    headers: authHeaders(),
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return await res.json();
 }
 
-function Card({ title, children, className = "" }) {
-  return (
-    <section
-      className={`bg-white rounded-2xl px-4 py-4 ${className}`}
-      style={{ border: `1px solid ${C.border}` }}
-    >
-      {title && (
-        <h2 className="text-xs uppercase tracking-wider font-semibold mb-2" style={{ color: C.muted }}>
-          {title}
-        </h2>
-      )}
-      {children}
-    </section>
-  );
+async function fetchActiveCyclesCount(farmId) {
+  if (!farmId) return 0;
+  const url = `/api/v1/cycles?farm_id=${encodeURIComponent(farmId)}&cycle_status=ACTIVE`;
+  const res = await fetch(url, { headers: authHeaders() });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const body = await res.json();
+  const cycles = body?.data?.cycles ?? body?.cycles ?? [];
+  return cycles.length;
 }
 
-function Stat({ label, value, sub }) {
+async function fetchOpenAlerts(farmId) {
+  if (!farmId) return [];
+  const url = `/api/v1/alerts?farm_id=${encodeURIComponent(farmId)}&status=OPEN`;
+  const res = await fetch(url, { headers: authHeaders() });
+  if (!res.ok) return [];
+  const body = await res.json();
+  return body?.data?.alerts ?? body?.alerts ?? body?.data ?? [];
+}
+
+async function fetchTasksOpenCount() {
+  const res = await fetch("/api/v1/tasks/next", { headers: authHeaders() });
+  if (!res.ok) return 0;
+  const body = await res.json();
+  return body?.data ? 1 : 0;
+}
+
+function FarmOverview() {
+  const { farmId } = useCurrentFarm();
+
+  const farmQuery = useQuery({
+    queryKey: ["farm", farmId],
+    queryFn: () => fetchFarmDetail(farmId),
+    enabled: !!farmId,
+  });
+  const cyclesCountQuery = useQuery({
+    queryKey: ["cycles-count", farmId, "ACTIVE"],
+    queryFn: () => fetchActiveCyclesCount(farmId),
+    enabled: !!farmId,
+  });
+  const alertsQuery = useQuery({
+    queryKey: ["alerts", farmId, "OPEN"],
+    queryFn: () => fetchOpenAlerts(farmId),
+    enabled: !!farmId,
+  });
+  const tasksQuery = useQuery({
+    queryKey: ["tasks-open-count"],
+    queryFn: fetchTasksOpenCount,
+  });
+
+  const farm         = farmQuery.data;
+  const activeCycles = cyclesCountQuery.data ?? 0;
+  const openAlerts   = (alertsQuery.data ?? []).length;
+  const openTasks    = tasksQuery.data ?? 0;
+  const areaHa       = farm?.land_area_ha;
+
+  // Live cards (full opacity).
+  const liveCards = [
+    {
+      label:   "Active cycles",
+      value:   activeCycles,
+      sub:     farm?.farm_name || (activeCycles ? "On this farm" : "None planted"),
+      loading: cyclesCountQuery.isLoading,
+    },
+    {
+      label:   "Open tasks",
+      value:   openTasks,
+      sub:     openTasks ? "1 ranked top" : "All caught up",
+      loading: tasksQuery.isLoading,
+    },
+    {
+      label:   "Open alerts",
+      value:   openAlerts,
+      sub:     openAlerts ? "Compliance / agronomy" : "No open alerts",
+      loading: alertsQuery.isLoading,
+    },
+    {
+      label:   "Total area",
+      value:   areaHa != null ? `${Number(areaHa).toFixed(2)} ha` : "—",
+      sub:     farm?.location_island || farm?.location_name || undefined,
+      loading: farmQuery.isLoading,
+    },
+  ];
+
+  // Phase-stub cards (dimmed, badge in corner).
+  const stubCards = [
+    { label: "Today's harvest",          value: "—", sub: "kg logged today",   phase: "Phase 5" },
+    { label: "This week's revenue",      value: "—", sub: "FJD inflows",       phase: "Phase 6" },
+    { label: "Cash runway",              value: "—", sub: "Days until empty", phase: "Phase 6" },
+    { label: "Worker attendance",        value: "—", sub: "Today's check-ins", phase: "Phase 5" },
+    { label: "Yield forecast vs actual", value: "—", sub: "Last cycle delta",  phase: "Phase 5" },
+    { label: "Compliance score",         value: "—", sub: "WHD adherence",     phase: "Phase 5" },
+  ];
+
   return (
-    <div>
-      <div className="text-[11px] uppercase tracking-wider font-medium" style={{ color: C.muted }}>
-        {label}
+    <div className="space-y-4">
+      <div>
+        <h1 className="text-2xl font-bold" style={{ color: C.soil }}>
+          Farm overview
+        </h1>
+        <div className="text-xs mt-0.5" style={{ color: C.muted }}>
+          All-in-one farm health snapshot
+        </div>
       </div>
-      <div className="text-xl font-bold mt-0.5" style={{ color: C.soil }}>{value}</div>
-      {sub && <div className="text-xs mt-0.5" style={{ color: C.muted }}>{sub}</div>}
-    </div>
-  );
-}
 
-function Skeleton({ h = 16, w = "100%" }) {
-  return (
-    <div
-      className="rounded animate-pulse"
-      style={{ background: "#EFE7D6", height: h, width: w }}
-    />
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <FarmSelector />
+        <ModeDropdown />
+      </div>
+
+      <TopTaskBanner />
+
+      <div
+        className="grid gap-2"
+        style={{ gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))" }}
+      >
+        {liveCards.map((c) => (
+          <MetricCard
+            key={c.label}
+            label={c.label}
+            value={c.value}
+            sub={c.sub}
+            loading={c.loading}
+          />
+        ))}
+        {stubCards.map((c) => (
+          <MetricCard
+            key={c.label}
+            label={c.label}
+            value={c.value}
+            sub={c.sub}
+            phase={c.phase}
+          />
+        ))}
+      </div>
+
+      <section
+        className="bg-white rounded-2xl px-4 py-4"
+        style={{ border: `1px solid ${C.border}` }}
+      >
+        <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
+          <h2
+            className="text-sm font-semibold uppercase tracking-wider"
+            style={{ color: C.soil }}
+          >
+            Active cycles
+          </h2>
+          <NewCycleButton />
+        </div>
+        <ActiveCyclesTable farmId={farmId} />
+      </section>
+    </div>
   );
 }
 
 export default function FarmDashboard() {
-  const [farm, setFarm]       = useState(null);   // primary farm object
-  const [harvest, setHarvest] = useState(null);   // latest harvest (or null)
-  const [loading, setLoading] = useState(true);
-  const [error, setError]     = useState("");
-
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-
-    async function load() {
-      try {
-        const [farmsRes, harvestsRes] = await Promise.all([
-          fetch("/api/v1/farms", { headers: authHeaders() }),
-          fetch("/api/v1/harvests?limit=1&offset=0", { headers: authHeaders() }),
-        ]);
-
-        let nextFarm = null;
-        if (farmsRes.ok) {
-          const body = await farmsRes.json();
-          if (Array.isArray(body?.farms) && body.farms.length > 0) {
-            nextFarm = body.farms[0];
-          }
-        }
-
-        let nextHarvest = null;
-        if (harvestsRes.ok) {
-          const body = await harvestsRes.json();
-          // Tolerate Part 13 envelope or legacy raw body.
-          const payload = body?.data ?? body;
-          if (Array.isArray(payload?.harvests) && payload.harvests.length > 0) {
-            nextHarvest = payload.harvests[0];
-          }
-        }
-
-        if (!cancelled) {
-          setFarm(nextFarm);
-          setHarvest(nextHarvest);
-          if (!farmsRes.ok && farmsRes.status !== 404) {
-            setError(`Could not load farm (HTTP ${farmsRes.status}).`);
-          }
-        }
-      } catch (e) {
-        if (!cancelled) setError(`Network error: ${e.message}`);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    }
-    load();
-    return () => { cancelled = true; };
-  }, []);
-
-  const farmName     = farm?.farm_name || farm?.farm_code || "My farm";
-  const activeCycles = Number(farm?.active_cycles ?? 0);
-
   return (
-    <div className="space-y-4">
-      {/* Header */}
-      <div className="pt-1">
-        <div className="text-xs font-medium" style={{ color: C.muted }}>Your farm</div>
-        <h1 className="text-2xl font-bold mt-0.5" style={{ color: C.soil }}>
-          {loading ? <Skeleton h={28} w="60%" /> : farmName}
-        </h1>
-      </div>
-
-      {/* Stats card */}
-      <Card title="Overview">
-        {loading ? (
-          <div className="flex gap-6">
-            <Skeleton h={40} w={90} />
-            <Skeleton h={40} w={90} />
-          </div>
-        ) : (
-          <div className="flex gap-8 flex-wrap">
-            <Stat label="Active cycles" value={activeCycles} sub={activeCycles === 0 ? "No crops in the ground yet" : undefined} />
-            {farm?.island && <Stat label="Island" value={farm.island} />}
-            {farm?.total_area_ha != null && <Stat label="Area (ha)" value={farm.total_area_ha} />}
-          </div>
-        )}
-      </Card>
-
-      {/* Today card */}
-      <Card title="Today">
-        {loading ? (
-          <div className="space-y-2">
-            <Skeleton h={14} w="40%" />
-            <Skeleton h={14} w="70%" />
-          </div>
-        ) : harvest ? (
-          <div>
-            <div className="text-sm font-semibold" style={{ color: C.soil }}>
-              Most recent harvest
-            </div>
-            <div className="text-sm mt-1" style={{ color: C.soil }}>
-              {harvest.gross_yield_kg != null ? Number(harvest.gross_yield_kg).toFixed(2) : "—"} kg
-              {harvest.grade ? ` · Grade ${harvest.grade}` : ""}
-              {harvest.destination ? ` · ${harvest.destination}` : ""}
-            </div>
-            <div className="text-xs mt-0.5" style={{ color: C.muted }}>
-              {formatDate(harvest.harvest_date)}
-              {harvest.pu_id ? ` · ${harvest.pu_id}` : ""}
-            </div>
-          </div>
-        ) : (
-          <div className="text-sm" style={{ color: C.muted }}>
-            No harvests logged yet. Use the button below to record your first one.
-          </div>
-        )}
-      </Card>
-
-      {error && (
-        <Card>
-          <div className="text-sm" style={{ color: C.amber }}>{error}</div>
-        </Card>
-      )}
-
-      {/* Primary CTA */}
-      <div>
-        <Link
-          to="/farm/harvest/new"
-          className="block w-full text-center py-3 rounded-xl font-semibold text-white transition-colors"
-          style={{ background: C.green }}
-        >
-          Record harvest
-        </Link>
-      </div>
-    </div>
+    <QueryClientProvider client={queryClient}>
+      <CurrentFarmProvider>
+        <FarmOverview />
+      </CurrentFarmProvider>
+    </QueryClientProvider>
   );
 }
