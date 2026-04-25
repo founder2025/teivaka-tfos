@@ -106,8 +106,11 @@ export default function ActiveCyclesTable({ farmId }) {
               <td className="px-2 py-2" style={TD_STYLE}>
                 {c.production_name || c.production_id || "—"}
               </td>
-              <td className="px-2 py-2 font-mono text-[11px]" style={TD_STYLE}>
-                {c.pu_id || "—"}
+              <td
+                className={`px-2 py-2 ${c.pu_farmer_label ? "" : "font-mono text-[11px]"}`}
+                style={TD_STYLE}
+              >
+                {c.pu_farmer_label || c.pu_id || "—"}
               </td>
               <td className="px-2 py-2" style={TD_STYLE}>
                 {dayCount(c.planting_date)}
