@@ -173,10 +173,7 @@ function FarmOverview() {
 
       <TopTaskBanner />
 
-      <div
-        className="grid gap-2"
-        style={{ gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))" }}
-      >
+      <div className="grid gap-2 grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-6">
         {liveCards.map((c) => (
           <MetricCard
             key={c.label}

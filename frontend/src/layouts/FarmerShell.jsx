@@ -38,12 +38,15 @@ const C = {
 const TIS_ENDPOINT = import.meta.env.VITE_TIS_ENDPOINT || "/tis/chat";
 const TIS_TOKEN = import.meta.env.VITE_TIS_BRIDGE_TOKEN || "";
 
-// Routes that get the wide 1200px shell to match the locked prototype's
-// edge-to-edge .main-content layout. Everything else keeps the narrow
-// max-w-screen-md form-friendly width. Add future Analytics / dashboard
-// routes to one of these as they ship.
-const WIDE_ROUTES_EXACT = new Set(["/farm"]);
-const WIDE_ROUTE_PREFIXES = []; // e.g., "/farm/analytics" once shipped
+// Default-wide shell. NARROW is the exception list — for routes whose
+// content really needs a form-column width (number/text inputs that look
+// silly at 1500px). Everything else inherits the wide content layout that
+// matches the locked prototype.
+const NARROW_ROUTE_PREFIXES = [
+  "/farm/harvest",   // HarvestNew form
+  "/onboarding",     // Legacy onboarding wizard + future sub-routes
+];
+const NARROW_ROUTES_EXACT = new Set([]);
 
 const USER_ID = "U-CODY";
 const FARM_ID = "F001";
@@ -149,16 +152,16 @@ function ShellContent() {
   const onTisRoute = location.pathname.startsWith("/tis");
   const showFab = !onTisRoute;
 
-  // Per-route shell width. Wide routes (Farm Overview today, more dashboards
-  // later) get the prototype's 1200px content pane. Narrow routes keep the
-  // form-friendly max-w-screen-md so HarvestNew / Onboarding inputs stay
-  // sensibly sized.
-  const isWideRoute =
-    WIDE_ROUTES_EXACT.has(location.pathname) ||
-    WIDE_ROUTE_PREFIXES.some((p) => location.pathname.startsWith(p));
-  const widthClass = isWideRoute
-    ? "max-w-[1200px] mx-auto px-6 md:px-8"
-    : "max-w-screen-md mx-auto px-4";
+  // Per-route shell width. Default WIDE (matches prototype's edge-to-edge
+  // content); the NARROW list above is the exception for form-heavy routes.
+  const isNarrow =
+    NARROW_ROUTES_EXACT.has(location.pathname) ||
+    NARROW_ROUTE_PREFIXES.some(
+      (p) => location.pathname === p || location.pathname.startsWith(`${p}/`),
+    );
+  const widthClass = isNarrow
+    ? "max-w-screen-md mx-auto px-4"
+    : "max-w-screen-2xl mx-auto px-6 md:px-8";
 
   // Cmd/Ctrl+L — universal log shortcut (Day 3a: toast; Day 3b: open LogSheet).
   useUniversalLogShortcut();
