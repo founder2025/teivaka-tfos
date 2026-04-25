@@ -79,11 +79,30 @@ export default function Login() {
         return;
       }
 
-      // Farmer: check if they need onboarding
-      const needsOnboarding = !getOnboardingComplete();
+      // Farmer: ask the server whether onboarding is complete (tenant.tenants
+      // .onboarded_at) and reconcile the local cache. Falls back to the
+      // existing local cache on transient failure rather than forcing a
+      // healthy user back through onboarding.
+      let onboardingComplete = getOnboardingComplete();
+      try {
+        const statusRes = await fetch("/api/v1/onboarding/status", {
+          headers: { Authorization: `Bearer ${data.access_token}` },
+        });
+        if (statusRes.ok) {
+          const statusBody = await statusRes.json();
+          const flag = statusBody?.data?.onboarding_complete;
+          if (typeof flag === "boolean") {
+            onboardingComplete = flag;
+            setOnboardingComplete(flag);
+          }
+        }
+      } catch {
+        /* keep cached value on network error */
+      }
+
       const destination = from && from !== "/login" && from !== "/register"
         ? from
-        : needsOnboarding ? "/onboarding" : "/home";
+        : onboardingComplete ? "/home" : "/onboarding";
 
       navigate(destination, { replace: true });
 

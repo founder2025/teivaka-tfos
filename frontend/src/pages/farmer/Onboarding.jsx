@@ -1,23 +1,105 @@
 /**
  * Onboarding.jsx — New user farm setup wizard
  *
- * Triggered for new users on first login (no farm data yet).
- * Steps:
- *   1. Welcome + name confirmation
- *   2. Farm name + size
- *   3. City / Country (for map dot placement)
- *   4. Map visibility preference
- *   5. Primary crops grown (multi-select)
- *   6. Profile photo (optional)
- *   → Done → Community Hub
+ * Single-page form, six visual steps. On finish (Day 3b sidequest fix,
+ * 2026-04-25) the submit handler chains the four real onboarding endpoints
  *
- * On complete, POSTs to /api/v1/farms + /api/v1/users/profile
- * then marks onboarding_complete = true so they go to Community on next login.
+ *   POST /api/v1/onboarding/farm-basics
+ *   POST /api/v1/onboarding/production-units
+ *   POST /api/v1/onboarding/livestock          (always empty under this UI)
+ *   POST /api/v1/onboarding/complete
+ *
+ * The legacy POST /api/v1/farms call is gone — it never wrote
+ * tenant.tenants.onboarded_at, which left fresh accounts in a redirect
+ * loop on every device switch / cache clear.
+ *
+ * Display name, city, country, and map_visibility have no slot in the
+ * onboarding contract; they used to be silently dropped by the
+ * try/catch around /api/v1/farms and remain dropped here. Re-adding them
+ * is community-profile work, not loop-fix work.
  */
 
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { authHeader, setOnboardingComplete } from "../../utils/auth";
+
+/**
+ * Map the 24 free-text crop chips this form offers to the production_id
+ * codes shared.productions actually carries. Verified against the live
+ * shared.productions table on 2026-04-25.
+ *
+ * "Lemongrass" and "Other" do not appear in shared.productions — they are
+ * silently dropped (with a console.warn) so the user can still submit.
+ */
+const CROP_CHIP_TO_PRODUCTION_ID = {
+  "Cassava":      "CRP-CAS",
+  "Kava":         "CRP-KAV",
+  "Yaqona":       "CRP-KAV",
+  "Dalo (Taro)":  "CRP-DAL",
+  "Sweet Potato": "CRP-SPT",
+  "Capsicum":     "CRP-CAP",
+  "Tomato":       "CRP-TOM",
+  "Eggplant":     "CRP-EGG",
+  "Banana":       "FRT-BAN",
+  "Pawpaw":       "FRT-PAP",
+  "Mango":        "FRT-MAN",
+  "Citrus":       "FRT-CIT",
+  "Pineapple":    "FRT-PIN",
+  "Watermelon":   "CRP-WAT",
+  "Corn":         "CRP-MAZ",
+  "Beans":        "CRP-FRB",
+  "Lettuce":      "CRP-LET",
+  "Cabbage":      "CRP-CAB",
+  "Ginger":       "CRP-GIN",
+  "Turmeric":     "CRP-TUR",
+  "Coconut":      "FRT-COC",
+  "Sugarcane":    "CRP-SUG",
+  // "Lemongrass": no row in shared.productions
+  // "Other":      no concrete production_id
+};
+
+const HA_PER_ACRE = 0.404686;
+
+function mapChipsToCrops(chips) {
+  const dropped = [];
+  const crops = [];
+  for (const chip of chips) {
+    const pid = CROP_CHIP_TO_PRODUCTION_ID[chip];
+    if (pid) crops.push({ production_id: pid, blocks: [] });
+    else dropped.push(chip);
+  }
+  if (dropped.length > 0) {
+    console.warn("[onboarding] dropped unmapped crop chips", dropped);
+  }
+  return crops;
+}
+
+function emitToast(message) {
+  window.dispatchEvent(
+    new CustomEvent("tfos:toast", { detail: { message } }),
+  );
+}
+
+async function postJson(url, body) {
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeader() },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    let detail;
+    try { detail = await res.json(); } catch { detail = null; }
+    const msg =
+      detail?.detail?.message ||
+      detail?.detail ||
+      detail?.message ||
+      `${res.status} ${res.statusText}`;
+    const err = new Error(typeof msg === "string" ? msg : JSON.stringify(msg));
+    err.status = res.status;
+    throw err;
+  }
+  return res.json();
+}
 
 const C = {
   soil:   "#2C1A0E",
@@ -147,27 +229,48 @@ export default function Onboarding() {
   async function finish() {
     setSubmitting(true);
     try {
-      // POST farm profile to API
-      // In MVP: attempt the API call, fall through to local flag on any error
+      // 1) farm-basics — required first; /complete refuses without a farm row.
+      const areaAcres =
+        data.farm_size_ha && parseFloat(data.farm_size_ha) > 0
+          ? parseFloat(data.farm_size_ha) / HA_PER_ACRE
+          : null;
       try {
-        await fetch("/api/v1/farms", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", ...authHeader() },
-          body: JSON.stringify({
-            farm_name: data.farm_name,
-            farm_size_ha: data.farm_size_ha ? parseFloat(data.farm_size_ha) : null,
-            city: data.city,
-            country: data.country,
-            map_visibility: data.map_visibility,
-            crops: data.crops,
-          }),
+        await postJson("/api/v1/onboarding/farm-basics", {
+          farm_name: data.farm_name,
+          area_acres: areaAcres,
+          section_term: "BLOCK",
         });
-      } catch (_) {
-        // API not yet wired — proceed anyway so onboarding isn't blocked
+      } catch (err) {
+        emitToast(`Couldn't save farm basics: ${err.message}`);
+        return;
       }
 
-      // Mark onboarding complete locally — unlocks all farmer routes
-      setOnboardingComplete();
+      // 2) production-units — empty array allowed if all chips were unmapped.
+      const crops = mapChipsToCrops(data.crops);
+      try {
+        await postJson("/api/v1/onboarding/production-units", { crops });
+      } catch (err) {
+        emitToast(`Couldn't save crops: ${err.message}`);
+        return;
+      }
+
+      // 3) livestock — this single-page form doesn't ask, so always empty.
+      try {
+        await postJson("/api/v1/onboarding/livestock", { groups: [] });
+      } catch (err) {
+        emitToast(`Couldn't save livestock: ${err.message}`);
+        return;
+      }
+
+      // 4) complete — server stamps onboarded_at + derives mode.
+      try {
+        await postJson("/api/v1/onboarding/complete", {});
+      } catch (err) {
+        emitToast(`Couldn't finish onboarding: ${err.message}`);
+        return;
+      }
+
+      setOnboardingComplete(true);
       navigate("/home");
     } finally {
       setSubmitting(false);

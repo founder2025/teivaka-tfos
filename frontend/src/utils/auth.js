@@ -91,8 +91,19 @@ export function getOnboardingComplete() {
   return localStorage.getItem("tfos_onboarding_complete") === "true";
 }
 
-export function setOnboardingComplete() {
-  localStorage.setItem("tfos_onboarding_complete", "true");
+/**
+ * Set or clear the local onboarding-complete flag.
+ *
+ * @param {boolean} [value=true] true → set "true"; false → remove the key.
+ *   Caller may pass a server-derived bool to keep the cache in sync with
+ *   tenant.tenants.onboarded_at without an extra round-trip on every render.
+ */
+export function setOnboardingComplete(value = true) {
+  if (value) {
+    localStorage.setItem("tfos_onboarding_complete", "true");
+  } else {
+    localStorage.removeItem("tfos_onboarding_complete");
+  }
 }
 
 /** Called on logout — clear everything including onboarding flag */
