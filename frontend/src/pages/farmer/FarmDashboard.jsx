@@ -20,7 +20,12 @@
  * Sub-components stay at module scope (Standing Rule 9). Trial chip lives in
  * TopAppBar — do NOT duplicate here.
  */
-import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
+import {
+  QueryClient,
+  QueryClientProvider,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 
 import { CurrentFarmProvider, useCurrentFarm } from "../../context/CurrentFarmContext";
 import MetricCard       from "../../components/farm/MetricCard";
@@ -90,6 +95,18 @@ async function fetchTasksOpenCount() {
 
 function FarmOverview() {
   const { farmId } = useCurrentFarm();
+  const queryClient = useQueryClient();
+
+  const handleCycleCreated = () => {
+    // Refresh everything that depends on cycle state.
+    queryClient.invalidateQueries({ queryKey: ["cycles", farmId, "ACTIVE"] });
+    queryClient.invalidateQueries({ queryKey: ["cycles-count", farmId, "ACTIVE"] });
+    queryClient.invalidateQueries({ queryKey: ["farm", farmId] });
+    queryClient.invalidateQueries({ queryKey: ["alerts", farmId, "OPEN"] });
+    queryClient.invalidateQueries({ queryKey: ["tasks-open-count"] });
+    queryClient.invalidateQueries({ queryKey: ["tasks-next"] });
+    queryClient.invalidateQueries({ queryKey: ["production-units", farmId] });
+  };
 
   const farmQuery = useQuery({
     queryKey: ["farm", farmId],
@@ -205,7 +222,7 @@ function FarmOverview() {
           >
             Active cycles
           </h2>
-          <NewCycleButton />
+          <NewCycleButton farmId={farmId} onCreated={handleCycleCreated} />
         </div>
         <ActiveCyclesTable farmId={farmId} />
       </section>

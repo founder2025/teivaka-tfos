@@ -19,6 +19,7 @@ from app.routers import (
     farms,
     zones,
     production_units,
+    productions,
     cycles,
     rotation,
     harvests,
@@ -231,6 +232,7 @@ app.include_router(onboarding.router,         prefix=f"{PREFIX}/onboarding",    
 app.include_router(farms.router,              prefix=f"{PREFIX}/farms",              tags=["Farms"])
 app.include_router(zones.router,              prefix=f"{PREFIX}/zones",              tags=["Zones"])
 app.include_router(production_units.router,   prefix=f"{PREFIX}/production-units",   tags=["Production Units"])
+app.include_router(productions.router,        prefix=f"{PREFIX}/productions",        tags=["Productions Catalog"])
 app.include_router(cycles.router,             prefix=f"{PREFIX}/cycles",             tags=["Production Cycles"])
 app.include_router(rotation.router,           prefix=f"{PREFIX}/rotation",           tags=["Rotation Engine"])
 app.include_router(harvests.router,           prefix=f"{PREFIX}/harvests",           tags=["Harvests"])
