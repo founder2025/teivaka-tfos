@@ -29,7 +29,24 @@ import {
   parseAreaToAcres,
   isSpeechSynthesisSupported,
 } from "../../utils/speech";
-import { authHeader } from "../../utils/auth";
+import { authHeader, getCurrentUser } from "../../utils/auth";
+
+const SPEECH_UNLOCKED_KEY = "tfos_speech_unlocked";
+
+// JWT today only carries {uid, tid, role, tier} — first_name is NOT in
+// the token. This helper falls through cleanly when first_name is
+// absent. Future ticket can fetch from GET /api/v1/me on splash dismiss
+// to populate a richer default.
+function defaultFarmName() {
+  try {
+    const u = getCurrentUser();
+    const fn = u?.first_name;
+    if (fn && typeof fn === "string" && fn.trim()) {
+      return `${fn.trim()}'s Farm`;
+    }
+  } catch { /* noop */ }
+  return "My Farm";
+}
 
 const C = {
   soil:    "#2C1A0E",
@@ -46,12 +63,14 @@ function emitToast(message) {
   );
 }
 
+const FARM_NAME_DEFAULT = defaultFarmName();
+
 const QUESTIONS = [
   {
     key:          "farmName",
     prompt:       "Bula. What do you call your farm?",
     placeholder:  "e.g. Save-A-Lot Farm",
-    defaultValue: "My Farm",
+    defaultValue: FARM_NAME_DEFAULT,
     inputType:    "text",
     parseValue:   null,
     summaryLabel: "Farm name",
@@ -80,8 +99,25 @@ function FarmBasicsInner() {
   const [step, setStep] = useState(
     firstUnanswered === -1 ? QUESTIONS.length : firstUnanswered,
   );
-  const [splashDismissed, setSplashDismissed] = useState(false);
+  // Splash unlocks speech APIs on the first user gesture and persists
+  // across reloads inside the same session — no re-tap needed when the
+  // farmer refreshes mid-wizard.
+  const [splashDismissed, setSplashDismissed] = useState(() => {
+    if (typeof window === "undefined") return false;
+    try {
+      return window.sessionStorage.getItem(SPEECH_UNLOCKED_KEY) === "1";
+    } catch {
+      return false;
+    }
+  });
   const [submitting, setSubmitting] = useState(false);
+
+  function unlockSpeech() {
+    setSplashDismissed(true);
+    try {
+      window.sessionStorage.setItem(SPEECH_UNLOCKED_KEY, "1");
+    } catch { /* noop */ }
+  }
 
   const allAnswered = step >= QUESTIONS.length;
 
@@ -146,7 +182,7 @@ function FarmBasicsInner() {
           </p>
           <button
             type="button"
-            onClick={() => setSplashDismissed(true)}
+            onClick={unlockSpeech}
             className="w-full px-6 py-3 rounded-xl text-white font-semibold"
             style={{ background: C.green }}
           >

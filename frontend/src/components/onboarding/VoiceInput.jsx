@@ -27,8 +27,11 @@ import {
 import {
   speak,
   listen,
+  detectUnit,
   isSpeechRecognitionSupported,
 } from "../../utils/speech";
+
+const ACRES_PER_HECTARE = 2.47105;
 
 const C = {
   soil:    "#2C1A0E",
@@ -52,9 +55,38 @@ export default function VoiceInput({
   const [stage, setStage] = useState("idle");
   const [heard, setHeard] = useState("");
   const [parsed, setParsed] = useState(null);
+  const [pendingNumber, setPendingNumber] = useState(null); // for needsUnit stage
   const [typed, setTyped] = useState("");
   const stopRef = useRef(null);
   const sttSupported = isSpeechRecognitionSupported();
+
+  function finalizeWithUnit(value, unit) {
+    const acres = unit === "hectare"
+      ? +(value * ACRES_PER_HECTARE).toFixed(2)
+      : value;
+    setHeard(`${value} ${unit}${value === 1 ? "" : "s"}`);
+    setParsed(acres);
+    setPendingNumber(null);
+    setStage("confirming");
+    speak(`Got it. ${acres} acres. Right?`);
+  }
+
+  function listenForUnit() {
+    if (!sttSupported || pendingNumber == null) return;
+    stopRef.current = listen({
+      onResult: ({ transcript }) => {
+        const unit = detectUnit(transcript || "");
+        if (unit) {
+          finalizeWithUnit(pendingNumber, unit);
+        } else {
+          // Stay in needsUnit stage, prompt again.
+          speak("Please say acres or hectares.");
+        }
+      },
+      onError: () => { /* leave buttons visible */ },
+      onEnd: () => { /* state already handled */ },
+    });
+  }
 
   // Auto-speak on mount (or when prompt changes for an active instance).
   useEffect(() => {
@@ -72,18 +104,35 @@ export default function VoiceInput({
     stopRef.current = listen({
       onResult: ({ transcript }) => {
         const text = (transcript || "").trim();
-        let val = text;
-        if (parseValue) val = parseValue(text);
         setHeard(text);
-        setParsed(val);
-        if (parseValue && (val == null || val === "")) {
-          speak("I didn't catch a number with a unit. Please try again.");
+
+        if (!parseValue) {
+          setParsed(text);
+          setStage("confirming");
+          speak(`Got it. ${text}. Right?`);
+          return;
+        }
+
+        const val = parseValue(text);
+        if (val == null) {
+          // Truly unparseable — re-prompt the whole question.
+          speak("I didn't catch that. Please try again.");
           setStage("idle");
           return;
         }
+        if (typeof val === "object" && val.needsUnit) {
+          // Number heard, unit missing — prompt only for the unit.
+          setPendingNumber(val.value);
+          setStage("needsUnit");
+          speak(`I heard ${val.value}. Acres or hectares?`);
+          // Auto-listen for the unit answer after the prompt finishes.
+          setTimeout(() => listenForUnit(), 1500);
+          return;
+        }
+        // Numeric result — full parse.
+        setParsed(val);
         setStage("confirming");
-        const display = parseValue ? `${val}` : text;
-        speak(`Got it. ${display}. Right?`);
+        speak(`Got it. ${val} acres. Right?`);
       },
       onError: () => setStage("idle"),
       onEnd: () => { /* state already handled */ },
@@ -186,6 +235,46 @@ export default function VoiceInput({
           >
             <Edit3 size={20} />
             <span className="text-xs">Edit</span>
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Unit-clarification stage ──────────────────────────────────────
+  if (stage === "needsUnit") {
+    return (
+      <div className="space-y-3">
+        <p className="text-base font-semibold" style={{ color: C.soil }}>
+          {prompt}
+        </p>
+        <div
+          className="px-4 py-3 rounded-xl"
+          style={{ background: C.cream, border: `1px solid ${C.border}` }}
+        >
+          <div className="text-xs uppercase tracking-wider" style={{ color: C.muted }}>
+            We heard
+          </div>
+          <div className="text-lg font-semibold mt-0.5" style={{ color: C.soil }}>
+            {pendingNumber} — acres or hectares?
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            onClick={() => finalizeWithUnit(pendingNumber, "acre")}
+            className="px-4 py-3 rounded-xl text-white font-semibold"
+            style={{ background: C.green }}
+          >
+            Acres
+          </button>
+          <button
+            type="button"
+            onClick={() => finalizeWithUnit(pendingNumber, "hectare")}
+            className="px-4 py-3 rounded-xl text-white font-semibold"
+            style={{ background: C.green }}
+          >
+            Hectares
           </button>
         </div>
       </div>

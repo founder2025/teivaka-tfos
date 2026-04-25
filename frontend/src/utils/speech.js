@@ -101,7 +101,12 @@ export function listen({ onResult, onError, onEnd, lang = "en-US" } = {}) {
 // "one acre"          → 1
 // "about an acre"     → 1
 // "two and a half ha" → 6.18
-// "two"               → null    (no unit; ambiguous)
+// "two"               → { value: 2, needsUnit: true }   (caller re-prompts)
+// "blah blah"         → null    (truly unparseable)
+//
+// Returning the partial-detect object lets VoiceInput re-prompt
+// specifically for the unit ("Acres or hectares?") instead of asking
+// the whole question again.
 // ---------------------------------------------------------------------
 
 const ACRES_PER_HECTARE = 2.47105;
@@ -148,15 +153,8 @@ function wordsToNumber(s) {
   return matched ? total : null;
 }
 
-export function parseAreaToAcres(transcript) {
-  if (!transcript || typeof transcript !== "string") return null;
-  const lower = transcript.toLowerCase().trim();
-
-  const hasAcre = /\bacres?\b/.test(lower);
-  const hasHa = /\bhectares?\b|\bha\b/.test(lower);
-  if (!hasAcre && !hasHa) return null;
-
-  // Idiomatic fractions before tokenizing: "a half" → 0.5, etc.
+function extractAreaNumber(lower) {
+  // Strip filler + replace idiomatic fractions before tokenizing.
   const stripped = lower
     .replace(/\bhectares?\b/g, " ")
     .replace(/\bacres?\b/g, " ")
@@ -168,9 +166,36 @@ export function parseAreaToAcres(transcript) {
     .replace(/\b(?:a|an)\s+quarter\b/g, " 0.25")
     .replace(/\b(?:a|an)\s+third\b/g, " 0.333")
     .trim();
-
   const value = wordsToNumber(stripped);
   if (value == null || !Number.isFinite(value) || value <= 0) return null;
+  return +value.toFixed(2);
+}
 
-  return hasHa ? +(value * ACRES_PER_HECTARE).toFixed(2) : +value.toFixed(2);
+export function parseAreaToAcres(transcript) {
+  if (!transcript || typeof transcript !== "string") return null;
+  const lower = transcript.toLowerCase().trim();
+
+  const hasAcre = /\bacres?\b/.test(lower);
+  const hasHa = /\bhectares?\b|\bha\b/.test(lower);
+  const value = extractAreaNumber(lower);
+
+  if (value == null) return null;
+  if (hasHa)   return +(value * ACRES_PER_HECTARE).toFixed(2);
+  if (hasAcre) return value;
+  return { value, needsUnit: true };
+}
+
+/**
+ * detectUnit(transcript) — used by VoiceInput's unit-clarification
+ * stage. Looks ONLY at the unit token, ignores any number words.
+ *   "acres" / "in acres" / "yes acres please" → "acre"
+ *   "hectares" / "ha"                          → "hectare"
+ *   anything else                              → null
+ */
+export function detectUnit(transcript) {
+  if (!transcript || typeof transcript !== "string") return null;
+  const lower = transcript.toLowerCase();
+  if (/\bhectares?\b|\bha\b/.test(lower)) return "hectare";
+  if (/\bacres?\b/.test(lower)) return "acre";
+  return null;
 }
