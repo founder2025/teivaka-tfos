@@ -90,9 +90,12 @@ async def list_cycles(
             SELECT pc.cycle_id, pc.farm_id, pc.pu_id, pc.zone_id, pc.production_id,
                    p.production_name, pc.cycle_status, pc.planting_date,
                    pc.expected_harvest_date, pc.actual_yield_kg, pc.cogk_fjd_per_kg,
-                   pc.created_at
+                   pc.created_at,
+                   pc.farmer_label,
+                   pu.farmer_label AS pu_farmer_label
             FROM   tenant.production_cycles pc
             JOIN   shared.productions p ON p.production_id = pc.production_id
+            LEFT JOIN tenant.production_units pu ON pu.pu_id = pc.pu_id
             {where}
             ORDER BY pc.planting_date DESC, pc.created_at DESC
             LIMIT :limit OFFSET :offset
@@ -175,9 +178,11 @@ async def get_cycle(
     # so explicit tenant_id filter is the enforced isolation boundary.
     row = (await db.execute(
         text("""
-            SELECT pc.*, p.production_name
+            SELECT pc.*, p.production_name,
+                   pu.farmer_label AS pu_farmer_label
             FROM   tenant.production_cycles pc
             JOIN   shared.productions p ON p.production_id = pc.production_id
+            LEFT JOIN tenant.production_units pu ON pu.pu_id = pc.pu_id
             WHERE  pc.cycle_id = :cid AND pc.tenant_id = :tid
         """),
         {"cid": cycle_id, "tid": str(user["tenant_id"])},
