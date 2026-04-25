@@ -3,12 +3,13 @@ from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from decimal import Decimal
 from typing import Optional
-from datetime import date
+from datetime import date, datetime, time, timedelta, timezone
 from uuid import UUID
 import uuid
 import logging
 
 from app.core.audit_chain import emit_audit_event
+from app.core.task_engine import emit_task
 from app.services.rotation_service import validate_rotation, CAN_START, log_rotation_override
 
 logger = logging.getLogger(__name__)
@@ -59,6 +60,124 @@ def compute_cogk(
         return None
     total_cost = total_labor_cost + total_input_cost + total_other_cost
     return round(total_cost / total_harvest_kg, 4)
+
+
+# ─── Initial task seeding ────────────────────────────────────────────────────
+# Day 0 task seeds for a brand-new cycle. Crop-only this commit (CRP-/FRT-);
+# livestock + apiculture seeds land in Phase 4+. The seeds are advisory
+# output captured in the parent CYCLE_TRANSITION audit row's payload —
+# emit_task itself does NOT emit audit.events per the v4.1 binding rule
+# in app/core/task_engine.py docstring ("audit chain records what the
+# farmer DID, not what the system suggested").
+
+_FIJI_OFFSET = timezone(timedelta(hours=12))  # Pacific/Fiji is UTC+12, no DST
+
+
+def _fiji_eod(d: date) -> datetime:
+    """End of day (23:59:59 Fiji-local) on date d, as a tz-aware datetime."""
+    return datetime.combine(d, time(23, 59, 59), tzinfo=_FIJI_OFFSET)
+
+
+async def generate_initial_tasks(
+    session: AsyncSession,
+    *,
+    cycle_id: str,
+    production_id: str,
+    pu_id: str,
+    farm_id: str,
+    tenant_id: str,
+    planting_date: date,
+) -> list[str]:
+    """Seed Day 0 tasks for a freshly-created cycle.
+
+    Returns the list of task_ids (str) created. Empty list for non-crop
+    productions — livestock/apiculture seeds are out of scope today.
+    Idempotent: emit_task dedupes on
+    (tenant_id, source_module, source_reference) so re-running on the
+    same cycle_id won't create duplicates.
+    """
+    if not (production_id.startswith("CRP-") or production_id.startswith("FRT-")):
+        return []
+
+    # Farmer-readable block label; falls back to pu_id if unset.
+    pu_row = (
+        await session.execute(
+            text("SELECT farmer_label FROM tenant.production_units WHERE pu_id = :pu"),
+            {"pu": pu_id},
+        )
+    ).first()
+    block_label = (pu_row[0] if pu_row and pu_row[0] else pu_id)
+
+    prod_row = (
+        await session.execute(
+            text(
+                "SELECT production_name FROM shared.productions WHERE production_id = :pid"
+            ),
+            {"pid": production_id},
+        )
+    ).first()
+    name = (prod_row[0] if prod_row and prod_row[0] else production_id)
+
+    today_eod = _fiji_eod(planting_date)
+    plus_24h  = datetime.now(timezone.utc) + timedelta(hours=24)
+    plus_7d_eod = _fiji_eod(planting_date + timedelta(days=7))
+
+    seeds = [
+        {
+            "imperative":       f"Prepare {block_label} for {name}",
+            "icon_key":         "Tractor",
+            "rank":             250,
+            "expires_at":       today_eod,
+            "source_reference": f"cycle_init:{cycle_id}:bed_prep",
+            "default_outcome":  None,
+        },
+        {
+            "imperative":       f"Plant {name} in {block_label}",
+            "icon_key":         "Sprout",
+            "rank":             240,
+            "expires_at":       today_eod,
+            "source_reference": f"cycle_init:{cycle_id}:plant",
+            "default_outcome":  None,
+        },
+        {
+            "imperative":       f"Water {name} in {block_label} (first watering within 24h)",
+            "icon_key":         "Droplet",
+            "rank":             230,
+            "expires_at":       plus_24h,
+            "source_reference": f"cycle_init:{cycle_id}:water_24h",
+            "default_outcome":  "AUTO_ESCALATE",
+        },
+        {
+            "imperative":       f"Check {name} growth in {block_label}",
+            "icon_key":         "Eye",
+            "rank":             220,
+            "expires_at":       plus_7d_eod,
+            "source_reference": f"cycle_init:{cycle_id}:observe_d7",
+            "default_outcome":  None,
+        },
+    ]
+
+    task_ids: list[str] = []
+    for seed in seeds:
+        tid = await emit_task(
+            db=session,
+            tenant_id=UUID(tenant_id),
+            farm_id=farm_id,
+            source_module="automation",
+            source_reference=seed["source_reference"],
+            imperative=seed["imperative"],
+            rank=seed["rank"],
+            icon_key=seed["icon_key"],
+            input_hint="none",
+            expires_at=seed["expires_at"],
+            default_outcome=seed["default_outcome"],
+            entity_type="cycle",
+            entity_id=cycle_id,
+            task_type="FIELD_TASK",
+        )
+        task_ids.append(str(tid))
+
+    return task_ids
 
 
 async def create_cycle(
@@ -186,7 +305,22 @@ async def create_cycle(
             override_reason, created_by_user_id, cycle_id, tenant_id
         )
 
-    # 8. Emit audit.events (v4.1 Bank Evidence spine — non-negotiable).
+    # 8. Seed Day 0 tasks (CRP/FRT only). Runs BEFORE the audit emit so
+    #    the resulting task_ids land in the same CYCLE_TRANSITION payload
+    #    rather than fragmenting the audit chain. Per v4.1 Bank Evidence
+    #    rule, task creation itself emits no audit row — only the parent
+    #    cycle transition is audited.
+    seeded_task_ids = await generate_initial_tasks(
+        session,
+        cycle_id=cycle_id,
+        production_id=production_id,
+        pu_id=pu_id,
+        farm_id=farm_id,
+        tenant_id=tenant_id,
+        planting_date=planting_date,
+    )
+
+    # 9. Emit audit.events (v4.1 Bank Evidence spine — non-negotiable).
     #    Step 5-6 smoke test exposed that create_cycle did not hash-chain
     #    into audit.events. from_status=None reflects the genesis
     #    transition into final_status (typically ACTIVE). The hash is NOT
@@ -200,6 +334,8 @@ async def create_cycle(
         entity_type="production_cycle",
         entity_id=cycle_id,
         payload={
+            "transition": "CREATE",
+            "cycle_id": cycle_id,
             "from_status": None,
             "to_status": final_status,
             "pu_id": pu_id,
@@ -207,6 +343,8 @@ async def create_cycle(
             "planting_date": planting_date.isoformat(),
             "rotation_status": rotation["rotation_status"],
             "override_reason": override_reason,
+            "seeded_task_count": len(seeded_task_ids),
+            "seeded_task_ids": seeded_task_ids,
         },
     )
 
