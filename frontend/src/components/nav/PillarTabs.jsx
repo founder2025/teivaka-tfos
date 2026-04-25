@@ -47,7 +47,7 @@ export default function PillarTabs() {
             }
           }}
         >
-          <Icon size={20} strokeWidth={2} />
+          <Icon size={24} strokeWidth={2} />
         </NavLink>
       ))}
     </nav>
