@@ -24,10 +24,12 @@ export default function PillarTabs() {
           key={key}
           to={to}
           end={to === "/home" || to === "/farm" || to === "/tis" || to === "/classroom"}
-          className="flex flex-col items-center justify-center"
+          title={label}
+          aria-label={label}
+          className="flex items-center justify-center"
           style={({ isActive }) => ({
-            padding: "8px 14px",
-            minWidth: 92,
+            padding: "0 14px",
+            minWidth: 56,
             height: 56,
             color: isActive ? C.greenDk : C.soil,
             borderBottom: `2px solid ${isActive ? C.green : "transparent"}`,
@@ -45,8 +47,7 @@ export default function PillarTabs() {
             }
           }}
         >
-          <Icon size={20} strokeWidth={2} style={{ marginBottom: 2 }} />
-          <span style={{ fontSize: 12, fontWeight: 500, lineHeight: 1 }}>{label}</span>
+          <Icon size={20} strokeWidth={2} />
         </NavLink>
       ))}
     </nav>
