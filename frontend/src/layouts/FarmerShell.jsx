@@ -149,7 +149,7 @@ function TisFab({ unread, onClick, active }) {
       onClick={onClick}
       aria-label={active ? "Close TIS chat" : "Open TIS chat"}
       aria-expanded={active}
-      className="fixed flex items-center justify-center transition-transform"
+      className="hidden md:flex fixed items-center justify-center transition-transform"
       style={{
         right: 24,
         bottom: 24,
