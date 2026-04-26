@@ -21,7 +21,7 @@
  * Gate: user must have at least one ACTIVE cycle. Empty-state CTA routes
  * to /farm to start one if not.
  */
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
@@ -99,6 +99,12 @@ function FieldEventForm() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError]           = useState("");
 
+  // Combobox state for the chemical name field.
+  const [chemOpen, setChemOpen]               = useState(false);
+  const [chemHighlightIdx, setChemHighlightIdx] = useState(0);
+  const chemInputRef    = useRef(null);
+  const chemDropdownRef = useRef(null);
+
   const cyclesQuery = useQuery({
     queryKey: ["cycles", "active"],
     queryFn: fetchActiveCycles,
@@ -118,6 +124,76 @@ function FieldEventForm() {
   );
 
   const isSpray = eventType === "SPRAY";
+
+  // Chemicals catalog — fetched only when SPRAY is selected and we have a cycle.
+  // Scoped to the cycle's production_id so the datalist is crop-relevant.
+  const cropFilter = selectedCycle?.production_id || null;
+  const chemicalsQuery = useQuery({
+    queryKey: ["chemicals", cropFilter ?? "_all"],
+    queryFn: async () => {
+      const url = cropFilter
+        ? `/api/v1/chemicals?registered_for=${encodeURIComponent(cropFilter)}`
+        : "/api/v1/chemicals";
+      const res = await fetch(url, { headers: authHeaders() });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return res.json();
+    },
+    enabled: isSpray && !!selectedCycle,
+    staleTime: 5 * 60_000,
+  });
+
+  // Resolve free-text input against the loaded catalog (case-insensitive exact).
+  const matchedChem = useMemo(() => {
+    if (!chemName.trim()) return null;
+    const list = chemicalsQuery.data?.data ?? [];
+    const target = chemName.trim().toLowerCase();
+    return list.find((c) => c.chem_name.toLowerCase() === target) || null;
+  }, [chemName, chemicalsQuery.data]);
+
+  // Combobox: substring filter for the dropdown list.
+  const allChems = chemicalsQuery.data?.data ?? [];
+  const filteredChems = useMemo(() => {
+    if (!chemName.trim()) return allChems;
+    const target = chemName.toLowerCase();
+    return allChems.filter((c) => c.chem_name.toLowerCase().includes(target));
+  }, [chemName, allChems]);
+
+  // Click-outside closes the dropdown.
+  useEffect(() => {
+    if (!chemOpen) return;
+    function onMouseDown(e) {
+      const inInput    = chemInputRef.current?.contains(e.target);
+      const inDropdown = chemDropdownRef.current?.contains(e.target);
+      if (!inInput && !inDropdown) setChemOpen(false);
+    }
+    document.addEventListener("mousedown", onMouseDown);
+    return () => document.removeEventListener("mousedown", onMouseDown);
+  }, [chemOpen]);
+
+  function handleChemKeyDown(e) {
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setChemOpen(true);
+      setChemHighlightIdx((i) => Math.min(i + 1, Math.max(filteredChems.length - 1, 0)));
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setChemHighlightIdx((i) => Math.max(i - 1, 0));
+    } else if (e.key === "Enter") {
+      if (chemOpen && filteredChems.length > 0) {
+        e.preventDefault();
+        const pick = filteredChems[chemHighlightIdx] || filteredChems[0];
+        if (pick) {
+          setChemName(pick.chem_name);
+          setChemOpen(false);
+        }
+      }
+    } else if (e.key === "Escape") {
+      setChemOpen(false);
+    } else if (e.key === "Tab") {
+      setChemOpen(false);
+    }
+  }
+
   const sprayValid = !isSpray || (chemName.trim() && quantity && quantityUnit);
 
   const submitDisabled =
@@ -288,15 +364,63 @@ function FieldEventForm() {
                 <label className="text-xs uppercase tracking-wider font-medium block mb-1" style={{ color: C.muted }}>
                   Chemical name *
                 </label>
-                <input
-                  type="text"
-                  value={chemName}
-                  onChange={(e) => setChemName(e.target.value)}
-                  placeholder="e.g. Glyphosate 360"
-                  required
-                  className="w-full px-3 py-2 rounded-lg text-sm focus:outline-none"
-                  style={{ background: "white", border: `1px solid ${C.border}`, color: C.soil }}
-                />
+                <div className="relative">
+                  <input
+                    ref={chemInputRef}
+                    type="text"
+                    value={chemName}
+                    onChange={(e) => {
+                      setChemName(e.target.value);
+                      setChemOpen(true);
+                      setChemHighlightIdx(0);
+                    }}
+                    onFocus={() => setChemOpen(true)}
+                    onKeyDown={handleChemKeyDown}
+                    placeholder="e.g. Dimethoate 40% EC"
+                    autoComplete="off"
+                    required
+                    className="w-full px-3 py-2 rounded-lg text-sm focus:outline-none"
+                    style={{ background: "white", border: `1px solid ${C.border}`, color: C.soil }}
+                  />
+                  {chemOpen && filteredChems.length > 0 && (
+                    <ul
+                      ref={chemDropdownRef}
+                      className="absolute z-50 mt-1 w-full max-h-64 overflow-y-auto rounded-lg shadow-lg"
+                      style={{ background: C.cream, border: `1px solid ${C.border}` }}
+                    >
+                      {filteredChems.map((c, idx) => (
+                        <li
+                          key={c.chem_name}
+                          onClick={() => { setChemName(c.chem_name); setChemOpen(false); }}
+                          onMouseEnter={() => setChemHighlightIdx(idx)}
+                          className="px-3 py-2 cursor-pointer"
+                          style={{
+                            background: idx === chemHighlightIdx ? "#E9F2DD" : "transparent",
+                            borderBottom: idx === filteredChems.length - 1 ? "none" : `1px solid ${C.border}`,
+                          }}
+                        >
+                          <div className="font-medium text-sm" style={{ color: C.soil }}>{c.chem_name}</div>
+                          <div className="text-xs mt-0.5" style={{ color: C.muted }}>
+                            WHD {c.withholding_period_days}d · {c.active_ingredient}
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  {chemOpen && filteredChems.length === 0 && chemName && (
+                    <div
+                      className="absolute z-50 mt-1 w-full px-3 py-2 rounded-lg shadow-lg text-xs"
+                      style={{ background: C.cream, border: `1px solid ${C.border}`, color: C.muted }}
+                    >
+                      No chemicals match &ldquo;{chemName}&rdquo; for this crop
+                    </div>
+                  )}
+                </div>
+                {matchedChem && (
+                  <p className="text-xs mt-1" style={{ color: C.muted }}>
+                    WHD {matchedChem.withholding_period_days} days · active: {matchedChem.active_ingredient}
+                  </p>
+                )}
                 <div className="text-[11px] mt-0.5" style={{ color: C.muted }}>
                   Must match a chemical in the system. WHD clearance auto-computed.
                 </div>
