@@ -18,25 +18,11 @@ export default function SearchBar() {
 
   useEffect(() => { setMac(isMac()); }, []);
 
-  useEffect(() => {
-    function handler(e) {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
-        e.preventDefault();
-        inputRef.current?.focus();
-        return;
-      }
-      const tag = document.activeElement?.tagName;
-      if (e.key === "/" && tag !== "INPUT" && tag !== "TEXTAREA") {
-        e.preventDefault();
-        inputRef.current?.focus();
-      }
-      if (e.key === "Escape" && document.activeElement === inputRef.current) {
-        inputRef.current?.blur();
-      }
-    }
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, []);
+  // Phase 3d (2026-04-26): keydown handler removed. Cmd/Ctrl+K now lives
+  // on TopAppBar so the shortcut works regardless of whether SearchBar
+  // is mounted. When Phase 8 mounts SearchBar inside a search overlay,
+  // a focused-state autofocus mechanism replaces this — see
+  // TopAppBar.emitSearchToast for the current trigger contract.
 
   function handleSubmit(e) {
     e.preventDefault();

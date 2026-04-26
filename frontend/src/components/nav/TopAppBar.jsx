@@ -1,8 +1,7 @@
 import { Link } from "react-router-dom";
 import { Menu, Search } from "lucide-react";
-import { useState } from "react";
+import { useEffect } from "react";
 import PillarTabs from "./PillarTabs";
-import SearchBar from "./SearchBar";
 import RightCluster from "./RightCluster";
 import { useLeftRail } from "../../context/LeftRailContext";
 
@@ -56,24 +55,48 @@ function RailToggle() {
   );
 }
 
+// Phase 3d (2026-04-26): SearchIconButton renders at all viewports.
+// Phase 8 will swap the click handler from a toast stub to a real
+// search-overlay open. Until then, click + Cmd/Ctrl+K both fire the
+// same toast.
+function emitSearchToast() {
+  window.dispatchEvent(
+    new CustomEvent("tfos:toast", {
+      detail: { message: "Global search launches in Phase 8. For now, navigate via pillars." },
+    }),
+  );
+}
+
 function SearchIconButton({ onClick }) {
   return (
     <button
       type="button"
       onClick={onClick}
       aria-label="Search"
+      title="Search farm, tasks, people…"
       className="rounded-md flex items-center justify-center"
       style={{ width: 36, height: 36, color: C.soil }}
       onMouseEnter={(e) => { e.currentTarget.style.background = C.tint; }}
       onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
     >
-      <Search size={18} strokeWidth={1.75} />
+      <Search size={20} strokeWidth={1.75} />
     </button>
   );
 }
 
 export default function TopAppBar() {
-  const [, setSearchOverlayOpen] = useState(false);
+  // Cmd/Ctrl+K — opens search (Phase 3d: same toast as the icon click;
+  // Phase 8 swap to real overlay open).
+  useEffect(() => {
+    function handler(e) {
+      if ((e.metaKey || e.ctrlKey) && (e.key === "k" || e.key === "K")) {
+        e.preventDefault();
+        emitSearchToast();
+      }
+    }
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, []);
 
   return (
     <header
@@ -88,27 +111,13 @@ export default function TopAppBar() {
         className="relative flex items-center"
         style={{ height: 56, padding: "0 16px", gap: 12 }}
       >
-        {/* Left: hamburger + brand + search */}
+        {/* Left: hamburger + brand + search-icon (universal). */}
         <div className="flex items-center flex-shrink-0" style={{ gap: 12 }}>
           <RailToggle />
           <Link to="/home" className="flex items-center flex-shrink-0" aria-label="teivaka home">
             <TeivakaLogo />
           </Link>
-          <div className="hidden md:block flex-shrink-0" style={{ width: 280 }}>
-            <SearchBar />
-          </div>
-          <div className="md:hidden flex-shrink-0">
-            <SearchIconButton
-              onClick={() => {
-                setSearchOverlayOpen(true);
-                window.dispatchEvent(
-                  new CustomEvent("tfos:toast", {
-                    detail: { message: "Global search launches in Phase 8. For now, navigate via pillars." },
-                  }),
-                );
-              }}
-            />
-          </div>
+          <SearchIconButton onClick={emitSearchToast} />
         </div>
 
         {/* Spacer — consumes remaining space so right cluster sits at the edge */}
