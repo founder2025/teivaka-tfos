@@ -2,11 +2,14 @@
  * TopTaskBanner — pulls /api/v1/tasks/next and renders the highest-rank OPEN
  * task as a prominent green-gradient banner above the metric grid.
  *
- * Action buttons (Done / Skip / Help) are STUBBED in this commit — they emit a
- * toast only. Day 3b-Farm scope is read-only; write endpoints
- * (POST /tasks/{id}/complete|skip|help) wire up Day 4+.
+ * Day 4 Phase 1: Done + Skip buttons now fire the real
+ * POST /complete and POST /skip endpoints, with React Query cache
+ * invalidation on success so the banner advances to the next task.
+ * Help button stays a toast stub — wiring lands in Day 4 Phase 2
+ * (WhatsApp escalation).
  */
-import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Droplet } from "lucide-react";
 
 const C = {
@@ -34,28 +37,66 @@ async function fetchNextTask() {
   return body?.data ?? null;
 }
 
-function StubButton({ children, primary }) {
-  return (
-    <button
-      type="button"
-      onClick={() => emitToast("Task actions wire up Day 4+")}
-      className="text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors"
-      style={
-        primary
-          ? { background: "white", color: C.greenDk }
-          : { background: "rgba(255,255,255,0.18)", color: "white" }
-      }
-    >
-      {children}
-    </button>
-  );
-}
-
 export default function TopTaskBanner() {
+  const queryClient = useQueryClient();
+  const [submitting, setSubmitting] = useState(null); // null | "DONE" | "SKIP"
+
   const { data: task, isLoading, error } = useQuery({
     queryKey: ["tasks-next"],
     queryFn: fetchNextTask,
   });
+
+  const isBusy = submitting !== null;
+
+  async function refreshTaskQueries() {
+    await queryClient.invalidateQueries({ queryKey: ["tasks-next"] });
+    await queryClient.invalidateQueries({ queryKey: ["tasks-open-count"] });
+  }
+
+  const handleDone = async () => {
+    if (!task?.task_id || isBusy) return;
+    setSubmitting("DONE");
+    try {
+      const res = await fetch(`/api/v1/tasks/${task.task_id}/complete`, {
+        method: "POST",
+        headers: authHeaders(),
+        body: JSON.stringify({}),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      await refreshTaskQueries();
+      emitToast("Task marked done");
+    } catch (err) {
+      console.error("Task complete failed:", err);
+      emitToast(`Couldn't complete task: ${err.message}`);
+    } finally {
+      setSubmitting(null);
+    }
+  };
+
+  const handleSkip = async () => {
+    if (!task?.task_id || isBusy) return;
+    setSubmitting("SKIP");
+    try {
+      // SkipReason is required by the backend (TaskSkipIn schema). Default
+      // to "other" until Day 4 Phase 2 introduces a skip-reason picker.
+      const res = await fetch(`/api/v1/tasks/${task.task_id}/skip`, {
+        method: "POST",
+        headers: authHeaders(),
+        body: JSON.stringify({ reason: "other" }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      await refreshTaskQueries();
+      emitToast("Task skipped");
+    } catch (err) {
+      console.error("Task skip failed:", err);
+      emitToast(`Couldn't skip task: ${err.message}`);
+    } finally {
+      setSubmitting(null);
+    }
+  };
+
+  // TODO Day 4 Phase 2: wire to /api/v1/tasks/{id}/help (WhatsApp escalation)
+  const handleHelp = () => emitToast("Task help wires up Day 4 Phase 2");
 
   let label = "Top task";
   let title = "—";
@@ -77,6 +118,8 @@ export default function TopTaskBanner() {
     if (task.body_md) meta = task.body_md.slice(0, 140);
     else if (task.source_module) meta = `Source: ${task.source_module}`;
   }
+
+  const busyClass = isBusy ? "opacity-50 cursor-not-allowed" : "";
 
   return (
     <div
@@ -112,9 +155,33 @@ export default function TopTaskBanner() {
       </div>
       {task && (
         <div className="flex-shrink-0 flex gap-2">
-          <StubButton primary>Done</StubButton>
-          <StubButton>Skip</StubButton>
-          <StubButton>Help</StubButton>
+          <button
+            type="button"
+            onClick={handleDone}
+            disabled={isBusy}
+            className={`text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors ${busyClass}`}
+            style={{ background: "white", color: C.greenDk }}
+          >
+            {submitting === "DONE" ? "Done…" : "Done"}
+          </button>
+          <button
+            type="button"
+            onClick={handleSkip}
+            disabled={isBusy}
+            className={`text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors ${busyClass}`}
+            style={{ background: "rgba(255,255,255,0.18)", color: "white" }}
+          >
+            {submitting === "SKIP" ? "Skip…" : "Skip"}
+          </button>
+          <button
+            type="button"
+            onClick={handleHelp}
+            disabled={isBusy}
+            className={`text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors ${busyClass}`}
+            style={{ background: "rgba(255,255,255,0.18)", color: "white" }}
+          >
+            Help
+          </button>
         </div>
       )}
     </div>
