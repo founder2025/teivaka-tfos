@@ -37,6 +37,7 @@ const Community     = lazy(() => import("./pages/farmer/Community"));
 const CommunityMap  = lazy(() => import("./pages/farmer/CommunityMap"));
 const Onboarding    = lazy(() => import("./pages/farmer/Onboarding"));
 const FarmBasics    = lazy(() => import("./pages/onboarding/FarmBasics"));
+const FieldEventNew = lazy(() => import("./pages/farmer/FieldEventNew"));
 const KnowledgeBase = lazy(() => import("./pages/farmer/KnowledgeBase"));
 const FarmManager   = lazy(() => import("./pages/farmer/FarmManager"));
 const TIS           = lazy(() => import("./pages/farmer/TIS"));
@@ -157,7 +158,7 @@ export default function App() {
             <Route path="/farm/tasks"        element={<ComingSoon title="Tasks"        phase="4.2" />} />
             <Route path="/farm/cycles"       element={<ComingSoon title="Cycles"       phase="4.3" />} />
             <Route path="/farm/harvests"     element={<ComingSoon title="Harvests"     phase="4.3" />} />
-            <Route path="/farm/field-events" element={<ComingSoon title="Field Events" phase="4.2" />} />
+            <Route path="/farm/field-events" element={<FieldEventNew />} />
             <Route path="/farm/inventory"    element={<ComingSoon title="Inventory"    phase="5"   />} />
             <Route path="/farm/labor"        element={<ComingSoon title="Labor"        phase="4.2" />} />
             <Route path="/farm/cash"         element={<ComingSoon title="Cash"         phase="4.2" />} />

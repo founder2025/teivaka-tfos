@@ -18,12 +18,14 @@ from __future__ import annotations
 from datetime import date, datetime, timezone
 from decimal import Decimal
 from typing import Any, Optional
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, Response, status
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.audit_chain import emit_audit_event
 from app.middleware.rls import (
     ROLE_ADMIN,
     ROLE_FOUNDER,
@@ -239,6 +241,40 @@ async def create_field_event(
                 "idempotency_key": idempotency_key,
             },
         )).mappings().first()
+
+        # Emit audit.events (v4.1 Bank Evidence spine).
+        #
+        # SPRAY events emit CHEMICAL_APPLIED — the existing
+        # audit_events_event_type_valid CHECK constraint already includes
+        # this value. Hash-chain participation is mandatory for SPRAY
+        # because it gates harvest compliance (WHD trigger).
+        #
+        # Other 13 event types (PLANTING, FERTILIZE, IRRIGATE, PRUNE,
+        # PEST_OBSERVE, DISEASE_OBSERVE, etc.) have no matching value in
+        # the audit.events CHECK constraint — adding FIELD_EVENT_LOGGED
+        # would require a migration that broadens the constraint. Deferred
+        # to a Phase 4.x.5 follow-up; non-SPRAY events skip audit for now.
+        # The field_events row itself is the system of record for those.
+        if payload.event_type == "SPRAY":
+            await emit_audit_event(
+                db=db,
+                tenant_id=UUID(tenant_id),
+                actor_user_id=UUID(user_id),
+                event_type="CHEMICAL_APPLIED",
+                entity_type="field_event",
+                entity_id=event_id,
+                payload={
+                    "event_id":             event_id,
+                    "cycle_id":             payload.cycle_id,
+                    "pu_id":                payload.pu_id,
+                    "farm_id":              payload.farm_id,
+                    "event_type":           payload.event_type,
+                    "event_date":           payload.event_date.isoformat(),
+                    "chemical_id":          chemical_id,
+                    "chemical_application": chemical_application_flag,
+                },
+            )
+
         await db.commit()
     except HTTPException:
         raise
