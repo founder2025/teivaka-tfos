@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { Bell, MessageSquare, ChevronDown } from "lucide-react";
-import UniversalLogButton from "./UniversalLogButton";
 import NotificationsPanel from "./NotificationsPanel";
 import MeMenu from "./MeMenu";
 import { useTisSse } from "../../hooks/useTisSse";
@@ -151,10 +150,6 @@ export default function RightCluster() {
 
   return (
     <div className="flex items-center flex-shrink-0" style={{ gap: 8 }}>
-      <div className="hidden md:block">
-        <UniversalLogButton variant="pill" />
-      </div>
-
       <StatusDot />
 
       <IconButton

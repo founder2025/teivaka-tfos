@@ -17,7 +17,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Outlet, useLocation } from "react-router-dom";
-import { Sparkles } from "lucide-react";
+import { Plus, Sparkles } from "lucide-react";
 
 import TopAppBar from "../components/nav/TopAppBar";
 import BottomNav from "../components/nav/BottomNav";
@@ -100,6 +100,48 @@ function useIsDesktop() {
   return desktop;
 }
 
+// Farm-pillar-only floating (+) — desktop only. Stacks above the TIS FAB
+// (which sits at bottom 24px) so the two don't collide. Larger than TIS FAB
+// (64×64 vs 56×56) per spec — signals "primary action on this pillar".
+// All triggers (mobile center +, desktop pill (removed Day 4-Phase 2),
+// Cmd/Ctrl+L, this Farm-pillar FAB) converge on the same LogSheet via
+// LauncherContext. No catalog filtering by trigger — full mode-aware grid.
+function FarmPillarLogFab() {
+  const location = useLocation();
+  const { open: openLauncher } = useLauncher();
+  if (!location.pathname.startsWith("/farm")) return null;
+  return (
+    <button
+      type="button"
+      onClick={openLauncher}
+      aria-label="Log farm activity"
+      className="hidden md:flex fixed items-center justify-center transition-transform"
+      style={{
+        right: 24,
+        bottom: 96,
+        width: 64,
+        height: 64,
+        borderRadius: "50%",
+        background: C.green,
+        color: "#FFFFFF",
+        border: "3px solid #F8F3E9",
+        boxShadow: "0 6px 20px rgba(0,0,0,0.18)",
+        cursor: "pointer",
+        zIndex: 40,
+      }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.transform = "scale(1.05)";
+        e.currentTarget.style.transitionDuration = "150ms";
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.transform = "scale(1)";
+      }}
+    >
+      <Plus size={32} strokeWidth={2.5} />
+    </button>
+  );
+}
+
 function TisFab({ unread, onClick, active }) {
   return (
     <button
@@ -168,9 +210,23 @@ function ShellContent() {
   // Cmd/Ctrl+L — universal log shortcut (Day 3a: toast; Day 3b: open LogSheet).
   useUniversalLogShortcut();
 
-  const { open: railOpen, width: railWidth } = useLeftRail();
+  const { open: railOpen, width: railWidth, setOpen: setRailOpen } = useLeftRail();
   const desktop = useIsDesktop();
   const mainMarginLeft = desktop && railOpen ? railWidth : 0;
+
+  // Auto-open the LeftRail on pillar switch (desktop only). Mobile keeps
+  // the existing v2.2 auto-CLOSE-on-pathname-change behavior in
+  // LeftRailProvider — we no-op here so the two effects don't fight.
+  // First mount also triggers because lastPillarRef starts null.
+  const lastPillarRef = useRef(null);
+  useEffect(() => {
+    if (!desktop) return;
+    const pillar = location.pathname.split("/")[1] || "home";
+    if (lastPillarRef.current !== pillar) {
+      lastPillarRef.current = pillar;
+      setRailOpen(true);
+    }
+  }, [desktop, location.pathname, setRailOpen]);
 
   // TIS side-panel state — lifted so the conversation survives route changes.
   const [tisPanelOpen, setTisPanelOpen] = useState(false);
@@ -282,6 +338,7 @@ function ShellContent() {
           onSend={handleSend}
         />
       )}
+      <FarmPillarLogFab />
       <LauncherSheet />
       <Toast />
     </div>
