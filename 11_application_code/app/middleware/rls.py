@@ -3,6 +3,7 @@
 
 from fastapi import Request, Depends, HTTPException, status
 from app.db.session import AsyncSessionLocal
+from app.utils.roles import has_role
 from sqlalchemy import text
 from typing import AsyncGenerator
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -92,8 +93,11 @@ def require_role(*roles: str):
 
 def require_admin():
     """
-    Strict guard for platform admin routes (/api/v1/admin/*).
-    Only accounts with role = 'ADMIN' may pass.
+    Hierarchy guard for platform admin routes (/api/v1/admin/*).
+    Per MBI Part 14, accounts with role >= ADMIN may pass — that means
+    ADMIN, ENTERPRISE_ADMIN, and FOUNDER. Roles below ADMIN
+    (PARTNER / MANAGER / WORKER / BANK_VIEWER / COMMUNITY) get 403.
+
     Returns 403 for all other roles -- does not leak admin route existence.
 
     Usage:
@@ -101,7 +105,7 @@ def require_admin():
         async def list_all_users(user: dict = Depends(require_admin())):
     """
     def checker(user: dict = Depends(get_current_user)) -> dict:
-        if user.get("role") != ROLE_ADMIN:
+        if not has_role(user.get("role"), ROLE_ADMIN):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Access denied.",

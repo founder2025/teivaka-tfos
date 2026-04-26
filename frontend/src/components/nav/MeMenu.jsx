@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Lock, LogOut } from "lucide-react";
+import { Lock, LogOut, Shield } from "lucide-react";
 import { ME_MENU_ITEMS } from "./pillarSubNavMap";
+import { getCurrentUser } from "../../utils/auth";
+import { hasRole } from "../../utils/roles";
 
 const C = {
   soil:    "#5C4033",
@@ -95,6 +97,10 @@ export default function MeMenu({ onClose }) {
   const initials = initialsFrom(displayName, "UK");
   const tier = tierLabel(me?.subscription_tier, me?.trial_ends_at);
   const badgeBg = tierBadgeColor(me?.subscription_tier);
+  // Read role from JWT (instant, no fetch dependency). Backend still
+  // enforces require_admin() — this is a UX gate only.
+  const userRole = getCurrentUser()?.role;
+  const showAdminLink = hasRole(userRole, "ADMIN");
 
   return (
     <div
@@ -155,6 +161,27 @@ export default function MeMenu({ onClose }) {
 
       {/* Items */}
       <ul className="py-1">
+        {showAdminLink && (
+          <li role="none">
+            <Link
+              to="/admin"
+              role="menuitem"
+              onClick={onClose}
+              className="flex items-center gap-3 text-sm"
+              style={{
+                height: 36,
+                padding: "8px 12px",
+                color: C.soil,
+                background: "transparent",
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = C.hoverBg; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+            >
+              <Shield size={16} strokeWidth={1.75} />
+              <span className="flex-1">Admin Panel</span>
+            </Link>
+          </li>
+        )}
         {ME_MENU_ITEMS.map((item) => {
           const Icon = item.icon;
           const href = item.phase ? `/stub/phase-${item.phase}` : item.path;

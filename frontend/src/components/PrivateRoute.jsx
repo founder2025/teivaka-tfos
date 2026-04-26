@@ -29,6 +29,7 @@ import {
   setOnboardingComplete,
   authHeader,
 } from "../utils/auth";
+import { hasRole } from "../utils/roles";
 
 /** Require any authenticated user */
 export function PrivateRoute({ children }) {
@@ -40,7 +41,8 @@ export function PrivateRoute({ children }) {
   return children;
 }
 
-/** Require role = ADMIN. Non-admins see /403 */
+/** Require role >= ADMIN per MBI Part 14 hierarchy. FOUNDER and
+ * ENTERPRISE_ADMIN inherit; all roles below ADMIN see /403. */
 export function AdminRoute({ children }) {
   const user = getCurrentUser();
   const location = useLocation();
@@ -48,7 +50,7 @@ export function AdminRoute({ children }) {
   if (!user) {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
-  if (!isAdmin()) {
+  if (!hasRole(user.role, "ADMIN")) {
     return <Navigate to="/403" replace />;
   }
   return children;
