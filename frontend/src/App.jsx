@@ -19,7 +19,7 @@
 
 import { lazy, Suspense } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import { AdminRoute, FarmerRoute, OnboardingRoute } from "./components/PrivateRoute";
+import { AdminRoute, FarmerRoute, OnboardingRoute, PrivateRoute } from "./components/PrivateRoute";
 
 // ── Auth pages (public) ──────────────────────────────────────────────────────
 import Login    from "./pages/Login";
@@ -52,6 +52,10 @@ const FarmDashboard = lazy(() => import("./pages/farmer/FarmDashboard"));
 const HarvestNew    = lazy(() => import("./pages/farmer/HarvestNew"));
 const Classroom     = lazy(() => import("./pages/farmer/Classroom"));
 const Me            = lazy(() => import("./pages/farmer/Me"));
+
+// ── Phase A1 — Solo mode surface (MBI Part 19) ────────────────────────────────
+const SoloShell    = lazy(() => import("./layouts/SoloShell"));
+const SoloTaskCard = lazy(() => import("./pages/solo/SoloTaskCard"));
 
 // ── Day 3a — Nav v2.1 structural stubs ───────────────────────────────────────
 import ComingSoon from "./pages/ComingSoon";
@@ -186,6 +190,11 @@ export default function App() {
 
             <Route path="/stub/phase-:phaseNum" element={<ComingSoon dynamic />} />
           </Route>
+          {/* Solo mode — full-screen single-task surface, no nav */}
+          <Route element={<PrivateRoute><SoloShell /></PrivateRoute>}>
+            <Route path="/solo" element={<SoloTaskCard />} />
+          </Route>
+
           <Route path="/harvest" element={
             <FarmerRoute><HarvestLog /></FarmerRoute>
           } />
