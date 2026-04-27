@@ -49,8 +49,8 @@ async def derive_mode(
     """Compute the current farmer mode. Never user-toggled — always derived.
 
     Reads:
-      - SUM(farms.total_area_ha) WHERE tenant
-      - COUNT(production_cycles) WHERE tenant AND status='active'
+      - SUM(farms.land_area_ha) WHERE tenant
+      - COUNT(production_cycles) WHERE tenant AND cycle_status='ACTIVE'
       - user.created_at → tenure in days
       - tenant.subscription_tier
 
@@ -61,10 +61,10 @@ async def derive_mode(
             text(
                 """
                 SELECT
-                    COALESCE(SUM(f.total_area_ha), 0)::float AS total_area_ha,
+                    COALESCE(SUM(f.land_area_ha), 0)::float AS total_area_ha,
                     COALESCE((
                         SELECT COUNT(*) FROM tenant.production_cycles pc
-                        WHERE pc.tenant_id = :tid AND pc.status = 'active'
+                        WHERE pc.tenant_id = :tid AND pc.cycle_status = 'ACTIVE'
                     ), 0)::int AS active_cycles,
                     EXTRACT(
                         EPOCH FROM (NOW() - COALESCE(u.created_at, NOW()))
