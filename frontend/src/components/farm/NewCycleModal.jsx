@@ -15,6 +15,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import Modal from "../ui/Modal";
+import ThemedCombobox from "../inputs/ThemedCombobox.jsx";
 
 const C = {
   soil:    "#5C4033",
@@ -349,23 +350,21 @@ export default function NewCycleModal({ isOpen, onClose, onCreated, farmId }) {
             <label className="text-xs uppercase tracking-wider font-medium block mb-1" style={{ color: C.muted }}>
               Block
             </label>
-            <select
+            <ThemedCombobox
+              id="pu_id"
+              name="pu_id"
               value={puId}
-              onChange={(e) => setPuId(e.target.value)}
-              disabled={pusQuery.isLoading}
-              className="w-full px-3 py-2 rounded-lg text-sm focus:outline-none"
-              style={{ background: "white", border: `1px solid ${C.border}`, color: C.soil }}
-            >
-              {pusQuery.isLoading && <option>Loading blocks…</option>}
-              {!pusQuery.isLoading && pus.length === 0 && (
-                <option value="">No blocks found — finish onboarding first</option>
-              )}
-              {pus.map((pu) => (
-                <option key={pu.pu_id} value={pu.pu_id}>
-                  {pu.farmer_label || pu.pu_id}
-                </option>
-              ))}
-            </select>
+              onChange={setPuId}
+              options={pus.map((pu) => ({
+                value: pu.pu_id,
+                label: pu.farmer_label || pu.pu_id,
+                sublabel: pu.area_ha ? `${pu.area_ha} ha` : undefined,
+              }))}
+              placeholder="Select block..."
+              required
+              loading={pusQuery.isLoading}
+              emptyMessage="No blocks available"
+            />
           </div>
 
           {/* Crop selector */}
