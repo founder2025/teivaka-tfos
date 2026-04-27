@@ -121,6 +121,7 @@ class AuthMiddleware:
                         t.tis_calls_reset_at,
                         t.farm_count_limit,
                         t.worker_count_limit,
+                        t.mode,
                         u.trial_started_at,
                         u.trial_ends_at
                     FROM tenant.users u

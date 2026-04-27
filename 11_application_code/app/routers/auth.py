@@ -188,7 +188,7 @@ async def login(
             SELECT u.user_id, u.tenant_id, u.email, u.full_name,
                    u.first_name, u.last_name, u.role, u.password_hash,
                    u.email_verified,
-                   t.subscription_tier, t.tis_daily_limit
+                   t.subscription_tier, t.tis_daily_limit, t.mode
             FROM tenant.users u
             JOIN tenant.tenants t ON t.tenant_id = u.tenant_id
             WHERE u.email = :email AND u.is_active = true
@@ -221,6 +221,7 @@ async def login(
         "token_type": "bearer",
         "role": role,
         "tier": tier,
+        "mode": user["mode"],
         "tis_daily_limit": user["tis_daily_limit"],
         "display_name": (
             f"{user['first_name']} {user['last_name']}"
