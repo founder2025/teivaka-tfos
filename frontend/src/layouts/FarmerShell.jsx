@@ -16,7 +16,7 @@
  * shell structural edits. Filename preserved; internals rewritten in place.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Outlet, useLocation } from "react-router-dom";
+import { Navigate, Outlet, useLocation } from "react-router-dom";
 import { Plus, Sparkles } from "lucide-react";
 
 import TopAppBar from "../components/nav/TopAppBar";
@@ -28,6 +28,7 @@ import Toast from "../components/ui/Toast";
 import LogSheet from "../components/launcher/LogSheet";
 import { LeftRailProvider, useLeftRail } from "../context/LeftRailContext";
 import { LauncherProvider, useLauncher } from "../context/LauncherContext";
+import { useEffectiveMode } from "../hooks/useEffectiveMode";
 
 const C = {
   soil:    "#5C4033",
@@ -193,6 +194,16 @@ function TisFab({ unread, onClick, active }) {
 
 function ShellContent() {
   const location = useLocation();
+  const { effective: effectiveMode } = useEffectiveMode();
+
+  // Mode-aware bounce: SOLO users (real or FOUNDER-overridden) land at
+  // /solo regardless of which farmer pillar they navigated to. Returns
+  // before any other shell setup so we don't pay layout work for a frame
+  // we're about to unmount.
+  if (effectiveMode === "SOLO") {
+    return <Navigate to="/solo" replace />;
+  }
+
   const onTisRoute = location.pathname.startsWith("/tis");
   const showFab = !onTisRoute;
 
