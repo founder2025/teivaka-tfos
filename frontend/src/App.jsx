@@ -64,6 +64,7 @@ const AdminUsers     = lazy(() => import("./pages/admin/AdminUsers"));
 const AdminContent   = lazy(() => import("./pages/admin/AdminContent"));
 const AdminAnalytics = lazy(() => import("./pages/admin/AdminAnalytics"));
 const AdminSettings  = lazy(() => import("./pages/admin/AdminSettings"));
+const InputsSandbox  = lazy(() => import("./pages/admin/InputsSandbox"));
 
 // ── Misc pages ───────────────────────────────────────────────────────────────
 import Forbidden from "./pages/Forbidden";
@@ -124,6 +125,9 @@ export default function App() {
           } />
           <Route path="/admin/settings" element={
             <AdminRoute><AdminSettings /></AdminRoute>
+          } />
+          <Route path="/admin/dev/inputs-sandbox" element={
+            <AdminRoute><InputsSandbox /></AdminRoute>
           } />
 
           {/* ── Farmer routes ───────────────────────────────────────────── */}
