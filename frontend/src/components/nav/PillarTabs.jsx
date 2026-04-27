@@ -18,7 +18,7 @@ const PILLARS = [
 
 export default function PillarTabs() {
   return (
-    <nav className="flex items-center" aria-label="Primary">
+    <nav className="flex items-center gap-6" aria-label="Primary">
       {PILLARS.map(({ key, label, to, Icon }) => (
         <NavLink
           key={key}
