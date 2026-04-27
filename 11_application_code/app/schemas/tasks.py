@@ -9,7 +9,7 @@ Deployment target: /opt/teivaka/11_application_code/app/schemas/tasks.py
 """
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from enum import Enum
 from typing import Literal
 from uuid import UUID
@@ -81,6 +81,7 @@ class TaskOut(BaseModel):
     icon_key: str
     input_hint: str  # 'none' | 'numeric_kg' | 'numeric_fjd' | 'photo' | 'text_short' | 'checklist' | 'confirm_yn'
     body_md: str | None = None
+    due_date: date | None = None
     expires_at: datetime | None = None
     default_outcome: str | None = None
     entity_type: str | None = None

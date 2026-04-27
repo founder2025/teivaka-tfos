@@ -17,7 +17,7 @@ Deployment target: /opt/teivaka/11_application_code/app/routers/tasks.py
 """
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import Annotated
 from uuid import UUID
 
@@ -79,6 +79,7 @@ def _row_to_task_out(row) -> TaskOut:
         icon_key=row.icon_key,
         input_hint=row.input_hint or "none",
         body_md=row.body_md,
+        due_date=row.due_date,
         expires_at=row.expires_at,
         default_outcome=row.default_outcome,
         entity_type=row.entity_type,
@@ -92,19 +93,26 @@ def _row_to_task_out(row) -> TaskOut:
 
 
 async def _fetch_next_task(db: AsyncSession, tenant_id: UUID) -> TaskOut | None:
-    """Return the lowest-rank OPEN task for the tenant, or None."""
+    """Return the lowest-rank OPEN task that is due today or earlier.
+
+    The due_date predicate hides scheduled-future reminders (e.g. WHD
+    clearance seeds) until their day arrives. Tasks with NULL due_date
+    are immediate and always eligible.
+    """
     row = (
         await db.execute(
             text(
                 """
                 SELECT task_id, imperative, task_rank, icon_key, input_hint,
-                       body_md, expires_at, default_outcome, entity_type,
-                       entity_id, source_module, source_reference,
-                       voice_playback_url, status, created_at
+                       body_md, due_date, expires_at, default_outcome,
+                       entity_type, entity_id, source_module,
+                       source_reference, voice_playback_url, status,
+                       created_at
                 FROM tenant.task_queue
                 WHERE tenant_id = :tid
                   AND status = 'OPEN'
                   AND (expires_at IS NULL OR expires_at > NOW())
+                  AND (due_date IS NULL OR due_date <= CURRENT_DATE)
                 ORDER BY task_rank ASC, created_at ASC
                 LIMIT 1
                 """
@@ -174,12 +182,17 @@ async def list_tasks(
     source_module: SourceModule | None = None,
     entity_type: str | None = None,
     entity_id: str | None = None,
+    include_future: bool = Query(default=False),
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
 ):
     """Growth/Commercial list view with filters.
 
     Default: status='OPEN', sorted by task_rank ASC, limit 50.
+
+    By default future-dated tasks (due_date > today) are hidden so the
+    farmer view matches /tasks/next. Pass include_future=true to surface
+    the full scheduled queue (admin / planning views).
     """
     await set_tenant_context(db, user["tenant_id"])
 
@@ -208,6 +221,9 @@ async def list_tasks(
         where_clauses.append("entity_id = :eid")
         params["eid"] = entity_id
 
+    if not include_future:
+        where_clauses.append("(due_date IS NULL OR due_date <= CURRENT_DATE)")
+
     where_sql = " AND ".join(where_clauses)
 
     count_row = (
@@ -222,9 +238,10 @@ async def list_tasks(
             text(
                 f"""
                 SELECT task_id, imperative, task_rank, icon_key, input_hint,
-                       body_md, expires_at, default_outcome, entity_type,
-                       entity_id, source_module, source_reference,
-                       voice_playback_url, status, created_at
+                       body_md, due_date, expires_at, default_outcome,
+                       entity_type, entity_id, source_module,
+                       source_reference, voice_playback_url, status,
+                       created_at
                 FROM tenant.task_queue
                 WHERE {where_sql}
                 ORDER BY task_rank ASC, created_at ASC
