@@ -111,3 +111,8 @@ pytz==2024.2                      # timezone handling (Pacific/Fiji = UTC+12)
 aiofiles==24.1.0                  # async file I/O
 tenacity==9.0.0                   # retry logic for external API calls
 orjson==3.10.12                   # fast JSON serialization (drop-in for stdlib)
+
+# =============================================================================
+# PDF Generation (Bank Evidence service — Phase PDFv1)
+# =============================================================================
+reportlab>=4.0                    # PDF rendering for audit / bank evidence exports

@@ -52,3 +52,6 @@ pytz==2024.2
 aiofiles==24.1.0
 tenacity==9.0.0
 orjson==3.10.12
+
+# PDF generation (Bank Evidence service — Phase PDFv1)
+reportlab>=4.0
