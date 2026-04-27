@@ -20,6 +20,7 @@
  */
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import ThemedSelect from "../../components/inputs/ThemedSelect.jsx";
 
 const C = {
   soil:    "#5C4033",
@@ -289,21 +290,17 @@ export default function HarvestNew() {
               No active cycles. Plant one before logging a harvest.
             </div>
           ) : (
-            <select
+            <ThemedSelect
               id="cycle_id"
-              className={inputCls}
-              style={{ borderColor: C.border }}
+              name="cycle_id"
               value={cycleId}
-              onChange={(e) => setCycleId(e.target.value)}
-            >
-              <option value="">Select a cycle…</option>
-              {cycles.map((c) => (
-                <option key={c.cycle_id} value={c.cycle_id}>
-                  {c.pu_id} · {c.production_name || c.production_id}
-                  {c.planting_date ? ` · planted ${c.planting_date}` : ""}
-                </option>
-              ))}
-            </select>
+              onChange={setCycleId}
+              options={cycles.map((c) => ({
+                value: c.cycle_id,
+                label: `${c.production_name || c.production_id || "—"} on ${c.pu_farmer_label || c.pu_id}`,
+              }))}
+              placeholder="Select a cycle…"
+            />
           )}
         </Field>
 
@@ -334,31 +331,25 @@ export default function HarvestNew() {
         </Field>
 
         <Field label="Grade" htmlFor="grade">
-          <select
+          <ThemedSelect
             id="grade"
-            className={inputCls}
-            style={{ borderColor: C.border }}
+            name="grade"
             value={grade}
-            onChange={(e) => setGrade(e.target.value)}
-          >
-            {GRADES.map((g) => (
-              <option key={g} value={g}>Grade {g}</option>
-            ))}
-          </select>
+            onChange={setGrade}
+            options={GRADES.map((g) => ({ value: g, label: `Grade ${g}` }))}
+            placeholder="Select grade…"
+          />
         </Field>
 
         <Field label="Destination" htmlFor="destination">
-          <select
+          <ThemedSelect
             id="destination"
-            className={inputCls}
-            style={{ borderColor: C.border }}
+            name="destination"
             value={destination}
-            onChange={(e) => setDestination(e.target.value)}
-          >
-            {DESTINATIONS.map((d) => (
-              <option key={d} value={d}>{d}</option>
-            ))}
-          </select>
+            onChange={setDestination}
+            options={DESTINATIONS.map((d) => ({ value: d, label: d }))}
+            placeholder="Select destination…"
+          />
           {destination === "OTHER" && (
             <input
               type="text"

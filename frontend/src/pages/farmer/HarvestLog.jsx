@@ -14,6 +14,7 @@
  */
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import ThemedSelect from "../../components/inputs/ThemedSelect.jsx";
 
 const C = { soil: "#2C1A0E", green: "#3D8C40", cream: "#F5EFE0", gold: "#D4A017", border: "#E0D5C0", red: "#B91C1C" };
 
@@ -218,17 +219,25 @@ export default function HarvestLog() {
           </Field>
 
           <Field label="Grade" htmlFor="grade">
-            <select id="grade" className={inputCls} style={{ borderColor: C.border }}
-                    value={form.grade} onChange={(e) => update("grade", e.target.value)}>
-              {GRADES.map((g) => <option key={g} value={g}>Grade {g}</option>)}
-            </select>
+            <ThemedSelect
+              id="grade"
+              name="grade"
+              value={form.grade}
+              onChange={(v) => update("grade", v)}
+              options={GRADES.map((g) => ({ value: g, label: `Grade ${g}` }))}
+              placeholder="Select grade…"
+            />
           </Field>
 
           <Field label="Destination" htmlFor="destination">
-            <select id="destination" className={inputCls} style={{ borderColor: C.border }}
-                    value={form.destination} onChange={(e) => update("destination", e.target.value)}>
-              {DESTINATIONS.map((d) => <option key={d} value={d}>{d}</option>)}
-            </select>
+            <ThemedSelect
+              id="destination"
+              name="destination"
+              value={form.destination}
+              onChange={(v) => update("destination", v)}
+              options={DESTINATIONS.map((d) => ({ value: d, label: d }))}
+              placeholder="Select destination…"
+            />
           </Field>
 
           <div className="flex items-center gap-2">

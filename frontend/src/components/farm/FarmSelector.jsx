@@ -7,9 +7,9 @@
  */
 import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Map as MapIcon } from "lucide-react";
 
 import { useCurrentFarm } from "../../context/CurrentFarmContext";
+import ThemedSelect from "../inputs/ThemedSelect.jsx";
 
 const C = {
   soil:   "#5C4033",
@@ -62,33 +62,24 @@ export default function FarmSelector() {
     );
   }
 
+  const options = farms.map((f) => {
+    // Display layer: farm_id is operational; never show it as label.
+    // Falls back to farm_id only if both farm_name and location are missing.
+    const parts = [];
+    if (f.farm_name) parts.push(f.farm_name);
+    if (f.location_island) parts.push(f.location_island);
+    const display = parts.length ? parts.join(" · ") : f.farm_id;
+    return { value: f.farm_id, label: display };
+  });
+
   return (
-    <span
-      className="inline-flex items-center gap-1.5 px-2 py-1.5 rounded-lg"
-      style={{ background: "white", border: `1px solid ${C.border}` }}
-    >
-      <MapIcon size={14} style={{ color: C.muted }} />
-      <select
+    <div className="inline-block" style={{ minWidth: 200 }}>
+      <ThemedSelect
         value={farmId || ""}
-        onChange={(e) => setFarmId(e.target.value)}
-        className="bg-transparent text-sm font-medium border-0 focus:outline-none cursor-pointer"
-        style={{ color: C.soil }}
-        aria-label="Select farm"
-      >
-        {farms.map((f) => {
-          // Display layer: farm_id is operational; never show it as label.
-          // Falls back to farm_id only if both farm_name and location are missing.
-          const parts = [];
-          if (f.farm_name) parts.push(f.farm_name);
-          if (f.location_island) parts.push(f.location_island);
-          const display = parts.length ? parts.join(" · ") : f.farm_id;
-          return (
-            <option key={f.farm_id} value={f.farm_id}>
-              {display}
-            </option>
-          );
-        })}
-      </select>
-    </span>
+        onChange={(v) => setFarmId(v)}
+        options={options}
+        placeholder="Select farm…"
+      />
+    </div>
   );
 }

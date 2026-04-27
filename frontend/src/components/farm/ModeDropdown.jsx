@@ -6,12 +6,19 @@
  * onChange emits a toast and updates local state only.
  */
 import { useState } from "react";
+import ThemedSelect from "../inputs/ThemedSelect.jsx";
 
 const C = {
   soil:   "#5C4033",
   border: "#E6DED0",
   muted:  "#8A7863",
 };
+
+const MODE_OPTIONS = [
+  { value: "Growth",     label: "Growth" },
+  { value: "Commercial", label: "Commercial" },
+  { value: "Solo",       label: "Solo" },
+];
 
 function emitToast(message) {
   window.dispatchEvent(
@@ -22,30 +29,16 @@ function emitToast(message) {
 export default function ModeDropdown() {
   const [mode, setMode] = useState("Growth");
   return (
-    <span
-      className="inline-flex items-center gap-1.5 px-2 py-1.5 rounded-lg"
-      style={{ background: "white", border: `1px solid ${C.border}` }}
-    >
-      <span
-        className="text-[11px] uppercase tracking-wider font-medium"
-        style={{ color: C.muted }}
-      >
-        Mode
-      </span>
-      <select
+    <div className="inline-block" style={{ minWidth: 140 }}>
+      <ThemedSelect
         value={mode}
-        onChange={(e) => {
-          setMode(e.target.value);
+        onChange={(v) => {
+          setMode(v);
           emitToast("Mode switching coming Day 4+");
         }}
-        className="bg-transparent text-sm font-medium border-0 focus:outline-none cursor-pointer"
-        style={{ color: C.soil }}
-        aria-label="Farm view mode"
-      >
-        <option>Growth</option>
-        <option>Commercial</option>
-        <option>Solo</option>
-      </select>
-    </span>
+        options={MODE_OPTIONS}
+        placeholder="Mode"
+      />
+    </div>
   );
 }
