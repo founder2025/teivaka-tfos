@@ -26,6 +26,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.audit_chain import emit_audit_event
+from app.core.task_engine import emit_task
 from app.middleware.rls import (
     ROLE_ADMIN,
     ROLE_FOUNDER,
@@ -256,6 +257,77 @@ async def create_field_event(
         # to a Phase 4.x.5 follow-up; non-SPRAY events skip audit for now.
         # The field_events row itself is the system of record for those.
         if payload.event_type == "SPRAY":
+            # Seed a WHD-clearance reminder for harvest readiness.
+            # Composed from human-readable fields only — no internal IDs leak
+            # into farmer-facing text (Universal Naming v2). Skipped silently
+            # if the BEFORE-INSERT trigger could not derive whd_clearance_date.
+            whd_date = row.get("whd_clearance_date")
+            seeded_task_id: Optional[str] = None
+            if whd_date is not None:
+                display = (await db.execute(
+                    text("""
+                        SELECT
+                          (SELECT chem_name
+                             FROM shared.chemical_library
+                            WHERE chemical_id = :chem_id) AS chem_name,
+                          (SELECT p.production_name
+                             FROM tenant.production_cycles pc
+                             JOIN shared.productions p
+                               ON p.production_id = pc.production_id
+                            WHERE pc.cycle_id = :cyc_id) AS production_name,
+                          (SELECT pu_name
+                             FROM tenant.production_units
+                            WHERE pu_id = :pu_id) AS pu_name
+                    """),
+                    {
+                        "chem_id": chemical_id,
+                        "cyc_id":  payload.cycle_id,
+                        "pu_id":   payload.pu_id,
+                    },
+                )).first()
+
+                prod_label = (display.production_name if display and display.production_name else "Crop")
+                pu_label   = (display.pu_name         if display and display.pu_name         else "block")
+                chem_label = (display.chem_name       if display and display.chem_name       else "spray")
+
+                imperative = (
+                    f"{prod_label} on {pu_label} ready to harvest — "
+                    f"{chem_label} withholding period complete"
+                )[:120]
+
+                task_uuid = await emit_task(
+                    db=db,
+                    tenant_id=UUID(tenant_id),
+                    farm_id=payload.farm_id,
+                    source_module="compliance",
+                    source_reference=event_id,
+                    imperative=imperative,
+                    rank=400,
+                    icon_key="Sprout",
+                    input_hint="confirm_yn",
+                    entity_type="CYCLE",
+                    entity_id=payload.cycle_id,
+                    task_type="REMINDER",
+                )
+                seeded_task_id = str(task_uuid)
+
+                # emit_task does not expose due_date; set the WHD scheduling
+                # date on the row it just upserted. Same transaction as the
+                # field_event insert so the reminder cannot exist without
+                # the SPRAY event that spawned it.
+                await db.execute(
+                    text("""
+                        UPDATE tenant.task_queue
+                           SET due_date = :due
+                         WHERE task_id  = :tid
+                    """),
+                    {"due": whd_date, "tid": seeded_task_id},
+                )
+
+            # CHEMICAL_APPLIED is the v4.1 audit-chain spine for SPRAY.
+            # TASK_SEEDED is not in audit_events_event_type_valid, so
+            # task_id + due_date piggyback into this payload to keep the
+            # reminder seed traceable through the hash chain.
             await emit_audit_event(
                 db=db,
                 tenant_id=UUID(tenant_id),
@@ -272,6 +344,8 @@ async def create_field_event(
                     "event_date":           payload.event_date.isoformat(),
                     "chemical_id":          chemical_id,
                     "chemical_application": chemical_application_flag,
+                    "whd_clearance_date":   whd_date.isoformat() if whd_date else None,
+                    "seeded_task_id":       seeded_task_id,
                 },
             )
 
