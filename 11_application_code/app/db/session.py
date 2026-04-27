@@ -67,7 +67,7 @@ async def get_rls_db(tenant_id: str) -> AsyncGenerator[AsyncSession, None]:
         async with session.begin():
             try:
                 await session.execute(
-                    text("SET LOCAL app.tenant_id = :tenant_id"),
+                    text("SELECT set_config('app.tenant_id', :tenant_id, true)"),
                     {"tenant_id": str(tenant_id)},
                 )
                 yield session
@@ -90,7 +90,7 @@ async def get_rls_db_dependency(tenant_id: str) -> AsyncGenerator[AsyncSession, 
         async with session.begin():
             try:
                 await session.execute(
-                    text("SET LOCAL app.tenant_id = :tenant_id"),
+                    text("SELECT set_config('app.tenant_id', :tenant_id, true)"),
                     {"tenant_id": str(tenant_id)},
                 )
                 yield session
