@@ -25,6 +25,7 @@ from app.routers import (
     rotation,
     harvests,
     field_events,
+    cash,
     income,
     labor,
     inputs,
@@ -241,6 +242,7 @@ app.include_router(harvests.router,           prefix=f"{PREFIX}/harvests",      
 app.include_router(field_events.router,       prefix=f"{PREFIX}/field-events",       tags=["Field Events"])
 
 # Farm OS — financials
+app.include_router(cash.router,               prefix=f"{PREFIX}/cash-ledger",        tags=["Cash Ledger"])
 app.include_router(income.router,             prefix=f"{PREFIX}/income",             tags=["Income"])
 app.include_router(labor.router,              prefix=f"{PREFIX}/labor",              tags=["Labor"])
 app.include_router(inputs.router,             prefix=f"{PREFIX}/inputs",             tags=["Inputs & Inventory"])
