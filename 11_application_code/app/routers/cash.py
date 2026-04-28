@@ -99,12 +99,22 @@ class CashLedgerCreate(BaseModel):
     reference_id: Optional[str] = Field(None, max_length=128)
     reference_type: Optional[str] = Field(None, max_length=64)
     bank_account: Optional[str] = Field(None, max_length=128)
+    # P-Doctrine-2: Block + Crop anchors. Both optional — generic farm
+    # expenses (utilities, fuel, whole-farm fertilizer purchase before
+    # allocation) genuinely don't tie to a single block.
+    pu_id: Optional[str] = Field(None, max_length=64)
+    production_id: Optional[str] = Field(None, max_length=64)
 
 
 class CashLedgerUpdate(BaseModel):
     """All fields optional — partial PATCH. Immutable fields (transaction_type,
     transaction_date, ledger_id, tenant_id, farm_id, created_by, created_at)
-    are intentionally excluded so the audit chain integrity is preserved."""
+    are intentionally excluded so the audit chain integrity is preserved.
+
+    pu_id + production_id ARE mutable: a farmer may correct block/crop
+    attribution after the fact (e.g. expense was logged before the
+    block was identified). The CASH_UPDATED audit row records the swap.
+    """
     description: Optional[str] = Field(None, min_length=1, max_length=500)
     category: Optional[str] = Field(None, min_length=1, max_length=64)
     amount_fjd: Optional[Decimal] = Field(None, gt=Decimal("0"))
@@ -112,11 +122,14 @@ class CashLedgerUpdate(BaseModel):
     reference_id: Optional[str] = Field(None, max_length=128)
     reference_type: Optional[str] = Field(None, max_length=64)
     bank_account: Optional[str] = Field(None, max_length=128)
+    pu_id: Optional[str] = Field(None, max_length=64)
+    production_id: Optional[str] = Field(None, max_length=64)
 
 
 _PATCH_FIELDS = (
     "description", "category", "amount_fjd", "payment_method",
     "reference_id", "reference_type", "bank_account",
+    "pu_id", "production_id",
 )
 
 
@@ -137,18 +150,34 @@ async def log_cash(
         if not farm_check.first():
             raise HTTPException(status_code=404, detail="farm_id not found for tenant")
 
+        # P-Doctrine-2: validate Block anchor belongs to the farm.
+        # 404 only on hard mismatch; production_id is accepted as-given
+        # (retro logging of an expense for a previous crop on the same
+        # block is a real workflow — don't 422 the farmer for it).
+        if body.pu_id:
+            pu_check = await db.execute(
+                text("""
+                    SELECT 1 FROM tenant.production_units
+                    WHERE pu_id = :pu_id AND farm_id = :farm_id
+                    LIMIT 1
+                """),
+                {"pu_id": body.pu_id, "farm_id": body.farm_id},
+            )
+            if not pu_check.first():
+                raise HTTPException(status_code=404, detail="pu_id not found on farm")
+
         await db.execute(
             text("""
                 INSERT INTO tenant.cash_ledger (
                     ledger_id, tenant_id, farm_id, transaction_date,
                     transaction_type, category, description, amount_fjd,
                     payment_method, reference_id, reference_type, bank_account,
-                    created_by
+                    created_by, pu_id, production_id
                 ) VALUES (
                     :ledger_id, :tenant_id, :farm_id, :transaction_date,
                     :transaction_type, :category, :description, :amount_fjd,
                     :payment_method, :reference_id, :reference_type, :bank_account,
-                    :created_by
+                    :created_by, :pu_id, :production_id
                 )
             """),
             {
@@ -165,6 +194,8 @@ async def log_cash(
                 "reference_type": body.reference_type,
                 "bank_account": body.bank_account,
                 "created_by": str(user["user_id"]),
+                "pu_id": body.pu_id,
+                "production_id": body.production_id,
             },
         )
 
@@ -178,6 +209,8 @@ async def log_cash(
             payload={
                 "ledger_id": ledger_id,
                 "farm_id": body.farm_id,
+                "pu_id": body.pu_id,
+                "production_id": body.production_id,
                 "transaction_date": body.transaction_date.isoformat(),
                 "transaction_type": body.transaction_type,
                 "category": body.category,
@@ -207,6 +240,8 @@ async def list_cash(
     period_start: Optional[date] = None,
     period_end: Optional[date] = None,
     transaction_type: Optional[TransactionType] = None,
+    pu_id: Optional[str] = None,
+    production_id: Optional[str] = None,
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     user: dict = Depends(get_current_user),
@@ -227,6 +262,12 @@ async def list_cash(
         if transaction_type:
             where.append("transaction_type = :ttype")
             params["ttype"] = transaction_type
+        if pu_id:
+            where.append("pu_id = :pu_id")
+            params["pu_id"] = pu_id
+        if production_id:
+            where.append("production_id = :production_id")
+            params["production_id"] = production_id
         where_sql = " AND ".join(where)
 
         rows = (
@@ -278,6 +319,8 @@ async def list_cash(
         "filters": {
             "farm_id": farm_id,
             "transaction_type": transaction_type,
+            "pu_id": pu_id,
+            "production_id": production_id,
         },
         "pagination": {"limit": limit, "offset": offset},
     })
@@ -305,6 +348,22 @@ async def update_cash(
         ).mappings().first()
         if not existing:
             raise HTTPException(status_code=404, detail="ledger entry not found")
+
+        # P-Doctrine-2: if PATCH is moving the row to a different Block,
+        # the new pu_id must belong to the row's existing farm_id (farm_id
+        # itself is immutable). Skip the check on no-op or NULL re-assigns.
+        new_pu = updates.get("pu_id")
+        if "pu_id" in updates and new_pu and new_pu != existing["pu_id"]:
+            pu_check = await db.execute(
+                text("""
+                    SELECT 1 FROM tenant.production_units
+                    WHERE pu_id = :pu_id AND farm_id = :farm_id
+                    LIMIT 1
+                """),
+                {"pu_id": new_pu, "farm_id": existing["farm_id"]},
+            )
+            if not pu_check.first():
+                raise HTTPException(status_code=404, detail="pu_id not found on this entry's farm")
 
         # Compute actual changes (skip no-ops, e.g. PATCH that resends
         # the same value). Decimal/str coercion is intentional — Postgres

@@ -165,6 +165,24 @@ async function fetchFarms() {
   return body?.data ?? body?.farms ?? [];
 }
 
+async function fetchProductionUnits(farmId) {
+  if (!farmId) return [];
+  const res = await fetch(
+    `/api/v1/production-units?farm_id=${encodeURIComponent(farmId)}`,
+    { headers: authHeaders() },
+  );
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const body = await res.json();
+  return body?.data ?? [];
+}
+
+async function fetchProductions() {
+  const res = await fetch("/api/v1/productions?is_active=true", { headers: authHeaders() });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const body = await res.json();
+  return body?.data?.productions ?? [];
+}
+
 async function fetchCashLedger({ farmId, period, type, offset }) {
   const { start, end } = periodToDates(period);
   const qs = new URLSearchParams();
@@ -200,8 +218,27 @@ function EntryFormModal({ mode, entry, farmId, isOpen, onClose, onSaved }) {
   const [description, setDescription] = useState("");
   const [amount, setAmount]           = useState("");
   const [payment, setPayment]         = useState("");
+  const [puId, setPuId]               = useState("");
+  const [productionId, setProductionId] = useState("");
   const [submitting, setSubmitting]   = useState(false);
   const [error, setError]             = useState("");
+
+  // P-Doctrine-2: Block + Crop options. Only fetch when the modal is
+  // open AND we're in create mode (edit mode keeps anchors as-is per
+  // P-Doctrine-1's pending edit-UI redesign).
+  const pusQuery = useQuery({
+    queryKey: ["production-units", farmId],
+    queryFn: () => fetchProductionUnits(farmId),
+    enabled: isOpen && !isEdit && !!farmId,
+    staleTime: 60_000,
+  });
+
+  const productionsQuery = useQuery({
+    queryKey: ["productions", "active"],
+    queryFn: fetchProductions,
+    enabled: isOpen && !isEdit,
+    staleTime: 5 * 60_000,
+  });
 
   useEffect(() => {
     if (!isOpen) return;
@@ -212,6 +249,8 @@ function EntryFormModal({ mode, entry, farmId, isOpen, onClose, onSaved }) {
       setDescription(entry.description || "");
       setAmount(String(entry.amount_fjd ?? ""));
       setPayment(entry.payment_method || "");
+      setPuId(entry.pu_id || "");
+      setProductionId(entry.production_id || "");
     } else {
       setDate(todayISO());
       setType("INCOME");
@@ -219,6 +258,8 @@ function EntryFormModal({ mode, entry, farmId, isOpen, onClose, onSaved }) {
       setDescription("");
       setAmount("");
       setPayment("");
+      setPuId("");
+      setProductionId("");
     }
     setError("");
     setSubmitting(false);
@@ -230,7 +271,43 @@ function EntryFormModal({ mode, entry, farmId, isOpen, onClose, onSaved }) {
     setCategory("");
   }, [type, isEdit]);
 
+  // Auto-fill Crop from selected Block's current_production_id.
+  // Only fires when the user picks a block; clearing the block clears
+  // the crop too. The user can still override the crop afterwards.
+  useEffect(() => {
+    if (isEdit) return;
+    if (!puId) {
+      setProductionId("");
+      return;
+    }
+    const pu = (pusQuery.data || []).find((p) => p.pu_id === puId);
+    if (pu?.current_production_id) {
+      setProductionId(pu.current_production_id);
+    }
+  }, [puId, pusQuery.data, isEdit]);
+
   const categoryOptions = CATEGORIES_BY_TYPE[type] || [];
+
+  const puOptions = useMemo(() => {
+    const base = [{ value: "", label: "— Whole farm / general expense" }];
+    return base.concat(
+      (pusQuery.data || []).map((p) => ({
+        value: p.pu_id,
+        label: p.farmer_label || p.pu_id,
+        sublabel: p.production_name || p.current_production_id || undefined,
+      })),
+    );
+  }, [pusQuery.data]);
+
+  const productionOptions = useMemo(() => {
+    const base = [{ value: "", label: "— No specific crop" }];
+    return base.concat(
+      (productionsQuery.data || []).map((p) => ({
+        value: p.production_id,
+        label: p.production_name || p.production_id,
+      })),
+    );
+  }, [productionsQuery.data]);
 
   const submitDisabled =
     submitting ||
@@ -269,6 +346,10 @@ function EntryFormModal({ mode, entry, farmId, isOpen, onClose, onSaved }) {
           amount_fjd: amount,
         };
         if (payment) body.payment_method = payment;
+        // P-Doctrine-2: optional Block + Crop anchors. Empty strings
+        // become absent fields (backend treats absent as NULL).
+        if (puId) body.pu_id = puId;
+        if (productionId) body.production_id = productionId;
         res = await fetch("/api/v1/cash-ledger", {
           method: "POST",
           headers: authHeaders(),
@@ -392,6 +473,38 @@ function EntryFormModal({ mode, entry, farmId, isOpen, onClose, onSaved }) {
             style={{ background: C.cream, border: `1px solid ${C.border}`, color: C.soil }}
           />
         </div>
+
+        {/* Block (Production Unit) — optional. Hidden in edit mode. */}
+        {!isEdit && (
+          <div>
+            <label className="text-xs uppercase tracking-wider font-medium block mb-1" style={{ color: C.muted }}>
+              Block (optional)
+            </label>
+            <ThemedSelect
+              value={puId}
+              onChange={setPuId}
+              options={puOptions}
+              placeholder="— Whole farm / general expense"
+              disabled={pusQuery.isLoading}
+            />
+          </div>
+        )}
+
+        {/* Crop — optional, auto-fills from selected block. Hidden in edit mode. */}
+        {!isEdit && (
+          <div>
+            <label className="text-xs uppercase tracking-wider font-medium block mb-1" style={{ color: C.muted }}>
+              Crop (optional, auto-fills from block)
+            </label>
+            <ThemedSelect
+              value={productionId}
+              onChange={setProductionId}
+              options={productionOptions}
+              placeholder="— No specific crop"
+              disabled={productionsQuery.isLoading}
+            />
+          </div>
+        )}
 
         {/* Amount */}
         <div>
