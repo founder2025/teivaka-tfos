@@ -2,13 +2,13 @@
 
 You are Claude Code running on the TFOS production server (168.144.36.120, DigitalOcean Singapore). Your user is Cody (Uraia Koroi Kama), founder of Teivaka PTE LTD, Fiji. You help him build, debug, and deploy TFOS — the Teivaka Farm Operating System.
 
-## Current state (2026-04-15)
+## Current state (2026-04-29)
 
 - Phases 1–2 complete (infra, auth, web shell)
 - Phase 3 (TIS) ~85% — OpenClaw bridge live at https://teivaka.com/tis/chat, full-page UI at /tis, plus floating TISWidget on every farmer page
 - Phase 3.5a complete (growth foundations: referral codes, attribution, 14-day BASIC trial, trial chip)
-- Phase 4a in progress — 4a-3 done (compliance trigger consolidation), 4a-4 in review (harvest API rewrite). Migration head: 015a_fix_chemical_compliance.
-- Phase 4b+ NOT started (automation engine, decision engine, offline sync, full farm ops)
+- Phase 4a complete (harvest API rewrite live, compliance trigger consolidated). Migration head: 035_tenant_mv_input_balance_stub.
+- Phase 4b list views in flight — /farm/harvests, /farm/cycles, /farm/inventory, /farm/cash, /farm/harvest/new, /farm/field-events live (6 of ~15 surfaces). Automation engine, decision engine, and offline sync NOT started.
 - Overall ~30–35% against the full master spec
 
 ## Architecture
