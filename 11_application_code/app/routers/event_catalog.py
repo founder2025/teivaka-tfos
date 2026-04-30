@@ -55,7 +55,11 @@ MODE_RANK: dict[str, int] = {
     "ENTERPRISE": 3,   # vestigial; CHECK on tenants.mode doesn't allow this today
 }
 
-VALID_GROUPS = {"CROPS", "ANIMALS", "MONEY", "NOTES", "OTHER", "SYSTEM"}
+VALID_GROUPS = {
+    "CROPS", "PERENNIALS", "LIVESTOCK", "POULTRY", "APICULTURE",
+    "AQUACULTURE", "FORESTRY", "SPECIALTY",
+    "MONEY", "NOTES", "OTHER", "SYSTEM",
+}
 
 
 @router.get("", summary="List event types available to current user")
