@@ -45,7 +45,7 @@ const C = {
   redBg:   "#FDECEA",
 };
 
-export default function GroupCatalogSection({ farmId }) {
+export default function GroupCatalogSection({ farmId, inlineMode = false, onStateChange }) {
   const [activeMap, setActiveMap] = useState({}); // catalog_group -> bool
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -84,6 +84,7 @@ export default function GroupCatalogSection({ farmId }) {
 
     // Optimistic
     setActiveMap(m => ({ ...m, [key]: next }));
+    if (onStateChange) onStateChange({ ...activeMap, [key]: next });
     setPendingKey(key);
     setError(null);
 
@@ -106,6 +107,7 @@ export default function GroupCatalogSection({ farmId }) {
     } catch (e) {
       // Revert on error
       setActiveMap(m => ({ ...m, [key]: prev }));
+      if (onStateChange) onStateChange({ ...activeMap, [key]: prev });
       setError(e.message || "Could not save change. Try again.");
     } finally {
       setPendingKey(null);
@@ -133,11 +135,15 @@ export default function GroupCatalogSection({ farmId }) {
   }
 
   return (
-    <section style={{ padding: 20 }}>
-      <h3 style={{ marginBottom: 6, color: C.soil, fontSize: 18 }}>Group catalog</h3>
-      <p style={{ marginTop: 0, color: C.muted, fontSize: 14 }}>
-        Choose what appears when you tap (+). You can change this anytime.
-      </p>
+    <section style={{ padding: inlineMode ? 0 : 20 }}>
+      {!inlineMode && (
+        <>
+          <h3 style={{ marginBottom: 6, color: C.soil, fontSize: 18 }}>Group catalog</h3>
+          <p style={{ marginTop: 0, color: C.muted, fontSize: 14 }}>
+            Choose what appears when you tap (+). You can change this anytime.
+          </p>
+        </>
+      )}
 
       {error && (
         <div style={{
@@ -170,7 +176,7 @@ export default function GroupCatalogSection({ farmId }) {
                 <Icon size={22} color={isOn ? C.green : C.soil} />
                 <div>
                   <div style={{ fontSize: 15, fontWeight: 600, color: C.soil }}>{label}</div>
-                  {universal && (
+                  {!inlineMode && universal && (
                     <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>
                       Recommended for all farms
                     </div>

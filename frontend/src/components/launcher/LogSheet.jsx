@@ -50,8 +50,10 @@ import {
   // Tile chrome
   Lock,
   ArrowLeft,
+  Settings,
 } from "lucide-react";
 import Modal from "../ui/Modal";
+import GroupCatalogSection from "../settings/GroupCatalogSection";
 
 /**
  * LogSheet — two-level (+) catalog modal per Catalog Redesign Doctrine 2026-04-30.
@@ -253,10 +255,20 @@ export default function LogSheet({ isOpen, onClose, mode }) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
   const [selectedGroup, setSelectedGroup] = useState(null);
+  // Phase 5.10c: Level 3 manage-panel state.
+  // viewMode: 'grid' (Level 1+2) or 'manage' (Level 3 inline toggle panel)
+  // activeFarmId: lifted from fetch closure so the manage panel can use it
+  // localActiveGroups: optimistic override for shouldShowManageLink, set by
+  // GroupCatalogSection's onStateChange callback while in manage panel
+  const [viewMode, setViewMode] = useState("grid");
+  const [activeFarmId, setActiveFarmId] = useState(null);
+  const [localActiveGroups, setLocalActiveGroups] = useState(null);
 
   useEffect(() => {
     if (!isOpen) {
       setSelectedGroup(null);
+      setViewMode("grid");
+      setLocalActiveGroups(null);
       return;
     }
 
@@ -289,6 +301,10 @@ export default function LogSheet({ isOpen, onClose, mode }) {
 
       if (cancelled) return;
 
+      // Lift farmId into component state so the manage panel (Phase 5.10c)
+      // can use it.
+      setActiveFarmId(firstFarmId);
+
       const url = firstFarmId
         ? `/api/v1/event-catalog?farm_id=${encodeURIComponent(firstFarmId)}`
         : "/api/v1/event-catalog";
@@ -317,7 +333,9 @@ export default function LogSheet({ isOpen, onClose, mode }) {
   // Phase 5.9: meta.active_groups present only when farm_id was passed to the
   // endpoint. When absent (older response shape, fetch failed, or no farm),
   // shouldShowManageLink stays false — graceful degradation.
-  const activeGroups = data?.meta?.active_groups ?? null;
+  // Phase 5.10c: localActiveGroups overrides the server value while the user
+  // is toggling in the inline manage panel — instant Level 1 link sync.
+  const activeGroups = localActiveGroups ?? data?.meta?.active_groups ?? null;
   const shouldShowManageLink =
     Array.isArray(activeGroups) && activeGroups.length < 11;
 
@@ -335,9 +353,12 @@ export default function LogSheet({ isOpen, onClose, mode }) {
     : [];
 
   const isLevel2 = selectedGroup !== null;
-  const headerTitle = isLevel2
-    ? groupLabels[selectedGroup] || selectedGroup
-    : "What do you want to log?";
+  const isManage = viewMode === "manage";
+  const headerTitle = isManage
+    ? "Manage groups"
+    : isLevel2
+      ? groupLabels[selectedGroup] || selectedGroup
+      : "What do you want to log?";
 
   const handleEventClick = (event) => {
     const evtType = event.event_type;
@@ -368,7 +389,26 @@ export default function LogSheet({ isOpen, onClose, mode }) {
       title={headerTitle}
       size="lg"
     >
-      {isLevel2 && (
+      {!isManage && !isLevel2 && (
+        <div className="mb-3 flex items-center justify-end">
+          <button
+            type="button"
+            onClick={() => setViewMode("manage")}
+            aria-label="Manage groups"
+            className="inline-flex items-center gap-1 text-sm text-gray-600 hover:text-gray-900 transition"
+            style={{
+              background: "transparent",
+              border: "none",
+              padding: 6,
+              cursor: "pointer",
+            }}
+          >
+            <Settings className="w-5 h-5" />
+          </button>
+        </div>
+      )}
+
+      {!isManage && isLevel2 && (
         <div className="mb-3">
           <button
             type="button"
@@ -382,7 +422,7 @@ export default function LogSheet({ isOpen, onClose, mode }) {
         </div>
       )}
 
-      {isLoading && (
+      {!isManage && isLoading && (
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
           {Array.from({ length: 6 }).map((_, i) => (
             <div
@@ -393,19 +433,19 @@ export default function LogSheet({ isOpen, onClose, mode }) {
         </div>
       )}
 
-      {error && !isLoading && (
+      {!isManage && error && !isLoading && (
         <div className="text-center py-8 text-gray-500">
           Couldn't load. Try again in a moment.
         </div>
       )}
 
-      {!isLoading && !error && !isLevel2 && visibleGroups.length === 0 && (
+      {!isManage && !isLoading && !error && !isLevel2 && visibleGroups.length === 0 && (
         <div className="text-center py-8 text-gray-500">
           No events available right now.
         </div>
       )}
 
-      {!isLoading && !error && !isLevel2 && visibleGroups.length > 0 && (
+      {!isManage && !isLoading && !error && !isLevel2 && visibleGroups.length > 0 && (
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
           {visibleGroups.map((groupKey) => (
             <GroupTile
@@ -420,13 +460,13 @@ export default function LogSheet({ isOpen, onClose, mode }) {
         </div>
       )}
 
-      {!isLoading && !error && isLevel2 && groupEvents.length === 0 && (
+      {!isManage && !isLoading && !error && isLevel2 && groupEvents.length === 0 && (
         <div className="text-center py-8 text-gray-500">
           No events here yet.
         </div>
       )}
 
-      {!isLoading && !error && isLevel2 && groupEvents.length > 0 && (
+      {!isManage && !isLoading && !error && isLevel2 && groupEvents.length > 0 && (
         <div className="grid grid-cols-3 md:grid-cols-4 gap-3">
           {groupEvents.map((evt) => (
             <EventTile
@@ -438,14 +478,11 @@ export default function LogSheet({ isOpen, onClose, mode }) {
         </div>
       )}
 
-      {!isLevel2 && shouldShowManageLink && (
+      {!isManage && !isLevel2 && shouldShowManageLink && (
         <div className="mt-3 pt-3 border-t border-gray-100 text-center">
           <button
             type="button"
-            onClick={() => {
-              onClose();
-              navigate("/me/settings");
-            }}
+            onClick={() => setViewMode("manage")}
             className="text-sm underline"
             style={{
               color: C.soil,
@@ -460,17 +497,62 @@ export default function LogSheet({ isOpen, onClose, mode }) {
         </div>
       )}
 
-      <div className="mt-4 pt-3 border-t border-gray-100 text-center text-xs text-gray-500">
-        Tip — press{" "}
-        <kbd className="px-1.5 py-0.5 bg-gray-100 rounded text-gray-700 font-mono">
-          Cmd
-        </kbd>{" "}
-        +{" "}
-        <kbd className="px-1.5 py-0.5 bg-gray-100 rounded text-gray-700 font-mono">
-          L
-        </kbd>{" "}
-        to open this from anywhere.
-      </div>
+      {/* Phase 5.10c: Level 3 inline manage panel */}
+      {isManage && (
+        <div className="flex flex-col" style={{ minHeight: 320 }}>
+          <div
+            className="overflow-y-auto"
+            style={{ flex: 1, maxHeight: "60vh" }}
+          >
+            <GroupCatalogSection
+              farmId={activeFarmId}
+              inlineMode
+              onStateChange={(newMap) => {
+                const newActive = Object.entries(newMap)
+                  .filter(([, v]) => v)
+                  .map(([k]) => k);
+                setLocalActiveGroups(newActive);
+              }}
+            />
+          </div>
+          <div
+            className="mt-4 pt-3"
+            style={{ borderTop: `1px solid ${C.border || "#E6E1D6"}` }}
+          >
+            <button
+              type="button"
+              onClick={() => setViewMode("grid")}
+              style={{
+                width: "100%",
+                padding: 14,
+                background: C.green || "#6AA84F",
+                color: "white",
+                border: "none",
+                borderRadius: 8,
+                fontSize: 16,
+                fontWeight: 600,
+                cursor: "pointer",
+              }}
+            >
+              Done
+            </button>
+          </div>
+        </div>
+      )}
+
+      {!isManage && (
+        <div className="mt-4 pt-3 border-t border-gray-100 text-center text-xs text-gray-500">
+          Tip — press{" "}
+          <kbd className="px-1.5 py-0.5 bg-gray-100 rounded text-gray-700 font-mono">
+            Cmd
+          </kbd>{" "}
+          +{" "}
+          <kbd className="px-1.5 py-0.5 bg-gray-100 rounded text-gray-700 font-mono">
+            L
+          </kbd>{" "}
+          to open this from anywhere.
+        </div>
+      )}
     </Modal>
   );
 }
