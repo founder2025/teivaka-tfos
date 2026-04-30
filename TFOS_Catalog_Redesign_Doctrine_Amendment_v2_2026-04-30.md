@@ -49,7 +49,7 @@ This **prevents cognitive overload** (Decision 4 of original doctrine) AND **exc
 ### Where the toggle lives
 
 - **At onboarding:** wizard step "What do you farm?" — multi-select group picker
-- **In settings:** `/farm/settings` exposes per-group toggles for the active farm
+- **In settings:** `/me/settings` exposes per-group toggles for the active farm <!-- amended 2026-04-30: route is /me/settings, not /farm/settings; original memo was aspirational on this point. MBI Section 3 — reality wins, drift reconciled same-day. -->
 - **Inside the (+) modal:** small "Manage groups →" link visible at Level 1 footer when groups are hidden
 
 ### Storage model
@@ -176,13 +176,13 @@ Inserted into the existing onboarding flow, after farm-creation step, before mod
 
 Copy: "Welcome — what do you farm? Pick everything that applies. You can change this anytime."
 
-### `/farm/settings` toggles section
+### `/me/settings` toggles section
 
 New section titled "Group catalog" or "What appears in (+)". Lists all 11 groups with toggle switches. Default state from `GET /api/v1/farms/{farm_id}/active-groups`. Toggle calls `PUT`, invalidates frontend cache so (+) refreshes immediately.
 
 ### LogSheet "Manage groups" footer link
 
-When a farm has fewer than 11 groups active (i.e., user has hidden some), the (+) modal Level 1 footer shows: "Manage groups →" linking to `/farm/settings#groups`. When all 11 active, link is hidden (visual cleanliness).
+When a farm has fewer than 11 groups active (i.e., user has hidden some), the (+) modal Level 1 footer shows: "Manage groups →" linking to `/me/settings#groups`. When all 11 active, link is hidden (visual cleanliness).
 
 ---
 
@@ -237,7 +237,7 @@ This amendment adds three inviolable rules to the MBI list:
 | 5.5 | event-catalog endpoint filter + 2 new endpoints (GET, PUT active-groups) | none |
 | 5.6 | Onboarding wires to insert default rows | none |
 | 5.7 | Onboarding wizard "What do you farm?" step | none |
-| 5.8 | /farm/settings group toggles section | none |
+| 5.8 | /me/settings group toggles section | none |
 | 5.9 | LogSheet "Manage groups →" footer link | none |
 
 ---
