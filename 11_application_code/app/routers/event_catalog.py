@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.middleware.rls import get_current_user, get_tenant_db
 from app.schemas.envelope import error_envelope, success_envelope
+from app.services.naming import name_many
 
 
 router = APIRouter()
@@ -175,6 +176,34 @@ async def list_event_catalog(
             d["compound_emits"] = list(d["compound_emits"])
         filtered.append(d)
 
+    # ---- 7. Inject translations from shared.naming_dictionary ----
+    label_keys = []
+    desc_keys = []
+    voice_keys = []
+    subtype_keys = []
+    for d in filtered:
+        label_keys.append(f"event.{d['event_type']}.label")
+        desc_keys.append(f"event.{d['event_type']}.description")
+        voice_keys.append(f"event.{d['event_type']}.voice_prompt")
+        for st in (d.get('subtypes') or []):
+            subtype_keys.append(f"subtype.{d['event_type']}.{st}.label")
+    group_keys = [f"group.{g}.label" for g in {d['catalog_group'] for d in filtered}]
+
+    labels        = await name_many(db, label_keys,   form='label')        if label_keys   else {}
+    descriptions  = await name_many(db, desc_keys,    form='description')  if desc_keys    else {}
+    voice_prompts = await name_many(db, voice_keys,   form='voice_prompt') if voice_keys   else {}
+    subtype_labels= await name_many(db, subtype_keys, form='label')        if subtype_keys else {}
+    group_labels  = await name_many(db, group_keys,   form='label')        if group_keys   else {}
+
+    for d in filtered:
+        et = d['event_type']
+        d['translated'] = {
+            'label':        labels.get(f"event.{et}.label", et),
+            'description':  descriptions.get(f"event.{et}.description", ''),
+            'voice_prompt': voice_prompts.get(f"event.{et}.voice_prompt", ''),
+            'subtype_labels': {st: subtype_labels.get(f"subtype.{et}.{st}.label", st) for st in (d.get('subtypes') or [])},
+        }
+
     return success_envelope(
         {"events": filtered},
         meta={
@@ -184,5 +213,6 @@ async def list_event_catalog(
             "tenant_mode": tenant_mode,
             "has_livestock": has_livestock,
             "include_system": include_system,
+            "group_labels": {g.replace('group.', '').replace('.label', ''): v for g, v in group_labels.items()},
         },
     )
