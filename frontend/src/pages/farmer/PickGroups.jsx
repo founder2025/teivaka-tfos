@@ -1,20 +1,23 @@
 /**
- * WhatYouFarm.jsx — /onboarding/what-you-farm — second wizard page.
+ * PickGroups.jsx — pillar-side group picker, used inside the farm pillar
+ * when a serious user wants to customize which groups appear in (+).
  *
- * Per Catalog Redesign Doctrine Amendment v2 (commit 272f513) Q3 lock:
- * MONEY/NOTES/OTHER are pre-active universally; the user explicitly opts
- * INTO the production groups they actually farm.
+ * Originally authored as /onboarding/what-you-farm wizard step (Phase 5.7);
+ * relocated and renamed at Phase 5.10 doctrinal cleanup (2026-04-30) to
+ * encode The Onboarding Doctrine: pillar decisions belong inside pillars,
+ * not at signup.
  *
- * 8 multi-select tiles in a mobile-first 2-col grid (4-col on tablet+).
- * Tap toggles selection. Continue submits PUT to the Phase 5.5b endpoint;
- * Skip with 0 selections triggers a confirmation. Skip with selections
- * proceeds normally (treats it as "Skip the rest of the questions").
+ * NOT currently wired into any route. Phase 5.10c will use this component
+ * (or its tile-grid pattern) for the in-modal toggle panel inside (+).
  *
- * Plain fetch + token from localStorage (auth helper). No useQuery —
- * onboarding is OUTSIDE QueryClientProvider scope (per LogSheet recon).
- *
- * farm_id propagated from FarmBasics via OnboardingContext (sessionStorage
- * backed; survives refresh inside the wizard session).
+ * Implementation notes (preserved from original wizard authoring):
+ * - 8 multi-select tiles in a mobile-first 2-col grid (4-col on tablet+).
+ * - Tap toggles selection. Continue submits PUT to the Phase 5.5b endpoint;
+ *   Skip with 0 selections triggers a confirmation.
+ * - Plain fetch + token from localStorage (auth helper). No useQuery —
+ *   QueryClientProvider not in scope at FarmerShell mount (per LogSheet recon).
+ * - farm_id consumed from OnboardingContext when wizard was active; pillar-
+ *   side use will source farm_id from pillar context or props (Phase 5.10c).
  */
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -62,7 +65,7 @@ const PRODUCTION_GROUPS = [
   { key: "SPECIALTY",   label: "Specialty",     Icon: Sparkles },
 ];
 
-function WhatYouFarmInner() {
+function PickGroupsInner() {
   const { state } = useOnboarding();
   const navigate = useNavigate();
 
@@ -215,10 +218,10 @@ function WhatYouFarmInner() {
   );
 }
 
-export default function WhatYouFarm() {
+export default function PickGroups() {
   return (
     <OnboardingProvider>
-      <WhatYouFarmInner />
+      <PickGroupsInner />
     </OnboardingProvider>
   );
 }

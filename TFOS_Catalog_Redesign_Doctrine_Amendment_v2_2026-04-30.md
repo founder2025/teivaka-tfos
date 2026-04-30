@@ -228,6 +228,50 @@ This amendment adds three inviolable rules to the MBI list:
 
 ---
 
+## The Onboarding Doctrine (Operator-stated, Phase 5.10 — 2026-04-30)
+
+**Onboarding's job is to learn the user, not to extract pillar commitments.**
+
+### What belongs in onboarding
+
+- Email + name confirmation
+- Preferred name / how to address them
+- Newsletter / marketing permissions
+- Where they came from (referral source, marketing attribution)
+- Basic relational stuff (timezone, location for content relevance)
+- Anything that helps TFOS understand WHO they are as a person
+
+### What does NOT belong in onboarding
+
+- Anything pillar-specific (farm, classroom, TIS, growth, community)
+- Domain decisions (what they farm, what they teach, what they sell)
+- Business commitments
+- Anything that requires them to be 'serious' about a pillar
+- Anything that creates premature data the user might not want to commit to yet
+
+### Why
+
+Signup brings users into the platform. Pillar engagement happens later, when
+they're ready. Pillar decisions live INSIDE pillars.
+
+Most signups are exploratory — users get into /home before deciding which
+pillar matters to them. Forcing pillar decisions at signup is the wrong
+moment and creates the wrong commitment.
+
+### Filed for Inviolable Rule #19 (MBI amendment, Operator-only)
+
+This doctrine should be elevated to the MBI Inviolable Rules list as Rule #19.
+Until then, it lives here as a first-class principle binding all Sprint 5+
+onboarding work.
+
+### Outstanding question (filed for tomorrow)
+
+Does FarmBasics.jsx (farm creation in onboarding) violate this doctrine?
+The farm is a pillar entity. Filed for review. May result in farm creation
+moving to first-touch-of-farm-pillar in a future phase.
+
+---
+
 ## Locked decisions (Q1-Q4 from 2026-04-30 Operator session)
 
 | Q | Decision | Locked at |

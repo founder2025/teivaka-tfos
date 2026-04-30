@@ -153,16 +153,10 @@ function FarmBasicsInner() {
         setSubmitting(false);
         return;
       }
-      // Capture farm_id from response for the next wizard step (Phase 5.7).
-      // Backend returns { data: { farm_id, next_route, ... } } via _envelope.
-      try {
-        const j = await res.json();
-        const fid = j?.data?.farm_id || j?.farm_id;
-        if (fid) setField("farmId", fid);
-      } catch { /* noop */ }
-      // Phase 5.10b architectural correction (2026-04-30): wizard skipped.
-      // Onboarding is light by design; group preferences toggle inside the farm
-      // pillar when the user becomes serious about farm management (Phase 5.10c).
+      // Phase 5.10 doctrinal cleanup (2026-04-30): farm_id capture removed.
+      // The Onboarding Doctrine — onboarding learns the user, not pillar
+      // commitments. farm_id lives inside the farm pillar, fetched on-demand
+      // when the user becomes serious about farm management.
       navigate("/home");
     } catch (e) {
       emitToast(`Network error: ${e.message}`);
