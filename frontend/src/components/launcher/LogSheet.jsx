@@ -4,6 +4,9 @@ import {
   // Level 1 group icons
   Sprout,
   PawPrint,
+  Bird,
+  Fish,
+  Trees,
   Banknote,
   BookOpen,
   Boxes,
@@ -81,14 +84,28 @@ const C = {
   soil:  "var(--soil, #5C4033)",
 };
 
-const GROUP_ORDER = ["CROPS", "ANIMALS", "MONEY", "NOTES", "OTHER"];
+// Phase 5.10d: 11-group taxonomy per Catalog Redesign Doctrine Amendment v2.
+// Order matches MeSettings/GroupCatalogSection: production groups first, then
+// universal (MONEY/NOTES/OTHER). VOICE is appended in JSX as a Phase 4.6
+// placeholder, not in this list.
+const GROUP_ORDER = [
+  "CROPS", "PERENNIALS", "LIVESTOCK", "POULTRY",
+  "APICULTURE", "AQUACULTURE", "FORESTRY", "SPECIALTY",
+  "MONEY", "NOTES", "OTHER",
+];
 
 const GROUP_ICONS = {
-  CROPS:   Sprout,
-  ANIMALS: PawPrint,
-  MONEY:   Banknote,
-  NOTES:   BookOpen,
-  OTHER:   Boxes,
+  CROPS:       Sprout,
+  PERENNIALS:  TreeDeciduous,
+  LIVESTOCK:   PawPrint,
+  POULTRY:     Bird,
+  APICULTURE:  Hexagon,
+  AQUACULTURE: Fish,
+  FORESTRY:    Trees,
+  SPECIALTY:   Sparkles,
+  MONEY:       Banknote,
+  NOTES:       BookOpen,
+  OTHER:       Boxes,
 };
 
 const EVENT_ROUTES = {
@@ -344,7 +361,16 @@ export default function LogSheet({ isOpen, onClose, mode }) {
     return acc;
   }, {});
 
-  const visibleGroups = GROUP_ORDER.filter((g) => groupCounts[g] > 0);
+  // Phase 5.10d: include groups that are active even with 0 events.
+  // 'No farmer left behind' — empty active groups still render as tiles;
+  // tap → Level 2 shows the existing 'No events here yet' empty state until
+  // events ship in Sprint 6+ for the new domains (PERENNIALS, AQUACULTURE,
+  // FORESTRY, SPECIALTY, POULTRY-specific, plus rebranded LIVESTOCK).
+  const visibleGroups = GROUP_ORDER.filter(
+    (g) =>
+      groupCounts[g] > 0 ||
+      (Array.isArray(activeGroups) && activeGroups.includes(g)),
+  );
 
   const groupEvents = selectedGroup
     ? events

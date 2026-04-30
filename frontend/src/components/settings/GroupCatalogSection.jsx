@@ -183,13 +183,45 @@ export default function GroupCatalogSection({ farmId, inlineMode = false, onStat
                   )}
                 </div>
               </div>
-              <input
-                type="checkbox"
-                checked={isOn}
-                disabled={isPending}
-                onChange={() => toggleGroup(key)}
-                style={{ width: 22, height: 22, cursor: isPending ? "wait" : "pointer" }}
-              />
+              <span
+                role="switch"
+                aria-checked={isOn}
+                aria-disabled={isPending}
+                onClick={() => !isPending && toggleGroup(key)}
+                onKeyDown={(e) => {
+                  if (!isPending && (e.key === " " || e.key === "Enter")) {
+                    e.preventDefault();
+                    toggleGroup(key);
+                  }
+                }}
+                tabIndex={isPending ? -1 : 0}
+                style={{
+                  position: "relative",
+                  display: "inline-block",
+                  width: 44,
+                  height: 24,
+                  borderRadius: 12,
+                  background: isOn ? C.green : "#CFCFCF",
+                  transition: "background 0.18s ease",
+                  cursor: isPending ? "wait" : "pointer",
+                  opacity: isPending ? 0.6 : 1,
+                  flexShrink: 0,
+                }}
+              >
+                <span
+                  style={{
+                    position: "absolute",
+                    top: 2,
+                    left: isOn ? 22 : 2,
+                    width: 20,
+                    height: 20,
+                    borderRadius: "50%",
+                    background: "white",
+                    transition: "left 0.18s ease",
+                    boxShadow: "0 1px 3px rgba(0,0,0,0.15)",
+                  }}
+                />
+              </span>
             </label>
           );
         })}
