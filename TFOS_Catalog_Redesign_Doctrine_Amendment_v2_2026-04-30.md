@@ -83,7 +83,7 @@ Existing farms predating this migration are backfilled with all 11 groups active
 
 ```sql
 CREATE TABLE tenant.farm_active_groups (
-    farm_id      uuid NOT NULL REFERENCES tenant.farms(farm_id),
+    farm_id      text NOT NULL REFERENCES tenant.farms(farm_id),  -- text not uuid; matches production reality (MBI Section 3)
     catalog_group text NOT NULL,
     is_active    boolean NOT NULL DEFAULT true,
     activated_at timestamp with time zone NOT NULL DEFAULT now(),
