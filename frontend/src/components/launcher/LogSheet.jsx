@@ -267,24 +267,45 @@ export default function LogSheet({ isOpen, onClose, mode }) {
     const token =
       localStorage.getItem("tfos_access_token") ||
       sessionStorage.getItem("tfos_access_token");
+    const authHdrs = { Authorization: `Bearer ${token}` };
 
-    fetch("/api/v1/event-catalog", {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then((res) => {
+    // Phase 5.9: fetch first farm so we can pass farm_id to event-catalog.
+    // With farm_id, response carries meta.active_groups so we can show the
+    // "Manage groups" link when fewer than 11 groups are active.
+    // Falls back to no-farm-id (current behavior) if /api/v1/farms fails or
+    // returns empty — graceful degradation per Phase 5.9 spec.
+    (async () => {
+      let firstFarmId = null;
+      try {
+        const fr = await fetch("/api/v1/farms", { headers: authHdrs });
+        if (fr.ok) {
+          const fb = await fr.json();
+          const farms = fb?.data?.farms || fb?.data || fb?.farms || [];
+          if (Array.isArray(farms) && farms.length > 0) {
+            firstFarmId = farms[0].farm_id;
+          }
+        }
+      } catch { /* fall through with firstFarmId = null */ }
+
+      if (cancelled) return;
+
+      const url = firstFarmId
+        ? `/api/v1/event-catalog?farm_id=${encodeURIComponent(firstFarmId)}`
+        : "/api/v1/event-catalog";
+
+      try {
+        const res = await fetch(url, { headers: authHdrs });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return res.json();
-      })
-      .then((body) => {
+        const body = await res.json();
         if (cancelled) return;
         setData(body);
         setIsLoading(false);
-      })
-      .catch((err) => {
+      } catch (err) {
         if (cancelled) return;
         setError(err);
         setIsLoading(false);
-      });
+      }
+    })();
 
     return () => {
       cancelled = true;
@@ -293,6 +314,12 @@ export default function LogSheet({ isOpen, onClose, mode }) {
 
   const events = data?.data?.events || [];
   const groupLabels = data?.meta?.group_labels || {};
+  // Phase 5.9: meta.active_groups present only when farm_id was passed to the
+  // endpoint. When absent (older response shape, fetch failed, or no farm),
+  // shouldShowManageLink stays false — graceful degradation.
+  const activeGroups = data?.meta?.active_groups ?? null;
+  const shouldShowManageLink =
+    Array.isArray(activeGroups) && activeGroups.length < 11;
 
   const groupCounts = events.reduce((acc, e) => {
     acc[e.catalog_group] = (acc[e.catalog_group] || 0) + 1;
@@ -408,6 +435,28 @@ export default function LogSheet({ isOpen, onClose, mode }) {
               onClick={handleEventClick}
             />
           ))}
+        </div>
+      )}
+
+      {!isLevel2 && shouldShowManageLink && (
+        <div className="mt-3 pt-3 border-t border-gray-100 text-center">
+          <button
+            type="button"
+            onClick={() => {
+              onClose();
+              navigate("/me/settings");
+            }}
+            className="text-sm underline"
+            style={{
+              color: C.soil,
+              background: "transparent",
+              border: "none",
+              padding: "4px 8px",
+              cursor: "pointer",
+            }}
+          >
+            Manage groups →
+          </button>
         </div>
       )}
 
