@@ -31,6 +31,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.audit_chain import emit_audit_event
 from app.db.session import AsyncSessionLocal
 from app.middleware.rls import get_current_user
+from app.services.farm_active_groups_defaults import insert_default_active_groups
 from app.services.onboarding_service import (
     default_farmer_label,
     derive_initial_mode,
@@ -314,6 +315,9 @@ async def farm_basics(
                     "gps_lng": gps_lng,
                 },
             )
+            # Wire default farm_active_groups rows per Catalog Redesign Doctrine
+            # Amendment v2 (272f513) Q3 lock — same transaction as the farm INSERT.
+            await insert_default_active_groups(session, farm_id, user["user_id"])
             created = True
 
         # Persist tenant-scoped preferences.
