@@ -62,6 +62,7 @@ VALID_GROUPS = {"CROPS", "ANIMALS", "MONEY", "NOTES", "OTHER", "SYSTEM"}
 async def list_event_catalog(
     group: Optional[str] = Query(None, description="Filter to one catalog group"),
     include_system: bool = Query(False, description="FOUNDER-only: include SYSTEM-group events"),
+    farm_id: Optional[str] = Query(None, description="Filter to events allowed for this farm's active groups"),
     user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_tenant_db),
 ):
@@ -108,6 +109,38 @@ async def list_event_catalog(
     )).first()
     has_livestock = bool(livestock_row[0]) if livestock_row else False
 
+    # ---- 4.5. Resolve farm_active_groups if farm_id provided ----
+    active_groups: Optional[list[str]] = None
+    if farm_id:
+        # Validate farm belongs to user's tenant
+        farm_check = (await db.execute(
+            text("SELECT farm_id FROM tenant.farms WHERE farm_id = :fid AND tenant_id = :tid"),
+            {"fid": farm_id, "tid": tid},
+        )).first()
+        if not farm_check:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=error_envelope(
+                    "FARM_NOT_FOUND",
+                    f"Farm {farm_id} not found for current tenant",
+                ),
+            )
+
+        # Fetch active groups for this farm
+        ag_rows = (await db.execute(
+            text("""
+                SELECT catalog_group
+                FROM tenant.farm_active_groups
+                WHERE farm_id = :fid AND is_active = true
+            """),
+            {"fid": farm_id},
+        )).all()
+        ag_list = [r[0] for r in ag_rows]
+        # Empty list = farm not yet onboarded; fall back to "show all"
+        # Non-empty list = apply filter
+        if ag_list:
+            active_groups = ag_list
+
     # ---- 5. Fetch catalog rows ----
     # Apply filters in SQL where possible; role/mode rank comparisons in Python
     # (catalog stores enum strings, not ranks — translation happens here).
@@ -126,6 +159,10 @@ async def list_event_catalog(
 
     if not has_livestock:
         sql_filters.append("c.livestock_only = false")
+
+    if active_groups is not None:
+        sql_filters.append("c.catalog_group = ANY(:active_groups)")
+        params["active_groups"] = active_groups
 
     where = " AND ".join(sql_filters)
 
@@ -213,6 +250,8 @@ async def list_event_catalog(
             "tenant_mode": tenant_mode,
             "has_livestock": has_livestock,
             "include_system": include_system,
+            "active_groups": active_groups,
+            "farm_id": farm_id,
             "group_labels": {g.replace('group.', '').replace('.label', ''): v for g, v in group_labels.items()},
         },
     )
