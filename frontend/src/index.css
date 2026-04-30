@@ -11,6 +11,11 @@
   --color-gold:   #D4A017;
   --color-slate:  #1A1F2E;
   --color-border: #E0D5C0;
+
+  /* Farmer-shell palette (PALETTE_FARM): used by event-catalog (+) UI and farmer-facing surfaces. */
+  --green: #6AA84F;
+  --cream: #F8F3E9;
+  --soil:  #5C4033;
 }
 
 * {
