@@ -160,7 +160,10 @@ function FarmBasicsInner() {
         const fid = j?.data?.farm_id || j?.farm_id;
         if (fid) setField("farmId", fid);
       } catch { /* noop */ }
-      navigate("/onboarding/what-you-farm");
+      // Phase 5.10b architectural correction (2026-04-30): wizard skipped.
+      // Onboarding is light by design; group preferences toggle inside the farm
+      // pillar when the user becomes serious about farm management (Phase 5.10c).
+      navigate("/home");
     } catch (e) {
       emitToast(`Network error: ${e.message}`);
       setSubmitting(false);

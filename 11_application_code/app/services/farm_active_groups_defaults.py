@@ -1,10 +1,14 @@
 """farm_active_groups_defaults.py — single source of truth for new-farm group defaults.
 
-Per Catalog Redesign Doctrine Amendment v2 (commit 272f513) Q3 lock:
-new farms get MONEY/NOTES/OTHER active=true (universal); 8 production
-groups (CROPS, PERENNIALS, LIVESTOCK, POULTRY, APICULTURE, AQUACULTURE,
-FORESTRY, SPECIALTY) inactive=true. User opts INTO production domains
-via the onboarding wizard (Phase 5.7) or /farm/settings (Phase 5.8).
+Per Catalog Redesign Doctrine Amendment v2 (commit 272f513) — Q3 REVISED at
+Phase 5.10 (2026-04-30, hour 31): all 11 groups default active=true for new
+farms. Onboarding is light by design; the trim decision belongs INSIDE the
+farm pillar when the user becomes serious about farm management
+(Phase 5.10c, in-modal toggle panel).
+
+Original Q3 lock (3 active universal + 8 inactive production) was reversed
+because signup is not the moment of serious farm-pillar commitment — forcing
+a domain decision there is the wrong moment.
 
 Idempotent via ON CONFLICT DO NOTHING — safe to call against farms that
 were already backfilled by Migration 039 (existing farms have all 11
@@ -28,25 +32,26 @@ async def insert_default_active_groups(
 ) -> None:
     """Insert 11 default farm_active_groups rows for a newly-created farm.
 
-    Defaults: MONEY/NOTES/OTHER active=true, 8 production groups inactive.
-    No-ops on rows that already exist (ON CONFLICT DO NOTHING).
+    Defaults (Phase 5.10 Q3-revised): all 11 groups active=true. User trims
+    via the in-pillar toggle panel (Phase 5.10c) when serious about farm
+    management. No-ops on rows that already exist (ON CONFLICT DO NOTHING).
     """
     await db.execute(
         text("""
             INSERT INTO tenant.farm_active_groups
                 (farm_id, catalog_group, is_active, activated_at, activated_by)
             VALUES
-                (:fid, 'CROPS',       false, now(), :uid),
-                (:fid, 'PERENNIALS',  false, now(), :uid),
-                (:fid, 'LIVESTOCK',   false, now(), :uid),
-                (:fid, 'POULTRY',     false, now(), :uid),
-                (:fid, 'APICULTURE',  false, now(), :uid),
-                (:fid, 'AQUACULTURE', false, now(), :uid),
-                (:fid, 'FORESTRY',    false, now(), :uid),
-                (:fid, 'SPECIALTY',   false, now(), :uid),
-                (:fid, 'MONEY',       true,  now(), :uid),
-                (:fid, 'NOTES',       true,  now(), :uid),
-                (:fid, 'OTHER',       true,  now(), :uid)
+                (:fid, 'CROPS',       true, now(), :uid),
+                (:fid, 'PERENNIALS',  true, now(), :uid),
+                (:fid, 'LIVESTOCK',   true, now(), :uid),
+                (:fid, 'POULTRY',     true, now(), :uid),
+                (:fid, 'APICULTURE',  true, now(), :uid),
+                (:fid, 'AQUACULTURE', true, now(), :uid),
+                (:fid, 'FORESTRY',    true, now(), :uid),
+                (:fid, 'SPECIALTY',   true, now(), :uid),
+                (:fid, 'MONEY',       true, now(), :uid),
+                (:fid, 'NOTES',       true, now(), :uid),
+                (:fid, 'OTHER',       true, now(), :uid)
             ON CONFLICT (farm_id, catalog_group) DO NOTHING
         """),
         {"fid": farm_id, "uid": activated_by},

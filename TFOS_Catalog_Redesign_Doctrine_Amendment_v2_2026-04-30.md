@@ -56,10 +56,23 @@ This **prevents cognitive overload** (Decision 4 of original doctrine) AND **exc
 
 `tenant.farm_active_groups` — composite PK on (farm_id, catalog_group). Per-farm activation. A multi-farm operator can run cattle on Farm A and aquaculture on Farm B with different group visibility per farm. (Operator decision Q1 locked.)
 
-### Default state at onboarding
+### Default state for new farms (REVISED Phase 5.10 — 2026-04-30)
 
-Pre-checked: **MONEY + NOTES + OTHER** (universally relevant — every farm has cash flow, things to note, admin events).
-Unchecked by default: all 8 production groups (CROPS, PERENNIALS, LIVESTOCK, POULTRY, APICULTURE, AQUACULTURE, FORESTRY, SPECIALTY). Farmer ticks the production groups they actually operate. (Operator decision Q3 locked.)
+ALL 11 groups default to `is_active=true` for new farms. The (+) menu shows
+the full taxonomy when the user first becomes serious about farm management,
+not at signup (which is light by design).
+
+Original Q3 lock (3 active, 8 inactive at onboarding) was reversed at hour 31
+of the Sprint 5 build session because:
+- Signup is not the moment of serious farm-pillar commitment
+- Most signups explore the platform before committing to farm management
+- Forcing a domain decision at signup is the wrong moment
+- The right place for the trim decision is INSIDE the farm pillar, when the
+  user actively engages with (+) and decides to customize
+
+The /onboarding/what-you-farm wizard (Phase 5.7 file) remains in source for
+future opt-in re-enable but is no longer in the auto-redirect flow as of
+Phase 5.10b.
 
 ### Behavior when a group is hidden with open events
 
@@ -221,7 +234,8 @@ This amendment adds three inviolable rules to the MBI list:
 |---|---|---|
 | Q1 | Per-farm group activation (not per-tenant) | 2026-04-30 |
 | Q2 | Toggle OFF hides from (+) only; history stays in /reports | 2026-04-30 |
-| Q3 | Onboarding pre-checks MONEY + NOTES + OTHER; production groups unchecked by default | 2026-04-30 |
+| Q3 | Onboarding pre-checks MONEY + NOTES + OTHER; production groups unchecked by default <!-- REVERSED 2026-04-30 Phase 5.10: see Q3-revised below --> | 2026-04-30 |
+| Q3-revised | All 11 groups default ACTIVE for new farms; user trims via in-pillar toggle (Phase 5.10c). Onboarding is light by design — not the moment of serious farm-pillar commitment. | 2026-04-30 Phase 5.10 |
 | Q4 | Sprint 5 ships all 9 phases tonight | 2026-04-30 |
 
 ---
@@ -239,6 +253,9 @@ This amendment adds three inviolable rules to the MBI list:
 | 5.7 | Onboarding wizard "What do you farm?" step | none |
 | 5.8 | /me/settings group toggles section | none |
 | 5.9 | LogSheet "Manage groups →" footer link | none |
+| 5.10a | Default flip — all 11 groups is_active=true for new farms (Q3 reversal) | none |
+| 5.10b | Skip /onboarding/what-you-farm from FarmBasics flow (route stays for future opt-in) | none |
+| 5.10c | (TOMORROW) Move toggle UI from /me/settings to in-modal panel inside (+) | none |
 
 ---
 
