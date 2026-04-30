@@ -37,6 +37,7 @@ const Community     = lazy(() => import("./pages/farmer/Community"));
 const CommunityMap  = lazy(() => import("./pages/farmer/CommunityMap"));
 const Onboarding    = lazy(() => import("./pages/farmer/Onboarding"));
 const FarmBasics    = lazy(() => import("./pages/onboarding/FarmBasics"));
+const WhatYouFarm   = lazy(() => import("./pages/onboarding/WhatYouFarm"));
 const FieldEventNew = lazy(() => import("./pages/farmer/FieldEventNew"));
 const KnowledgeBase = lazy(() => import("./pages/farmer/KnowledgeBase"));
 const FarmManager   = lazy(() => import("./pages/farmer/FarmManager"));
@@ -112,6 +113,9 @@ export default function App() {
           } />
           <Route path="/onboarding/farm-basics" element={
             <OnboardingRoute><FarmBasics /></OnboardingRoute>
+          } />
+          <Route path="/onboarding/what-you-farm" element={
+            <OnboardingRoute><WhatYouFarm /></OnboardingRoute>
           } />
 
           {/* ── Admin routes ────────────────────────────────────────────── */}

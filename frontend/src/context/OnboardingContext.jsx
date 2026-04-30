@@ -14,6 +14,7 @@ const STORAGE_KEY = "tfos_onboarding_state";
 const initial = {
   farmName: "",
   totalAreaAcres: null,
+  farmId: null,        // captured from POST /onboarding/farm-basics; consumed by WhatYouFarm
   productionUnits: [], // future Phase 3
   livestock: [],       // future Phase 4
 };

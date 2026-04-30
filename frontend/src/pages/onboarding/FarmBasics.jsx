@@ -153,8 +153,14 @@ function FarmBasicsInner() {
         setSubmitting(false);
         return;
       }
-      emitToast("Saved. Next page lands tomorrow.");
-      navigate("/home");
+      // Capture farm_id from response for the next wizard step (Phase 5.7).
+      // Backend returns { data: { farm_id, next_route, ... } } via _envelope.
+      try {
+        const j = await res.json();
+        const fid = j?.data?.farm_id || j?.farm_id;
+        if (fid) setField("farmId", fid);
+      } catch { /* noop */ }
+      navigate("/onboarding/what-you-farm");
     } catch (e) {
       emitToast(`Network error: ${e.message}`);
       setSubmitting(false);
