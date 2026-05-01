@@ -24,6 +24,7 @@ from app.routers import (
     farm_active_groups,
     farm_libraries,
     events,
+    flocks,
     chemicals,
     cycles,
     rotation,
@@ -243,6 +244,7 @@ app.include_router(event_catalog.router,      prefix=f"{PREFIX}/event-catalog", 
 app.include_router(farm_active_groups.router, prefix=f"{PREFIX}/farms",              tags=["Farm Active Groups"])
 app.include_router(farm_libraries.router,     prefix=PREFIX,                         tags=["Farm Libraries"])
 app.include_router(events.router,              prefix=PREFIX,                         tags=["Events"])
+app.include_router(flocks.router,              prefix=PREFIX,                         tags=["Flocks"])
 app.include_router(chemicals.router,           prefix="/api/v1",                      tags=["chemicals"])
 app.include_router(cycles.router,             prefix=f"{PREFIX}/cycles",             tags=["Production Cycles"])
 app.include_router(rotation.router,           prefix=f"{PREFIX}/rotation",           tags=["Rotation Engine"])
