@@ -120,6 +120,8 @@ const EVENT_ROUTES = {
   MORTALITY_LOGGED:   "/farm/poultry/mortality/new",
   VACCINATION_GIVEN:  "/farm/poultry/vaccination/new",
   FEED_RECEIVED:      "/farm/poultry/feed/new",
+  WEIGHT_CHECK:       "/farm/poultry/weight/new",
+  BIRD_REPLACEMENT:   "/farm/poultry/birds/add",
 };
 
 const EVENT_ICONS = {

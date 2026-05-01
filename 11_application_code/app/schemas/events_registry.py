@@ -73,6 +73,26 @@ class MortalityLoggedPayload(BaseModel):
     )
 
 
+class WeightCheckPayload(BaseModel):
+    """Sample-based weight check. flock_id required at anchors. No side effect."""
+    avg_weight_g: int = Field(..., gt=0, le=20000, description="Average weight per bird in grams.")
+    sample_size: int = Field(..., gt=0, le=10000, description="How many birds were weighed.")
+    total_weight_g: Optional[int] = Field(default=None, gt=0, description="Optional total weight of the sample (cross-check).")
+    notes: Optional[str] = Field(default=None, max_length=500)
+
+
+class BirdReplacementPayload(BaseModel):
+    """Adds birds to existing flock. Increments flock.current_count same-tx. placed_count never changes."""
+    qty_added: int = Field(..., gt=0, le=1000000)
+    reason: str = Field(..., description="REPLACEMENT (restock after mortality), EXPANSION (grow flock), RECOVERY (returned escapees)")
+    cost_fjd: Optional[Decimal] = Field(default=None, ge=0, max_digits=10, decimal_places=2)
+    supplier_id: Optional[str] = Field(default=None, description="Optional UUID of supplier in farm_libraries.")
+    notes: Optional[str] = Field(default=None, max_length=500)
+
+    class Config:
+        json_encoders = {Decimal: str}
+
+
 class FeedReceivedPayload(BaseModel):
     """Payload schema for FEED_RECEIVED event.
 
@@ -128,11 +148,14 @@ EVENT_TYPE_REGISTRY: dict = {
     "MORTALITY_LOGGED":   (MortalityLoggedPayload,   "tenant.poultry_event_log", 1),
     "VACCINATION_GIVEN":  (VaccinationGivenPayload,  "tenant.poultry_event_log", 1),
     "FEED_RECEIVED":      (FeedReceivedPayload,      "tenant.poultry_event_log", 1),
+    "WEIGHT_CHECK":       (WeightCheckPayload,       "tenant.poultry_event_log", 1),
+    "BIRD_REPLACEMENT":   (BirdReplacementPayload,   "tenant.poultry_event_log", 1),
 }
 
 # Vocabularies (used for app-layer validation in events.py)
 MORTALITY_CAUSES = {"DISEASE", "PREDATION", "INJURY", "UNKNOWN", "OLD_AGE", "OTHER"}
 VACCINATION_ROUTES = {"DRINKING_WATER", "INJECTION", "EYE_DROP", "SPRAY", "OTHER"}
+BIRD_REPLACEMENT_REASONS = {"REPLACEMENT", "EXPANSION", "RECOVERY"}
 
 
 def get_schema_for_event_type(event_type: str):

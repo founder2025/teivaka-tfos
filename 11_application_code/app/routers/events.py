@@ -30,7 +30,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.audit_chain import emit_audit_event
 from app.middleware.rls import get_current_user, get_tenant_db
 from app.schemas.envelope import error_envelope, success_envelope
-from app.schemas.events_registry import get_schema_for_event_type, MORTALITY_CAUSES, VACCINATION_ROUTES
+from app.schemas.events_registry import get_schema_for_event_type, MORTALITY_CAUSES, VACCINATION_ROUTES, BIRD_REPLACEMENT_REASONS
 from sqlalchemy.exc import IntegrityError
 
 import json
@@ -194,6 +194,42 @@ async def submit_event(
                     f"cause must be one of {sorted(MORTALITY_CAUSES)}.",
                 ),
             )
+
+    # 2h. WEIGHT_CHECK-specific: flock_id REQUIRED
+    if submission.event_type == "WEIGHT_CHECK":
+        if submission.anchors.flock_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=error_envelope("weight_check_requires_flock", "WEIGHT_CHECK requires a flock_id anchor."),
+            )
+
+    # 2i. BIRD_REPLACEMENT-specific: flock_id REQUIRED, reason in vocab, supplier_id valid if provided
+    if submission.event_type == "BIRD_REPLACEMENT":
+        if submission.anchors.flock_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=error_envelope("bird_replacement_requires_flock", "BIRD_REPLACEMENT requires a flock_id anchor."),
+            )
+        if not isinstance(submission.payload, dict):
+            raise HTTPException(400, error_envelope("invalid_payload", "Payload must be a dict."))
+        reason_value = submission.payload.get("reason")
+        if reason_value not in BIRD_REPLACEMENT_REASONS:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=error_envelope("invalid_replacement_reason", f"reason must be one of {sorted(BIRD_REPLACEMENT_REASONS)}."),
+            )
+        supplier_id_value = submission.payload.get("supplier_id")
+        if supplier_id_value is not None:
+            try:
+                supplier_uuid = UUID(str(supplier_id_value))
+            except (ValueError, TypeError):
+                raise HTTPException(400, error_envelope("invalid_supplier_id", "supplier_id must be a valid UUID."))
+            supplier_check = await db.execute(
+                text("SELECT library_id FROM shared.farm_libraries WHERE library_id = :sid AND library_type = 'POULTRY_SUPPLIER' AND is_active = TRUE"),
+                {"sid": supplier_uuid},
+            )
+            if supplier_check.first() is None:
+                raise HTTPException(404, error_envelope("supplier_not_found", f"Supplier {supplier_id_value} not found or not active."))
 
     # 2g. FEED_RECEIVED-specific: feed_type_id valid, supplier_id valid (if provided)
     if submission.event_type == "FEED_RECEIVED":
@@ -372,23 +408,20 @@ async def submit_event(
         qty_dead = payload_dict.get("qty_dead", 0)
         try:
             await db.execute(
-                text("""
-                    UPDATE tenant.flocks
-                    SET current_count = current_count - :qty,
-                        updated_at = now()
-                    WHERE flock_id = :fid
-                """),
+                text("UPDATE tenant.flocks SET current_count = current_count - :qty, updated_at = now() WHERE flock_id = :fid"),
                 {"qty": qty_dead, "fid": submission.anchors.flock_id},
             )
         except IntegrityError as ie:
             await db.rollback()
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=error_envelope(
-                    "would_underflow_count",
-                    f"Logging {qty_dead} dead birds would put flock {submission.anchors.flock_id} below zero.",
-                ),
-            )
+            raise HTTPException(400, error_envelope("would_underflow_count", f"Logging {qty_dead} dead birds would put flock {submission.anchors.flock_id} below zero."))
+
+    # 6b. Side effect for BIRD_REPLACEMENT: INCREMENT current_count (mirrors MORTALITY)
+    if submission.event_type == "BIRD_REPLACEMENT":
+        qty_added = payload_dict.get("qty_added", 0)
+        await db.execute(
+            text("UPDATE tenant.flocks SET current_count = current_count + :qty, updated_at = now() WHERE flock_id = :fid"),
+            {"qty": qty_added, "fid": submission.anchors.flock_id},
+        )
 
     await db.commit()
 

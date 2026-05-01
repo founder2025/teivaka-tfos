@@ -57,6 +57,8 @@ const FlockPlacedNew      = lazy(() => import("./pages/farmer/poultry/FlockPlace
 const MortalityLoggedNew    = lazy(() => import("./pages/farmer/poultry/MortalityLoggedNew"));
 const VaccinationGivenNew   = lazy(() => import("./pages/farmer/poultry/VaccinationGivenNew"));
 const FeedReceivedNew       = lazy(() => import("./pages/farmer/poultry/FeedReceivedNew"));
+const WeightCheckNew        = lazy(() => import("./pages/farmer/poultry/WeightCheckNew"));
+const BirdReplacementNew    = lazy(() => import("./pages/farmer/poultry/BirdReplacementNew"));
 const LibrarySettings       = lazy(() => import("./pages/farmer/LibrarySettings"));
 const HarvestList   = lazy(() => import("./pages/farmer/HarvestList"));
 const CycleList     = lazy(() => import("./pages/farmer/CycleList"));
@@ -166,6 +168,8 @@ export default function App() {
             <Route path="/farm/poultry/mortality/new" element={<MortalityLoggedNew  />} />
             <Route path="/farm/poultry/vaccination/new" element={<VaccinationGivenNew  />} />
             <Route path="/farm/poultry/feed/new" element={<FeedReceivedNew  />} />
+            <Route path="/farm/poultry/weight/new" element={<WeightCheckNew  />} />
+            <Route path="/farm/poultry/birds/add" element={<BirdReplacementNew  />} />
             <Route path="/classroom"         element={<Classroom     />} />
             <Route path="/me"                element={<Me            />} />
             <Route path="/me/library"        element={<LibrarySettings   />} />
