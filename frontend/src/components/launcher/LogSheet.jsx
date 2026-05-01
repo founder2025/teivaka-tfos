@@ -115,6 +115,7 @@ const EVENT_ROUTES = {
   CASH_IN:           "/farm/cash",
   WORKER_CHECKIN:    "/farm/labor",
   CYCLE_CREATED:     { action: "new-cycle", route: "/farm?action=new-cycle" },
+  EGGS_COLLECTED:    "/farm/poultry/eggs/new",
 };
 
 const EVENT_ICONS = {
