@@ -11,8 +11,6 @@
  * updated. Flagged, not fixed (BottomNav.jsx is in the standing-rule lock).
  */
 
-import { Link } from "react-router-dom";
-
 const C = {
   soil:   "#5C4033",
   cream:  "#F8F3E9",
@@ -45,22 +43,6 @@ export default function Me() {
           Profile, settings, and tier info — coming in Week 2
         </p>
       </div>
-
-      <Link
-        to="/me/library"
-        className="block bg-white rounded-2xl px-4 py-4"
-        style={{ border: `1px solid ${C.border}`, color: C.soil }}
-      >
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <div className="text-sm font-medium">My library</div>
-            <div className="text-xs mt-1" style={{ color: C.muted }}>
-              Breeds, feeds, vaccines, suppliers, buyers
-            </div>
-          </div>
-          <span className="text-base" style={{ color: C.muted }}>→</span>
-        </div>
-      </Link>
 
       <section
         className="bg-white rounded-2xl px-4 py-4"
