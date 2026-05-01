@@ -73,6 +73,35 @@ class MortalityLoggedPayload(BaseModel):
     )
 
 
+class EggsSoldPayload(BaseModel):
+    """Eggs sold event. flock_id OPTIONAL (eggs may pool from multiple flocks). No side effect.
+    cash_ledger auto-link deferred to Phase 6.5+."""
+    qty_eggs: int = Field(..., ge=1, le=1000000)
+    total_revenue_fjd: Decimal = Field(..., ge=0, max_digits=12, decimal_places=2)
+    buyer_id: Optional[str] = Field(default=None, description="Optional UUID of buyer in shared.farm_libraries POULTRY_BUYER.")
+    price_fjd_per_dozen: Optional[Decimal] = Field(default=None, ge=0, max_digits=8, decimal_places=2)
+    sale_date: str = Field(..., description="Date sold (YYYY-MM-DD).")
+    notes: Optional[str] = Field(default=None, max_length=500)
+
+    class Config:
+        json_encoders = {Decimal: str}
+
+
+class BirdsSoldPayload(BaseModel):
+    """Birds sold event. flock_id REQUIRED. DECREMENTS flock.current_count same-tx.
+    Underflow protection via CHECK constraint -> 400 would_underflow_count."""
+    qty_sold: int = Field(..., ge=1, le=1000000)
+    sale_type: str = Field(..., description="LIVE_BIRD, DRESSED, or EGGS_LAYER_END (ex-layer hens).")
+    total_revenue_fjd: Decimal = Field(..., ge=0, max_digits=12, decimal_places=2)
+    buyer_id: Optional[str] = Field(default=None, description="Optional UUID of buyer in shared.farm_libraries POULTRY_BUYER.")
+    price_per_bird_fjd: Optional[Decimal] = Field(default=None, ge=0, max_digits=8, decimal_places=2)
+    sale_date: str = Field(..., description="Date sold (YYYY-MM-DD).")
+    notes: Optional[str] = Field(default=None, max_length=500)
+
+    class Config:
+        json_encoders = {Decimal: str}
+
+
 class WeightCheckPayload(BaseModel):
     """Sample-based weight check. flock_id required at anchors. No side effect."""
     avg_weight_g: int = Field(..., gt=0, le=20000, description="Average weight per bird in grams.")
@@ -150,12 +179,15 @@ EVENT_TYPE_REGISTRY: dict = {
     "FEED_RECEIVED":      (FeedReceivedPayload,      "tenant.poultry_event_log", 1),
     "WEIGHT_CHECK":       (WeightCheckPayload,       "tenant.poultry_event_log", 1),
     "BIRD_REPLACEMENT":   (BirdReplacementPayload,   "tenant.poultry_event_log", 1),
+    "EGGS_SOLD":          (EggsSoldPayload,          "tenant.poultry_event_log", 1),
+    "BIRDS_SOLD":         (BirdsSoldPayload,         "tenant.poultry_event_log", 1),
 }
 
 # Vocabularies (used for app-layer validation in events.py)
 MORTALITY_CAUSES = {"DISEASE", "PREDATION", "INJURY", "UNKNOWN", "OLD_AGE", "OTHER"}
 VACCINATION_ROUTES = {"DRINKING_WATER", "INJECTION", "EYE_DROP", "SPRAY", "OTHER"}
 BIRD_REPLACEMENT_REASONS = {"REPLACEMENT", "EXPANSION", "RECOVERY"}
+BIRDS_SOLD_TYPES = {"LIVE_BIRD", "DRESSED", "EGGS_LAYER_END"}
 
 
 def get_schema_for_event_type(event_type: str):

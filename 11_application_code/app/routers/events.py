@@ -30,7 +30,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.audit_chain import emit_audit_event
 from app.middleware.rls import get_current_user, get_tenant_db
 from app.schemas.envelope import error_envelope, success_envelope
-from app.schemas.events_registry import get_schema_for_event_type, MORTALITY_CAUSES, VACCINATION_ROUTES, BIRD_REPLACEMENT_REASONS
+from app.schemas.events_registry import get_schema_for_event_type, MORTALITY_CAUSES, VACCINATION_ROUTES, BIRD_REPLACEMENT_REASONS, BIRDS_SOLD_TYPES
 from sqlalchemy.exc import IntegrityError
 
 import json
@@ -194,6 +194,51 @@ async def submit_event(
                     f"cause must be one of {sorted(MORTALITY_CAUSES)}.",
                 ),
             )
+
+    # 2j. EGGS_SOLD-specific: buyer_id valid if provided (flock_id OPTIONAL)
+    if submission.event_type == "EGGS_SOLD":
+        if not isinstance(submission.payload, dict):
+            raise HTTPException(400, error_envelope("invalid_payload", "Payload must be a dict."))
+        buyer_id_value = submission.payload.get("buyer_id")
+        if buyer_id_value is not None:
+            try:
+                buyer_uuid = UUID(str(buyer_id_value))
+            except (ValueError, TypeError):
+                raise HTTPException(400, error_envelope("invalid_buyer_id", "buyer_id must be a valid UUID."))
+            buyer_check = await db.execute(
+                text("SELECT library_id FROM shared.farm_libraries WHERE library_id = :bid AND library_type = 'POULTRY_BUYER' AND is_active = TRUE"),
+                {"bid": buyer_uuid},
+            )
+            if buyer_check.first() is None:
+                raise HTTPException(404, error_envelope("buyer_not_found", f"Buyer {buyer_id_value} not found or not active."))
+
+    # 2k. BIRDS_SOLD-specific: flock_id REQUIRED, sale_type in vocab, buyer_id valid if provided
+    if submission.event_type == "BIRDS_SOLD":
+        if submission.anchors.flock_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=error_envelope("birds_sold_requires_flock", "BIRDS_SOLD requires a flock_id anchor."),
+            )
+        if not isinstance(submission.payload, dict):
+            raise HTTPException(400, error_envelope("invalid_payload", "Payload must be a dict."))
+        sale_type_value = submission.payload.get("sale_type")
+        if sale_type_value not in BIRDS_SOLD_TYPES:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=error_envelope("invalid_sale_type", f"sale_type must be one of {sorted(BIRDS_SOLD_TYPES)}."),
+            )
+        buyer_id_value = submission.payload.get("buyer_id")
+        if buyer_id_value is not None:
+            try:
+                buyer_uuid = UUID(str(buyer_id_value))
+            except (ValueError, TypeError):
+                raise HTTPException(400, error_envelope("invalid_buyer_id", "buyer_id must be a valid UUID."))
+            buyer_check = await db.execute(
+                text("SELECT library_id FROM shared.farm_libraries WHERE library_id = :bid AND library_type = 'POULTRY_BUYER' AND is_active = TRUE"),
+                {"bid": buyer_uuid},
+            )
+            if buyer_check.first() is None:
+                raise HTTPException(404, error_envelope("buyer_not_found", f"Buyer {buyer_id_value} not found or not active."))
 
     # 2h. WEIGHT_CHECK-specific: flock_id REQUIRED
     if submission.event_type == "WEIGHT_CHECK":
@@ -422,6 +467,18 @@ async def submit_event(
             text("UPDATE tenant.flocks SET current_count = current_count + :qty, updated_at = now() WHERE flock_id = :fid"),
             {"qty": qty_added, "fid": submission.anchors.flock_id},
         )
+
+    # 6c. Side effect for BIRDS_SOLD: DECREMENT current_count (mirrors MORTALITY)
+    if submission.event_type == "BIRDS_SOLD":
+        qty_sold = payload_dict.get("qty_sold", 0)
+        try:
+            await db.execute(
+                text("UPDATE tenant.flocks SET current_count = current_count - :qty, updated_at = now() WHERE flock_id = :fid"),
+                {"qty": qty_sold, "fid": submission.anchors.flock_id},
+            )
+        except IntegrityError as ie:
+            await db.rollback()
+            raise HTTPException(400, error_envelope("would_underflow_count", f"Selling {qty_sold} birds would put flock {submission.anchors.flock_id} below zero."))
 
     await db.commit()
 
