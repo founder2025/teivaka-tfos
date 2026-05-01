@@ -1,8 +1,10 @@
-"""POULTRY Bank Evidence PDF — Phase 6.10-1.
+"""POULTRY Bank Evidence — Phase 6.10-1b (Monthly Cashflow Statement).
 
 GET /api/v1/poultry/bank-evidence?period=YYYY-MM
-  Returns a verifiable monthly PDF (binary stream) anchored to the audit
-  hash chain. First moat artifact under Phase 9 (audit-grade exports).
+  Returns a verifiable monthly cashflow statement (PDF, binary stream)
+  anchored to the audit hash chain. Restructured 6.10-1b: 7-section formal
+  business cashflow document — bankers lend against cashflow, not
+  operational metrics.
 
 Locked emission ordering (audit-first, PDF-anchor): the BANK_PDF_GENERATED
 audit event is committed BEFORE the PDF is rendered. The PDF embeds its
@@ -16,13 +18,15 @@ also rolls back — no orphan audit rows.
 Schema notes:
   - audit.report_exports.period_start / period_end are `date` columns; we
     pass datetime.date() on insert.
+  - audit.report_exports has no report_type column (Strike #34); report
+    taxonomy lives in audit.events.payload_jsonb.report_type.
   - event_type 'BANK_PDF_GENERATED' is enumerated in the audit.events
     CHECK constraint (migrations 023/036/042) and the event_type_catalog.
 """
 
 import hashlib
 import io
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 from uuid import UUID
 
@@ -49,26 +53,35 @@ from app.schemas.envelope import error_envelope
 router = APIRouter()
 
 
-# Design tokens (mirror PoultryDashboard.jsx)
-C_SOIL = colors.HexColor("#5C4033")
-C_CREAM = colors.HexColor("#F8F3E9")
-C_GREEN = colors.HexColor("#6AA84F")
-C_BORDER = colors.HexColor("#E6DED0")
-C_MUTED = colors.HexColor("#8A8678")
-C_RED = colors.HexColor("#A32D2D")
+# Design tokens (formal accounting palette, mirror PoultryDashboard.jsx)
+COLOR_SOIL = colors.HexColor("#5C4033")
+COLOR_CREAM = colors.HexColor("#F8F3E9")
+COLOR_GREEN = colors.HexColor("#6AA84F")
+COLOR_BORDER = colors.HexColor("#E6DED0")
+COLOR_MUTED = colors.HexColor("#8A8678")
+COLOR_RED = colors.HexColor("#A32D2D")
 
 
-EVENT_LABELS = {
-    "EGGS_COLLECTED": "Eggs collected",
-    "EGGS_SOLD": "Eggs sold",
-    "FLOCK_PLACED": "Flock placed",
-    "MORTALITY_LOGGED": "Mortality",
-    "VACCINATION_GIVEN": "Vaccination",
-    "FEED_RECEIVED": "Feed delivery",
-    "WEIGHT_CHECK": "Weight check",
-    "BIRD_REPLACEMENT": "Birds added",
-    "BIRDS_SOLD": "Birds sold",
-}
+def fmt_fjd(amount):
+    """Format FJD amount: 'FJD 1,234.56' positive; '(1,234.56)' negative; '—' None."""
+    if amount is None:
+        return "—"
+    abs_amt = abs(float(amount))
+    formatted = f"FJD {abs_amt:,.2f}"
+    return f"({formatted[4:]})" if float(amount) < 0 else formatted
+
+
+def fmt_pct(num, denom):
+    """Format percentage: '43%' or '—' on zero/None denom."""
+    if denom is None or float(denom) == 0:
+        return "—"
+    return f"{(float(num) / float(denom) * 100):.0f}%"
+
+
+def long_period_label(period_start: datetime, period_end: datetime) -> str:
+    """'1 May 2026 — 31 May 2026' (period_end is exclusive next-month, so subtract 1 day)."""
+    last_day = period_end - timedelta(days=1)
+    return f"{period_start.day} {period_start.strftime('%B %Y')} — {last_day.day} {last_day.strftime('%B %Y')}"
 
 
 def _resolve_actor_uuid(user: dict) -> UUID:
@@ -114,194 +127,6 @@ def _parse_period(period: str) -> tuple[datetime, datetime]:
     return period_start, period_end
 
 
-def _event_detail(event_type: str, payload: dict) -> str:
-    p = payload or {}
-    if event_type == "EGGS_COLLECTED":
-        return f"{p.get('qty_eggs', 0)} eggs"
-    if event_type == "EGGS_SOLD":
-        return f"{p.get('qty_eggs', 0)} eggs · FJD {p.get('total_revenue_fjd', 0)}"
-    if event_type == "MORTALITY_LOGGED":
-        return f"{p.get('qty_dead', 0)} dead ({p.get('cause', 'unknown')})"
-    if event_type == "VACCINATION_GIVEN":
-        return f"{p.get('qty_doses', '')} doses · {p.get('route', '')}"
-    if event_type == "FEED_RECEIVED":
-        cost = p.get("cost_fjd")
-        base = f"{p.get('qty_kg', 0)}kg"
-        return f"{base} · FJD {cost}" if cost else base
-    if event_type == "WEIGHT_CHECK":
-        avg_g = p.get("avg_weight_g") or 0
-        return f"avg {avg_g/1000:.2f}kg (n={p.get('sample_size', 0)})"
-    if event_type == "BIRD_REPLACEMENT":
-        return f"+{p.get('qty_added', 0)} birds ({p.get('reason', '')})"
-    if event_type == "BIRDS_SOLD":
-        return f"{p.get('qty_sold', 0)} {p.get('sale_type', '')} · FJD {p.get('total_revenue_fjd', 0)}"
-    if event_type == "FLOCK_PLACED":
-        return f"{p.get('placed_count', 0)} {p.get('flock_type', '')}"
-    return ""
-
-
-def _build_pdf(
-    farm_name: str,
-    farm_id: str,
-    period_label: str,
-    generated_at: datetime,
-    kpis: dict,
-    flocks: list[dict],
-    events: list[dict],
-    anchor_hash: str,
-) -> bytes:
-    buf = io.BytesIO()
-    doc = SimpleDocTemplate(
-        buf,
-        pagesize=A4,
-        leftMargin=1.6 * cm,
-        rightMargin=1.6 * cm,
-        topMargin=1.6 * cm,
-        bottomMargin=1.6 * cm,
-        title=f"Bank Evidence — {farm_name} — {period_label}",
-    )
-
-    styles = getSampleStyleSheet()
-    title_style = ParagraphStyle(
-        "title", parent=styles["Heading1"], textColor=C_SOIL, fontSize=18, leading=22, spaceAfter=4,
-    )
-    subtitle_style = ParagraphStyle(
-        "subtitle", parent=styles["Normal"], textColor=C_MUTED, fontSize=10, leading=13, spaceAfter=2,
-    )
-    section_style = ParagraphStyle(
-        "section", parent=styles["Heading2"], textColor=C_SOIL, fontSize=12, leading=15,
-        spaceBefore=12, spaceAfter=6,
-    )
-    body_style = ParagraphStyle(
-        "body", parent=styles["Normal"], textColor=C_SOIL, fontSize=9, leading=12, alignment=TA_LEFT,
-    )
-    footer_label_style = ParagraphStyle(
-        "footer_label", parent=styles["Normal"], textColor=C_SOIL, fontSize=9, leading=12,
-        spaceBefore=14,
-    )
-    footer_body_style = ParagraphStyle(
-        "footer_body", parent=styles["Normal"], textColor=C_MUTED, fontSize=8, leading=11,
-    )
-
-    story: list = []
-
-    # Header
-    story.append(Paragraph("Bank Evidence — Poultry", title_style))
-    story.append(Paragraph(f"{farm_name} ({farm_id})", subtitle_style))
-    story.append(Paragraph(f"Period: {period_label}", subtitle_style))
-    story.append(Paragraph(
-        f"Generated: {generated_at.strftime('%Y-%m-%d %H:%M UTC')}",
-        subtitle_style,
-    ))
-
-    # Period summary
-    story.append(Paragraph("Period summary", section_style))
-    summary_rows = [
-        ["Metric", "Value"],
-        ["Active flocks", str(kpis.get("active_flocks", 0))],
-        ["Total birds", str(kpis.get("total_birds", 0))],
-        ["Eggs collected", str(kpis.get("eggs_collected", 0))],
-        ["Eggs sold", str(kpis.get("eggs_sold", 0))],
-        ["Birds sold", str(kpis.get("birds_sold", 0))],
-        ["Mortality (birds)", str(kpis.get("mortality", 0))],
-        ["Revenue (FJD)", f"{kpis.get('revenue_fjd', 0):.2f}"],
-        ["Feed cost (FJD)", f"{kpis.get('feed_cost_fjd', 0):.2f}"],
-    ]
-    summary_tbl = Table(summary_rows, colWidths=[7 * cm, 5 * cm])
-    summary_tbl.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, 0), C_CREAM),
-        ("TEXTCOLOR", (0, 0), (-1, 0), C_SOIL),
-        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-        ("FONTSIZE", (0, 0), (-1, -1), 9),
-        ("LINEBELOW", (0, 0), (-1, 0), 0.5, C_BORDER),
-        ("LINEBELOW", (0, 1), (-1, -1), 0.25, C_BORDER),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
-        ("TOPPADDING", (0, 0), (-1, -1), 5),
-        ("LEFTPADDING", (0, 0), (-1, -1), 6),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 6),
-    ]))
-    story.append(summary_tbl)
-
-    # Active flocks
-    story.append(Paragraph("Active flocks", section_style))
-    if flocks:
-        flock_rows = [["Flock", "Label", "Type", "Status", "Placed", "Current/Placed"]]
-        for f in flocks:
-            placed_str = f["placed_date"].isoformat() if f.get("placed_date") else "—"
-            flock_rows.append([
-                f.get("flock_id") or "",
-                f.get("flock_label") or "",
-                f.get("flock_type") or "",
-                f.get("lifecycle_status") or "",
-                placed_str,
-                f"{f.get('current_count', 0)} / {f.get('placed_count', 0)}",
-            ])
-        flock_tbl = Table(flock_rows, colWidths=[3 * cm, 4 * cm, 2.4 * cm, 2.2 * cm, 2.4 * cm, 3 * cm])
-        flock_tbl.setStyle(TableStyle([
-            ("BACKGROUND", (0, 0), (-1, 0), C_CREAM),
-            ("TEXTCOLOR", (0, 0), (-1, 0), C_SOIL),
-            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-            ("FONTSIZE", (0, 0), (-1, -1), 8),
-            ("LINEBELOW", (0, 0), (-1, 0), 0.5, C_BORDER),
-            ("LINEBELOW", (0, 1), (-1, -1), 0.25, C_BORDER),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
-            ("TOPPADDING", (0, 0), (-1, -1), 4),
-            ("LEFTPADDING", (0, 0), (-1, -1), 4),
-            ("RIGHTPADDING", (0, 0), (-1, -1), 4),
-            ("VALIGN", (0, 0), (-1, -1), "TOP"),
-        ]))
-        story.append(flock_tbl)
-    else:
-        story.append(Paragraph("No active flocks during this period.", body_style))
-
-    # Activity
-    story.append(Paragraph(f"Activity in {period_label}", section_style))
-    if events:
-        event_rows = [["Date", "Event", "Flock", "Detail"]]
-        for ev in events:
-            occurred = ev.get("occurred_at")
-            date_str = occurred.strftime("%Y-%m-%d") if occurred else "—"
-            label = EVENT_LABELS.get(ev.get("event_type", ""), ev.get("event_type", ""))
-            flock = ev.get("flock_id") or "—"
-            detail = _event_detail(ev.get("event_type", ""), ev.get("payload") or {})
-            event_rows.append([date_str, label, flock, detail])
-        event_tbl = Table(event_rows, colWidths=[2.4 * cm, 3.6 * cm, 3 * cm, 8 * cm])
-        event_tbl.setStyle(TableStyle([
-            ("BACKGROUND", (0, 0), (-1, 0), C_CREAM),
-            ("TEXTCOLOR", (0, 0), (-1, 0), C_SOIL),
-            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-            ("FONTSIZE", (0, 0), (-1, -1), 8),
-            ("LINEBELOW", (0, 0), (-1, 0), 0.5, C_BORDER),
-            ("LINEBELOW", (0, 1), (-1, -1), 0.25, C_BORDER),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
-            ("TOPPADDING", (0, 0), (-1, -1), 4),
-            ("LEFTPADDING", (0, 0), (-1, -1), 4),
-            ("RIGHTPADDING", (0, 0), (-1, -1), 4),
-            ("VALIGN", (0, 0), (-1, -1), "TOP"),
-        ]))
-        story.append(event_tbl)
-    else:
-        story.append(Paragraph("No events logged in this period.", body_style))
-
-    # Audit anchor footer
-    story.append(Spacer(1, 12))
-    story.append(Paragraph(
-        f"Audit chain anchor: {anchor_hash[-16:]} · "
-        f"Verify at: https://teivaka.com/verify/{anchor_hash}",
-        footer_label_style,
-    ))
-    story.append(Paragraph(
-        "This document is anchored to the Teivaka tenant audit chain. The hash above "
-        "uniquely identifies the audit event recorded when this PDF was generated. "
-        "Tampering with the document or any underlying event will invalidate the chain "
-        "and be detectable by re-running verification at the URL above.",
-        footer_body_style,
-    ))
-
-    doc.build(story)
-    return buf.getvalue()
-
-
 @router.get("/poultry/bank-evidence")
 async def poultry_bank_evidence(
     period: Optional[str] = Query(
@@ -311,7 +136,7 @@ async def poultry_bank_evidence(
     user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_tenant_db),
 ):
-    """Return PDF (binary) for the requested period; emit audit + write export row."""
+    """Return cashflow PDF (binary) for the requested period; emit audit + write export row."""
     actor_uuid = _resolve_actor_uuid(user)
     tenant_uuid = _resolve_tenant_uuid(user)
 
@@ -341,79 +166,63 @@ async def poultry_bank_evidence(
     farm_id = farm_row.farm_id
     farm_name = farm_row.farm_name
 
-    # 3. Compute period KPIs
-    eggs_collected = (await db.execute(text("""
-        SELECT COALESCE(SUM((payload_jsonb->>'qty_eggs')::INT), 0)
-        FROM tenant.poultry_event_log
-        WHERE event_type = 'EGGS_COLLECTED'
-          AND occurred_at >= :ps AND occurred_at < :pe
-    """), {"ps": period_start, "pe": period_end})).scalar() or 0
-
-    eggs_sold = (await db.execute(text("""
-        SELECT COALESCE(SUM((payload_jsonb->>'qty_eggs')::INT), 0)
-        FROM tenant.poultry_event_log
-        WHERE event_type = 'EGGS_SOLD'
-          AND occurred_at >= :ps AND occurred_at < :pe
-    """), {"ps": period_start, "pe": period_end})).scalar() or 0
-
-    birds_sold = (await db.execute(text("""
-        SELECT COALESCE(SUM((payload_jsonb->>'qty_sold')::INT), 0)
-        FROM tenant.poultry_event_log
-        WHERE event_type = 'BIRDS_SOLD'
-          AND occurred_at >= :ps AND occurred_at < :pe
-    """), {"ps": period_start, "pe": period_end})).scalar() or 0
-
-    mortality = (await db.execute(text("""
-        SELECT COALESCE(SUM((payload_jsonb->>'qty_dead')::INT), 0)
-        FROM tenant.poultry_event_log
-        WHERE event_type = 'MORTALITY_LOGGED'
-          AND occurred_at >= :ps AND occurred_at < :pe
-    """), {"ps": period_start, "pe": period_end})).scalar() or 0
-
-    revenue_fjd = float((await db.execute(text("""
-        SELECT COALESCE(SUM((payload_jsonb->>'total_revenue_fjd')::NUMERIC), 0)
-        FROM tenant.poultry_event_log
-        WHERE event_type IN ('EGGS_SOLD', 'BIRDS_SOLD')
-          AND occurred_at >= :ps AND occurred_at < :pe
-    """), {"ps": period_start, "pe": period_end})).scalar() or 0)
-
-    feed_cost_fjd = float((await db.execute(text("""
-        SELECT COALESCE(SUM((payload_jsonb->>'cost_fjd')::NUMERIC), 0)
-        FROM tenant.poultry_event_log
-        WHERE event_type = 'FEED_RECEIVED'
-          AND occurred_at >= :ps AND occurred_at < :pe
-    """), {"ps": period_start, "pe": period_end})).scalar() or 0)
-
-    active_flocks_count = (await db.execute(text("""
+    # 3a. Asset position (period-independent — current state)
+    active_flocks = int((await db.execute(text("""
         SELECT COUNT(*) FROM tenant.flocks WHERE is_active = TRUE
-    """))).scalar() or 0
+    """))).scalar() or 0)
 
-    total_birds = (await db.execute(text("""
+    total_birds = int((await db.execute(text("""
         SELECT COALESCE(SUM(current_count), 0) FROM tenant.flocks WHERE is_active = TRUE
-    """))).scalar() or 0
+    """))).scalar() or 0)
 
-    kpis = {
-        "active_flocks": int(active_flocks_count),
-        "total_birds": int(total_birds),
-        "eggs_collected": int(eggs_collected),
-        "eggs_sold": int(eggs_sold),
-        "birds_sold": int(birds_sold),
-        "mortality": int(mortality),
-        "revenue_fjd": revenue_fjd,
-        "feed_cost_fjd": feed_cost_fjd,
-    }
+    # 3b. Revenue breakdown
+    row = (await db.execute(text("""
+        SELECT
+            COALESCE(SUM((payload_jsonb->>'qty_eggs')::INT), 0) AS qty_eggs,
+            COALESCE(SUM((payload_jsonb->>'total_revenue_fjd')::NUMERIC), 0) AS revenue
+        FROM tenant.poultry_event_log
+        WHERE event_type = 'EGGS_SOLD' AND occurred_at >= :s AND occurred_at < :e
+    """), {"s": period_start, "e": period_end})).first()
+    eggs_sold_qty = int(row.qty_eggs) if row else 0
+    eggs_sold_revenue = float(row.revenue) if row else 0.0
 
-    # 4. Active flocks
-    flocks_result = await db.execute(text("""
-        SELECT flock_id, flock_label, flock_type, lifecycle_status,
-               placed_date, placed_count, current_count
-        FROM tenant.flocks
-        WHERE is_active = TRUE
-        ORDER BY placed_date DESC, flock_id
-    """))
-    flocks_data = [dict(r) for r in flocks_result.mappings().all()]
+    row = (await db.execute(text("""
+        SELECT
+            COALESCE(SUM((payload_jsonb->>'qty_sold')::INT), 0) AS qty_sold,
+            COALESCE(SUM((payload_jsonb->>'total_revenue_fjd')::NUMERIC), 0) AS revenue
+        FROM tenant.poultry_event_log
+        WHERE event_type = 'BIRDS_SOLD' AND occurred_at >= :s AND occurred_at < :e
+    """), {"s": period_start, "e": period_end})).first()
+    birds_sold_qty = int(row.qty_sold) if row else 0
+    birds_sold_revenue = float(row.revenue) if row else 0.0
 
-    # 5. Events in period (cap 30)
+    total_revenue = eggs_sold_revenue + birds_sold_revenue
+
+    # 3c. Expense breakdown
+    row = (await db.execute(text("""
+        SELECT
+            COALESCE(SUM((payload_jsonb->>'qty_kg')::NUMERIC), 0) AS qty_kg,
+            COALESCE(SUM((payload_jsonb->>'cost_fjd')::NUMERIC), 0) AS cost
+        FROM tenant.poultry_event_log
+        WHERE event_type = 'FEED_RECEIVED' AND occurred_at >= :s AND occurred_at < :e
+    """), {"s": period_start, "e": period_end})).first()
+    feed_qty_kg = float(row.qty_kg) if row else 0.0
+    feed_cost = float(row.cost) if row else 0.0
+
+    row = (await db.execute(text("""
+        SELECT
+            COALESCE(SUM((payload_jsonb->>'qty_added')::INT), 0) AS qty_added,
+            COALESCE(SUM((payload_jsonb->>'cost_fjd')::NUMERIC), 0) AS cost
+        FROM tenant.poultry_event_log
+        WHERE event_type = 'BIRD_REPLACEMENT' AND occurred_at >= :s AND occurred_at < :e
+    """), {"s": period_start, "e": period_end})).first()
+    birds_purchased_qty = int(row.qty_added) if row else 0
+    birds_purchased_cost = float(row.cost) if row else 0.0
+
+    total_expenses = feed_cost + birds_purchased_cost
+    net_position = total_revenue - total_expenses
+
+    # 4. Events in period (cap 30) — Statement of Activity
     events_result = await db.execute(text("""
         SELECT event_id, event_type, flock_id, occurred_at, payload_jsonb
         FROM tenant.poultry_event_log
@@ -427,12 +236,12 @@ async def poultry_bank_evidence(
             "event_type": r["event_type"],
             "flock_id": r["flock_id"],
             "occurred_at": r["occurred_at"],
-            "payload": r["payload_jsonb"],
+            "payload_jsonb": r["payload_jsonb"],
         }
         for r in events_result.mappings().all()
     ]
 
-    # 6. Chain bounds (audit.events for this tenant within period)
+    # 5. Chain bounds (audit.events for this tenant within period)
     first_row = (await db.execute(text("""
         SELECT event_id FROM audit.events
         WHERE tenant_id = :tid
@@ -451,7 +260,7 @@ async def poultry_bank_evidence(
     """), {"tid": str(tenant_uuid), "ps": period_start, "pe": period_end})).first()
     chain_last_event: Optional[UUID] = last_row[0] if last_row else None
 
-    # 7. Hash chain integrity walk for this tenant
+    # 6. Hash chain integrity walk for this tenant
     breaks = (await db.execute(text("""
         WITH chain AS (
           SELECT event_id, previous_hash, this_hash,
@@ -466,14 +275,13 @@ async def poultry_bank_evidence(
     chain_verified_ok = (int(breaks) == 0)
     chain_verified_at = datetime.now(timezone.utc)
 
-    # 8. Poultry event count in period
-    poultry_event_count = (await db.execute(text("""
+    # 7. Poultry event count in period
+    poultry_event_count = int((await db.execute(text("""
         SELECT COUNT(*) FROM tenant.poultry_event_log
         WHERE occurred_at >= :ps AND occurred_at < :pe
-    """), {"ps": period_start, "pe": period_end})).scalar() or 0
-    poultry_event_count = int(poultry_event_count)
+    """), {"ps": period_start, "pe": period_end})).scalar() or 0)
 
-    # 9. Emit BANK_PDF_GENERATED audit event (BEFORE PDF render)
+    # 8. Emit BANK_PDF_GENERATED audit event (BEFORE PDF render)
     audit_payload = {
         "report_type": "POULTRY_BANK_EVIDENCE",
         "period": period,
@@ -498,29 +306,285 @@ async def poultry_bank_evidence(
             error_envelope("audit_emission_failed", "Could not record audit event."),
         )
 
-    # 10. Anchor hash = the audit event's own hash (self-referential)
+    # 9. Anchor hash = the audit event's own hash (self-referential)
     anchor_hash = audit_hash
 
-    # 11. Generate PDF with anchor_hash in footer
-    generated_at = datetime.now(timezone.utc)
-    pdf_bytes = _build_pdf(
-        farm_name=farm_name,
-        farm_id=farm_id,
-        period_label=period,
-        generated_at=generated_at,
-        kpis=kpis,
-        flocks=flocks_data,
-        events=events_data,
-        anchor_hash=anchor_hash,
+    # 10. Compose the cashflow PDF (7 sections)
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=A4,
+        leftMargin=2 * cm,
+        rightMargin=2 * cm,
+        topMargin=2 * cm,
+        bottomMargin=2 * cm,
+        title=f"Cashflow Statement — {farm_name} — {period}",
     )
 
-    # 12. PDF SHA-256
+    elements: list = []
+
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle(
+        "CFTitle", parent=styles["Heading1"], textColor=COLOR_SOIL,
+        fontSize=16, spaceAfter=2, leading=20, fontName="Helvetica-Bold",
+    )
+    subtitle_style = ParagraphStyle(
+        "CFSubtitle", parent=styles["Normal"], textColor=COLOR_SOIL,
+        fontSize=10, spaceAfter=2, leading=13,
+    )
+    meta_style = ParagraphStyle(
+        "CFMeta", parent=styles["Normal"], textColor=COLOR_MUTED,
+        fontSize=8, spaceAfter=2, leading=11, fontName="Helvetica",
+    )
+    anchor_style = ParagraphStyle(
+        "CFAnchor", parent=styles["Normal"], textColor=COLOR_MUTED,
+        fontSize=7, spaceAfter=14, fontName="Courier",
+    )
+    section_header_style = ParagraphStyle(
+        "CFSection", parent=styles["Heading2"], textColor=COLOR_GREEN,
+        fontSize=11, spaceBefore=10, spaceAfter=6, fontName="Helvetica-Bold",
+    )
+    body_style = ParagraphStyle(
+        "CFBody", parent=styles["Normal"], textColor=COLOR_SOIL,
+        fontSize=9, spaceAfter=4, leading=12,
+    )
+    footnote_style = ParagraphStyle(
+        "CFFootnote", parent=styles["Normal"], textColor=COLOR_MUTED,
+        fontSize=7, spaceAfter=8, leading=10, fontName="Helvetica-Oblique",
+    )
+    footer_style = ParagraphStyle(
+        "CFFooter", parent=styles["Normal"], textColor=COLOR_MUTED,
+        fontSize=7, alignment=TA_LEFT, leading=10,
+    )
+
+    # ── 1. HEADER ───────────────────────────────────────────────
+    elements.append(Paragraph("Monthly Cashflow Statement &mdash; Poultry Operation", title_style))
+    elements.append(Paragraph(
+        f"<b>{farm_name}</b> &nbsp;&nbsp; "
+        f"<font size='8' color='#8A8678'><font face='Courier'>{farm_id}</font></font>",
+        subtitle_style,
+    ))
+    elements.append(Paragraph(
+        f"Period: <b>{long_period_label(period_start, period_end)}</b>",
+        meta_style,
+    ))
+    elements.append(Paragraph(
+        f"Generated: {datetime.now(timezone.utc).strftime('%-d %B %Y %H:%M UTC')}",
+        meta_style,
+    ))
+    elements.append(Paragraph(f"Audit anchor: {anchor_hash[-16:]}", anchor_style))
+
+    # ── 2. CASHFLOW SUMMARY ─────────────────────────────────────
+    elements.append(Paragraph("CASHFLOW SUMMARY", section_header_style))
+    net_color = COLOR_GREEN if net_position >= 0 else COLOR_RED
+    summary_data = [
+        ["Total revenue (cash in)", fmt_fjd(total_revenue)],
+        ["Total expenses (cash out)", fmt_fjd(total_expenses)],
+        ["NET POSITION", fmt_fjd(net_position)],
+    ]
+    summary_table = Table(summary_data, colWidths=[10 * cm, 6 * cm])
+    summary_table.setStyle(TableStyle([
+        ("FONTNAME", (0, 0), (-1, 1), "Helvetica"),
+        ("FONTNAME", (0, 2), (-1, 2), "Helvetica-Bold"),
+        ("FONTSIZE", (0, 0), (-1, 1), 11),
+        ("FONTSIZE", (0, 2), (-1, 2), 14),
+        ("TEXTCOLOR", (0, 0), (-1, 1), COLOR_SOIL),
+        ("TEXTCOLOR", (0, 2), (-1, 2), net_color),
+        ("ALIGN", (1, 0), (1, -1), "RIGHT"),
+        ("LINEBELOW", (0, 1), (-1, 1), 0.75, COLOR_SOIL),
+        ("LINEABOVE", (0, 2), (-1, 2), 1.0, COLOR_SOIL),
+        ("TOPPADDING", (0, 0), (-1, -1), 8),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+        ("LEFTPADDING", (0, 0), (-1, -1), 4),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+    ]))
+    elements.append(summary_table)
+
+    # ── 3. REVENUE BREAKDOWN ────────────────────────────────────
+    elements.append(Paragraph("REVENUE", section_header_style))
+    revenue_rows = [
+        ["SOURCE", "QUANTITY", "AMOUNT (FJD)", "% OF TOTAL"],
+        ["Egg sales", f"{eggs_sold_qty:,} eggs", fmt_fjd(eggs_sold_revenue),
+         fmt_pct(eggs_sold_revenue, total_revenue)],
+        ["Live and dressed bird sales", f"{birds_sold_qty:,} birds", fmt_fjd(birds_sold_revenue),
+         fmt_pct(birds_sold_revenue, total_revenue)],
+        ["TOTAL REVENUE", "", fmt_fjd(total_revenue),
+         "100%" if total_revenue > 0 else "—"],
+    ]
+    revenue_table = Table(revenue_rows, colWidths=[7 * cm, 4 * cm, 3.5 * cm, 2.5 * cm])
+    revenue_table.setStyle(TableStyle([
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTSIZE", (0, 0), (-1, 0), 8),
+        ("TEXTCOLOR", (0, 0), (-1, 0), COLOR_SOIL),
+        ("FONTNAME", (0, -1), (-1, -1), "Helvetica-Bold"),
+        ("FONTSIZE", (0, 1), (-1, -1), 9),
+        ("TEXTCOLOR", (0, 1), (-1, -1), COLOR_SOIL),
+        ("ALIGN", (1, 0), (-1, -1), "RIGHT"),
+        ("LINEBELOW", (0, 0), (-1, 0), 0.75, COLOR_SOIL),
+        ("LINEABOVE", (0, -1), (-1, -1), 0.75, COLOR_SOIL),
+        ("TOPPADDING", (0, 0), (-1, -1), 6),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+        ("LEFTPADDING", (0, 0), (-1, -1), 4),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+    ]))
+    elements.append(revenue_table)
+
+    # ── 4. EXPENSE BREAKDOWN ────────────────────────────────────
+    elements.append(Paragraph("EXPENSES", section_header_style))
+    expense_rows = [
+        ["CATEGORY", "DETAIL", "AMOUNT (FJD)", "% OF TOTAL"],
+        ["Feed", f"{feed_qty_kg:,.1f} kg", fmt_fjd(feed_cost),
+         fmt_pct(feed_cost, total_expenses)],
+        ["Birds purchased", f"{birds_purchased_qty:,} birds", fmt_fjd(birds_purchased_cost),
+         fmt_pct(birds_purchased_cost, total_expenses)],
+        ["Vaccines and medicines", "not yet itemised *", "—", "—"],
+        ["TOTAL EXPENSES", "", fmt_fjd(total_expenses),
+         "100%" if total_expenses > 0 else "—"],
+    ]
+    expense_table = Table(expense_rows, colWidths=[7 * cm, 4 * cm, 3.5 * cm, 2.5 * cm])
+    expense_table.setStyle(TableStyle([
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTSIZE", (0, 0), (-1, 0), 8),
+        ("TEXTCOLOR", (0, 0), (-1, 0), COLOR_SOIL),
+        ("FONTNAME", (0, -1), (-1, -1), "Helvetica-Bold"),
+        ("FONTSIZE", (0, 1), (-1, -1), 9),
+        ("TEXTCOLOR", (0, 1), (-1, -1), COLOR_SOIL),
+        ("TEXTCOLOR", (1, 3), (1, 3), COLOR_MUTED),
+        ("FONTNAME", (1, 3), (1, 3), "Helvetica-Oblique"),
+        ("ALIGN", (1, 0), (-1, -1), "RIGHT"),
+        ("LINEBELOW", (0, 0), (-1, 0), 0.75, COLOR_SOIL),
+        ("LINEABOVE", (0, -1), (-1, -1), 0.75, COLOR_SOIL),
+        ("TOPPADDING", (0, 0), (-1, -1), 6),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+        ("LEFTPADDING", (0, 0), (-1, -1), 4),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+    ]))
+    elements.append(expense_table)
+    elements.append(Paragraph(
+        "* Vaccine and medicine costs are not yet itemised in TFOS. To include them, "
+        "log cost amounts in vaccination events. Future TFOS releases will track "
+        "this automatically.",
+        footnote_style,
+    ))
+
+    # ── 5. ASSET POSITION ───────────────────────────────────────
+    elements.append(Paragraph("ASSET POSITION", section_header_style))
+    elements.append(Paragraph("(as at end of period)", meta_style))
+    asset_rows = [
+        ["ASSET", "QUANTITY"],
+        ["Active flocks", f"{active_flocks:,} flocks"],
+        ["Live birds (total)", f"{total_birds:,} birds"],
+        ["Feed inventory on hand", "not yet tracked *"],
+    ]
+    asset_table = Table(asset_rows, colWidths=[10 * cm, 7 * cm])
+    asset_table.setStyle(TableStyle([
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTSIZE", (0, 0), (-1, 0), 8),
+        ("TEXTCOLOR", (0, 0), (-1, 0), COLOR_SOIL),
+        ("FONTSIZE", (0, 1), (-1, -1), 9),
+        ("TEXTCOLOR", (0, 1), (-1, -1), COLOR_SOIL),
+        ("TEXTCOLOR", (1, 3), (1, 3), COLOR_MUTED),
+        ("FONTNAME", (1, 3), (1, 3), "Helvetica-Oblique"),
+        ("ALIGN", (1, 0), (1, -1), "RIGHT"),
+        ("LINEBELOW", (0, 0), (-1, 0), 0.75, COLOR_SOIL),
+        ("TOPPADDING", (0, 0), (-1, -1), 6),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+        ("LEFTPADDING", (0, 0), (-1, -1), 4),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+    ]))
+    elements.append(asset_table)
+    elements.append(Paragraph(
+        "* Market valuation of live assets is supplied by the reviewing lender or "
+        "buyer using local market prices. Feed inventory tracking will be available "
+        "in a future TFOS release.",
+        footnote_style,
+    ))
+
+    # ── 6. STATEMENT OF ACTIVITY ────────────────────────────────
+    elements.append(Paragraph("STATEMENT OF ACTIVITY", section_header_style))
+    elements.append(Paragraph(
+        "The cashflow above is derived from the following audited events. "
+        "Each event is hash-chained and tamper-evident. Verify at the URL below.",
+        body_style,
+    ))
+
+    if not events_data:
+        elements.append(Paragraph("No events recorded in this period.", body_style))
+    else:
+        activity_rows = [["DATE", "EVENT", "FLOCK", "DETAIL"]]
+        for ev in events_data:
+            p = ev["payload_jsonb"] or {}
+            et = ev["event_type"]
+            if et == "EGGS_COLLECTED":
+                detail = f"{p.get('qty_eggs', 0):,} eggs"
+            elif et == "EGGS_SOLD":
+                detail = f"{p.get('qty_eggs', 0):,} eggs · {fmt_fjd(float(p.get('total_revenue_fjd', 0)))}"
+            elif et == "MORTALITY_LOGGED":
+                detail = f"{p.get('qty_dead', 0)} dead ({p.get('cause', '?')})"
+            elif et == "VACCINATION_GIVEN":
+                detail = f"{p.get('qty_doses', '?')} doses · {p.get('route', '')}"
+            elif et == "FEED_RECEIVED":
+                cost_part = f" · {fmt_fjd(float(p.get('cost_fjd', 0)))}" if p.get("cost_fjd") else ""
+                detail = f"{p.get('qty_kg', 0)}kg{cost_part}"
+            elif et == "WEIGHT_CHECK":
+                detail = f"avg {(int(p.get('avg_weight_g', 0)) / 1000):.2f}kg (n={p.get('sample_size', 0)})"
+            elif et == "FLOCK_PLACED":
+                detail = f"{p.get('placed_count', 0)} placed"
+            elif et == "BIRDS_SOLD":
+                detail = f"{p.get('qty_sold', 0)} {p.get('sale_type', '')} · {fmt_fjd(float(p.get('total_revenue_fjd', 0)))}"
+            elif et == "BIRD_REPLACEMENT":
+                detail = f"+{p.get('qty_added', 0)} ({p.get('reason', '')})"
+            else:
+                detail = ""
+
+            activity_rows.append([
+                ev["occurred_at"].strftime("%d %b") if ev["occurred_at"] else "",
+                et.replace("_", " ").title(),
+                str(ev["flock_id"]) if ev["flock_id"] else "—",
+                detail[:50],
+            ])
+        activity_table = Table(activity_rows, colWidths=[2 * cm, 4 * cm, 3.5 * cm, 7.5 * cm])
+        activity_table.setStyle(TableStyle([
+            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+            ("FONTSIZE", (0, 0), (-1, 0), 7),
+            ("TEXTCOLOR", (0, 0), (-1, 0), COLOR_SOIL),
+            ("FONTSIZE", (0, 1), (-1, -1), 7),
+            ("TEXTCOLOR", (0, 1), (-1, -1), COLOR_SOIL),
+            ("LINEBELOW", (0, 0), (-1, 0), 0.5, COLOR_SOIL),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("TOPPADDING", (0, 0), (-1, -1), 3),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+            ("LEFTPADDING", (0, 0), (-1, -1), 4),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+            ("FONTNAME", (3, 1), (3, -1), "Helvetica"),
+        ]))
+        elements.append(activity_table)
+
+    # ── 7. FOOTER ───────────────────────────────────────────────
+    elements.append(Spacer(1, 0.5 * cm))
+    elements.append(Paragraph(
+        f"<b>Prepared by:</b> Teivaka Farm OS<br/>"
+        f"<b>Period covered:</b> {long_period_label(period_start, period_end)}<br/>"
+        f"<b>Audit anchor:</b> <font face='Courier'>{anchor_hash[-16:]}</font><br/>"
+        f"<b>Verify online:</b> https://teivaka.com/verify/{anchor_hash}",
+        footer_style,
+    ))
+    elements.append(Spacer(1, 0.3 * cm))
+    elements.append(Paragraph(
+        "This statement is generated from immutable, hash-chained audit events. "
+        "Each event row includes farm, block, crop, and operator metadata, and a "
+        "SHA256 chain link to its predecessor. The chain has been verified end-to-end "
+        "at the time of this statement's generation. Lenders, buyers, and auditors "
+        "may verify chain integrity in real time using the URL above.",
+        footer_style,
+    ))
+
+    doc.build(elements)
+    buffer.seek(0)
+    pdf_bytes = buffer.read()
     pdf_sha256 = hashlib.sha256(pdf_bytes).hexdigest()
 
-    # 13. INSERT report_exports row
-    # NOTE: report_type column does not exist on audit.report_exports (deployed
-    # schema has 18 columns, report_type not among them). Report taxonomy lives
-    # in audit.events.payload_jsonb.report_type instead. Strike #34.
+    # 11. INSERT report_exports row (Strike #34 — no report_type column)
     insert_row = (await db.execute(text("""
         INSERT INTO audit.report_exports (
             tenant_id, farm_id,
@@ -549,10 +613,10 @@ async def poultry_bank_evidence(
     })).first()
     export_id: UUID = insert_row[0]
 
-    # 14. Atomic commit (audit event + report_exports row land together)
+    # 12. Atomic commit (audit event + report_exports row land together)
     await db.commit()
 
-    # 15. Return PDF stream
+    # 13. Return PDF stream
     filename = f"bank-evidence-{farm_id}-{period}.pdf"
     return Response(
         content=pdf_bytes,
