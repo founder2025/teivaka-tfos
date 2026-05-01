@@ -56,6 +56,7 @@ const EggsNew         = lazy(() => import("./pages/farmer/poultry/EggsNew"));
 const FlockPlacedNew      = lazy(() => import("./pages/farmer/poultry/FlockPlacedNew"));
 const MortalityLoggedNew    = lazy(() => import("./pages/farmer/poultry/MortalityLoggedNew"));
 const VaccinationGivenNew   = lazy(() => import("./pages/farmer/poultry/VaccinationGivenNew"));
+const FeedReceivedNew       = lazy(() => import("./pages/farmer/poultry/FeedReceivedNew"));
 const HarvestList   = lazy(() => import("./pages/farmer/HarvestList"));
 const CycleList     = lazy(() => import("./pages/farmer/CycleList"));
 const InventoryList = lazy(() => import("./pages/farmer/InventoryList"));
@@ -163,6 +164,7 @@ export default function App() {
             <Route path="/farm/poultry/flocks/new" element={<FlockPlacedNew  />} />
             <Route path="/farm/poultry/mortality/new" element={<MortalityLoggedNew  />} />
             <Route path="/farm/poultry/vaccination/new" element={<VaccinationGivenNew  />} />
+            <Route path="/farm/poultry/feed/new" element={<FeedReceivedNew  />} />
             <Route path="/classroom"         element={<Classroom     />} />
             <Route path="/me"                element={<Me            />} />
             <Route path="/tis"               element={<TIS           />} />

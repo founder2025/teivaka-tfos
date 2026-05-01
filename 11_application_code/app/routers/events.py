@@ -195,6 +195,55 @@ async def submit_event(
                 ),
             )
 
+    # 2g. FEED_RECEIVED-specific: feed_type_id valid, supplier_id valid (if provided)
+    if submission.event_type == "FEED_RECEIVED":
+        if not isinstance(submission.payload, dict):
+            raise HTTPException(400, error_envelope("invalid_payload", "Payload must be a dict."))
+
+        feed_type_id_value = submission.payload.get("feed_type_id")
+        supplier_id_value = submission.payload.get("supplier_id")
+
+        # feed_type_id REQUIRED + must be valid UUID + active POULTRY_FEED in libraries
+        try:
+            feed_uuid = UUID(str(feed_type_id_value)) if feed_type_id_value else None
+        except (ValueError, TypeError):
+            raise HTTPException(400, error_envelope("invalid_feed_type_id", "feed_type_id must be a valid UUID."))
+        if feed_uuid is None:
+            raise HTTPException(400, error_envelope("missing_feed_type_id", "feed_type_id is required."))
+
+        feed_check = await db.execute(
+            text("""
+                SELECT library_id FROM shared.farm_libraries
+                WHERE library_id = :fid AND library_type = 'POULTRY_FEED' AND is_active = TRUE
+            """),
+            {"fid": feed_uuid},
+        )
+        if feed_check.first() is None:
+            raise HTTPException(
+                404,
+                error_envelope("feed_type_not_found", f"Feed type {feed_type_id_value} not found or not active."),
+            )
+
+        # supplier_id OPTIONAL but if provided must be valid UUID + active POULTRY_SUPPLIER
+        if supplier_id_value is not None:
+            try:
+                supplier_uuid = UUID(str(supplier_id_value))
+            except (ValueError, TypeError):
+                raise HTTPException(400, error_envelope("invalid_supplier_id", "supplier_id must be a valid UUID."))
+
+            supplier_check = await db.execute(
+                text("""
+                    SELECT library_id FROM shared.farm_libraries
+                    WHERE library_id = :sid AND library_type = 'POULTRY_SUPPLIER' AND is_active = TRUE
+                """),
+                {"sid": supplier_uuid},
+            )
+            if supplier_check.first() is None:
+                raise HTTPException(
+                    404,
+                    error_envelope("supplier_not_found", f"Supplier {supplier_id_value} not found or not active."),
+                )
+
     # 2f. VACCINATION_GIVEN-specific: flock_id REQUIRED, vaccine_id valid, route in vocab
     if submission.event_type == "VACCINATION_GIVEN":
         if submission.anchors.flock_id is None:

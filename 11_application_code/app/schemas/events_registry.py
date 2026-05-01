@@ -14,6 +14,7 @@ Cross-group reuse: livestock, aquaculture, crops events all register here as the
 payload_schema_version: increment when payload shape changes for an existing event_type.
 """
 
+from decimal import Decimal
 from typing import Optional
 from pydantic import BaseModel, Field
 
@@ -72,6 +73,30 @@ class MortalityLoggedPayload(BaseModel):
     )
 
 
+class FeedReceivedPayload(BaseModel):
+    """Payload schema for FEED_RECEIVED event.
+
+    flock_id and pu_id OPTIONAL (feed often arrives at farm level).
+    feed_type_id REQUIRED (UUID FK to shared.farm_libraries POULTRY_FEED).
+    supplier_id OPTIONAL (UUID FK to shared.farm_libraries POULTRY_SUPPLIER).
+    NO side effect on flocks.
+    NO automatic cash_ledger entry (deferred to Phase 6.5+ integration).
+    """
+    feed_type_id: str = Field(..., description="UUID of feed type in shared.farm_libraries.")
+    qty_kg: Decimal = Field(..., gt=0, max_digits=10, decimal_places=3, description="Quantity in kilograms.")
+    supplier_id: Optional[str] = Field(default=None, description="Optional UUID of supplier in shared.farm_libraries.")
+    cost_fjd: Optional[Decimal] = Field(
+        default=None, ge=0, max_digits=10, decimal_places=2,
+        description="Cost in FJD. Optional; may be unknown at delivery.",
+    )
+    delivery_date: str = Field(..., description="Delivery date (YYYY-MM-DD).")
+    batch_number: Optional[str] = Field(default=None, max_length=100)
+    notes: Optional[str] = Field(default=None, max_length=500)
+
+    class Config:
+        json_encoders = {Decimal: str}  # Decimals serialize to strings in JSONB
+
+
 class VaccinationGivenPayload(BaseModel):
     """Payload schema for VACCINATION_GIVEN event.
 
@@ -102,6 +127,7 @@ EVENT_TYPE_REGISTRY: dict = {
     "EGGS_COLLECTED":     (EggsCollectedPayload,     "tenant.poultry_event_log", 1),
     "MORTALITY_LOGGED":   (MortalityLoggedPayload,   "tenant.poultry_event_log", 1),
     "VACCINATION_GIVEN":  (VaccinationGivenPayload,  "tenant.poultry_event_log", 1),
+    "FEED_RECEIVED":      (FeedReceivedPayload,      "tenant.poultry_event_log", 1),
 }
 
 # Vocabularies (used for app-layer validation in events.py)
