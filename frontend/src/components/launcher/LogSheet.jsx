@@ -361,16 +361,24 @@ export default function LogSheet({ isOpen, onClose, mode }) {
     return acc;
   }, {});
 
-  // Phase 5.10d: include groups that are active even with 0 events.
-  // 'No farmer left behind' — empty active groups still render as tiles;
-  // tap → Level 2 shows the existing 'No events here yet' empty state until
-  // events ship in Sprint 6+ for the new domains (PERENNIALS, AQUACULTURE,
-  // FORESTRY, SPECIALTY, POULTRY-specific, plus rebranded LIVESTOCK).
-  const visibleGroups = GROUP_ORDER.filter(
-    (g) =>
-      groupCounts[g] > 0 ||
-      (Array.isArray(activeGroups) && activeGroups.includes(g)),
-  );
+  // Phase 5.10e: active_groups is the source of truth when present.
+  // - If activeGroups is an array (farm has per-farm config from API meta or
+  //   optimistic local override), tile visible iff group is in activeGroups.
+  //   This honors BOTH doctrines: empty active groups still render (5.10d
+  //   "no farmer left behind"), AND non-empty inactive groups now hide
+  //   (5.10e "user controls their own (+)"). 5.10d shipped OR which made
+  //   every populated group permanently visible regardless of toggle —
+  //   defeating the user-controlled groups feature for livestock-only
+  //   farmers wanting to hide Crops, etc.
+  // - If activeGroups is null (no farm_id, fetch failed, older response
+  //   shape), fall back to event-count check.
+  // - VOICE special-cased: it's a Phase 4.1-redux-v4 placeholder, not a
+  //   real catalog group, so always visible.
+  const visibleGroups = GROUP_ORDER.filter((g) => {
+    if (g === "VOICE") return true;
+    if (Array.isArray(activeGroups)) return activeGroups.includes(g);
+    return groupCounts[g] > 0;
+  });
 
   const groupEvents = selectedGroup
     ? events

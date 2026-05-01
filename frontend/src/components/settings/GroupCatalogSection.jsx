@@ -81,10 +81,18 @@ export default function GroupCatalogSection({ farmId, inlineMode = false, onStat
     if (pendingKey) return; // throttle one in-flight at a time
     const prev = !!activeMap[key];
     const next = !prev;
+    // Phase 5.10e: snapshot prev/next maps as locals, drive both
+    // setActiveMap and onStateChange from the same value. Original code used
+    // closure activeMap for the callback which was technically stale (React
+    // state updates async). Math worked today because [key]:value override
+    // forces correctness, but pattern is a footgun if pendingKey throttle
+    // ever loosens. Cheap insurance.
+    const prevMap = activeMap;
+    const nextMap = { ...prevMap, [key]: next };
 
     // Optimistic
-    setActiveMap(m => ({ ...m, [key]: next }));
-    if (onStateChange) onStateChange({ ...activeMap, [key]: next });
+    setActiveMap(nextMap);
+    if (onStateChange) onStateChange(nextMap);
     setPendingKey(key);
     setError(null);
 
@@ -105,9 +113,9 @@ export default function GroupCatalogSection({ farmId, inlineMode = false, onStat
         throw new Error(errBody?.error?.message || `HTTP ${res.status}`);
       }
     } catch (e) {
-      // Revert on error
-      setActiveMap(m => ({ ...m, [key]: prev }));
-      if (onStateChange) onStateChange({ ...activeMap, [key]: prev });
+      // Revert on error — same prevMap snapshot
+      setActiveMap(prevMap);
+      if (onStateChange) onStateChange(prevMap);
       setError(e.message || "Could not save change. Try again.");
     } finally {
       setPendingKey(null);
