@@ -26,6 +26,7 @@ from app.routers import (
     events,
     flocks,
     poultry_dashboard,
+    poultry_bank_evidence,
     chemicals,
     cycles,
     rotation,
@@ -247,6 +248,7 @@ app.include_router(farm_libraries.router,     prefix=PREFIX,                    
 app.include_router(events.router,              prefix=PREFIX,                         tags=["Events"])
 app.include_router(flocks.router,              prefix=PREFIX,                         tags=["Flocks"])
 app.include_router(poultry_dashboard.router,   prefix=PREFIX,                         tags=["POULTRY Dashboard"])
+app.include_router(poultry_bank_evidence.router, prefix=PREFIX,                       tags=["POULTRY Bank Evidence"])
 app.include_router(chemicals.router,           prefix="/api/v1",                      tags=["chemicals"])
 app.include_router(cycles.router,             prefix=f"{PREFIX}/cycles",             tags=["Production Cycles"])
 app.include_router(rotation.router,           prefix=f"{PREFIX}/rotation",           tags=["Rotation Engine"])

@@ -102,6 +102,16 @@ function PoultryDashboardInner() {
 
         {data && (
           <>
+            {/* Bank evidence shortcut */}
+            <button
+              onClick={() => navigate('/farm/poultry/bank-evidence')}
+              className="w-full px-3 py-3 rounded-md border text-sm flex items-center justify-between"
+              style={{ background: '#fff', borderColor: C.border, color: C.soil }}
+            >
+              <span>📄 Generate bank evidence PDF</span>
+              <span style={{ color: C.muted }}>→</span>
+            </button>
+
             {/* KPI tiles */}
             <section>
               <div className="text-xs font-medium uppercase tracking-wide mb-2" style={{ color: C.muted }}>This week</div>
