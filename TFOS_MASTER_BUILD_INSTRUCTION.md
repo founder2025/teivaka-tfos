@@ -6,6 +6,18 @@
 
 ---
 
+## Companion Doctrines
+
+The following canonical doctrines extend this MBI and are binding alongside it. Read these before any sprint planning or build work:
+
+- `TFOS_Vertical_Completeness_Doctrine.md` — The eight-gate completeness bar every group build must clear before shipping (locked 2026-05-01)
+- `TFOS_Catalog_Redesign_Doctrine_2026-04-30.md` — 11-group catalog taxonomy for the (+) modal
+- `TFOS_Catalog_Redesign_Doctrine_Amendment_v2_2026-04-30.md` — Amendment v2: production domains expansion + The Onboarding Doctrine
+
+This MBI document on /opt/teivaka is v1.0 (April 2026). Doctrine evolution v1.0 → v4.2 has happened in Operator-curated project knowledge (Cowork). Full sync of this MBI to canonical evolution is filed as backlog item B22.
+
+---
+
 > **THIS DOCUMENT IS THE LAW.**
 > Every line of code written, every schema migrated, every API endpoint built, every prompt engineered — must conform to this document. If it conflicts with what you think is standard practice, this document wins. If it conflicts with a framework default, this document wins. When in doubt: re-read this document before writing a single line.
 

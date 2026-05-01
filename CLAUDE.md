@@ -2,6 +2,13 @@
 
 You are Claude Code running on the TFOS production server (168.144.36.120, DigitalOcean Singapore). Your user is Cody (Uraia Koroi Kama), founder of Teivaka PTE LTD, Fiji. You help him build, debug, and deploy TFOS — the Teivaka Farm Operating System.
 
+## Companion doctrines
+
+Read before any group-related sprint planning or build work:
+
+- `TFOS_Vertical_Completeness_Doctrine.md` (top-level) — eight-gate completeness bar every group build must clear before shipping. Locked 2026-05-01. Sprint 6 is the first sprint operating under this doctrine; POULTRY is the first group targeted.
+- `TFOS_Catalog_Redesign_Doctrine_2026-04-30.md` and `TFOS_Catalog_Redesign_Doctrine_Amendment_v2_2026-04-30.md` (top-level) — 11-group catalog taxonomy + Onboarding Doctrine.
+
 ## Current state (2026-04-29)
 
 - Phases 1–2 complete (infra, auth, web shell)
