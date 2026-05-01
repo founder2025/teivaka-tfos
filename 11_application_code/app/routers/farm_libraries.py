@@ -22,7 +22,7 @@ import json
 from typing import Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -283,4 +283,156 @@ async def add_library_row(
             "audit_hash": audit_hash[-8:],
         },
         meta={"created": True},
+    )
+
+
+class LibraryPatchRequest(BaseModel):
+    """PATCH v1 supports is_active toggle ONLY.
+
+    Attribute editing deferred to Phase 6.1b-4 (requires LIBRARY_ROW_UPDATED
+    event type registered in shared.event_type_catalog).
+    """
+    is_active: bool = Field(..., description="Target state. true=reactivate, false=deactivate.")
+
+
+@router.patch("/farm-libraries/{library_id}")
+async def patch_library_row(
+    library_id: UUID = Path(..., description="library_id of farm-private row to update"),
+    payload: LibraryPatchRequest = ...,
+    user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_tenant_db),
+):
+    """Toggle is_active on a farm-private library row.
+
+    Globals (tenant_id IS NULL) cannot be patched — RLS UPDATE policy excludes them
+    silently; handler returns 404 when zero rows updated.
+    Other farm's rows are similarly excluded by RLS → 404.
+    Idempotent: state-already-target returns 200 with no_change=true and no audit emission.
+    """
+
+    tenant_uuid = _resolve_tenant_uuid(user)
+    actor_uuid = _resolve_actor_uuid(user)
+
+    # Read current state first (RLS will return None if row is global or other-tenant)
+    current_result = await db.execute(
+        text("""
+            SELECT library_id, library_type, name, is_active
+            FROM shared.farm_libraries
+            WHERE library_id = :lid
+        """),
+        {"lid": library_id},
+    )
+    current_row = current_result.first()
+
+    if current_row is None:
+        # Either doesn't exist, or is global, or belongs to other tenant — RLS hides it.
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=error_envelope(
+                code="library_not_found",
+                message=f"Library row {library_id} not found, is global (immutable), or belongs to another farm.",
+            ),
+        )
+
+    current_is_active = current_row.is_active
+    target_is_active = payload.is_active
+
+    # Idempotent no-op
+    if current_is_active == target_is_active:
+        return success_envelope(
+            {
+                "library_id": str(library_id),
+                "library_type": current_row.library_type,
+                "name": current_row.name,
+                "is_active": current_is_active,
+                "no_change": True,
+            },
+            meta={"already_in_target_state": True},
+        )
+
+    # Determine event type
+    event_type = "LIBRARY_ROW_DEACTIVATED" if not target_is_active else "LIBRARY_ROW_REACTIVATED"
+
+    # UPDATE (RLS USING+WITH CHECK enforces tenant scope)
+    update_result = await db.execute(
+        text("""
+            UPDATE shared.farm_libraries
+            SET is_active = :ia, updated_at = now()
+            WHERE library_id = :lid
+            RETURNING library_id, library_type, name, is_active
+        """),
+        {"ia": target_is_active, "lid": library_id},
+    )
+    updated_row = update_result.first()
+
+    if updated_row is None:
+        # RLS rejected the update — should have been caught by SELECT above, but defense in depth
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=error_envelope(
+                code="library_not_found",
+                message=f"Library row {library_id} could not be updated (RLS).",
+            ),
+        )
+
+    # Emit audit event
+    audit_event_id, audit_hash = await emit_audit_event(
+        db=db,
+        tenant_id=tenant_uuid,
+        actor_user_id=actor_uuid,
+        event_type=event_type,
+        entity_type="farm_library",
+        entity_id=str(library_id),
+        payload={
+            "library_type": updated_row.library_type,
+            "name": updated_row.name,
+            "previous_is_active": current_is_active,
+            "new_is_active": target_is_active,
+        },
+    )
+
+    if audit_event_id is None or not audit_hash:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=error_envelope(
+                code="audit_emission_failed",
+                message=f"{event_type} emission failed.",
+            ),
+        )
+
+    await db.commit()
+
+    return success_envelope(
+        {
+            "library_id": str(library_id),
+            "library_type": updated_row.library_type,
+            "name": updated_row.name,
+            "is_active": target_is_active,
+            "audit_event_id": str(audit_event_id),
+            "audit_hash": audit_hash[-8:],
+            "event_type": event_type,
+        },
+        meta={"updated": True, "no_change": False},
+    )
+
+
+@router.delete("/farm-libraries/{library_id}")
+async def delete_library_row(
+    library_id: UUID = Path(..., description="library_id"),
+    user: dict = Depends(get_current_user),
+):
+    """DELETE is permanently blocked. Library deactivation is soft-delete only.
+
+    Per Vertical Completeness Doctrine Gate 4 v1.1 mutation rules:
+    'DELETE blocked at RLS layer; UPDATE is_active=false is the only deactivation path'
+
+    Defense in depth: API layer also blocks, even though RLS would block at DB layer.
+    """
+    raise HTTPException(
+        status_code=status.HTTP_405_METHOD_NOT_ALLOWED,
+        detail=error_envelope(
+            code="method_not_allowed",
+            message="DELETE is not supported on farm libraries. To deactivate a row, use PATCH with {\"is_active\": false}. To reactivate, PATCH with {\"is_active\": true}. This preserves audit chain integrity per Vertical Completeness Doctrine Gate 4.",
+        ),
+        headers={"Allow": "GET, POST, PATCH"},
     )
