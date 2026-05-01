@@ -106,18 +106,39 @@ Every event type in the group has a form that:
 
 Output: form components shipped for every event type, no "Coming soon" placeholders.
 
-### Gate 4 — Controlled Vocabulary Library Completeness
+### Gate 4 — Controlled Vocabulary Library Completeness AND Extensibility (v1.1, 2026-05-01)
 
-Domain-specific controlled vocabularies (vaccine library, breed library, feed library, variety library, fertilizer library, certification library, etc.) are populated with the inputs a Pacific farmer in that domain actually buys and uses.
+Domain-specific controlled vocabularies (vaccine library, breed library, feed library, variety library, fertilizer library, certification library, supplier library, buyer library, etc.) ship with two binding properties:
+
+**Property 1 — Operator-curated initial completeness.** Each library is populated with the inputs Pacific farmers in that domain actually buy and use, validated by the Operator (or domain validation reference). Initial Operator-seeded rows are visible to every farmer in that domain as global defaults. Controlled-vocabulary dropdowns are never empty when a farmer enters a form.
+
+**Property 2 — Farmer-extensible at runtime.** Every library accepts farmer additions via two UI surfaces:
+1. **In-form `+ Add new`** at the moment of need (zero context switch)
+2. **Dedicated settings page** for bulk management (review additions, edit typos, soft-deactivate unused entries)
+
+**Visibility rules (binding):**
+- Operator-seeded global rows (`tenant_id IS NULL`) visible to all farmers
+- Farmer additions (`tenant_id = farm's tenant`) visible only within that farm
+- No farmer sees another farmer's private additions
+- Operator (FOUNDER role) sees all rows for curation purposes
+
+**Mutation rules (binding):**
+- Soft-delete only — `is_active = false`, never hard-delete (audit chain integrity)
+- DELETE blocked at RLS layer; UPDATE is_active=false is the only deactivation path
+- Every library mutation emits an audit event (`LIBRARY_ROW_ADDED`, `LIBRARY_ROW_DEACTIVATED`, `LIBRARY_ROW_REACTIVATED`)
+- Library mutations carry the four-anchor minimum (Farm + Operator); Block + Crop optional per mutation type
+
+**Schema pattern (binding):**
+Single polymorphic `shared.farm_libraries` table with `library_type` enum scaling across all 11 groups. No per-group separate library tables. FK to `tenant.tenants(tenant_id)`. Cross-group reuse begins here.
 
 Examples per group:
-- **Poultry:** vaccines (Newcastle, IBD, Marek's, Pox), feed grades (starter/grower/layer/finisher), breeds (ISA Brown, Hyline, Cobb 500, Ross 308), suppliers (Punja, Goodman Fielder, local hatcheries)
-- **Crops:** varieties (Marshall talanoa cassava, Hawaiian Sunshine taro, etc.), fertilizers (NPK 12-12-17, urea), chemicals (already in `shared.chemical_library`)
-- **Livestock:** breeds (Boer goat, Brahman cross, etc.), vaccines, dewormers, mineral supplements
+- **Poultry:** vaccines (Newcastle, IBD, Marek's, Pox), feed grades (starter/grower/layer/finisher), breeds (ISA Brown, Hyline, Cobb 500, Ross 308), suppliers (Crest Chicken, Punja, Goodman Fielder, Bayer), buyers (supermarket, restaurant, market, family)
+- **Crops:** varieties (Marshall talanoa cassava, Hawaiian Sunshine taro), fertilizers (NPK 12-12-17, urea), chemicals (already in `shared.chemical_library`)
+- **Livestock:** breeds (Boer goat, Brahman cross), vaccines, dewormers, mineral supplements
 - **Aquaculture:** species (tilapia, prawn, milkfish), feed grades, water treatments
 - **Apiculture:** queen sources, mite treatments, foundation suppliers
 
-Output: per-group library tables populated; controlled-vocabulary dropdowns are not empty.
+Output: library tables populated with Operator-seeded globals; farmer-extensible CRUD UI live; audit chain wired; soft-delete plumbing complete; never an empty dropdown.
 
 ### Gate 5 — Reports + Read-Only Dashboards
 
