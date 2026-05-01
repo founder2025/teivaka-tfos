@@ -72,15 +72,41 @@ class MortalityLoggedPayload(BaseModel):
     )
 
 
+class VaccinationGivenPayload(BaseModel):
+    """Payload schema for VACCINATION_GIVEN event.
+
+    flock_id REQUIRED at anchor layer.
+    vaccine_id REQUIRED — UUID FK to shared.farm_libraries (POULTRY_VACCINE).
+    NO side effect on flock count (pure record-keeping).
+    """
+    vaccine_id: str = Field(..., description="UUID of vaccine row in shared.farm_libraries.")
+    qty_doses: Optional[int] = Field(
+        default=None, ge=1, le=1000000,
+        description="Number of doses administered. Defaults to flock.current_count at app layer if omitted.",
+    )
+    route: str = Field(
+        ...,
+        description="Administration route (controlled vocab: DRINKING_WATER, INJECTION, EYE_DROP, SPRAY, OTHER).",
+    )
+    next_due_date: Optional[str] = Field(
+        default=None,
+        description="Optional next-vaccination date in YYYY-MM-DD format.",
+    )
+    notes: Optional[str] = Field(
+        default=None, max_length=500,
+        description="Single free-text field per Doctrine 4a.1 Tension 1.1.",
+    )
+
+
 EVENT_TYPE_REGISTRY: dict = {
-    "EGGS_COLLECTED":   (EggsCollectedPayload,   "tenant.poultry_event_log", 1),
-    "MORTALITY_LOGGED": (MortalityLoggedPayload, "tenant.poultry_event_log", 1),
-    # Future events register here:
-    # "VACCINATION_GIVEN": (VaccinationGivenPayload, "tenant.poultry_event_log", 1),
+    "EGGS_COLLECTED":     (EggsCollectedPayload,     "tenant.poultry_event_log", 1),
+    "MORTALITY_LOGGED":   (MortalityLoggedPayload,   "tenant.poultry_event_log", 1),
+    "VACCINATION_GIVEN":  (VaccinationGivenPayload,  "tenant.poultry_event_log", 1),
 }
 
-# Cause vocabulary (used for app-layer validation in events.py)
+# Vocabularies (used for app-layer validation in events.py)
 MORTALITY_CAUSES = {"DISEASE", "PREDATION", "INJURY", "UNKNOWN", "OLD_AGE", "OTHER"}
+VACCINATION_ROUTES = {"DRINKING_WATER", "INJECTION", "EYE_DROP", "SPRAY", "OTHER"}
 
 
 def get_schema_for_event_type(event_type: str):

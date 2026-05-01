@@ -30,7 +30,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.audit_chain import emit_audit_event
 from app.middleware.rls import get_current_user, get_tenant_db
 from app.schemas.envelope import error_envelope, success_envelope
-from app.schemas.events_registry import get_schema_for_event_type, MORTALITY_CAUSES
+from app.schemas.events_registry import get_schema_for_event_type, MORTALITY_CAUSES, VACCINATION_ROUTES
 from sqlalchemy.exc import IntegrityError
 
 import json
@@ -193,6 +193,53 @@ async def submit_event(
                     "invalid_mortality_cause",
                     f"cause must be one of {sorted(MORTALITY_CAUSES)}.",
                 ),
+            )
+
+    # 2f. VACCINATION_GIVEN-specific: flock_id REQUIRED, vaccine_id valid, route in vocab
+    if submission.event_type == "VACCINATION_GIVEN":
+        if submission.anchors.flock_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=error_envelope(
+                    "vaccination_requires_flock",
+                    "VACCINATION_GIVEN requires a flock_id anchor.",
+                ),
+            )
+        if not isinstance(submission.payload, dict):
+            raise HTTPException(400, error_envelope("invalid_payload", "Payload must be a dict."))
+
+        vaccine_id_value = submission.payload.get("vaccine_id")
+        route_value = submission.payload.get("route")
+
+        if route_value not in VACCINATION_ROUTES:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=error_envelope(
+                    "invalid_vaccination_route",
+                    f"route must be one of {sorted(VACCINATION_ROUTES)}.",
+                ),
+            )
+
+        # vaccine_id must be UUID-parseable + exist in shared.farm_libraries POULTRY_VACCINE active
+        try:
+            vaccine_uuid = UUID(str(vaccine_id_value)) if vaccine_id_value else None
+        except (ValueError, TypeError):
+            raise HTTPException(400, error_envelope("invalid_vaccine_id", "vaccine_id must be a valid UUID."))
+
+        if vaccine_uuid is None:
+            raise HTTPException(400, error_envelope("missing_vaccine_id", "vaccine_id is required."))
+
+        vaccine_check = await db.execute(
+            text("""
+                SELECT library_id FROM shared.farm_libraries
+                WHERE library_id = :vid AND library_type = 'POULTRY_VACCINE' AND is_active = TRUE
+            """),
+            {"vid": vaccine_uuid},
+        )
+        if vaccine_check.first() is None:
+            raise HTTPException(
+                404,
+                error_envelope("vaccine_not_found", f"Vaccine {vaccine_id_value} not found or not active."),
             )
 
     # 3. Validate payload against registered schema
