@@ -117,6 +117,7 @@ const EVENT_ROUTES = {
   CYCLE_CREATED:     { action: "new-cycle", route: "/farm?action=new-cycle" },
   EGGS_COLLECTED:    "/farm/poultry/eggs/new",
   FLOCK_PLACED:      "/farm/poultry/flocks/new",
+  MORTALITY_LOGGED:  "/farm/poultry/mortality/new",
 };
 
 const EVENT_ICONS = {

@@ -55,12 +55,32 @@ class EggsCollectedPayload(BaseModel):
 # POULTRY events route to tenant.poultry_event_log.
 # Future groups register additional events with their own table names.
 
+class MortalityLoggedPayload(BaseModel):
+    """Payload schema for MORTALITY_LOGGED event.
+
+    Anchors include flock_id REQUIRED at app layer (validated in events.py).
+    Side effect: decrements tenant.flocks.current_count by qty_dead in same transaction.
+    """
+    qty_dead: int = Field(..., ge=1, le=1000000, description="Number of birds that died.")
+    cause: str = Field(
+        ...,
+        description="Mortality cause (controlled vocab: DISEASE, PREDATION, INJURY, UNKNOWN, OLD_AGE, OTHER).",
+    )
+    notes: Optional[str] = Field(
+        default=None, max_length=500,
+        description="Single free-text field per Doctrine 4a.1 Tension 1.1.",
+    )
+
+
 EVENT_TYPE_REGISTRY: dict = {
-    "EGGS_COLLECTED": (EggsCollectedPayload, "tenant.poultry_event_log", 1),
+    "EGGS_COLLECTED":   (EggsCollectedPayload,   "tenant.poultry_event_log", 1),
+    "MORTALITY_LOGGED": (MortalityLoggedPayload, "tenant.poultry_event_log", 1),
     # Future events register here:
-    # "MORTALITY_LOGGED": (MortalityLoggedPayload, "tenant.poultry_event_log", 1),
     # "VACCINATION_GIVEN": (VaccinationGivenPayload, "tenant.poultry_event_log", 1),
 }
+
+# Cause vocabulary (used for app-layer validation in events.py)
+MORTALITY_CAUSES = {"DISEASE", "PREDATION", "INJURY", "UNKNOWN", "OLD_AGE", "OTHER"}
 
 
 def get_schema_for_event_type(event_type: str):

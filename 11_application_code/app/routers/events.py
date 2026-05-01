@@ -30,7 +30,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.audit_chain import emit_audit_event
 from app.middleware.rls import get_current_user, get_tenant_db
 from app.schemas.envelope import error_envelope, success_envelope
-from app.schemas.events_registry import get_schema_for_event_type
+from app.schemas.events_registry import get_schema_for_event_type, MORTALITY_CAUSES
+from sqlalchemy.exc import IntegrityError
 
 import json
 
@@ -174,6 +175,26 @@ async def submit_event(
                 ),
             )
 
+    # 2e. MORTALITY_LOGGED-specific: flock_id REQUIRED, cause in vocab
+    if submission.event_type == "MORTALITY_LOGGED":
+        if submission.anchors.flock_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=error_envelope(
+                    "mortality_requires_flock",
+                    "MORTALITY_LOGGED requires a flock_id anchor.",
+                ),
+            )
+        cause_value = submission.payload.get("cause") if isinstance(submission.payload, dict) else None
+        if cause_value not in MORTALITY_CAUSES:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=error_envelope(
+                    "invalid_mortality_cause",
+                    f"cause must be one of {sorted(MORTALITY_CAUSES)}.",
+                ),
+            )
+
     # 3. Validate payload against registered schema
     try:
         validated_payload = payload_schema_class(**submission.payload)
@@ -248,6 +269,30 @@ async def submit_event(
     if new_row is None:
         raise HTTPException(500, error_envelope("insert_failed", "Event row insert failed after audit emission."))
     event_id = new_row.event_id
+
+    # 6. Side effect for MORTALITY_LOGGED: decrement tenant.flocks.current_count
+    #    Same transaction; CHECK constraint on flocks (current_count >= 0) catches underflow
+    if submission.event_type == "MORTALITY_LOGGED":
+        qty_dead = payload_dict.get("qty_dead", 0)
+        try:
+            await db.execute(
+                text("""
+                    UPDATE tenant.flocks
+                    SET current_count = current_count - :qty,
+                        updated_at = now()
+                    WHERE flock_id = :fid
+                """),
+                {"qty": qty_dead, "fid": submission.anchors.flock_id},
+            )
+        except IntegrityError as ie:
+            await db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=error_envelope(
+                    "would_underflow_count",
+                    f"Logging {qty_dead} dead birds would put flock {submission.anchors.flock_id} below zero.",
+                ),
+            )
 
     await db.commit()
 
