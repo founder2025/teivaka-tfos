@@ -39,19 +39,24 @@ router = APIRouter()
 
 
 class EventAnchors(BaseModel):
-    """Four-anchor envelope: Farm + Coop (pu_id) + Crop (cycle_id) + Operator (from session).
+    """Four-anchor envelope: Farm + Coop (pu_id) + Crop (cycle_id) + Flock (flock_id) + Operator (from session).
 
     Per Doctrine Inviolable #14, every event row carries the four anchors.
     Per Strike #21: anchors are TEXT (human-readable IDs), not UUIDs.
     Per Strike #22: Crop anchor uses cycle_id (instance) NOT production_id (category).
 
-    Phase 6.2-1: cycle_id may be None for whole-coop events; flock_id added Phase 6.2-3.
+    Phase 6.2-3: flock_id added for POULTRY events. Optional (whole-farm events still work).
+    Validated: flock must exist, be active, and belong to the same farm as farm_id.
     """
     farm_id: str = Field(..., min_length=1, description="Anchor 1: Farm. TEXT (e.g. F001-A0EE).")
-    pu_id: Optional[str] = Field(default=None, description="Anchor 2: Coop. TEXT (e.g. PU001). Required for most events.")
+    pu_id: Optional[str] = Field(default=None, description="Anchor 2: Coop. TEXT (e.g. PU001).")
     cycle_id: Optional[str] = Field(
         default=None,
         description="Anchor 3: Crop INSTANCE (cycle_id). TEXT. None when no specific crop applies.",
+    )
+    flock_id: Optional[str] = Field(
+        default=None,
+        description="Anchor 4 (POULTRY): Flock. TEXT (e.g. F001-A0EE-FLK001). None for whole-farm events.",
     )
 
 
@@ -139,6 +144,36 @@ async def submit_event(
         if cycle_check.first() is None:
             raise HTTPException(404, error_envelope("cycle_not_found", f"Production cycle {submission.anchors.cycle_id} not found."))
 
+    # 2d. Flock must exist, be active, and belong to the anchor's farm (Phase 6.2-3)
+    if submission.anchors.flock_id is not None:
+        flock_check = await db.execute(
+            text("""
+                SELECT flock_id, farm_id, is_active
+                FROM tenant.flocks
+                WHERE flock_id = :fid
+            """),
+            {"fid": submission.anchors.flock_id},
+        )
+        flock_row = flock_check.first()
+        if flock_row is None:
+            raise HTTPException(
+                404,
+                error_envelope("flock_not_found", f"Flock {submission.anchors.flock_id} not found."),
+            )
+        if not flock_row.is_active:
+            raise HTTPException(
+                400,
+                error_envelope("flock_inactive", f"Flock {submission.anchors.flock_id} is not active; cannot log events to it."),
+            )
+        if flock_row.farm_id != submission.anchors.farm_id:
+            raise HTTPException(
+                400,
+                error_envelope(
+                    "flock_farm_mismatch",
+                    f"Flock {submission.anchors.flock_id} belongs to farm {flock_row.farm_id}, not {submission.anchors.farm_id}.",
+                ),
+            )
+
     # 3. Validate payload against registered schema
     try:
         validated_payload = payload_schema_class(**submission.payload)
@@ -162,6 +197,7 @@ async def submit_event(
             "farm_id": submission.anchors.farm_id,
             "pu_id": submission.anchors.pu_id,
             "cycle_id": submission.anchors.cycle_id,
+            "flock_id": submission.anchors.flock_id,
         },
         "payload_keys": sorted(payload_dict.keys()),
         "payload_schema_version": schema_version,
@@ -181,7 +217,7 @@ async def submit_event(
     if audit_event_id is None or not audit_hash:
         raise HTTPException(500, error_envelope("audit_emission_failed", "Audit event emission failed."))
 
-    # 5. INSERT event row with audit_event_id linked (TEXT anchors per Strike #21)
+    # 5. INSERT event row with audit_event_id linked (TEXT anchors per Strike #21; flock_id added Phase 6.2-3)
     insert_result = await db.execute(
         text("""
             INSERT INTO tenant.poultry_event_log (
@@ -189,7 +225,7 @@ async def submit_event(
                 event_type, occurred_at, payload_jsonb, payload_schema_version, audit_event_id
             )
             VALUES (
-                :tid, :fid, :pu, :cid, NULL, :uid,
+                :tid, :fid, :pu, :cid, :flk, :uid,
                 :et, :occ, CAST(:p AS jsonb), :ver, :aud
             )
             RETURNING event_id
@@ -199,6 +235,7 @@ async def submit_event(
             "fid": submission.anchors.farm_id,
             "pu": submission.anchors.pu_id,
             "cid": submission.anchors.cycle_id,
+            "flk": submission.anchors.flock_id,
             "uid": actor_uuid,
             "et": submission.event_type,
             "occ": occurred_ts,
