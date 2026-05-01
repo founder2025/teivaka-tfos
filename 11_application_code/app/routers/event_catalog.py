@@ -228,7 +228,22 @@ async def list_event_catalog(
         voice_keys.append(f"event.{d['event_type']}.voice_prompt")
         for st in (d.get('subtypes') or []):
             subtype_keys.append(f"subtype.{d['event_type']}.{st}.label")
-    group_keys = [f"group.{g}.label" for g in {d['catalog_group'] for d in filtered}]
+    # Phase 5.10f: group_keys must cover the full canonical 11, not just groups
+    # with events present today. New domains (PERENNIALS, AQUACULTURE, FORESTRY,
+    # SPECIALTY, POULTRY, APICULTURE, LIVESTOCK) have zero event_catalog rows
+    # until Sprint 6+ ships their events; without this, their labels silently
+    # drop from meta.group_labels and LogSheet tiles fall through to raw
+    # uppercase enum (e.g. "AQUACULTURE" instead of "Fish & sea") — violating
+    # the Universal Naming Doctrine.
+    # Long-term: replace this hardcoded list with a single canonical source
+    # (e.g., /api/v1/naming/groups endpoint reading from a CATALOG_GROUP enum
+    # in shared module). Tracked in doctrine backlog.
+    _CATALOG_GROUP_ENUM = [
+        "CROPS", "PERENNIALS", "LIVESTOCK", "POULTRY",
+        "APICULTURE", "AQUACULTURE", "FORESTRY", "SPECIALTY",
+        "MONEY", "NOTES", "OTHER",
+    ]
+    group_keys = [f"group.{g}.label" for g in _CATALOG_GROUP_ENUM]
 
     labels        = await name_many(db, label_keys,   form='label')        if label_keys   else {}
     descriptions  = await name_many(db, desc_keys,    form='description')  if desc_keys    else {}

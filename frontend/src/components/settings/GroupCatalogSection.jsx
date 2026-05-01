@@ -45,7 +45,7 @@ const C = {
   redBg:   "#FDECEA",
 };
 
-export default function GroupCatalogSection({ farmId, inlineMode = false, onStateChange }) {
+export default function GroupCatalogSection({ farmId, inlineMode = false, groupLabels = null, onStateChange }) {
   const [activeMap, setActiveMap] = useState({}); // catalog_group -> bool
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -183,7 +183,12 @@ export default function GroupCatalogSection({ farmId, inlineMode = false, onStat
               <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                 <Icon size={22} color={isOn ? C.green : C.soil} />
                 <div>
-                  <div style={{ fontSize: 15, fontWeight: 600, color: C.soil }}>{label}</div>
+                  <div style={{ fontSize: 15, fontWeight: 600, color: C.soil }}>
+                    {/* Phase 5.10f: API-provided dictionary label wins;
+                        GROUPS_DEF.label is fallback for standalone use without
+                        an event-catalog fetch. Single source of truth = naming_dictionary. */}
+                    {(groupLabels && groupLabels[key]) || label}
+                  </div>
                   {!inlineMode && universal && (
                     <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>
                       Recommended for all farms

@@ -541,6 +541,7 @@ export default function LogSheet({ isOpen, onClose, mode }) {
             <GroupCatalogSection
               farmId={activeFarmId}
               inlineMode
+              groupLabels={groupLabels}
               onStateChange={(newMap) => {
                 const newActive = Object.entries(newMap)
                   .filter(([, v]) => v)
