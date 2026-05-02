@@ -98,8 +98,8 @@
         header Cache-Control "no-store"
     }
 
-    # Public audit verification (Phase 9-1) — server-rendered HTML from FastAPI
-    handle /verify/* {
+    # Public audit verification (Phase 9-1; broadened in 9-3 for bare /verify) — server-rendered HTML from FastAPI
+    handle /verify* {
         reverse_proxy api:8000 {
             health_uri /api/v1/health
         }

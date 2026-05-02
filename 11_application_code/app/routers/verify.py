@@ -14,9 +14,11 @@ Uses get_db (auth-free, no RLS binding) -- the SECURITY DEFINER functions
 bypass RLS internally and return only sanitized fields.
 """
 
+import base64
 import os
 import re
 from datetime import datetime, timezone
+from io import BytesIO
 from pathlib import Path
 from typing import Optional
 
@@ -29,6 +31,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
 from app.schemas.envelope import error_envelope
+
+try:
+    import qrcode
+    import qrcode.constants
+    _QR_AVAILABLE = True
+except ImportError:
+    _QR_AVAILABLE = False
 
 router = APIRouter()
 html_router = APIRouter()
@@ -176,6 +185,25 @@ async def verify_json(
     return response
 
 
+def _generate_sample_qr_b64(verify_url: str) -> str:
+    """Generate a base64-encoded PNG QR code for inline embedding in HTML."""
+    if not _QR_AVAILABLE:
+        return ""
+    qr = qrcode.QRCode(
+        version=None,
+        error_correction=qrcode.constants.ERROR_CORRECT_M,
+        box_size=8,
+        border=2,
+    )
+    qr.add_data(verify_url)
+    qr.make(fit=True)
+    img = qr.make_image(fill_color="#5C4033", back_color="#F8F3E9")
+    buf = BytesIO()
+    img.save(buf, format='PNG')
+    buf.seek(0)
+    return base64.b64encode(buf.read()).decode('ascii')
+
+
 def _format_iso_human(iso_str):
     """Convert ISO 8601 to '1 May 2026 · 15:43 UTC'. None-safe; returns raw on parse failure."""
     if not iso_str:
@@ -186,6 +214,41 @@ def _format_iso_human(iso_str):
         return dt.strftime("%-d %B %Y · %H:%M UTC")
     except (ValueError, AttributeError):
         return iso_str
+
+
+@html_router.get("/verify", response_class=HTMLResponse)
+async def verify_about(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Public 'About verification' explainer page (Phase 9-3)."""
+    await _rate_limit_check(request)
+
+    row = await db.execute(text("""
+        SELECT total_events, tenant_count, chain_break_count, latest_bank_pdf_hash
+        FROM audit.public_chain_stats()
+    """))
+    stats = row.first()
+    total_events = stats.total_events if stats else 0
+    tenant_count = stats.tenant_count if stats else 0
+    chain_break_count = stats.chain_break_count if stats else 0
+    sample_hash = stats.latest_bank_pdf_hash if stats and stats.latest_bank_pdf_hash else None
+
+    sample_qr_b64 = ""
+    if sample_hash:
+        sample_qr_b64 = _generate_sample_qr_b64(f"https://teivaka.com/verify/{sample_hash}")
+
+    context = {
+        "request": request,
+        "total_events_human": f"{total_events:,}",
+        "tenants_human": f"{tenant_count:,}",
+        "chain_break_count": chain_break_count,
+        "sample_hash": sample_hash,
+        "sample_qr_b64": sample_qr_b64,
+    }
+    response = templates.TemplateResponse("verify_about.html", context)
+    response.headers["Cache-Control"] = "public, max-age=300"
+    return response
 
 
 @html_router.get("/verify/{audit_hash}", response_class=HTMLResponse)
