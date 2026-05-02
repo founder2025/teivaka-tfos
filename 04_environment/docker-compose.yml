@@ -454,8 +454,8 @@ services:
       # Caddy admin API (localhost only — for caddy reload without restart)
       - "127.0.0.1:2019:2019"
     volumes:
-      # Caddyfile configuration
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # Caddyfile configuration (live-mounted production config)
+      - ./Caddyfile.production:/etc/caddy/Caddyfile:ro
       # PWA static files (built frontend)
       - ../frontend/dist:/srv/frontend:ro
       # Caddy data: TLS certificates, ACME state
