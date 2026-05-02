@@ -74,10 +74,12 @@ class MortalityLoggedPayload(BaseModel):
 
 
 class HealthObservationPayload(BaseModel):
-    """Health observation for a flock. flock_id REQUIRED. No side effect.
-    Future Phase 6.6 will trigger compliance alerts from SEVERE observations."""
-    severity: str = Field(..., description="MILD, MODERATE, or SEVERE")
-    symptoms: list[str] = Field(..., min_length=1, description="At least one symptom from HEALTH_SYMPTOMS vocab.")
+    """Health observation for a flock. flock_id REQUIRED.
+    SEVERE blocks subsequent EGGS_SOLD/BIRDS_SOLD on the flock until a
+    CLEARED HEALTH_OBSERVATION is logged with later occurred_at (Phase 6.6-2).
+    MILD and MODERATE record but do not block sales."""
+    severity: str = Field(..., description="MILD, MODERATE, SEVERE, or CLEARED")
+    symptoms: list[str] = Field(default_factory=list, description="Symptoms from HEALTH_SYMPTOMS vocab. Empty allowed for CLEARED severity.")
     qty_affected: int = Field(..., ge=1, le=1000000, description="Number of birds showing symptoms.")
     notes: Optional[str] = Field(default=None, max_length=500)
 
@@ -211,7 +213,7 @@ MORTALITY_CAUSES = {"DISEASE", "PREDATION", "INJURY", "UNKNOWN", "OLD_AGE", "OTH
 VACCINATION_ROUTES = {"DRINKING_WATER", "INJECTION", "EYE_DROP", "SPRAY", "OTHER"}
 BIRD_REPLACEMENT_REASONS = {"REPLACEMENT", "EXPANSION", "RECOVERY"}
 BIRDS_SOLD_TYPES = {"LIVE_BIRD", "DRESSED", "EGGS_LAYER_END"}
-HEALTH_SEVERITY = {"MILD", "MODERATE", "SEVERE"}
+HEALTH_SEVERITY = {"MILD", "MODERATE", "SEVERE", "CLEARED"}
 HEALTH_SYMPTOMS = {
     "COUGHING", "SNEEZING", "DIARRHEA", "LETHARGY", "REDUCED_APPETITE",
     "REDUCED_PRODUCTION", "SWELLING", "NASAL_DISCHARGE", "EYE_DISCHARGE",

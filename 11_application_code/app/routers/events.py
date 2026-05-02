@@ -91,6 +91,44 @@ def _resolve_tenant_uuid(user: dict) -> UUID:
         raise HTTPException(401, error_envelope("invalid_tenant_id", "Session tenant_id not a valid UUID."))
 
 
+async def check_severe_health_block(
+    db: AsyncSession,
+    tenant_id: UUID,
+    flock_id: str,
+) -> Optional[dict]:
+    """Phase 6.6-2: latest HEALTH_OBSERVATION on this flock blocks sales if SEVERE.
+
+    Returns block dict if latest is SEVERE, None if CLEARED / MILD / MODERATE / absent.
+    Operator clears by logging a CLEARED HEALTH_OBSERVATION with later occurred_at.
+    Stateless: each call recomputes from audit chain (Strike #56: payload_jsonb).
+    """
+    result = await db.execute(text("""
+        SELECT
+            pel.occurred_at,
+            pel.payload_jsonb->>'severity' AS severity,
+            pel.payload_jsonb->'symptoms' AS symptoms,
+            pel.payload_jsonb->>'qty_affected' AS qty_affected
+        FROM tenant.poultry_event_log pel
+        WHERE pel.tenant_id = :tid
+          AND pel.event_type = 'HEALTH_OBSERVATION'
+          AND pel.flock_id = :fid
+        ORDER BY pel.occurred_at DESC
+        LIMIT 1
+    """), {"tid": str(tenant_id), "fid": flock_id})
+
+    row = result.first()
+    if row is None or row.severity != "SEVERE":
+        return None
+
+    return {
+        "severity": row.severity,
+        "observed_at": row.occurred_at.isoformat(),
+        "symptoms": row.symptoms,
+        "qty_affected": int(row.qty_affected) if row.qty_affected else None,
+        "resolution": "Log a HEALTH_OBSERVATION with severity=CLEARED on this flock to allow sales.",
+    }
+
+
 async def check_vaccination_withholding(
     db: AsyncSession,
     tenant_id: UUID,
@@ -256,10 +294,17 @@ async def submit_event(
                 detail=error_envelope("invalid_severity", f"severity must be one of {sorted(HEALTH_SEVERITY)}."),
             )
         symptoms_value = submission.payload.get("symptoms", [])
-        if not isinstance(symptoms_value, list) or len(symptoms_value) == 0:
+        # CLEARED severity allows empty symptoms (operator confirming healthy);
+        # MILD/MODERATE/SEVERE require at least one symptom.
+        if not isinstance(symptoms_value, list):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=error_envelope("invalid_symptoms", "symptoms must be a non-empty list."),
+                detail=error_envelope("invalid_symptoms", "symptoms must be a list."),
+            )
+        if severity_value != "CLEARED" and len(symptoms_value) == 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=error_envelope("invalid_symptoms", "symptoms must be a non-empty list (unless severity is CLEARED)."),
             )
         bad_symptoms = [s for s in symptoms_value if s not in HEALTH_SYMPTOMS]
         if bad_symptoms:
@@ -313,6 +358,38 @@ async def submit_event(
             )
             if buyer_check.first() is None:
                 raise HTTPException(404, error_envelope("buyer_not_found", f"Buyer {buyer_id_value} not found or not active."))
+
+    # 2j-h. EGGS_SOLD: SEVERE health block check (Phase 6.6-2)
+    if submission.event_type == "EGGS_SOLD" and submission.anchors.flock_id:
+        health_block = await check_severe_health_block(
+            db, tenant_uuid, submission.anchors.flock_id
+        )
+        if health_block:
+            await emit_audit_event(
+                db=db,
+                tenant_id=tenant_uuid,
+                event_type="WITHHOLDING_VIOLATION_ATTEMPTED",
+                payload={
+                    "blocked_event_type": "EGGS_SOLD",
+                    "block_reason": "severe_health_observation",
+                    "farm_id": submission.anchors.farm_id,
+                    "pu_id": submission.anchors.pu_id,
+                    "flock_id": submission.anchors.flock_id,
+                    "violation": health_block,
+                },
+                actor_user_id=actor_uuid,
+                entity_type="flock",
+                entity_id=submission.anchors.flock_id,
+            )
+            await db.commit()
+            raise HTTPException(
+                status_code=409,
+                detail=error_envelope(
+                    "severe_health_block_active",
+                    "Cannot sell eggs from this flock. Last health observation logged a SEVERE issue. Log a CLEARED HEALTH_OBSERVATION first.",
+                    data=health_block,
+                ),
+            )
 
     # 2j-w. EGGS_SOLD: vaccination withholding check (Phase 6.6-1, Compliance Gate 6)
     if submission.event_type == "EGGS_SOLD" and submission.anchors.flock_id:
@@ -371,6 +448,40 @@ async def submit_event(
             )
             if buyer_check.first() is None:
                 raise HTTPException(404, error_envelope("buyer_not_found", f"Buyer {buyer_id_value} not found or not active."))
+
+    # 2k-h. BIRDS_SOLD: SEVERE health block check (Phase 6.6-2)
+    # SEVERE blocks ALL bird sales regardless of sale_type
+    if submission.event_type == "BIRDS_SOLD" and submission.anchors.flock_id:
+        health_block = await check_severe_health_block(
+            db, tenant_uuid, submission.anchors.flock_id
+        )
+        if health_block:
+            await emit_audit_event(
+                db=db,
+                tenant_id=tenant_uuid,
+                event_type="WITHHOLDING_VIOLATION_ATTEMPTED",
+                payload={
+                    "blocked_event_type": "BIRDS_SOLD",
+                    "block_reason": "severe_health_observation",
+                    "sale_type": submission.payload.get("sale_type") if isinstance(submission.payload, dict) else None,
+                    "farm_id": submission.anchors.farm_id,
+                    "pu_id": submission.anchors.pu_id,
+                    "flock_id": submission.anchors.flock_id,
+                    "violation": health_block,
+                },
+                actor_user_id=actor_uuid,
+                entity_type="flock",
+                entity_id=submission.anchors.flock_id,
+            )
+            await db.commit()
+            raise HTTPException(
+                status_code=409,
+                detail=error_envelope(
+                    "severe_health_block_active",
+                    "Cannot sell birds from this flock. Last health observation logged a SEVERE issue. Log a CLEARED HEALTH_OBSERVATION first.",
+                    data=health_block,
+                ),
+            )
 
     # 2k-w. BIRDS_SOLD: vaccination withholding check for meat (Phase 6.6-1)
     if submission.event_type == "BIRDS_SOLD" and submission.anchors.flock_id:

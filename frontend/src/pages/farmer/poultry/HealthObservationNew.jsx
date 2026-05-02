@@ -13,9 +13,10 @@ const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 1, ref
 const C = { soil: '#5C4033', cream: '#F8F3E9', green: '#6AA84F', amber: '#BF9000', red: '#A32D2D', border: '#E6DED0', muted: '#8A8678' };
 
 const SEVERITY_OPTIONS = [
-  { value: 'MILD',     label: 'Mild — a few birds noticed',     color: '#BF9000' },
-  { value: 'MODERATE', label: 'Moderate — needs attention',     color: '#D97A1A' },
-  { value: 'SEVERE',   label: 'Severe — many sick or dying',    color: '#A32D2D' },
+  { value: 'MILD',     label: 'Mild — a few birds noticed',                color: '#BF9000' },
+  { value: 'MODERATE', label: 'Moderate — needs attention',                color: '#D97A1A' },
+  { value: 'SEVERE',   label: 'Severe — many sick or dying (blocks sales)', color: '#A32D2D' },
+  { value: 'CLEARED',  label: 'Cleared — flock is healthy now',            color: '#6AA84F' },
 ];
 
 const SYMPTOMS = [
@@ -34,8 +35,8 @@ const SYMPTOMS = [
 ];
 
 const Schema = z.object({
-  severity: z.enum(['MILD', 'MODERATE', 'SEVERE']),
-  symptoms: z.array(z.string()).min(1),
+  severity: z.enum(['MILD', 'MODERATE', 'SEVERE', 'CLEARED']),
+  symptoms: z.array(z.string()),
   qty_affected: z.number().int().min(1).max(1000000),
   notes: z.string().max(500).optional(),
 });
@@ -110,6 +111,10 @@ function Inner() {
       qty_affected: qtyAffected === '' ? NaN : parseInt(qtyAffected, 10),
       notes: notes.trim() || undefined,
     };
+    if (candidate.severity !== 'CLEARED' && (!candidate.symptoms || candidate.symptoms.length === 0)) {
+      setErrs({ symptoms: 'Pick at least one sign' });
+      return;
+    }
     const parsed = Schema.safeParse(candidate);
     if (!parsed.success) {
       const e = {};
@@ -165,7 +170,7 @@ function Inner() {
               {errs.severity && <div className="text-xs mt-1" style={{ color: C.red }}>{errs.severity}</div>}
             </div>
             <div>
-              <label className="block text-xs mb-1" style={{ color: C.muted }}>What signs? * (pick one or more)</label>
+              <label className="block text-xs mb-1" style={{ color: C.muted }}>What signs? {severity !== 'CLEARED' && '* (pick one or more)'}</label>
               <div className="grid grid-cols-2 gap-2">
                 {SYMPTOMS.map(s => (
                   <label key={s.value} className="flex items-center gap-2 px-3 py-2 rounded-md border cursor-pointer text-sm" style={{ background: symptoms.includes(s.value) ? '#E8F0E2' : '#fff', borderColor: symptoms.includes(s.value) ? C.green : C.border }}>
