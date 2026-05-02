@@ -27,6 +27,7 @@ from app.routers import (
     flocks,
     poultry_dashboard,
     poultry_bank_evidence,
+    poultry_compliance,
     verify,
     chemicals,
     cycles,
@@ -249,6 +250,7 @@ app.include_router(farm_libraries.router,     prefix=PREFIX,                    
 app.include_router(events.router,              prefix=PREFIX,                         tags=["Events"])
 app.include_router(flocks.router,              prefix=PREFIX,                         tags=["Flocks"])
 app.include_router(poultry_dashboard.router,   prefix=PREFIX,                         tags=["POULTRY Dashboard"])
+app.include_router(poultry_compliance.router,  prefix=PREFIX,                         tags=["POULTRY Compliance"])
 app.include_router(poultry_bank_evidence.router, prefix=PREFIX,                       tags=["POULTRY Bank Evidence"])
 app.include_router(verify.router,              prefix=PREFIX,                         tags=["Verify (JSON)"])
 app.include_router(verify.html_router,         prefix="",                             tags=["Verify (HTML)"])

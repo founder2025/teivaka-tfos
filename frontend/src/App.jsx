@@ -64,6 +64,7 @@ const BirdsSoldNew          = lazy(() => import("./pages/farmer/poultry/BirdsSol
 const HealthObservationNew  = lazy(() => import("./pages/farmer/poultry/HealthObservationNew"));
 const FeedUsedNew           = lazy(() => import("./pages/farmer/poultry/FeedUsedNew"));
 const PoultryDashboard      = lazy(() => import("./pages/farmer/poultry/PoultryDashboard"));
+const PoultryCompliance     = lazy(() => import("./pages/farmer/poultry/PoultryCompliance"));
 const PoultryBankEvidence   = lazy(() => import("./pages/farmer/poultry/PoultryBankEvidence"));
 const LibrarySettings       = lazy(() => import("./pages/farmer/LibrarySettings"));
 const HarvestList   = lazy(() => import("./pages/farmer/HarvestList"));
@@ -205,7 +206,7 @@ export default function App() {
             <Route path="/farm/cash"         element={<CashLedger />} />
             <Route path="/farm/buyers"       element={<ComingSoon title="Buyers"       phase="6"   />} />
             <Route path="/farm/equipment"    element={<ComingSoon title="Equipment"    phase="6.5" />} />
-            <Route path="/farm/compliance"   element={<ComingSoon title="Compliance"   phase="4.2" />} />
+            <Route path="/farm/compliance"   element={<PoultryCompliance  />} />
             <Route path="/farm/analytics"    element={<ComingSoon title="Analytics"    phase="4.2" />} />
             <Route path="/farm/reports"      element={<ComingSoon title="Reports"      phase="6"   />} />
             <Route path="/farm/locations"    element={<ComingSoon title="Locations"    phase="5.5" />} />

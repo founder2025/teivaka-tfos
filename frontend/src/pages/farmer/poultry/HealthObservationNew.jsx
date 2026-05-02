@@ -3,7 +3,7 @@
  * flock_id REQUIRED. No side effect (Future Phase 6.6 triggers compliance alerts from SEVERE).
  */
 import { useState, useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { z } from 'zod';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { apiClient } from '../../../utils/apiClient';
@@ -54,13 +54,18 @@ function extractList(res, ...paths) {
 function Inner() {
   const navigate = useNavigate();
   const [farmId, setFarmId] = useState(null);
+  const [searchParams] = useSearchParams();
+  const prefillSeverity = searchParams.get('prefill_severity');
+  const prefillFlockId = searchParams.get('flock_id');
   const [puId, setPuId] = useState('');
-  const [flockId, setFlockId] = useState('');
+  const [flockId, setFlockId] = useState(prefillFlockId || '');
   const [pus, setPus] = useState([]);
   const [flocks, setFlocks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [anchorError, setAnchorError] = useState(null);
-  const [severity, setSeverity] = useState('');
+  const [severity, setSeverity] = useState(
+    prefillSeverity && ['MILD', 'MODERATE', 'SEVERE', 'CLEARED'].includes(prefillSeverity) ? prefillSeverity : ''
+  );
   const [symptoms, setSymptoms] = useState([]);
   const [qtyAffected, setQtyAffected] = useState('');
   const [notes, setNotes] = useState('');
