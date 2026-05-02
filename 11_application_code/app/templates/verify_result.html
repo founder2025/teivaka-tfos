@@ -76,6 +76,40 @@
     border: 1px solid var(--border); margin-top: 8px;
   }
 </style>
+{% if verified %}
+<script type="application/ld+json">
+{
+  "@context": "https://teivaka.com/schema/audit-verification/v1",
+  "@type": "AuditVerification",
+  "verified": true,
+  "audit_hash": "{{ audit_hash }}",
+  "audit_event": {
+    "event_type": "{{ event.event_type }}",
+    "occurred_at": "{{ event.occurred_at }}",
+    "farm_id": "{{ event.farm_id }}"
+  },
+  "chain": {
+    "integrity_ok": {{ 'true' if chain.integrity_ok else 'false' }},
+    "verified_at": "{{ chain.verified_at }}",
+    "events_in_chain": {{ chain.events_in_chain }},
+    "chain_break_count": {{ chain.chain_break_count }}
+  },
+  "platform": {
+    "name": "Teivaka Farm OS",
+    "verify_method": "sha256-hash-chain"
+  }
+}
+</script>
+{% else %}
+<script type="application/ld+json">
+{
+  "@context": "https://teivaka.com/schema/audit-verification/v1",
+  "@type": "AuditVerification",
+  "verified": false,
+  "audit_hash": "{{ audit_hash }}"
+}
+</script>
+{% endif %}
 </head>
 <body>
 <div class="wrap">
@@ -93,7 +127,7 @@
   <div class="card">
     <h2>Event</h2>
     <div class="row"><span class="label">Type</span><span class="value">{{ event.event_type }}</span></div>
-    <div class="row"><span class="label">Occurred at</span><span class="value">{{ event.occurred_at }}</span></div>
+    <div class="row"><span class="label">Occurred at</span><span class="value">{{ event.occurred_at_human or event.occurred_at }}</span></div>
     <div class="row"><span class="label">Farm</span><span class="value mono">{{ event.farm_id }}</span></div>
   </div>
 
@@ -102,7 +136,7 @@
     <div class="row"><span class="label">Status</span><span class="value">
       {% if chain.integrity_ok %}<span class="ok">&#10003; Tamper-free</span>{% else %}<span class="bad">&#10007; Chain break detected</span>{% endif %}
     </span></div>
-    <div class="row"><span class="label">Verified at</span><span class="value">{{ chain.verified_at }}</span></div>
+    <div class="row"><span class="label">Verified at</span><span class="value">{{ chain.verified_at_human or chain.verified_at }}</span></div>
     <div class="row"><span class="label">Events in chain</span><span class="value">{{ chain.events_in_chain }}</span></div>
     <div class="row"><span class="label">Chain breaks</span><span class="value">{{ chain.chain_break_count }}</span></div>
   </div>

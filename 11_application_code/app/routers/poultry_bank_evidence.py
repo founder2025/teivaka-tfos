@@ -37,12 +37,15 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import cm
 from reportlab.platypus import (
+    Image as RLImage,
     Paragraph,
     SimpleDocTemplate,
     Spacer,
     Table,
     TableStyle,
 )
+import qrcode
+import qrcode.constants
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -76,6 +79,23 @@ def fmt_pct(num, denom):
     if denom is None or float(denom) == 0:
         return "—"
     return f"{(float(num) / float(denom) * 100):.0f}%"
+
+
+def generate_qr_image(verify_url: str) -> io.BytesIO:
+    """Generate a QR code PNG for the verify URL. Returns BytesIO ready for reportlab."""
+    qr = qrcode.QRCode(
+        version=None,
+        error_correction=qrcode.constants.ERROR_CORRECT_M,
+        box_size=10,
+        border=2,
+    )
+    qr.add_data(verify_url)
+    qr.make(fit=True)
+    img = qr.make_image(fill_color="#5C4033", back_color="#F8F3E9")
+    buf = io.BytesIO()
+    img.save(buf, format='PNG')
+    buf.seek(0)
+    return buf
 
 
 def long_period_label(period_start: datetime, period_end: datetime) -> str:
@@ -560,22 +580,42 @@ async def poultry_bank_evidence(
         ]))
         elements.append(activity_table)
 
-    # ── 7. FOOTER ───────────────────────────────────────────────
+    # ── 7. FOOTER WITH QR CODE ──────────────────────────────────
     elements.append(Spacer(1, 0.5 * cm))
-    elements.append(Paragraph(
+
+    verify_url = f"https://teivaka.com/verify/{anchor_hash}"
+    qr_buf = generate_qr_image(verify_url)
+    qr_image = RLImage(qr_buf, width=2.5 * cm, height=2.5 * cm)
+
+    footer_text_para = Paragraph(
         f"<b>Prepared by:</b> Teivaka Farm OS<br/>"
         f"<b>Period covered:</b> {long_period_label(period_start, period_end)}<br/>"
         f"<b>Audit anchor:</b> <font face='Courier'>{anchor_hash[-16:]}</font><br/>"
-        f"<b>Verify online:</b> https://teivaka.com/verify/{anchor_hash}",
+        f"<b>Verify online:</b> {verify_url}<br/>"
+        f"<i>Or scan the QR code →</i>",
         footer_style,
-    ))
+    )
+
+    footer_table = Table(
+        [[footer_text_para, qr_image]],
+        colWidths=[12 * cm, 3 * cm],
+    )
+    footer_table.setStyle(TableStyle([
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 0),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+        ("TOPPADDING", (0, 0), (-1, -1), 0),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+    ]))
+    elements.append(footer_table)
+
     elements.append(Spacer(1, 0.3 * cm))
     elements.append(Paragraph(
         "This statement is generated from immutable, hash-chained audit events. "
         "Each event row includes farm, block, crop, and operator metadata, and a "
         "SHA256 chain link to its predecessor. The chain has been verified end-to-end "
         "at the time of this statement's generation. Lenders, buyers, and auditors "
-        "may verify chain integrity in real time using the URL above.",
+        "may verify chain integrity in real time by scanning the QR code or visiting the URL above.",
         footer_style,
     ))
 

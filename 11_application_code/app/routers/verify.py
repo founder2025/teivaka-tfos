@@ -176,6 +176,18 @@ async def verify_json(
     return response
 
 
+def _format_iso_human(iso_str):
+    """Convert ISO 8601 to '1 May 2026 · 15:43 UTC'. None-safe; returns raw on parse failure."""
+    if not iso_str:
+        return None
+    try:
+        normalized = iso_str.replace('Z', '+00:00') if iso_str.endswith('Z') else iso_str
+        dt = datetime.fromisoformat(normalized)
+        return dt.strftime("%-d %B %Y · %H:%M UTC")
+    except (ValueError, AttributeError):
+        return iso_str
+
+
 @html_router.get("/verify/{audit_hash}", response_class=HTMLResponse)
 async def verify_html(
     audit_hash: str,
@@ -183,12 +195,22 @@ async def verify_html(
     db: AsyncSession = Depends(get_db),
 ):
     payload = await _verify_core(audit_hash, request, db)
+
+    event = payload.get("audit_event")
+    chain = payload.get("chain")
+    event_human = None
+    chain_human = None
+    if event:
+        event_human = {**event, "occurred_at_human": _format_iso_human(event.get("occurred_at"))}
+    if chain:
+        chain_human = {**chain, "verified_at_human": _format_iso_human(chain.get("verified_at"))}
+
     context = {
         "request": request,
         "verified": payload.get("verified", False),
         "audit_hash": payload["audit_hash"],
-        "event": payload.get("audit_event"),
-        "chain": payload.get("chain"),
+        "event": event_human,
+        "chain": chain_human,
         "platform": payload["platform"],
     }
     response = templates.TemplateResponse("verify_result.html", context)
