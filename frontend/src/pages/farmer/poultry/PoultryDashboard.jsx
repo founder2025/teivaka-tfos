@@ -8,6 +8,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { apiClient } from '../../../utils/apiClient';
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false, staleTime: 30_000 } } });
@@ -83,6 +84,7 @@ function PoultryDashboardInner() {
   const kpis = data?.kpis || {};
   const events = data?.recent_events || [];
   const flocks = data?.flock_cards || [];
+  const trends = data?.trends || null;
 
   return (
     <div className="min-h-screen" style={{ background: C.cream, color: C.soil }}>
@@ -205,10 +207,115 @@ function PoultryDashboardInner() {
                 </div>
               )}
             </section>
+
+            <TrendsSection trends={trends} />
           </>
         )}
       </div>
     </div>
+  );
+}
+
+function fmtDateShort(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+}
+
+function FCRCard({ fcr }) {
+  if (!fcr || fcr.current == null) {
+    return (
+      <div className="rounded-md border p-4" style={{ background: '#fff', borderColor: C.border }}>
+        <div className="text-xs uppercase tracking-wide mb-2" style={{ color: C.muted }}>Feed conversion ratio (30d)</div>
+        <div className="text-sm" style={{ color: C.muted }}>
+          Not enough data yet. Log eggs collected + feed used to see your efficiency.
+        </div>
+      </div>
+    );
+  }
+  const trend = fcr.trend;
+  const trendColor = trend?.direction === 'improving' ? C.green : (trend?.direction === 'worsening' ? C.red : C.muted);
+  const trendArrow = trend?.direction === 'improving' ? '↓' : (trend?.direction === 'worsening' ? '↑' : '→');
+  return (
+    <div className="rounded-md border p-4" style={{ background: '#fff', borderColor: C.border }}>
+      <div className="text-xs uppercase tracking-wide mb-2" style={{ color: C.muted }}>Feed conversion ratio (30d)</div>
+      <div className="flex items-baseline gap-3">
+        <div className="text-3xl font-semibold" style={{ color: C.soil }}>{fcr.current.toFixed(2)}</div>
+        <div className="text-xs" style={{ color: C.muted }}>kg feed / kg egg</div>
+      </div>
+      {trend && (
+        <div className="text-xs mt-2" style={{ color: trendColor }}>
+          {trendArrow} {Math.abs(trend.delta_pct).toFixed(1)}% vs prior 30d ({trend.direction})
+        </div>
+      )}
+      <div className="text-xs mt-3" style={{ color: C.muted, lineHeight: 1.5 }}>
+        {fcr.interpretation}
+      </div>
+      <div className="text-xs mt-2 flex justify-between" style={{ color: C.muted }}>
+        <span>{fcr.feed_kg_30d.toFixed(1)} kg feed</span>
+        <span>{fcr.eggs_30d.toLocaleString()} eggs</span>
+      </div>
+    </div>
+  );
+}
+
+function TrendsSection({ trends }) {
+  const navigate = useNavigate();
+  if (!trends) return null;
+
+  const eggsData = (trends.eggs_daily || []).map(d => ({ day: fmtDateShort(d.day), eggs: d.eggs }));
+  const mortalityData = (trends.mortality_daily || []).map(d => ({ day: fmtDateShort(d.day), dead: d.dead }));
+  const hasEggsData = eggsData.length > 0;
+  const hasMortalityData = mortalityData.length > 0;
+
+  if (!hasEggsData && !hasMortalityData && !trends.fcr?.current) {
+    return (
+      <section>
+        <h2 className="text-xs font-medium uppercase tracking-wide mb-3" style={{ color: C.muted }}>Trends & efficiency</h2>
+        <div className="rounded-md border p-6 text-center" style={{ background: '#fff', borderColor: C.border }}>
+          <div className="text-sm mb-2" style={{ color: C.soil }}>No trends data yet</div>
+          <div className="text-xs mb-4" style={{ color: C.muted }}>Log eggs collected and feed used to see your operations chart up here.</div>
+          <button onClick={() => navigate('/farm/poultry/eggs/new')} className="px-3 py-2 rounded-md text-sm font-medium" style={{ background: C.green, color: '#fff' }}>
+            Log eggs collected →
+          </button>
+        </div>
+      </section>
+    );
+  }
+
+  return (
+    <section className="space-y-4">
+      <h2 className="text-xs font-medium uppercase tracking-wide" style={{ color: C.muted }}>Trends & efficiency · last 30 days</h2>
+      <FCRCard fcr={trends.fcr} />
+      {hasEggsData && (
+        <div className="rounded-md border p-4" style={{ background: '#fff', borderColor: C.border }}>
+          <div className="text-xs uppercase tracking-wide mb-3" style={{ color: C.muted }}>Eggs collected per day</div>
+          <ResponsiveContainer width="100%" height={200}>
+            <LineChart data={eggsData} margin={{ top: 5, right: 5, bottom: 5, left: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
+              <XAxis dataKey="day" tick={{ fontSize: 10, fill: C.muted }} interval="preserveStartEnd" />
+              <YAxis tick={{ fontSize: 10, fill: C.muted }} />
+              <Tooltip contentStyle={{ background: C.cream, border: `1px solid ${C.border}`, fontSize: 12 }} />
+              <Line type="monotone" dataKey="eggs" stroke={C.green} strokeWidth={2} dot={{ r: 3 }} />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+      {hasMortalityData && (
+        <div className="rounded-md border p-4" style={{ background: '#fff', borderColor: C.border }}>
+          <div className="text-xs uppercase tracking-wide mb-3" style={{ color: C.muted }}>Mortality per day</div>
+          <ResponsiveContainer width="100%" height={200}>
+            <LineChart data={mortalityData} margin={{ top: 5, right: 5, bottom: 5, left: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
+              <XAxis dataKey="day" tick={{ fontSize: 10, fill: C.muted }} interval="preserveStartEnd" />
+              <YAxis tick={{ fontSize: 10, fill: C.muted }} />
+              <Tooltip contentStyle={{ background: C.cream, border: `1px solid ${C.border}`, fontSize: 12 }} />
+              <Line type="monotone" dataKey="dead" stroke={C.red} strokeWidth={2} dot={{ r: 3 }} />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+    </section>
   );
 }
 

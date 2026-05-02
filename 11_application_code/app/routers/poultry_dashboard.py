@@ -129,6 +129,99 @@ async def poultry_dashboard(
             "days_since_placed": int(r["days_since_placed"] or 0),
         })
 
+    # ─── TRENDS SECTION (Phase 6.7-2) ─────────────────────────
+    # 30-day rolling window. Farm-wide aggregate (per-flock deferred to 6.7-3).
+
+    eggs_daily = await db.execute(text("""
+        SELECT
+            date_trunc('day', occurred_at)::date AS day,
+            SUM((payload_jsonb->>'qty_eggs')::numeric) AS eggs
+        FROM tenant.poultry_event_log
+        WHERE event_type = 'EGGS_COLLECTED'
+          AND occurred_at > now() - INTERVAL '30 days'
+        GROUP BY day
+        ORDER BY day ASC
+    """))
+    eggs_series = [{"day": r.day.isoformat(), "eggs": int(r.eggs or 0)} for r in eggs_daily.fetchall()]
+
+    mortality_daily = await db.execute(text("""
+        SELECT
+            date_trunc('day', occurred_at)::date AS day,
+            SUM((payload_jsonb->>'qty_dead')::numeric) AS dead
+        FROM tenant.poultry_event_log
+        WHERE event_type = 'MORTALITY_LOGGED'
+          AND occurred_at > now() - INTERVAL '30 days'
+        GROUP BY day
+        ORDER BY day ASC
+    """))
+    mortality_series = [{"day": r.day.isoformat(), "dead": int(r.dead or 0)} for r in mortality_daily.fetchall()]
+
+    fcr_data = await db.execute(text("""
+        WITH feed_consumed AS (
+            SELECT COALESCE(SUM((payload_jsonb->>'qty_kg')::numeric), 0) AS feed_kg
+            FROM tenant.poultry_event_log
+            WHERE event_type = 'FEED_USED'
+              AND occurred_at > now() - INTERVAL '30 days'
+        ),
+        eggs_produced AS (
+            SELECT COALESCE(SUM((payload_jsonb->>'qty_eggs')::numeric), 0) AS eggs_count
+            FROM tenant.poultry_event_log
+            WHERE event_type = 'EGGS_COLLECTED'
+              AND occurred_at > now() - INTERVAL '30 days'
+        ),
+        feed_consumed_prior AS (
+            SELECT COALESCE(SUM((payload_jsonb->>'qty_kg')::numeric), 0) AS feed_kg
+            FROM tenant.poultry_event_log
+            WHERE event_type = 'FEED_USED'
+              AND occurred_at BETWEEN now() - INTERVAL '60 days' AND now() - INTERVAL '30 days'
+        ),
+        eggs_produced_prior AS (
+            SELECT COALESCE(SUM((payload_jsonb->>'qty_eggs')::numeric), 0) AS eggs_count
+            FROM tenant.poultry_event_log
+            WHERE event_type = 'EGGS_COLLECTED'
+              AND occurred_at BETWEEN now() - INTERVAL '60 days' AND now() - INTERVAL '30 days'
+        )
+        SELECT
+            (SELECT feed_kg FROM feed_consumed) AS curr_feed_kg,
+            (SELECT eggs_count FROM eggs_produced) AS curr_eggs,
+            (SELECT feed_kg FROM feed_consumed_prior) AS prior_feed_kg,
+            (SELECT eggs_count FROM eggs_produced_prior) AS prior_eggs
+    """))
+    fcr_row = fcr_data.first()
+
+    def safe_fcr(feed_kg, eggs_count):
+        feed_kg = float(feed_kg or 0)
+        eggs_count = float(eggs_count or 0)
+        egg_kg = eggs_count * 0.060  # 60g per egg industry standard
+        if egg_kg <= 0 or feed_kg <= 0:
+            return None
+        return round(feed_kg / egg_kg, 2)
+
+    fcr_current = safe_fcr(fcr_row.curr_feed_kg, fcr_row.curr_eggs) if fcr_row else None
+    fcr_prior = safe_fcr(fcr_row.prior_feed_kg, fcr_row.prior_eggs) if fcr_row else None
+    fcr_trend = None
+    if fcr_current is not None and fcr_prior is not None and fcr_prior > 0:
+        # Lower FCR is BETTER (less feed per egg). Negative delta = improvement.
+        pct_change = ((fcr_current - fcr_prior) / fcr_prior) * 100
+        fcr_trend = {
+            "delta_pct": round(pct_change, 1),
+            "direction": "improving" if pct_change < 0 else ("worsening" if pct_change > 0 else "flat"),
+        }
+
+    trends_payload = {
+        "window_days": 30,
+        "eggs_daily": eggs_series,
+        "mortality_daily": mortality_series,
+        "fcr": {
+            "current": fcr_current,
+            "prior_period": fcr_prior,
+            "trend": fcr_trend,
+            "interpretation": "Lower is better. Industry layer benchmark: 2.0-2.5 kg feed per kg egg.",
+            "feed_kg_30d": float(fcr_row.curr_feed_kg or 0) if fcr_row else 0,
+            "eggs_30d": int(fcr_row.curr_eggs or 0) if fcr_row else 0,
+        },
+    }
+
     return success_envelope({
         "kpis": {
             "active_flocks": active_flocks,
@@ -139,5 +232,6 @@ async def poultry_dashboard(
         },
         "recent_events": recent_events,
         "flock_cards": flock_cards,
+        "trends": trends_payload,
         "window": {"days": 7, "since": seven_days_ago.isoformat()},
     })
