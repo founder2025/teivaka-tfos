@@ -756,6 +756,89 @@ async def submit_event(
             await db.rollback()
             raise HTTPException(400, error_envelope("would_underflow_count", f"Selling {qty_sold} birds would put flock {submission.anchors.flock_id} below zero."))
 
+    # 6d. Phase 8-2: Compliance task auto-generation
+    if submission.event_type == "HEALTH_OBSERVATION" and submission.anchors.flock_id:
+        from app.services.task_generator import (
+            create_compliance_task,
+            close_compliance_tasks_for_entity,
+            severe_health_task,
+        )
+        severity = payload_dict.get("severity")
+        if severity == "SEVERE":
+            flock_lookup = await db.execute(
+                text("SELECT flock_label FROM tenant.flocks WHERE flock_id = :fid LIMIT 1"),
+                {"fid": submission.anchors.flock_id},
+            )
+            flock_row = flock_lookup.first()
+            flock_label = flock_row.flock_label if flock_row else submission.anchors.flock_id
+            qty_affected = payload_dict.get("qty_affected")
+            title, imperative, description = severe_health_task(
+                submission.anchors.flock_id, flock_label, qty_affected
+            )
+            await create_compliance_task(
+                db=db,
+                tenant_id=tenant_uuid,
+                farm_id=submission.anchors.farm_id,
+                entity_type="flock",
+                entity_id=submission.anchors.flock_id,
+                title=title,
+                imperative=imperative,
+                description=description,
+                priority="HIGH",
+                task_rank=500,
+            )
+        elif severity == "CLEARED":
+            await close_compliance_tasks_for_entity(
+                db=db,
+                tenant_id=tenant_uuid,
+                entity_type="flock",
+                entity_id=submission.anchors.flock_id,
+                title_prefix="auto:severe_health:",
+            )
+
+    if submission.event_type == "VACCINATION_GIVEN" and submission.anchors.flock_id:
+        from app.services.task_generator import (
+            create_compliance_task,
+            vaccination_withholding_task,
+        )
+        vaccine_id = payload_dict.get("vaccine_id")
+        if vaccine_id:
+            vaccine_lookup = await db.execute(
+                text("""
+                    SELECT name,
+                           COALESCE((attributes->>'withholding_eggs_days')::int, 0) AS eggs_days,
+                           COALESCE((attributes->>'withholding_meat_days')::int, 0) AS meat_days
+                    FROM shared.farm_libraries WHERE library_id = :vid
+                """),
+                {"vid": vaccine_id},
+            )
+            v_row = vaccine_lookup.first()
+            if v_row:
+                max_days = max(int(v_row.eggs_days or 0), int(v_row.meat_days or 0))
+                if max_days > 0:
+                    flock_lookup = await db.execute(
+                        text("SELECT flock_label FROM tenant.flocks WHERE flock_id = :fid LIMIT 1"),
+                        {"fid": submission.anchors.flock_id},
+                    )
+                    f_row = flock_lookup.first()
+                    flock_label = f_row.flock_label if f_row else submission.anchors.flock_id
+                    sale_kind = "eggs" if v_row.eggs_days >= v_row.meat_days else "meat"
+                    title, imperative, description = vaccination_withholding_task(
+                        submission.anchors.flock_id, flock_label, v_row.name, max_days, sale_kind
+                    )
+                    await create_compliance_task(
+                        db=db,
+                        tenant_id=tenant_uuid,
+                        farm_id=submission.anchors.farm_id,
+                        entity_type="flock",
+                        entity_id=submission.anchors.flock_id,
+                        title=title,
+                        imperative=imperative,
+                        description=description,
+                        priority="MEDIUM",
+                        task_rank=600,
+                    )
+
     await db.commit()
 
     return success_envelope(
