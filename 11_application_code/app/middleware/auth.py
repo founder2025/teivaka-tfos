@@ -51,6 +51,8 @@ class AuthMiddleware:
     PUBLIC_PREFIXES: tuple[str, ...] = (
         "/api/v1/webhooks/",
         "/static/",
+        "/api/v1/verify/",
+        "/verify/",
     )
 
     async def __call__(self, request: Request, call_next):

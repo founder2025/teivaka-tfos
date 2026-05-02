@@ -98,6 +98,13 @@
         header Cache-Control "no-store"
     }
 
+    # Public audit verification (Phase 9-1) — server-rendered HTML from FastAPI
+    handle /verify/* {
+        reverse_proxy api:8000 {
+            health_uri /api/v1/health
+        }
+    }
+
     # Static assets — long cache (content-hashed filenames)
     @static_assets {
         path *.js *.css *.woff *.woff2 *.ttf *.ico *.png *.jpg *.jpeg *.gif *.svg *.webp *.avif

@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Verify · Teivaka Farm OS</title>
+<link rel="icon" href="/favicon.ico">
+<style>
+  :root {
+    --soil: #5C4033;
+    --cream: #F8F3E9;
+    --green: #6AA84F;
+    --amber: #BF9000;
+    --red: #A32D2D;
+    --border: #E6DED0;
+    --muted: #8A8678;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 0; min-height: 100vh;
+    background: var(--cream);
+    color: var(--soil);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif;
+    line-height: 1.5;
+  }
+  .wrap {
+    max-width: 540px; margin: 0 auto; padding: 32px 20px 64px;
+  }
+  header {
+    margin-bottom: 24px; padding-bottom: 16px; border-bottom: 1px solid var(--border);
+  }
+  header .brand {
+    font-size: 13px; color: var(--muted); letter-spacing: 0.5px; text-transform: uppercase;
+  }
+  header .title {
+    font-size: 22px; font-weight: 700; margin-top: 4px;
+  }
+  .badge {
+    display: flex; align-items: center; gap: 12px;
+    padding: 16px 18px; border-radius: 8px; margin-bottom: 24px;
+    font-size: 16px; font-weight: 600;
+  }
+  .badge.verified { background: #E8F0E2; color: var(--green); border: 1px solid var(--green); }
+  .badge.unverified { background: #FDECEA; color: var(--red); border: 1px solid var(--red); }
+  .badge .icon {
+    font-size: 24px; line-height: 1;
+  }
+  .card {
+    background: #fff; border: 1px solid var(--border); border-radius: 8px;
+    padding: 16px 18px; margin-bottom: 16px;
+  }
+  .card h2 {
+    font-size: 11px; font-weight: 700; color: var(--muted); letter-spacing: 0.5px;
+    text-transform: uppercase; margin: 0 0 12px;
+  }
+  .row {
+    display: flex; justify-content: space-between; align-items: baseline;
+    padding: 6px 0; gap: 12px;
+  }
+  .row + .row { border-top: 1px solid var(--border); }
+  .row .label { color: var(--muted); font-size: 13px; }
+  .row .value { font-size: 14px; font-weight: 500; text-align: right; word-break: break-all; }
+  .row .value.mono { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12px; }
+  .ok { color: var(--green); font-weight: 600; }
+  .bad { color: var(--red); font-weight: 600; }
+  footer {
+    margin-top: 32px; padding-top: 16px; border-top: 1px solid var(--border);
+    font-size: 11px; color: var(--muted); line-height: 1.6;
+  }
+  footer a { color: var(--green); text-decoration: none; }
+  footer a:hover { text-decoration: underline; }
+  .hash-block {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 11px; color: var(--muted); word-break: break-all;
+    background: var(--cream); padding: 10px 12px; border-radius: 6px;
+    border: 1px solid var(--border); margin-top: 8px;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="brand">Teivaka Farm OS &middot; Audit Verification</div>
+    <div class="title">Audit chain verification</div>
+  </header>
+
+  {% if verified %}
+  <div class="badge verified">
+    <span class="icon">&#10003;</span>
+    <span>Verified &middot; Hash exists in audit chain</span>
+  </div>
+
+  <div class="card">
+    <h2>Event</h2>
+    <div class="row"><span class="label">Type</span><span class="value">{{ event.event_type }}</span></div>
+    <div class="row"><span class="label">Occurred at</span><span class="value">{{ event.occurred_at }}</span></div>
+    <div class="row"><span class="label">Farm</span><span class="value mono">{{ event.farm_id }}</span></div>
+  </div>
+
+  <div class="card">
+    <h2>Chain integrity</h2>
+    <div class="row"><span class="label">Status</span><span class="value">
+      {% if chain.integrity_ok %}<span class="ok">&#10003; Tamper-free</span>{% else %}<span class="bad">&#10007; Chain break detected</span>{% endif %}
+    </span></div>
+    <div class="row"><span class="label">Verified at</span><span class="value">{{ chain.verified_at }}</span></div>
+    <div class="row"><span class="label">Events in chain</span><span class="value">{{ chain.events_in_chain }}</span></div>
+    <div class="row"><span class="label">Chain breaks</span><span class="value">{{ chain.chain_break_count }}</span></div>
+  </div>
+
+  <div class="card">
+    <h2>Verified hash</h2>
+    <div class="hash-block">{{ audit_hash }}</div>
+  </div>
+  {% else %}
+  <div class="badge unverified">
+    <span class="icon">&#10007;</span>
+    <span>Not verified &middot; Hash not found in audit chain</span>
+  </div>
+
+  <div class="card">
+    <h2>What this means</h2>
+    <p style="font-size: 14px; margin: 0; color: var(--soil);">The audit hash you submitted does not match any recorded event on Teivaka Farm OS. The document presenting this hash may be tampered, fabricated, or generated outside this platform.</p>
+  </div>
+
+  <div class="card">
+    <h2>Submitted hash</h2>
+    <div class="hash-block">{{ audit_hash }}</div>
+  </div>
+  {% endif %}
+
+  <footer>
+    This page is generated from immutable, hash-chained audit events. Each event is a SHA256-linked row in the Teivaka audit chain. The chain is walked end-to-end at verification time. Lenders, buyers, and regulators can rely on this verification.
+    <br><br>
+    <a href="https://teivaka.com">Teivaka Farm OS</a> &middot; {{ platform.verify_method }}
+  </footer>
+</div>
+</body>
+</html>

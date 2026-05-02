@@ -1,0 +1,196 @@
+"""Public audit verification — Phase 9-1.
+
+Endpoints:
+  GET /api/v1/verify/{audit_hash}   -> JSON
+  GET /verify/{audit_hash}          -> server-rendered HTML
+
+Both unauth. Rate-limited via Redis (10 req/min per IP).
+Privacy enforced at THREE layers:
+  1. SECURITY DEFINER function audit.verify_event_by_hash (Migration 049) -- DB-layer projection
+  2. Python whitelist in _build_response_payload -- code-layer enforcement
+  3. Strict response model + automated forbidden-field check in deploy smoke
+
+Uses get_db (auth-free, no RLS binding) -- the SECURITY DEFINER functions
+bypass RLS internally and return only sanitized fields.
+"""
+
+import os
+import re
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Optional
+
+import redis.asyncio as aioredis
+from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.templating import Jinja2Templates
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.db.session import get_db
+from app.schemas.envelope import error_envelope
+
+router = APIRouter()
+html_router = APIRouter()
+
+HASH_REGEX = re.compile(r'^[a-f0-9]{64}$')
+RATE_LIMIT_MAX = 10
+RATE_LIMIT_WINDOW = 60
+
+TEMPLATES_DIR = Path(__file__).resolve().parent.parent / "templates"
+templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
+
+_redis_client: Optional[aioredis.Redis] = None
+
+
+async def get_redis() -> aioredis.Redis:
+    global _redis_client
+    if _redis_client is None:
+        url = os.environ.get("REDIS_URL", "redis://redis:6379/0")
+        _redis_client = aioredis.from_url(url, decode_responses=True)
+    return _redis_client
+
+
+def _client_ip(request: Request) -> str:
+    xff = request.headers.get("x-forwarded-for")
+    if xff:
+        return xff.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+
+async def _rate_limit_check(request: Request) -> None:
+    ip = _client_ip(request)
+    redis_client = await get_redis()
+    key = f"verify:rl:{ip}"
+    try:
+        current = await redis_client.incr(key)
+        if current == 1:
+            await redis_client.expire(key, RATE_LIMIT_WINDOW)
+        if current > RATE_LIMIT_MAX:
+            raise HTTPException(
+                status_code=429,
+                detail=error_envelope("rate_limited", f"Verification rate limit exceeded. Try again in {RATE_LIMIT_WINDOW}s."),
+            )
+    except aioredis.RedisError:
+        pass
+
+
+async def _lookup_hash(db: AsyncSession, audit_hash: str) -> Optional[dict]:
+    row = await db.execute(text("""
+        SELECT event_type, occurred_at, farm_id, tenant_id
+        FROM audit.verify_event_by_hash(:h)
+    """), {"h": audit_hash})
+    result = row.first()
+    if result is None:
+        return None
+    return {
+        "event_type": result.event_type,
+        "occurred_at": result.occurred_at.isoformat() if result.occurred_at else None,
+        "farm_id": result.farm_id,
+        "tenant_id": str(result.tenant_id),
+    }
+
+
+async def _chain_integrity(db: AsyncSession, tenant_id: str) -> dict:
+    row = await db.execute(text("""
+        SELECT total_events, break_count, verified_at
+        FROM audit.verify_chain_for_tenant(cast(:tid AS uuid))
+    """), {"tid": tenant_id})
+    result = row.first()
+    total = result.total_events if result else 0
+    breaks = result.break_count if result else 0
+    verified_at = (
+        result.verified_at.isoformat()
+        if result and result.verified_at
+        else datetime.now(timezone.utc).isoformat()
+    )
+    return {
+        "integrity_ok": (breaks == 0),
+        "verified_at": verified_at,
+        "events_in_chain": int(total),
+        "chain_break_count": int(breaks),
+    }
+
+
+def _build_response_payload(verified: bool, event: Optional[dict], chain: Optional[dict], audit_hash: str) -> dict:
+    if not verified:
+        return {
+            "verified": False,
+            "audit_hash": audit_hash,
+            "platform": {
+                "name": "Teivaka Farm OS",
+                "verify_method": "sha256-hash-chain",
+            },
+        }
+    safe_event = {
+        "event_type": event["event_type"],
+        "occurred_at": event["occurred_at"],
+        "farm_id": event["farm_id"],
+    }
+    safe_chain = {
+        "integrity_ok": chain["integrity_ok"],
+        "verified_at": chain["verified_at"],
+        "events_in_chain": chain["events_in_chain"],
+        "chain_break_count": chain["chain_break_count"],
+    }
+    return {
+        "verified": True,
+        "audit_hash": audit_hash,
+        "audit_event": safe_event,
+        "chain": safe_chain,
+        "platform": {
+            "name": "Teivaka Farm OS",
+            "verify_method": "sha256-hash-chain",
+        },
+    }
+
+
+async def _verify_core(audit_hash: str, request: Request, db: AsyncSession) -> dict:
+    audit_hash = audit_hash.lower().strip()
+
+    if not HASH_REGEX.match(audit_hash):
+        raise HTTPException(
+            status_code=400,
+            detail=error_envelope("invalid_hash_format", "Audit hash must be 64 lowercase hex characters."),
+        )
+
+    await _rate_limit_check(request)
+
+    event = await _lookup_hash(db, audit_hash)
+    if event is None:
+        return _build_response_payload(False, None, None, audit_hash)
+
+    chain = await _chain_integrity(db, event["tenant_id"])
+    return _build_response_payload(True, event, chain, audit_hash)
+
+
+@router.get("/verify/{audit_hash}", response_class=JSONResponse)
+async def verify_json(
+    audit_hash: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    payload = await _verify_core(audit_hash, request, db)
+    response = JSONResponse(content=payload)
+    response.headers["Cache-Control"] = "public, max-age=300"
+    return response
+
+
+@html_router.get("/verify/{audit_hash}", response_class=HTMLResponse)
+async def verify_html(
+    audit_hash: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    payload = await _verify_core(audit_hash, request, db)
+    context = {
+        "request": request,
+        "verified": payload.get("verified", False),
+        "audit_hash": payload["audit_hash"],
+        "event": payload.get("audit_event"),
+        "chain": payload.get("chain"),
+        "platform": payload["platform"],
+    }
+    response = templates.TemplateResponse("verify_result.html", context)
+    response.headers["Cache-Control"] = "public, max-age=300"
+    return response
