@@ -91,6 +91,51 @@ def _resolve_tenant_uuid(user: dict) -> UUID:
         raise HTTPException(401, error_envelope("invalid_tenant_id", "Session tenant_id not a valid UUID."))
 
 
+async def check_vaccination_withholding(
+    db: AsyncSession,
+    tenant_id: UUID,
+    flock_id: str,
+    sale_kind: str,
+) -> Optional[dict]:
+    """Phase 6.6-1: query latest VACCINATION_GIVEN events for this flock; resolve
+    vaccine_id → library attributes → withholding_*_days; return violation dict
+    if any active withholding window blocks this sale_kind, else None.
+
+    sale_kind is 'eggs' or 'meat'. Stateless: each call recomputes from audit chain.
+    """
+    attr_field = f"withholding_{sale_kind}_days"
+
+    result = await db.execute(text(f"""
+        SELECT
+            pel.occurred_at,
+            fl.name AS vaccine_name,
+            COALESCE((fl.attributes->>'{attr_field}')::int, 0) AS withholding_days,
+            pel.occurred_at + COALESCE((fl.attributes->>'{attr_field}')::int, 0) * INTERVAL '1 day' AS withholding_until
+        FROM tenant.poultry_event_log pel
+        LEFT JOIN shared.farm_libraries fl ON fl.library_id = (pel.payload_jsonb->>'vaccine_id')::uuid
+        WHERE pel.tenant_id = :tid
+          AND pel.event_type = 'VACCINATION_GIVEN'
+          AND pel.flock_id = :fid
+          AND pel.occurred_at + COALESCE((fl.attributes->>'{attr_field}')::int, 0) * INTERVAL '1 day' > now()
+        ORDER BY pel.occurred_at + COALESCE((fl.attributes->>'{attr_field}')::int, 0) * INTERVAL '1 day' DESC
+        LIMIT 1
+    """), {"tid": str(tenant_id), "fid": flock_id})
+
+    row = result.first()
+    if row is None or row.withholding_days == 0:
+        return None
+
+    days_remaining = (row.withholding_until - datetime.now(timezone.utc)).days + 1
+    return {
+        "vaccine_name": row.vaccine_name,
+        "vaccinated_at": row.occurred_at.isoformat(),
+        "withholding_days": row.withholding_days,
+        "withholding_until": row.withholding_until.isoformat(),
+        "days_remaining": max(days_remaining, 0),
+        "sale_kind": sale_kind,
+    }
+
+
 @router.post("/events", status_code=status.HTTP_201_CREATED)
 async def submit_event(
     submission: EventSubmission,
@@ -269,6 +314,36 @@ async def submit_event(
             if buyer_check.first() is None:
                 raise HTTPException(404, error_envelope("buyer_not_found", f"Buyer {buyer_id_value} not found or not active."))
 
+    # 2j-w. EGGS_SOLD: vaccination withholding check (Phase 6.6-1, Compliance Gate 6)
+    if submission.event_type == "EGGS_SOLD" and submission.anchors.flock_id:
+        violation = await check_vaccination_withholding(
+            db, tenant_uuid, submission.anchors.flock_id, sale_kind="eggs"
+        )
+        if violation:
+            await emit_audit_event(
+                db=db,
+                tenant_id=tenant_uuid,
+                event_type="WITHHOLDING_VIOLATION_ATTEMPTED",
+                payload={
+                    "blocked_event_type": "EGGS_SOLD",
+                    "farm_id": submission.anchors.farm_id,
+                    "flock_id": submission.anchors.flock_id,
+                    "violation": violation,
+                },
+                actor_user_id=actor_uuid,
+                entity_type="flock",
+                entity_id=submission.anchors.flock_id,
+            )
+            await db.commit()
+            raise HTTPException(
+                status_code=409,
+                detail=error_envelope(
+                    "vaccination_withholding_active",
+                    f"Cannot sell eggs from this flock yet. {violation['vaccine_name']} withholding period ends in {violation['days_remaining']} day(s) (on {violation['withholding_until'][:10]}).",
+                    data=violation,
+                ),
+            )
+
     # 2k. BIRDS_SOLD-specific: flock_id REQUIRED, sale_type in vocab, buyer_id valid if provided
     if submission.event_type == "BIRDS_SOLD":
         if submission.anchors.flock_id is None:
@@ -296,6 +371,39 @@ async def submit_event(
             )
             if buyer_check.first() is None:
                 raise HTTPException(404, error_envelope("buyer_not_found", f"Buyer {buyer_id_value} not found or not active."))
+
+    # 2k-w. BIRDS_SOLD: vaccination withholding check for meat (Phase 6.6-1)
+    if submission.event_type == "BIRDS_SOLD" and submission.anchors.flock_id:
+        sale_type_for_check = submission.payload.get("sale_type") if isinstance(submission.payload, dict) else None
+        if sale_type_for_check in ("LIVE_BIRD", "DRESSED"):
+            violation = await check_vaccination_withholding(
+                db, tenant_uuid, submission.anchors.flock_id, sale_kind="meat"
+            )
+            if violation:
+                await emit_audit_event(
+                    db=db,
+                    tenant_id=tenant_uuid,
+                    event_type="WITHHOLDING_VIOLATION_ATTEMPTED",
+                    payload={
+                        "blocked_event_type": "BIRDS_SOLD",
+                        "sale_type": sale_type_for_check,
+                        "farm_id": submission.anchors.farm_id,
+                        "flock_id": submission.anchors.flock_id,
+                        "violation": violation,
+                    },
+                    actor_user_id=actor_uuid,
+                    entity_type="flock",
+                    entity_id=submission.anchors.flock_id,
+                )
+                await db.commit()
+                raise HTTPException(
+                    status_code=409,
+                    detail=error_envelope(
+                        "vaccination_withholding_active",
+                        f"Cannot sell birds from this flock yet for meat. {violation['vaccine_name']} withholding period ends in {violation['days_remaining']} day(s) (on {violation['withholding_until'][:10]}).",
+                        data=violation,
+                    ),
+                )
 
     # 2h. WEIGHT_CHECK-specific: flock_id REQUIRED
     if submission.event_type == "WEIGHT_CHECK":
