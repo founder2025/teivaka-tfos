@@ -30,7 +30,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.audit_chain import emit_audit_event
 from app.middleware.rls import get_current_user, get_tenant_db
 from app.schemas.envelope import error_envelope, success_envelope
-from app.schemas.events_registry import get_schema_for_event_type, MORTALITY_CAUSES, VACCINATION_ROUTES, BIRD_REPLACEMENT_REASONS, BIRDS_SOLD_TYPES
+from app.schemas.events_registry import get_schema_for_event_type, MORTALITY_CAUSES, VACCINATION_ROUTES, BIRD_REPLACEMENT_REASONS, BIRDS_SOLD_TYPES, HEALTH_SEVERITY, HEALTH_SYMPTOMS
 from sqlalchemy.exc import IntegrityError
 
 import json
@@ -193,6 +193,63 @@ async def submit_event(
                     "invalid_mortality_cause",
                     f"cause must be one of {sorted(MORTALITY_CAUSES)}.",
                 ),
+            )
+
+    # 2l. HEALTH_OBSERVATION-specific: flock_id REQUIRED, severity + symptoms in vocab
+    if submission.event_type == "HEALTH_OBSERVATION":
+        if submission.anchors.flock_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=error_envelope("health_observation_requires_flock", "HEALTH_OBSERVATION requires a flock_id anchor."),
+            )
+        if not isinstance(submission.payload, dict):
+            raise HTTPException(400, error_envelope("invalid_payload", "Payload must be a dict."))
+        severity_value = submission.payload.get("severity")
+        if severity_value not in HEALTH_SEVERITY:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=error_envelope("invalid_severity", f"severity must be one of {sorted(HEALTH_SEVERITY)}."),
+            )
+        symptoms_value = submission.payload.get("symptoms", [])
+        if not isinstance(symptoms_value, list) or len(symptoms_value) == 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=error_envelope("invalid_symptoms", "symptoms must be a non-empty list."),
+            )
+        bad_symptoms = [s for s in symptoms_value if s not in HEALTH_SYMPTOMS]
+        if bad_symptoms:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=error_envelope("invalid_symptoms_value", f"symptoms must be from {sorted(HEALTH_SYMPTOMS)}; got invalid: {bad_symptoms}."),
+            )
+
+    # 2m. FEED_USED-specific: flock_id REQUIRED, feed_type_id valid POULTRY_FEED
+    if submission.event_type == "FEED_USED":
+        if submission.anchors.flock_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=error_envelope("feed_used_requires_flock", "FEED_USED requires a flock_id anchor."),
+            )
+        if not isinstance(submission.payload, dict):
+            raise HTTPException(400, error_envelope("invalid_payload", "Payload must be a dict."))
+        feed_type_id_value = submission.payload.get("feed_type_id")
+        try:
+            feed_uuid = UUID(str(feed_type_id_value)) if feed_type_id_value else None
+        except (ValueError, TypeError):
+            raise HTTPException(400, error_envelope("invalid_feed_type_id", "feed_type_id must be a valid UUID."))
+        if feed_uuid is None:
+            raise HTTPException(400, error_envelope("missing_feed_type_id", "feed_type_id is required."))
+        feed_check = await db.execute(
+            text("""
+                SELECT library_id FROM shared.farm_libraries
+                WHERE library_id = :fid AND library_type = 'POULTRY_FEED' AND is_active = TRUE
+            """),
+            {"fid": feed_uuid},
+        )
+        if feed_check.first() is None:
+            raise HTTPException(
+                404,
+                error_envelope("feed_type_not_found", f"Feed type {feed_type_id_value} not found or not active."),
             )
 
     # 2j. EGGS_SOLD-specific: buyer_id valid if provided (flock_id OPTIONAL)
