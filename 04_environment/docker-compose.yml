@@ -167,7 +167,7 @@ services:
       --loglevel=info
       --queues=ai
       --concurrency=8
-      --hostname=worker-ai@%h
+      --hostname=worker-ai@localhost
       --max-tasks-per-child=200
     env_file:
       - .env
@@ -184,9 +184,7 @@ services:
       redis:
         condition: service_healthy
     healthcheck:
-      test: >
-        ["CMD", "celery", "-A", "app.workers.celery_app", "inspect",
-         "ping", "-d", "worker-ai@$$HOSTNAME", "--timeout", "5"]
+      test: ["CMD", "celery", "-A", "app.workers.celery_app", "inspect", "ping", "-d", "worker-ai@localhost", "--timeout", "5"]
       interval: 60s
       timeout: 15s
       retries: 3
@@ -295,6 +293,12 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import os,time,sys; sys.exit(0 if time.time() - os.path.getmtime('/app/data/celerybeat-schedule') < 1800 else 1)"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
     deploy:
       resources:
         limits:
@@ -472,7 +476,7 @@ services:
       api:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:2019/metrics"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:2019/config/"]
       interval: 30s
       timeout: 10s
       retries: 3
