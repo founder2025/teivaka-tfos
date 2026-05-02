@@ -26,7 +26,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.db.session import get_db
-from app.middleware.rls import get_current_user
+from app.middleware.rls import get_current_user, get_tenant_db
 from app.utils.email import send_password_reset_email, send_verification_email
 from app.utils.referral import generate_referral_code
 from app.utils.sms import send_otp_sms
@@ -896,9 +896,70 @@ async def verify_phone_otp(
 
 
 @router.get("/me")
-async def get_me(user: dict = Depends(get_current_user)):
-    """Return current user profile from validated JWT."""
-    return {"data": user}
+async def get_me(
+    user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_tenant_db),
+):
+    """Return current user profile from validated JWT, with computed Solo/Growth/Commercial mode (Phase 8-1)."""
+    # Mode derivation (Section 5 non-negotiable: derived server-side, never user-toggled).
+    # Wrap in try/except so a mode-derivation failure never breaks /me (login depends on it).
+    computed_mode = "GROWTH"  # safe default
+    mode_signals = {"max_area_ha": 0.0, "active_units": 0, "tenure_days": 0}
+    try:
+        stats_row = (await db.execute(text("""
+            WITH farm_stats AS (
+                SELECT COALESCE(MAX(land_area_ha), 0) AS max_area
+                FROM tenant.farms
+                WHERE tenant_id = :tid
+            ),
+            cycle_stats AS (
+                SELECT COUNT(*) AS active_cycles
+                FROM tenant.production_cycles
+                WHERE tenant_id = :tid AND cycle_status IN ('ACTIVE','HARVESTING','CLOSING')
+            ),
+            flock_stats AS (
+                SELECT COUNT(*) AS active_flocks
+                FROM tenant.flocks
+                WHERE tenant_id = :tid AND is_active = TRUE
+            ),
+            user_tenure AS (
+                SELECT EXTRACT(EPOCH FROM (now() - created_at)) / 86400 AS tenure_days
+                FROM tenant.users WHERE user_id = :uid
+            )
+            SELECT
+                (SELECT max_area FROM farm_stats) AS max_area,
+                (SELECT active_cycles FROM cycle_stats) AS active_cycles,
+                (SELECT active_flocks FROM flock_stats) AS active_flocks,
+                (SELECT tenure_days FROM user_tenure) AS tenure_days
+        """), {"tid": str(user["tenant_id"]), "uid": str(user["user_id"])})).first()
+
+        max_area = float(stats_row.max_area or 0) if stats_row else 0.0
+        active_units = (int(stats_row.active_cycles or 0) + int(stats_row.active_flocks or 0)) if stats_row else 0
+        tenure_days = float(stats_row.tenure_days or 0) if stats_row else 0.0
+
+        if max_area <= 0.5 and active_units <= 1 and tenure_days < 90:
+            computed_mode = "SOLO"
+        elif max_area <= 5.0 and active_units <= 5:
+            computed_mode = "GROWTH"
+        else:
+            computed_mode = "COMMERCIAL"
+
+        mode_signals = {
+            "max_area_ha": max_area,
+            "active_units": active_units,
+            "tenure_days": int(tenure_days),
+        }
+    except Exception:
+        # Defensive: never let mode derivation break /me. Default to GROWTH.
+        pass
+
+    return {
+        "data": {
+            **user,
+            "mode": computed_mode,
+            "mode_signals": mode_signals,
+        }
+    }
 
 
 @router.post("/refresh")
