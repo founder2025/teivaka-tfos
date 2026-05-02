@@ -9,14 +9,89 @@ Read before any group-related sprint planning or build work:
 - `TFOS_Vertical_Completeness_Doctrine.md` (top-level) — eight-gate completeness bar every group build must clear before shipping. Locked 2026-05-01. Sprint 6 is the first sprint operating under this doctrine; POULTRY is the first group targeted.
 - `TFOS_Catalog_Redesign_Doctrine_2026-04-30.md` and `TFOS_Catalog_Redesign_Doctrine_Amendment_v2_2026-04-30.md` (top-level) — 11-group catalog taxonomy + Onboarding Doctrine.
 
-## Current state (2026-04-29)
+## Current state (refreshed every session — this section is mutable)
 
-- Phases 1–2 complete (infra, auth, web shell)
-- Phase 3 (TIS) ~85% — OpenClaw bridge live at https://teivaka.com/tis/chat, full-page UI at /tis, plus floating TISWidget on every farmer page
-- Phase 3.5a complete (growth foundations: referral codes, attribution, 14-day BASIC trial, trial chip)
-- Phase 4a complete (harvest API rewrite live, compliance trigger consolidated). Migration head: 035_tenant_mv_input_balance_stub.
-- Phase 4b list views in flight — /farm/harvests, /farm/cycles, /farm/inventory, /farm/cash, /farm/harvest/new, /farm/field-events live (6 of ~15 surfaces). Automation engine, decision engine, and offline sync NOT started.
-- Overall ~30–35% against the full master spec
+**Last verified:** 2026-05-03
+
+**Production:** healthy (with caveats). teivaka.com HTTPS live.
+- 6 containers running:
+  - `teivaka_api` — healthy
+  - `teivaka_db` — healthy
+  - `teivaka_redis` — healthy
+  - `teivaka_caddy` — **unhealthy** as of 2026-05-03 (admin healthcheck transient; routing OK; investigate)
+  - `teivaka_worker_ai` — unhealthy 8+ days, diagnosis pending
+  - `teivaka_beat` — unhealthy 12+ days, diagnosis pending
+- Last commit: `1080a9d` (Phase 8-2: Automated task generator from compliance triggers)
+- Alembic head: `054_task_created_audit` (Phase 8-2: TASK_CREATED catalog + CHECK enum)
+- Branch: `feature/option-3-plus-nav-v2-1`
+
+**Phase status (Sprint 6 + 7 complete; Sprint 8 pending):**
+
+*Sprint 6 closed:*
+- ✅ Phase 5.10g — Vertical Completeness Doctrine locked
+- ✅ Phase 6.1a/b — 35 POULTRY events + farm_libraries + 34 globals
+- ✅ Phase 6.2-1..5 — Polymorphic events architecture + EGGS_COLLECTED
+- ✅ Phase 6.3-1..8 — 8 POULTRY forms (FlockPlaced, Mortality, Vaccination, FeedReceived, WeightCheck, BirdReplacement, EggsSold, BirdsSold)
+- ✅ Phase 6.4 — Library Management UI + Farm pillar rail entry
+- ✅ Phase 6.7-1 — POULTRY Dashboard composite endpoint
+- ✅ Phase 6.10-1/1b — Bank Evidence PDF + Cashflow Statement restructure
+- ✅ Phase 9-1/1b — Public verify endpoint + infra hygiene (B38 fixed)
+
+*Sprint 7 closed:*
+- ✅ Phase 9-2 — QR + ISO timestamp prettification + JSON-LD on verify page
+- ✅ Phase 9-3 — Public About Verification page at /verify (no hash)
+- ✅ Phase 6.3-9/10 — HEALTH_OBSERVATION + FEED_USED 2-form pack
+- ✅ Phase 6.6-1 — Vaccination withholding tracking enforcement
+- ✅ Phase 6.6-2 — SEVERE HEALTH_OBSERVATION blocks sales until CLEARED
+- ✅ Phase 6.6-3 — POULTRY Compliance dashboard at /farm/compliance
+- ✅ Phase 6.7-2 — POULTRY Dashboard charts (FCR + eggs/day + mortality trends)
+- ✅ Phase 8-1 — task_queue seed + /auth/me mode field (PIVOT after Strike #59 — discovered existing SoloTaskCard infrastructure)
+- ✅ Phase 8-2 — Automated task generator from compliance triggers
+
+**POULTRY Vertical Completeness:**
+- Gate 1 Event Taxonomy: ✅ PASS
+- Gate 2 Vocabulary: ✅ PASS
+- Gate 3 Form Coverage: 11/35 events user-facing (~31%)
+- Gate 4 Library Completeness: ✅ 100%
+- Gate 5 Reports + Dashboards: 🟢 ~60% (FCR + trends)
+- Gate 6 Compliance: 🟢 ~90% (vaccination withholding + SEVERE health enforcement + compliance dashboard + auto-task generation)
+- Gate 7 Bank Evidence + Verify: 🟢 ~95% (Bank Evidence PDF + QR + verify endpoint trilogy)
+- Gate 8 Solo Voice + Kadavu: 🟡 ~60% (SoloTaskCard + auto-task pipeline; F002 activation pending)
+
+**Strikes filed: 1-64** (institutional process upgrades across Sprint 6 + 7)
+
+**Doctrine status:**
+- ✅ Section 4 Universal Naming Doctrine — framework approved
+- 🟡 Section 4 vocabulary dictionary — pending dedicated session (B42)
+- ✅ Section 4a Data Input Doctrine — events_registry locked, 11 POULTRY forms shipped against contract
+
+**Open backlog (filed but deferred):**
+- B22: Sync prod MBI v1.0 to Cowork project knowledge MBI v4.2
+- B26: MBI Section 4a.2 references production_id as Crop anchor — should be cycle_id
+- B31: Lift QueryClientProvider into FarmerShell + promote extractList to apiClient.js
+- B32: Phase 6.5 universal library expansion (60-80 ag library types)
+- B33: Phase 6.1b-4 library rename support
+- B36: Extend VACCINATION_GIVEN payload to include cost_fjd
+- B37: Track feed inventory on-hand (link FEED_USED to FEED_RECEIVED inventory deduction)
+- B40: Kernel reboot pending. Routine `trig_014kMVmVwdx7z3X2QgkqHcRH` fires 2026-05-09T06:13:27Z if not done.
+- B41: Widen tenant.alembic_version.version_num from varchar(32) to varchar(64) (Strike #53)
+- B42: Phase 8-1 hardcoded English strings — migrate to shared.naming_dictionary in Phase 8-1b
+- B43: 6 pre-existing OPEN tasks in Operator tenant task_queue (origin unknown)
+- B44: TIS layer hallucinating fertilizer/dosage. Build shared.crop_nutrition_protocols (Phase 10-1) — Taro/dalo deeply for 5 Pacific countries × 7 BBCH stages first. TIS must NEVER generate dosage values; agronomy data needs verification_status enum.
+- B45: Rename test fixture flocks (e.g. 'Phase 6.2-2 Smoke Test Flock') to realistic Pacific-style names for cleaner Solo Voice demo output (Strike #64)
+
+**Open blockers:**
+- Q14 TTS provider — RESOLVED via Web Speech API selection in Phase 8-1 scope; SoloTaskCard already uses it
+- Q8 M-PAiSA merchant registration — still blocking 3.5b launch (2-6 week external lag)
+- Celery silent outage — worker_ai + beat unhealthy. Affects scheduled rules (RULE-034 ferry buffer, RULE-038 chemical compliance auto-resolve, daily Decision Engine snapshot, 13-week cashflow forecast). Diagnosis pending.
+
+**Strategic position (end of Sprint 7):**
+TFOS POULTRY ships the only agtech stack with: hash-chained Bank Evidence PDFs (lender-verifiable), audit-anchored compliance enforcement (regulator-verifiable), automated compliance task generation (operator-completable), Solo voice delivery (low-literacy-accessible), and productivity charts (banker-readable). All eight Vertical Completeness gates non-zero; five at 60%+; two at 90%+.
+
+The Pacific smallholder workflow loop is operational end-to-end:
+farmer logs SEVERE → enforcement blocks sales → auto-task surfaces in Solo → farmer logs CLEARED → task auto-closes → enforcement clears.
+
+Every step hash-chained in audit.events, verifiable via /verify/{audit_hash} endpoint, scannable from Bank Evidence PDF QR.
 
 ## Architecture
 
