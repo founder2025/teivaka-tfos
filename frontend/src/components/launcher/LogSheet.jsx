@@ -136,6 +136,8 @@ const EVENT_ROUTES = {
   PEST_CONTROL_APPLIED:  "/farm/poultry/pest-control/applied",
   TEMPERATURE_RECORDED:  "/farm/poultry/temperature/recorded",
   EGGS_GRADED:           "/farm/poultry/eggs/graded",
+  FLOCK_MOVED:           "/farm/poultry/flock/moved",
+  EQUIPMENT_MAINTAINED:  "/farm/poultry/equipment/maintained",
 };
 
 const EVENT_ICONS = {

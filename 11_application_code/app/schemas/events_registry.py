@@ -359,6 +359,37 @@ class EggsGradedPayload(BaseModel):
         json_encoders = {Decimal: str}
 
 
+class FlockMovedPayload(BaseModel):
+    """Phase 6.3-21: FLOCK_MOVED event payload. flock_id REQUIRED.
+
+    Records movement of birds between coops, pens, or grazing locations.
+    """
+    from_location: str = Field(..., max_length=100, description="Origin location (coop name, pen ID, area name).")
+    to_location: str = Field(..., max_length=100, description="Destination location.")
+    qty_moved: int = Field(..., gt=0, description="Number of birds moved.")
+    reason: Literal["SPACE", "SEPARATION", "AGE_BAND", "QUARANTINE", "MAINTENANCE", "OTHER"]
+    move_method: Literal["CARRIED", "HERDED", "CRATED"]
+    notes: Optional[str] = Field(default=None, max_length=500)
+
+    class Config:
+        json_encoders = {Decimal: str}
+
+
+class EquipmentMaintainedPayload(BaseModel):
+    """Phase 6.3-22: EQUIPMENT_MAINTAINED event payload. flock_id OPTIONAL (whole-farm equipment).
+
+    Records maintenance activity on poultry-related equipment.
+    """
+    equipment_type: Literal["FEEDER", "WATERER", "HEATING", "VENTILATION", "LIGHTING", "NEST_BOX", "FENCING", "OTHER"]
+    maintenance_type: Literal["REPAIR", "CLEANING", "REPLACEMENT", "INSPECTION", "CALIBRATION"]
+    cost_fjd: Optional[Decimal] = Field(default=None, gt=0, max_digits=10, decimal_places=2, description="Optional cost in FJD if maintenance involved expense.")
+    performed_by: Literal["OWNER", "WORKER", "EXTERNAL_SERVICE"]
+    notes: Optional[str] = Field(default=None, max_length=500)
+
+    class Config:
+        json_encoders = {Decimal: str}
+
+
 EVENT_TYPE_REGISTRY: dict = {
     "EGGS_COLLECTED":         (EggsCollectedPayload,         "tenant.poultry_event_log", 1),
     "MORTALITY_LOGGED":       (MortalityLoggedPayload,       "tenant.poultry_event_log", 1),
@@ -380,6 +411,8 @@ EVENT_TYPE_REGISTRY: dict = {
     "PEST_CONTROL_APPLIED":   (PestControlAppliedPayload,    "tenant.poultry_event_log", 1),
     "TEMPERATURE_RECORDED":   (TemperatureRecordedPayload,   "tenant.poultry_event_log", 1),
     "EGGS_GRADED":            (EggsGradedPayload,            "tenant.poultry_event_log", 1),
+    "FLOCK_MOVED":            (FlockMovedPayload,            "tenant.poultry_event_log", 1),
+    "EQUIPMENT_MAINTAINED":   (EquipmentMaintainedPayload,   "tenant.poultry_event_log", 1),
 }
 
 # Vocabularies (used for app-layer validation in events.py)

@@ -73,6 +73,8 @@ const VisitorLoggedNew      = lazy(() => import("./pages/farmer/poultry/VisitorL
 const PestControlAppliedNew = lazy(() => import("./pages/farmer/poultry/PestControlAppliedNew"));
 const TemperatureRecordedNew = lazy(() => import("./pages/farmer/poultry/TemperatureRecordedNew"));
 const EggsGradedNew          = lazy(() => import("./pages/farmer/poultry/EggsGradedNew"));
+const FlockMovedNew          = lazy(() => import("./pages/farmer/poultry/FlockMovedNew"));
+const EquipmentMaintainedNew = lazy(() => import("./pages/farmer/poultry/EquipmentMaintainedNew"));
 const PoultryDashboard      = lazy(() => import("./pages/farmer/poultry/PoultryDashboard"));
 const PoultryCompliance     = lazy(() => import("./pages/farmer/poultry/PoultryCompliance"));
 const PoultryBankEvidence   = lazy(() => import("./pages/farmer/poultry/PoultryBankEvidence"));
@@ -201,6 +203,8 @@ export default function App() {
             <Route path="/farm/poultry/pest-control/applied" element={<PestControlAppliedNew  />} />
             <Route path="/farm/poultry/temperature/recorded" element={<TemperatureRecordedNew  />} />
             <Route path="/farm/poultry/eggs/graded" element={<EggsGradedNew  />} />
+            <Route path="/farm/poultry/flock/moved" element={<FlockMovedNew  />} />
+            <Route path="/farm/poultry/equipment/maintained" element={<EquipmentMaintainedNew  />} />
             <Route path="/farm/poultry" element={<PoultryDashboard  />} />
             <Route path="/farm/poultry/bank-evidence" element={<PoultryBankEvidence  />} />
             <Route path="/classroom"         element={<Classroom     />} />
