@@ -134,6 +134,8 @@ const EVENT_ROUTES = {
   CULL_LOGGED:        "/farm/poultry/cull/logged",
   VISITOR_LOGGED:        "/farm/poultry/visitor/logged",
   PEST_CONTROL_APPLIED:  "/farm/poultry/pest-control/applied",
+  TEMPERATURE_RECORDED:  "/farm/poultry/temperature/recorded",
+  EGGS_GRADED:           "/farm/poultry/eggs/graded",
 };
 
 const EVENT_ICONS = {

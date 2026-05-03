@@ -796,6 +796,27 @@ async def submit_event(
                     error_envelope("chemical_not_found", f"Chemical {chemical_id_value} not found in shared.chemical_library."),
                 )
 
+    # 2v. TEMPERATURE_RECORDED-specific: flock_id REQUIRED (coop-scoped) (Phase 6.3-19)
+    if submission.event_type == "TEMPERATURE_RECORDED":
+        if submission.anchors.flock_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=error_envelope("temperature_recorded_requires_flock", "TEMPERATURE_RECORDED requires a flock_id anchor (coop-scoped event)."),
+            )
+        if not isinstance(submission.payload, dict):
+            raise HTTPException(400, error_envelope("invalid_payload", "Payload must be a dict."))
+
+    # 2w. EGGS_GRADED-specific: flock_id REQUIRED (Phase 6.3-20)
+    #     Subtotal validation enforced by Pydantic model_validator
+    if submission.event_type == "EGGS_GRADED":
+        if submission.anchors.flock_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=error_envelope("eggs_graded_requires_flock", "EGGS_GRADED requires a flock_id anchor (flock-scoped event)."),
+            )
+        if not isinstance(submission.payload, dict):
+            raise HTTPException(400, error_envelope("invalid_payload", "Payload must be a dict."))
+
     # 3. Validate payload against registered schema
     try:
         validated_payload = payload_schema_class(**submission.payload)

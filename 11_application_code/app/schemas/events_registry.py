@@ -17,7 +17,7 @@ payload_schema_version: increment when payload shape changes for an existing eve
 from datetime import datetime
 from decimal import Decimal
 from typing import Optional, Literal
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 # ============================================================================
@@ -317,6 +317,48 @@ class PestControlAppliedPayload(BaseModel):
         json_encoders = {Decimal: str}
 
 
+class TemperatureRecordedPayload(BaseModel):
+    """Phase 6.3-19: TEMPERATURE_RECORDED event payload. flock_id REQUIRED (coop-scoped).
+
+    Environmental tracking for heat stress prevention. Pacific climate sensitivity.
+    """
+    temperature_celsius: Decimal = Field(..., ge=Decimal("-10"), le=Decimal("50"), max_digits=4, decimal_places=1, description="Coop temperature in Celsius.")
+    humidity_pct: Optional[Decimal] = Field(default=None, ge=0, le=100, max_digits=5, decimal_places=1, description="Relative humidity %.")
+    time_of_day: Literal["MORNING", "MIDDAY", "AFTERNOON", "EVENING", "NIGHT"]
+    notes: Optional[str] = Field(default=None, max_length=500)
+
+    class Config:
+        json_encoders = {Decimal: str}
+
+
+class EggsGradedPayload(BaseModel):
+    """Phase 6.3-20: EGGS_GRADED event payload. flock_id REQUIRED.
+
+    Records grading of collected eggs into quality categories.
+    Validator: grade_a + grade_b + cracked + dirty MUST equal total_qty.
+    """
+    total_qty: int = Field(..., gt=0, description="Total eggs graded.")
+    grade_a_qty: int = Field(..., ge=0, description="Grade A (premium) eggs.")
+    grade_b_qty: int = Field(..., ge=0, description="Grade B (standard) eggs.")
+    cracked_qty: int = Field(..., ge=0, description="Cracked eggs (unsellable for retail).")
+    dirty_qty: int = Field(..., ge=0, description="Dirty eggs requiring cleaning.")
+    unit_price_fjd_grade_a: Optional[Decimal] = Field(default=None, gt=0, max_digits=8, decimal_places=2, description="Selling price per Grade A egg in FJD.")
+    unit_price_fjd_grade_b: Optional[Decimal] = Field(default=None, gt=0, max_digits=8, decimal_places=2, description="Selling price per Grade B egg in FJD.")
+    notes: Optional[str] = Field(default=None, max_length=500)
+
+    @model_validator(mode='after')
+    def validate_subtotals_equal_total(self):
+        subtotal = self.grade_a_qty + self.grade_b_qty + self.cracked_qty + self.dirty_qty
+        if subtotal != self.total_qty:
+            raise ValueError(
+                f"Subtotals must equal total_qty: grade_a({self.grade_a_qty}) + grade_b({self.grade_b_qty}) + cracked({self.cracked_qty}) + dirty({self.dirty_qty}) = {subtotal}, expected {self.total_qty}"
+            )
+        return self
+
+    class Config:
+        json_encoders = {Decimal: str}
+
+
 EVENT_TYPE_REGISTRY: dict = {
     "EGGS_COLLECTED":         (EggsCollectedPayload,         "tenant.poultry_event_log", 1),
     "MORTALITY_LOGGED":       (MortalityLoggedPayload,       "tenant.poultry_event_log", 1),
@@ -336,6 +378,8 @@ EVENT_TYPE_REGISTRY: dict = {
     "CULL_LOGGED":            (CullLoggedPayload,            "tenant.poultry_event_log", 1),
     "VISITOR_LOGGED":         (VisitorLoggedPayload,         "tenant.poultry_event_log", 1),
     "PEST_CONTROL_APPLIED":   (PestControlAppliedPayload,    "tenant.poultry_event_log", 1),
+    "TEMPERATURE_RECORDED":   (TemperatureRecordedPayload,   "tenant.poultry_event_log", 1),
+    "EGGS_GRADED":            (EggsGradedPayload,            "tenant.poultry_event_log", 1),
 }
 
 # Vocabularies (used for app-layer validation in events.py)
