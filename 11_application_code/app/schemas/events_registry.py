@@ -222,6 +222,34 @@ class CoopCleanedPayload(BaseModel):
         json_encoders = {Decimal: str}
 
 
+class FeedPurchasedPayload(BaseModel):
+    """Phase 6.3-13: FEED_PURCHASED event payload. flock_id OPTIONAL (farm-wide purchase allowed).
+    Bank Evidence input - cost_fjd captured for cashflow + lender verification.
+    feed_id REQUIRED FK to POULTRY_FEED. supplier_id OPTIONAL FK to POULTRY_SUPPLIER."""
+    feed_id: str = Field(..., description="UUID of feed type in shared.farm_libraries POULTRY_FEED.")
+    qty_kg: Decimal = Field(..., gt=0, max_digits=10, decimal_places=3, description="Quantity purchased in kg.")
+    cost_fjd: Decimal = Field(..., gt=0, max_digits=12, decimal_places=2, description="Total cost in Fijian dollars.")
+    supplier_id: Optional[str] = Field(default=None, description="Optional UUID of supplier in shared.farm_libraries POULTRY_SUPPLIER.")
+    payment_method: Literal["CASH", "MPAISA", "CHEQUE", "CREDIT", "OTHER"]
+    invoice_ref: Optional[str] = Field(default=None, max_length=60, description="Optional invoice / receipt reference.")
+    notes: Optional[str] = Field(default=None, max_length=500)
+
+    class Config:
+        json_encoders = {Decimal: str}
+
+
+class WaterConsumedPayload(BaseModel):
+    """Phase 6.3-14: WATER_CONSUMED event payload. flock_id REQUIRED (coop-scoped).
+    Records hydration consumption for a flock over a specified period."""
+    qty_litres: Decimal = Field(..., gt=0, max_digits=10, decimal_places=2, description="Water consumed in litres.")
+    source: Literal["TANK", "TAP", "WELL", "RAIN", "OTHER"]
+    period: Literal["DAILY", "WEEKLY", "MONTHLY"]
+    notes: Optional[str] = Field(default=None, max_length=500)
+
+    class Config:
+        json_encoders = {Decimal: str}
+
+
 EVENT_TYPE_REGISTRY: dict = {
     "EGGS_COLLECTED":     (EggsCollectedPayload,     "tenant.poultry_event_log", 1),
     "MORTALITY_LOGGED":   (MortalityLoggedPayload,   "tenant.poultry_event_log", 1),
@@ -235,6 +263,8 @@ EVENT_TYPE_REGISTRY: dict = {
     "FEED_USED":          (FeedUsedPayload,          "tenant.poultry_event_log", 1),
     "LITTER_CHANGED":     (LitterChangedPayload,     "tenant.poultry_event_log", 1),
     "COOP_CLEANED":       (CoopCleanedPayload,       "tenant.poultry_event_log", 1),
+    "FEED_PURCHASED":     (FeedPurchasedPayload,     "tenant.poultry_event_log", 1),
+    "WATER_CONSUMED":     (WaterConsumedPayload,     "tenant.poultry_event_log", 1),
 }
 
 # Vocabularies (used for app-layer validation in events.py)

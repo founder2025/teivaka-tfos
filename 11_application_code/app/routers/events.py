@@ -686,6 +686,59 @@ async def submit_event(
                     error_envelope("disinfectant_not_found", f"Disinfectant {disinfectant_id_value} not found or not active."),
                 )
 
+    # 2p. FEED_PURCHASED-specific: feed_id valid POULTRY_FEED, supplier_id valid if provided (Phase 6.3-13)
+    #     flock_id OPTIONAL - farm-wide purchase event.
+    if submission.event_type == "FEED_PURCHASED":
+        if not isinstance(submission.payload, dict):
+            raise HTTPException(400, error_envelope("invalid_payload", "Payload must be a dict."))
+        feed_id_value = submission.payload.get("feed_id")
+        if not feed_id_value:
+            raise HTTPException(400, error_envelope("missing_feed_id", "feed_id is required."))
+        try:
+            feed_uuid = UUID(str(feed_id_value))
+        except (ValueError, TypeError):
+            raise HTTPException(400, error_envelope("invalid_feed_id", "feed_id must be a valid UUID."))
+        feed_check = await db.execute(
+            text("""
+                SELECT library_id FROM shared.farm_libraries
+                WHERE library_id = :fid AND library_type = 'POULTRY_FEED' AND is_active = TRUE
+            """),
+            {"fid": feed_uuid},
+        )
+        if feed_check.first() is None:
+            raise HTTPException(
+                404,
+                error_envelope("feed_not_found", f"Feed {feed_id_value} not found or not active."),
+            )
+        supplier_id_value = submission.payload.get("supplier_id")
+        if supplier_id_value is not None:
+            try:
+                supplier_uuid = UUID(str(supplier_id_value))
+            except (ValueError, TypeError):
+                raise HTTPException(400, error_envelope("invalid_supplier_id", "supplier_id must be a valid UUID."))
+            supplier_check = await db.execute(
+                text("""
+                    SELECT library_id FROM shared.farm_libraries
+                    WHERE library_id = :sid AND library_type = 'POULTRY_SUPPLIER' AND is_active = TRUE
+                """),
+                {"sid": supplier_uuid},
+            )
+            if supplier_check.first() is None:
+                raise HTTPException(
+                    404,
+                    error_envelope("supplier_not_found", f"Supplier {supplier_id_value} not found or not active."),
+                )
+
+    # 2q. WATER_CONSUMED-specific: flock_id REQUIRED (coop-scoped event) (Phase 6.3-14)
+    if submission.event_type == "WATER_CONSUMED":
+        if submission.anchors.flock_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=error_envelope("water_consumed_requires_flock", "WATER_CONSUMED requires a flock_id anchor (coop-scoped event)."),
+            )
+        if not isinstance(submission.payload, dict):
+            raise HTTPException(400, error_envelope("invalid_payload", "Payload must be a dict."))
+
     # 3. Validate payload against registered schema
     try:
         validated_payload = payload_schema_class(**submission.payload)
