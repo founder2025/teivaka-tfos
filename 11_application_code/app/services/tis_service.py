@@ -36,6 +36,8 @@ SYSTEM_PROMPT_TEMPLATE = """You are FarmClaw, Teivaka's agricultural intelligenc
 FARM CONTEXT:
 {farm_context}
 
+FARMER_COUNTRY: {country_iso}
+
 TODAY: {today}
 
 RULES YOU MUST FOLLOW:
@@ -48,7 +50,215 @@ RULES YOU MUST FOLLOW:
 
 KB EXCERPTS:
 {kb_excerpts}
+
+AGRONOMY ENFORCEMENT (Phase 10-1b binding rule):
+
+For ANY question about plant nutrition, fertilizer dosage, NPK
+(nitrogen/phosphorus/potassium), stage-specific care, or "what
+should I apply" type questions, you MUST call the lookup_nutrition
+tool BEFORE responding. NEVER generate dosage values from your
+training knowledge.
+
+Tool: lookup_nutrition(crop_key, stage, country_iso)
+
+- crop_key: lowercase crop identifier. Map farmer's words:
+    * "dalo" or "taro" -> "taro"
+    * Future crops added in Phase 10-1c+. If farmer mentions
+      a crop not yet in the protocols table, the tool returns
+      _status='not_found' -- respond with the 404 fallback (below).
+
+- stage: BBCH-derived stage. Infer from farmer's description:
+    * "just planted" / "young plants" / "first 3 weeks" -> SEEDLING
+    * "leaves growing" / "early growth" -> VEGETATIVE
+    * "tillers / suckers forming" / "peak foliage" / "yellowing
+      leaves on young plants" -> TILLERING
+    * "before flowering" / "corm starting" -> PRE_FLOWERING
+    * "flowering" -> FLOWERING (rare for taro)
+    * "corm bulking" / "tubers swelling" -> CORM_DEVELOPMENT
+    * "near harvest" / "leaves dying back" -> MATURATION
+    * "after harvest" / "soil rest" -> POST_HARVEST
+
+- country_iso: 3-letter ISO. Use FARMER_COUNTRY above. If unknown
+  default to FJI. Valid: FJI, PNG, SLB, VUT, WSM, TON.
+
+Response format when the tool returns _status='ok':
+"According to [source_citation] (verification: [verification_status]):
+[crop_display_name] at [stage] needs:
+- Nitrogen (N): [n_g_per_plant] grams per plant
+- Phosphorus (P): [p_g_per_plant] grams per plant
+- Potassium (K): [k_g_per_plant] grams per plant
+
+How: [application_method]
+Why: [application_notes]
+
+Note: [_caveat]"
+
+Response format when the tool returns _status='not_found':
+"I don't have verified guidance for that crop or stage yet. I'd
+recommend contacting your local extension officer or agriculture
+ministry for site-specific advice."
+
+ABSOLUTE RULES:
+- NEVER state NPK values without calling the tool first
+- NEVER use units other than grams per plant for smallholder advice
+- NEVER skip the verification_status caveat
+- NEVER claim authority on agronomy beyond what the tool returns
 """
+
+
+# Phase 10-1b: lookup_nutrition tool definition (Anthropic function-calling schema).
+# When TIS receives a nutrition/fertilizer/NPK question, the prompt above forces
+# it to call this tool instead of generating dosage values from training data.
+NUTRITION_TOOL = {
+    "name": "lookup_nutrition",
+    "description": (
+        "Look up verified NPK fertilizer guidance for a crop at a specific growth "
+        "stage in a specific Pacific Island country. Returns structured nutrition "
+        "data from the FAO Pacific Crop Nutrition Manual + SPC Technical Bulletin. "
+        "ALWAYS call this for any nutrition/fertilizer question -- never generate "
+        "dosage values from training knowledge."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "crop_key": {
+                "type": "string",
+                "description": (
+                    "Lowercase crop identifier. Currently supports: 'taro' "
+                    "(also accepts 'dalo' as common name; map to 'taro')."
+                ),
+            },
+            "stage": {
+                "type": "string",
+                "enum": [
+                    "SEEDLING", "VEGETATIVE", "TILLERING", "PRE_FLOWERING",
+                    "FLOWERING", "CORM_DEVELOPMENT", "FRUIT_SET",
+                    "MATURATION", "POST_HARVEST",
+                ],
+                "description": (
+                    "BBCH-derived growth stage. Infer from farmer description "
+                    "(e.g., 'yellowing leaves on young plants' -> TILLERING)."
+                ),
+            },
+            "country_iso": {
+                "type": "string",
+                "enum": ["FJI", "PNG", "SLB", "VUT", "WSM", "TON"],
+                "description": (
+                    "3-letter ISO country code. Default to FJI if unknown. "
+                    "FJI=Fiji, PNG=Papua New Guinea, SLB=Solomon Islands, "
+                    "VUT=Vanuatu, WSM=Samoa, TON=Tonga."
+                ),
+            },
+        },
+        "required": ["crop_key", "stage", "country_iso"],
+    },
+}
+
+
+# Hardcoded crop-name normalisation. Phase 10-1c+ will widen this set.
+CROP_NORMALIZATION = {
+    "dalo": "taro",
+    "taro": "taro",
+}
+
+
+# Keyword surface for nutrition intent. When ANY of these appear we force the
+# tool-enabled Claude path so the KB short-circuit cannot block the lookup.
+NUTRITION_INTENT_KEYWORDS = (
+    "fertilizer", "fertiliser", "fertilize", "fertilise",
+    "npk", "nitrogen", "phosphorus", "potassium",
+    "nutrient", "nutrition",
+    "what should i apply", "what to apply",
+    "dose", "dosage",
+    "feed my", "feeding",
+    "yellowing", "yellow leaves",
+)
+
+
+def is_nutrition_question(msg: str) -> bool:
+    msg_lower = msg.lower()
+    return any(kw in msg_lower for kw in NUTRITION_INTENT_KEYWORDS)
+
+
+async def execute_lookup_nutrition(
+    session: AsyncSession,
+    crop_key: str,
+    stage: str,
+    country_iso: str,
+) -> dict:
+    """Look up the agronomy protocol and return a flat dict for Claude.
+
+    Calls shared.crop_nutrition_protocols directly. Same fallback logic as the
+    /api/v1/agronomy/nutrition/{crop}/{stage} HTTP endpoint: prefer country
+    match, fall back to NULL country (global), 404 if neither.
+    """
+    crop_in = (crop_key or "").lower().strip()
+    crop_normalized = CROP_NORMALIZATION.get(crop_in, crop_in)
+    stage_upper = (stage or "").upper().strip()
+    country_upper = (country_iso or "FJI").upper().strip()
+
+    sql = """
+        SELECT crop_display_name, stage_order, stage_window_text,
+               country_iso, n_g_per_plant, p_g_per_plant, k_g_per_plant,
+               application_method, application_notes,
+               verification_status, source_citation
+        FROM shared.crop_nutrition_protocols
+        WHERE crop_key = :ck AND stage = :st
+          AND (country_iso = :ci OR country_iso IS NULL)
+        ORDER BY CASE WHEN country_iso = :ci THEN 1 ELSE 2 END
+        LIMIT 1
+    """
+    result = await session.execute(
+        text(sql),
+        {"ck": crop_normalized, "st": stage_upper, "ci": country_upper},
+    )
+    row = result.first()
+    if row is None:
+        return {
+            "_status": "not_found",
+            "_message": (
+                f"No verified guidance for {crop_normalized} at {stage_upper} "
+                f"in {country_upper}."
+            ),
+        }
+
+    return {
+        "_status": "ok",
+        "crop_key": crop_normalized,
+        "crop_display_name": row.crop_display_name,
+        "stage": stage_upper,
+        "stage_window": row.stage_window_text,
+        "country_iso": row.country_iso,
+        "n_g_per_plant": float(row.n_g_per_plant),
+        "p_g_per_plant": float(row.p_g_per_plant),
+        "k_g_per_plant": float(row.k_g_per_plant),
+        "application_method": row.application_method,
+        "application_notes": row.application_notes,
+        "verification_status": row.verification_status,
+        "source_citation": row.source_citation,
+        "_caveat": (
+            "Values seeded from FAO Pacific Crop Nutrition Manual 2018. "
+            "Marked SEED_FAO_UNVERIFIED. For site-specific guidance, "
+            "consult local extension officer."
+        ),
+    }
+
+
+async def resolve_farmer_country(session: AsyncSession, tenant_id: str) -> str:
+    """Read tenant.tenants.country; default FJI on miss/error."""
+    try:
+        res = await session.execute(
+            text("SELECT country FROM tenant.tenants WHERE tenant_id = :tid"),
+            {"tid": tenant_id},
+        )
+        r = res.first()
+        if r and r.country:
+            c = str(r.country).upper().strip()
+            if len(c) == 3 and c in {"FJI", "PNG", "SLB", "VUT", "WSM", "TON"}:
+                return c
+    except Exception as e:
+        logger.warning("resolve_farmer_country failed: %s", e)
+    return "FJI"
 
 
 async def check_tis_rate_limit(
@@ -249,6 +459,12 @@ async def execute_tis_query(
     # Classify intent
     tis_module = await classify_intent(user_message)
 
+    # Phase 10-1b: detect nutrition intent. When true, force the tool-enabled
+    # Claude path even if classify_intent routed to KB and the KB lookup
+    # returned nothing -- otherwise the not-found short-circuit would block
+    # the lookup_nutrition tool from ever firing.
+    nutrition_question = is_nutrition_question(user_message)
+
     # Assemble context
     farm_context = ""
     kb_excerpts = ""
@@ -263,8 +479,8 @@ async def execute_tis_query(
                 f"[{a['title']}] (confidence: {a['similarity']:.2f})\n{a['content_chunk']}"
                 for a in kb_articles
             ])
-        else:
-            # No validated KB content found -- return hard not-found response
+        elif not nutrition_question:
+            # No validated KB content AND not a nutrition question -- hard not-found.
             return {
                 "tis_module": MODULE_KNOWLEDGE_BROKER,
                 "response": KB_NOT_FOUND_MESSAGE,
@@ -274,10 +490,16 @@ async def execute_tis_query(
                 "calls_remaining": rate["calls_remaining"],
                 "latency_ms": int((time.time() - start_time) * 1000),
             }
+        # else: nutrition question with no KB hits -- fall through to Claude
+        # so it can call the lookup_nutrition tool.
+
+    # Resolve farmer country for the prompt + tool default.
+    country_iso = await resolve_farmer_country(session, tenant_id)
 
     # Build system prompt
     system_prompt = SYSTEM_PROMPT_TEMPLATE.format(
         farm_context=farm_context or "No farm selected.",
+        country_iso=country_iso,
         today=date.today().isoformat(),
         kb_excerpts=kb_excerpts or "No KB articles loaded.",
     )
@@ -286,16 +508,65 @@ async def execute_tis_query(
     messages = list(conversation_history[-10:])  # Last 10 for context window
     messages.append({"role": "user", "content": user_message})
 
-    # Call Claude
-    response = await anthropic_client.messages.create(
-        model=settings.anthropic_model,
-        max_tokens=settings.anthropic_max_tokens,
-        system=system_prompt,
-        messages=messages,
-    )
+    # Call Claude with the lookup_nutrition tool wired in. Loop until the
+    # model stops requesting tool calls (cap at 3 iterations to bound runtime).
+    total_input_tokens = 0
+    total_output_tokens = 0
+    assistant_message = None
 
-    assistant_message = response.content[0].text
-    tokens_used = response.usage.input_tokens + response.usage.output_tokens
+    for _ in range(3):
+        response = await anthropic_client.messages.create(
+            model=settings.anthropic_model,
+            max_tokens=settings.anthropic_max_tokens,
+            system=system_prompt,
+            tools=[NUTRITION_TOOL],
+            messages=messages,
+        )
+        total_input_tokens += response.usage.input_tokens
+        total_output_tokens += response.usage.output_tokens
+
+        if response.stop_reason != "tool_use":
+            text_chunks = [
+                b.text for b in response.content
+                if getattr(b, "type", None) == "text"
+            ]
+            assistant_message = "\n".join(text_chunks).strip()
+            break
+
+        # Execute every tool_use block in this assistant turn.
+        tool_results = []
+        for block in response.content:
+            if getattr(block, "type", None) != "tool_use":
+                continue
+            if block.name == "lookup_nutrition":
+                tool_input = block.input or {}
+                result_data = await execute_lookup_nutrition(
+                    session=session,
+                    crop_key=tool_input.get("crop_key", ""),
+                    stage=tool_input.get("stage", ""),
+                    country_iso=tool_input.get("country_iso", country_iso),
+                )
+            else:
+                result_data = {
+                    "_status": "error",
+                    "_message": f"Unknown tool: {block.name}",
+                }
+            tool_results.append({
+                "type": "tool_result",
+                "tool_use_id": block.id,
+                "content": json.dumps(result_data),
+            })
+
+        messages.append({"role": "assistant", "content": response.content})
+        messages.append({"role": "user", "content": tool_results})
+
+    if assistant_message is None:
+        assistant_message = (
+            "I had trouble completing that request. Please try rephrasing or "
+            "contact support."
+        )
+
+    tokens_used = total_input_tokens + total_output_tokens
     latency_ms = int((time.time() - start_time) * 1000)
 
     # Log to ai_commands
@@ -340,12 +611,12 @@ async def log_ai_command(
         text("""
             INSERT INTO tenant.ai_commands
                 (command_id, command_date, tenant_id, user_id, farm_id,
-                 tis_module, raw_input, execution_status, result_summary,
-                 tokens_used, latency_ms)
+                 command_type, tis_module, raw_input, execution_status,
+                 result_summary, tokens_used, latency_ms)
             VALUES
                 (:command_id, NOW(), :tenant_id, :user_id, :farm_id,
-                 :tis_module, :raw_input, 'SUCCESS', :result_summary,
-                 :tokens_used, :latency_ms)
+                 'CHAT', :tis_module, :raw_input, 'SUCCESS',
+                 :result_summary, :tokens_used, :latency_ms)
         """),
         {
             "command_id": command_id,
