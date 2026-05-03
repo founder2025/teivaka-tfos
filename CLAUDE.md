@@ -11,21 +11,21 @@ Read before any group-related sprint planning or build work:
 
 ## Current state (refreshed every session — this section is mutable)
 
-**Last verified:** 2026-05-03
+**Last verified:** 2026-05-03 (Sprint 7 close)
 
-**Production:** healthy (with caveats). teivaka.com HTTPS live.
-- 6 containers running:
+**Production:** healthy. teivaka.com HTTPS live.
+- 6 containers running (all healthy as of Phase 8-2b commit 1194331):
   - `teivaka_api` — healthy
   - `teivaka_db` — healthy
   - `teivaka_redis` — healthy
-  - `teivaka_caddy` — **unhealthy** as of 2026-05-03 (admin healthcheck transient; routing OK; investigate)
-  - `teivaka_worker_ai` — unhealthy 8+ days, diagnosis pending
-  - `teivaka_beat` — unhealthy 12+ days, diagnosis pending
-- Last commit: `1080a9d` (Phase 8-2: Automated task generator from compliance triggers)
-- Alembic head: `054_task_created_audit` (Phase 8-2: TASK_CREATED catalog + CHECK enum)
+  - `teivaka_caddy` — healthy (was unhealthy pre-8-2b; healthcheck URL fixed)
+  - `teivaka_worker_ai` — healthy (was unhealthy pre-8-2b; YAML list-form fix + hostname stability)
+  - `teivaka_beat` — healthy (was unhealthy pre-8-2b; mtime healthcheck added)
+- Last commit: `25dfafe` (Phase 10-1b: TIS prompt enforces lookup_nutrition tool; verification-scope fix bundled)
+- Last migration: `055_crop_nutrition` (Phase 10-1: shared.crop_nutrition_protocols + 42 seed rows)
 - Branch: `feature/option-3-plus-nav-v2-1`
 
-**Phase status (Sprint 6 + 7 complete; Sprint 8 pending):**
+**Phase status (Sprint 6 + 7 closed):**
 
 *Sprint 6 closed:*
 - ✅ Phase 5.10g — Vertical Completeness Doctrine locked
@@ -35,30 +35,59 @@ Read before any group-related sprint planning or build work:
 - ✅ Phase 6.4 — Library Management UI + Farm pillar rail entry
 - ✅ Phase 6.7-1 — POULTRY Dashboard composite endpoint
 - ✅ Phase 6.10-1/1b — Bank Evidence PDF + Cashflow Statement restructure
-- ✅ Phase 9-1/1b — Public verify endpoint + infra hygiene (B38 fixed)
+- ✅ Phase 9-1/1b — Public verify endpoint + infra hygiene
 
 *Sprint 7 closed:*
 - ✅ Phase 9-2 — QR + ISO timestamp prettification + JSON-LD on verify page
-- ✅ Phase 9-3 — Public About Verification page at /verify (no hash)
+- ✅ Phase 9-3 — Public About Verification page at /verify
 - ✅ Phase 6.3-9/10 — HEALTH_OBSERVATION + FEED_USED 2-form pack
 - ✅ Phase 6.6-1 — Vaccination withholding tracking enforcement
 - ✅ Phase 6.6-2 — SEVERE HEALTH_OBSERVATION blocks sales until CLEARED
 - ✅ Phase 6.6-3 — POULTRY Compliance dashboard at /farm/compliance
 - ✅ Phase 6.7-2 — POULTRY Dashboard charts (FCR + eggs/day + mortality trends)
-- ✅ Phase 8-1 — task_queue seed + /auth/me mode field (PIVOT after Strike #59 — discovered existing SoloTaskCard infrastructure)
-- ✅ Phase 8-2 — Automated task generator from compliance triggers
+- ✅ Phase 8-1 — task_queue seed + /auth/me mode field (PIVOT: discovered existing SoloTaskCard infra; Strike #59)
+- ✅ Phase 8-2 — Automated task generator from compliance triggers (closed-loop Pacific smallholder workflow)
+- ✅ Section 14 sync 94bab19 — doc reconciliation through Phase 8-2 commit 1080a9d
+- ✅ Phase 8-2b — Infra health triage; all 6 containers green (caddy + worker_ai + beat healthchecks fixed)
+- ✅ Phase 10-1 — NPK Protocols Taro/dalo (6 Pacific countries × 7 stages = 42 rows; FAO PCNM 2018 + SPC TB 2017 cited)
+- ✅ Phase 10-1b — TIS prompt enforces lookup_nutrition tool; Strikes #62/63 architectural fix operational end-to-end
 
-**POULTRY Vertical Completeness:**
+**POULTRY Vertical Completeness (Sprint 7 close):**
 - Gate 1 Event Taxonomy: ✅ PASS
 - Gate 2 Vocabulary: ✅ PASS
 - Gate 3 Form Coverage: 11/35 events user-facing (~31%)
 - Gate 4 Library Completeness: ✅ 100%
-- Gate 5 Reports + Dashboards: 🟢 ~60% (FCR + trends)
-- Gate 6 Compliance: 🟢 ~90% (vaccination withholding + SEVERE health enforcement + compliance dashboard + auto-task generation)
-- Gate 7 Bank Evidence + Verify: 🟢 ~95% (Bank Evidence PDF + QR + verify endpoint trilogy)
-- Gate 8 Solo Voice + Kadavu: 🟡 ~60% (SoloTaskCard + auto-task pipeline; F002 activation pending)
+- Gate 5 Reports + Dashboards: 🟢 ~60%
+- Gate 6 Compliance: 🟢 ~90%
+- Gate 7 Bank Evidence + Verify: 🟢 ~95%
+- Gate 8 Solo Voice + Kadavu: 🟡 ~60%
 
-**Strikes filed: 1-64** (institutional process upgrades across Sprint 6 + 7)
+**Cross-vertical agronomy primitive (Sprint 7 close):**
+- Phase 10-1 + 10-1b shipped: TIS responds to nutrition questions with cited NPK guidance from structured KB; no LLM-generated dosages.
+- 42 seeded rows for Taro across 6 Pacific countries (FJI, PNG, SLB, VUT, WSM, TON) × 7 BBCH stages
+- Verification status enum surfaces caveat: SEED_FAO_UNVERIFIED → EXTENSION_REVIEWED → FIELD_VALIDATED
+- TIS chat restored end-to-end for all users (latent break since deployment, masked by upstream Anthropic 401)
+
+**Strikes filed: 1-78** (51 process upgrades across Sprint 6 + 7)
+
+Recent strikes (added in Sprint 7):
+- #61: every Phase commit updates Section 14 (operational hygiene)
+- #62: TIS responses for nutrition MUST resolve from structured KB, not LLM generation
+- #63: agronomy data needs verification_status enum surfaced in responses
+- #65: preserve existing CLAUDE.md heading style on doc-sync
+- #66: distinguish healthcheck-transient from service-degraded via FUNCTIONAL test
+- #67: psql connections use -U teivaka -d teivaka_db
+- #68: worker hostname stability (-d worker-ai@localhost over $$HOSTNAME)
+- #69: credential rotation requires container recreate, not restart (env reload) — persisted to memory
+- #70: strike persistence pattern (cross-session via feedback memory)
+- #71: one phase at a time; complete Six-Step Cadence before next phase — persisted to memory
+- #72: asyncpg rejects multi-statement DDL; one statement per op.execute() — persisted to memory
+- #73: verify code body's actual loop dimensions before locking commit message counts — persisted to memory
+- #74: pre-resolve IDs on host before passing to docker exec inner containers
+- #75: TIS-touching phases must verify Anthropic SDK round-trip in PRE-CHECK
+- #76: domain-boundary translation belongs in resolver functions, not data migration
+- #77: pre-existing bug discovery during phase verification → bundle minimum fix as "verification-scope plumbing"
+- #78: cascading failures mask each other; smoke through full request lifecycle, not just modified layer
 
 **Doctrine status:**
 - ✅ Section 4 Universal Naming Doctrine — framework approved
@@ -73,25 +102,42 @@ Read before any group-related sprint planning or build work:
 - B33: Phase 6.1b-4 library rename support
 - B36: Extend VACCINATION_GIVEN payload to include cost_fjd
 - B37: Track feed inventory on-hand (link FEED_USED to FEED_RECEIVED inventory deduction)
-- B40: Kernel reboot pending. Routine `trig_014kMVmVwdx7z3X2QgkqHcRH` fires 2026-05-09T06:13:27Z if not done.
-- B41: Widen tenant.alembic_version.version_num from varchar(32) to varchar(64) (Strike #53)
-- B42: Phase 8-1 hardcoded English strings — migrate to shared.naming_dictionary in Phase 8-1b
+- B40: Kernel reboot routine fires 2026-05-09T06:13:27Z; post-reboot validator routine `trig_015tW3eyQqmL75V5avLMcHer` fires 2026-05-09T06:18:00Z
+- B41: Widen tenant.alembic_version.version_num from varchar(32) to varchar(64)
+- B42: Phase 8-1 hardcoded English strings — migrate to shared.naming_dictionary
 - B43: 6 pre-existing OPEN tasks in Operator tenant task_queue (origin unknown)
-- B44: TIS layer hallucinating fertilizer/dosage. Build shared.crop_nutrition_protocols (Phase 10-1) — Taro/dalo deeply for 5 Pacific countries × 7 BBCH stages first. TIS must NEVER generate dosage values; agronomy data needs verification_status enum.
-- B45: Rename test fixture flocks (e.g. 'Phase 6.2-2 Smoke Test Flock') to realistic Pacific-style names for cleaner Solo Voice demo output (Strike #64)
+- B45: Rename test fixture flocks (e.g. 'Phase 6.2-2 Smoke Test Flock') to realistic Pacific-style names
+- B46: worker-automation + worker-notifications services missing from runtime (defined in compose but not running)
+- B47: Extract shared projection helper for agronomy data (DRY between agronomy router + tis_service)
+- B48: TIS tool execution loop drops text blocks when Claude emits both text + tool_use
+- B49: TIS tool loop max_iterations=3 with no logger.warning on cap-hit
+- B50: tenant.tenants.country format monitoring (silent-miss aspect closed by Strike #76; ongoing observability)
+- B51: Tool schema stage enum (9 values) broader than seeded data (7 stages for taro); document graceful 404 fallback
+- B52: tenant.ai_commands schema design review — command_type should have DB default; other NOT NULL columns may have similar app-side gaps
 
 **Open blockers:**
-- Q14 TTS provider — RESOLVED via Web Speech API selection in Phase 8-1 scope; SoloTaskCard already uses it
+- Q14 TTS provider — RESOLVED via Web Speech API in Phase 8-1 scope; SoloTaskCard.jsx already uses it
 - Q8 M-PAiSA merchant registration — still blocking 3.5b launch (2-6 week external lag)
-- Celery silent outage — worker_ai + beat unhealthy. Affects scheduled rules (RULE-034 ferry buffer, RULE-038 chemical compliance auto-resolve, daily Decision Engine snapshot, 13-week cashflow forecast). Diagnosis pending.
+- Naming dictionary unpopulated — blocks Phase 8-1b cleanup
 
-**Strategic position (end of Sprint 7):**
-TFOS POULTRY ships the only agtech stack with: hash-chained Bank Evidence PDFs (lender-verifiable), audit-anchored compliance enforcement (regulator-verifiable), automated compliance task generation (operator-completable), Solo voice delivery (low-literacy-accessible), and productivity charts (banker-readable). All eight Vertical Completeness gates non-zero; five at 60%+; two at 90%+.
+**Scheduled validations:**
+- B40 kernel reboot routine: 2026-05-09T06:13:27Z (routine `trig_014kMVmVwdx7z3X2QgkqHcRH`)
+- Post-reboot validator routine: 2026-05-09T06:18:00Z (routine `trig_015tW3eyQqmL75V5avLMcHer`); 4 curl checks against teivaka.com endpoints
+
+**Strategic position (Sprint 7 close):**
+TFOS POULTRY ships the only agtech stack with: hash-chained Bank Evidence PDFs (lender-verifiable), audit-anchored compliance enforcement (regulator-verifiable), automated compliance task generation (operator-completable), Solo voice delivery (low-literacy-accessible), productivity charts (banker-readable), and **cited agronomy intelligence grounded in structured KB rather than LLM hallucination** (Phase 10-1 + 10-1b operational close on Strikes #62/63).
 
 The Pacific smallholder workflow loop is operational end-to-end:
 farmer logs SEVERE → enforcement blocks sales → auto-task surfaces in Solo → farmer logs CLEARED → task auto-closes → enforcement clears.
 
-Every step hash-chained in audit.events, verifiable via /verify/{audit_hash} endpoint, scannable from Bank Evidence PDF QR.
+The TIS agronomy advisory loop is operational end-to-end:
+farmer asks "yellowing dalo leaves?" → TIS detects nutrition intent → tool call to lookup_nutrition(taro, TILLERING, FJI) → direct SQL query to shared.crop_nutrition_protocols → cited response with N=6.0g/plant + FAO citation + SEED_FAO_UNVERIFIED caveat → farmer sees grams-per-plant guidance with extension officer recommendation.
+
+All 8 POULTRY Vertical Completeness gates non-zero (5 at 60%+, 2 at 90%+).
+All 6 production containers healthy (first time since Sprint 6).
+TIS chat restored end-to-end (was silently 500-ing for unknown duration; revealed during Phase 10-1b verification gate per Strike #78).
+
+Every step hash-chained in audit.events, verifiable via /verify/{audit_hash}, scannable from Bank Evidence PDF QR.
 
 ## Architecture
 
