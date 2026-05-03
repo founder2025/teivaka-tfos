@@ -132,6 +132,8 @@ const EVENT_ROUTES = {
   WATER_CONSUMED:     "/farm/poultry/water/consumed",
   MORTALITY_INVESTIGATED: "/farm/poultry/mortality/investigated",
   CULL_LOGGED:        "/farm/poultry/cull/logged",
+  VISITOR_LOGGED:        "/farm/poultry/visitor/logged",
+  PEST_CONTROL_APPLIED:  "/farm/poultry/pest-control/applied",
 };
 
 const EVENT_ICONS = {

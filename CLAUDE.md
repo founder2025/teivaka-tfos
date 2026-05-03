@@ -22,7 +22,7 @@ Read before any group-related sprint planning or build work:
   - `teivaka_worker_ai` — healthy (was unhealthy pre-8-2b; YAML list-form fix + hostname stability)
   - `teivaka_beat` — healthy (was unhealthy pre-8-2b; mtime healthcheck added)
 - Last commit: `25dfafe` (Phase 10-1b: TIS prompt enforces lookup_nutrition tool; verification-scope fix bundled)
-- Last migration: `058_mortality_inv_cull` (Phase 6.3-15/16: MORTALITY_INVESTIGATED + CULL_LOGGED catalog + audit CHECK extends)
+- Last migration: `059_visitor_pest_ctrl` (Phase 6.3-17/18: VISITOR_LOGGED + PEST_CONTROL_APPLIED catalog + audit CHECK extends)
 - Branch: `feature/option-3-plus-nav-v2-1`
 
 **Phase status (Sprint 6 + 7 closed):**
@@ -54,11 +54,12 @@ Read before any group-related sprint planning or build work:
 - ✅ Phase 6.3-11/12 — LITTER_CHANGED + COOP_CLEANED 2-form biosecurity pack (5 POULTRY_DISINFECTANT globals seeded; Strike #80 filed on hardcoded library_type CHECK)
 - ✅ Phase 6.3-13/14 — FEED_PURCHASED + WATER_CONSUMED 2-form feed-economics pack (cost_fjd captured for Bank Evidence; whole-farm purchase pattern via Section 4a.4 anchor toggle)
 - ✅ Phase 6.3-15/16 — MORTALITY_INVESTIGATED + CULL_LOGGED 2-form mortality-detail pack (mortality story complete: LOGGED → INVESTIGATED → CULL chain audit-emitting)
+- ✅ Phase 6.3-17/18 — VISITOR_LOGGED + PEST_CONTROL_APPLIED 2-form biosecurity-continuation pack (outbreak traceability + chemical_id TEXT FK to shared.chemical_library; CROSSES 50% Form Coverage threshold)
 
 **POULTRY Vertical Completeness (Sprint 7 close):**
 - Gate 1 Event Taxonomy: ✅ PASS
 - Gate 2 Vocabulary: ✅ PASS
-- Gate 3 Form Coverage: 17/35 events user-facing (~49%)
+- Gate 3 Form Coverage: 19/35 events user-facing (~54%)
 - Gate 4 Library Completeness: ✅ 100%
 - Gate 5 Reports + Dashboards: 🟢 ~60%
 - Gate 6 Compliance: 🟢 ~90%

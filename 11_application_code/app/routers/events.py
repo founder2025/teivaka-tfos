@@ -766,6 +766,36 @@ async def submit_event(
         if not isinstance(submission.payload, dict):
             raise HTTPException(400, error_envelope("invalid_payload", "Payload must be a dict."))
 
+    # 2t. VISITOR_LOGGED-specific: farm_id required (flock_id optional), no FK validations (Phase 6.3-17)
+    if submission.event_type == "VISITOR_LOGGED":
+        if not isinstance(submission.payload, dict):
+            raise HTTPException(400, error_envelope("invalid_payload", "Payload must be a dict."))
+
+    # 2u. PEST_CONTROL_APPLIED-specific: at least one of chemical_id / non_chemical_method must be provided (Phase 6.3-18)
+    #     chemical_id is TEXT FK to shared.chemical_library.chemical_id (e.g. 'CHEM-001'), not a UUID.
+    if submission.event_type == "PEST_CONTROL_APPLIED":
+        if not isinstance(submission.payload, dict):
+            raise HTTPException(400, error_envelope("invalid_payload", "Payload must be a dict."))
+        chemical_id_value = submission.payload.get("chemical_id")
+        non_chemical_method_value = submission.payload.get("non_chemical_method")
+        if not chemical_id_value and not non_chemical_method_value:
+            raise HTTPException(
+                status_code=400,
+                detail=error_envelope("pest_control_method_required", "PEST_CONTROL_APPLIED requires either chemical_id or non_chemical_method (or both)."),
+            )
+        if chemical_id_value:
+            if not isinstance(chemical_id_value, str) or not chemical_id_value.strip():
+                raise HTTPException(400, error_envelope("invalid_chemical_id", "chemical_id must be a non-empty string."))
+            chem_check = await db.execute(
+                text("SELECT chemical_id FROM shared.chemical_library WHERE chemical_id = :cid LIMIT 1"),
+                {"cid": chemical_id_value},
+            )
+            if chem_check.first() is None:
+                raise HTTPException(
+                    404,
+                    error_envelope("chemical_not_found", f"Chemical {chemical_id_value} not found in shared.chemical_library."),
+                )
+
     # 3. Validate payload against registered schema
     try:
         validated_payload = payload_schema_class(**submission.payload)

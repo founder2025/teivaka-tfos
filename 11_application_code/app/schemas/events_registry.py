@@ -14,6 +14,7 @@ Cross-group reuse: livestock, aquaculture, crops events all register here as the
 payload_schema_version: increment when payload shape changes for an existing event_type.
 """
 
+from datetime import datetime
 from decimal import Decimal
 from typing import Optional, Literal
 from pydantic import BaseModel, Field
@@ -279,6 +280,43 @@ class CullLoggedPayload(BaseModel):
         json_encoders = {Decimal: str}
 
 
+class VisitorLoggedPayload(BaseModel):
+    """Phase 6.3-17: VISITOR_LOGGED event payload. flock_id OPTIONAL (visitor may visit whole farm).
+
+    Biosecurity foundational event for outbreak traceability.
+    """
+    visitor_type: Literal["BUYER", "SUPPLIER", "VET", "EXTENSION_OFFICER", "INSPECTOR", "OTHER_FARMER", "FAMILY", "OTHER"]
+    purpose: Literal["DELIVERY", "PURCHASE", "VETERINARY", "INSPECTION", "CONSULTATION", "SOCIAL", "OTHER"]
+    arrival_time: datetime = Field(..., description="ISO datetime of arrival.")
+    departure_time: Optional[datetime] = Field(default=None, description="ISO datetime of departure. Optional if visit ongoing.")
+    vehicle_disinfected: bool = Field(default=False, description="Was vehicle disinfected on entry?")
+    boots_disinfected: bool = Field(default=False, description="Were boots / footwear disinfected on entry?")
+    notes: Optional[str] = Field(default=None, max_length=500)
+
+    class Config:
+        json_encoders = {Decimal: str, datetime: lambda v: v.isoformat()}
+
+
+class PestControlAppliedPayload(BaseModel):
+    """Phase 6.3-18: PEST_CONTROL_APPLIED event payload. flock_id OPTIONAL.
+
+    Either chemical_id OR non_chemical_method (or both for combo treatments) must be provided.
+    chemical_id is a TEXT FK to shared.chemical_library.chemical_id (e.g. 'CHEM-001'),
+    not a UUID. Application-layer validates membership.
+    """
+    pest_target: Literal["RODENTS", "FLIES", "MITES", "LICE", "COCKROACHES", "OTHER"]
+    chemical_id: Optional[str] = Field(default=None, max_length=64, description="TEXT FK to shared.chemical_library.chemical_id (e.g. 'CHEM-001'). If provided, withholding compliance applies.")
+    non_chemical_method: Optional[Literal["TRAPS", "PHYSICAL_REMOVAL", "PREDATOR_BIRDS", "OTHER"]] = Field(default=None)
+    qty_used: Optional[Decimal] = Field(default=None, gt=0, max_digits=10, decimal_places=3)
+    unit: Optional[Literal["GRAMS", "ML", "ITEMS"]] = Field(default=None)
+    area_treated_m2: Optional[Decimal] = Field(default=None, gt=0, max_digits=10, decimal_places=2)
+    applicator_role: Literal["OWNER", "WORKER", "EXTERNAL_PEST_CONTROL"]
+    notes: Optional[str] = Field(default=None, max_length=500)
+
+    class Config:
+        json_encoders = {Decimal: str}
+
+
 EVENT_TYPE_REGISTRY: dict = {
     "EGGS_COLLECTED":         (EggsCollectedPayload,         "tenant.poultry_event_log", 1),
     "MORTALITY_LOGGED":       (MortalityLoggedPayload,       "tenant.poultry_event_log", 1),
@@ -296,6 +334,8 @@ EVENT_TYPE_REGISTRY: dict = {
     "WATER_CONSUMED":         (WaterConsumedPayload,         "tenant.poultry_event_log", 1),
     "MORTALITY_INVESTIGATED": (MortalityInvestigatedPayload, "tenant.poultry_event_log", 1),
     "CULL_LOGGED":            (CullLoggedPayload,            "tenant.poultry_event_log", 1),
+    "VISITOR_LOGGED":         (VisitorLoggedPayload,         "tenant.poultry_event_log", 1),
+    "PEST_CONTROL_APPLIED":   (PestControlAppliedPayload,    "tenant.poultry_event_log", 1),
 }
 
 # Vocabularies (used for app-layer validation in events.py)
