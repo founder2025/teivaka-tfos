@@ -15,7 +15,7 @@ payload_schema_version: increment when payload shape changes for an existing eve
 """
 
 from decimal import Decimal
-from typing import Optional
+from typing import Optional, Literal
 from pydantic import BaseModel, Field
 
 
@@ -195,6 +195,33 @@ class VaccinationGivenPayload(BaseModel):
     )
 
 
+class LitterChangedPayload(BaseModel):
+    """Phase 6.3-11: LITTER_CHANGED event payload. flock_id REQUIRED.
+    Biosecurity foundational event - records replacement of bedding/litter in a coop."""
+    litter_type: Literal["WOOD_SHAVINGS", "RICE_HUSK", "SAWDUST", "STRAW", "OTHER"]
+    qty_kg: Decimal = Field(..., gt=0, max_digits=10, decimal_places=2, description="Quantity of new litter added in kg.")
+    area_covered_m2: Optional[Decimal] = Field(default=None, gt=0, max_digits=10, decimal_places=2, description="Optional area covered in square metres.")
+    removed_litter_disposal: Literal["COMPOSTED", "BURNED", "BURIED", "SPREAD_ON_FIELD", "OTHER"]
+    notes: Optional[str] = Field(default=None, max_length=500)
+
+    class Config:
+        json_encoders = {Decimal: str}
+
+
+class CoopCleanedPayload(BaseModel):
+    """Phase 6.3-12: COOP_CLEANED event payload. flock_id REQUIRED.
+    Biosecurity foundational event - records cleaning + disinfection activity.
+    disinfectant_id (if provided) must FK to shared.farm_libraries POULTRY_DISINFECTANT."""
+    cleaning_method: Literal["WATER_RINSE", "DISINFECTANT_SPRAY", "FULL_DEEP_CLEAN", "DRY_SWEEP"]
+    disinfectant_id: Optional[str] = Field(default=None, description="Optional UUID of disinfectant in shared.farm_libraries POULTRY_DISINFECTANT.")
+    area_cleaned_m2: Optional[Decimal] = Field(default=None, gt=0, max_digits=10, decimal_places=2)
+    cleaner_role: Literal["OWNER", "WORKER", "FAMILY", "EXTERNAL"]
+    notes: Optional[str] = Field(default=None, max_length=500)
+
+    class Config:
+        json_encoders = {Decimal: str}
+
+
 EVENT_TYPE_REGISTRY: dict = {
     "EGGS_COLLECTED":     (EggsCollectedPayload,     "tenant.poultry_event_log", 1),
     "MORTALITY_LOGGED":   (MortalityLoggedPayload,   "tenant.poultry_event_log", 1),
@@ -206,6 +233,8 @@ EVENT_TYPE_REGISTRY: dict = {
     "BIRDS_SOLD":         (BirdsSoldPayload,         "tenant.poultry_event_log", 1),
     "HEALTH_OBSERVATION": (HealthObservationPayload, "tenant.poultry_event_log", 1),
     "FEED_USED":          (FeedUsedPayload,          "tenant.poultry_event_log", 1),
+    "LITTER_CHANGED":     (LitterChangedPayload,     "tenant.poultry_event_log", 1),
+    "COOP_CLEANED":       (CoopCleanedPayload,       "tenant.poultry_event_log", 1),
 }
 
 # Vocabularies (used for app-layer validation in events.py)

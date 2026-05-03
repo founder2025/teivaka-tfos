@@ -126,6 +126,8 @@ const EVENT_ROUTES = {
   BIRDS_SOLD:         "/farm/poultry/birds/sell",
   HEALTH_OBSERVATION: "/farm/poultry/health/new",
   FEED_USED:          "/farm/poultry/feed/used",
+  LITTER_CHANGED:     "/farm/poultry/litter/changed",
+  COOP_CLEANED:       "/farm/poultry/coop/cleaned",
 };
 
 const EVENT_ICONS = {

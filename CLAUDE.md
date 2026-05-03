@@ -22,7 +22,7 @@ Read before any group-related sprint planning or build work:
   - `teivaka_worker_ai` — healthy (was unhealthy pre-8-2b; YAML list-form fix + hostname stability)
   - `teivaka_beat` — healthy (was unhealthy pre-8-2b; mtime healthcheck added)
 - Last commit: `25dfafe` (Phase 10-1b: TIS prompt enforces lookup_nutrition tool; verification-scope fix bundled)
-- Last migration: `055_crop_nutrition` (Phase 10-1: shared.crop_nutrition_protocols + 42 seed rows)
+- Last migration: `056_litter_coop_disinfect` (Phase 6.3-11/12: LITTER_CHANGED catalog + audit CHECK + POULTRY_DISINFECTANT library_type + 5 seed rows)
 - Branch: `feature/option-3-plus-nav-v2-1`
 
 **Phase status (Sprint 6 + 7 closed):**
@@ -51,11 +51,12 @@ Read before any group-related sprint planning or build work:
 - ✅ Phase 8-2b — Infra health triage; all 6 containers green (caddy + worker_ai + beat healthchecks fixed)
 - ✅ Phase 10-1 — NPK Protocols Taro/dalo (6 Pacific countries × 7 stages = 42 rows; FAO PCNM 2018 + SPC TB 2017 cited)
 - ✅ Phase 10-1b — TIS prompt enforces lookup_nutrition tool; Strikes #62/63 architectural fix operational end-to-end
+- ✅ Phase 6.3-11/12 — LITTER_CHANGED + COOP_CLEANED 2-form biosecurity pack (5 POULTRY_DISINFECTANT globals seeded; Strike #80 filed on hardcoded library_type CHECK)
 
 **POULTRY Vertical Completeness (Sprint 7 close):**
 - Gate 1 Event Taxonomy: ✅ PASS
 - Gate 2 Vocabulary: ✅ PASS
-- Gate 3 Form Coverage: 11/35 events user-facing (~31%)
+- Gate 3 Form Coverage: 13/35 events user-facing (~37%)
 - Gate 4 Library Completeness: ✅ 100%
 - Gate 5 Reports + Dashboards: 🟢 ~60%
 - Gate 6 Compliance: 🟢 ~90%

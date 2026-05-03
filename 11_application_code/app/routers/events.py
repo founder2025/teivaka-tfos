@@ -648,6 +648,44 @@ async def submit_event(
                 error_envelope("vaccine_not_found", f"Vaccine {vaccine_id_value} not found or not active."),
             )
 
+    # 2n. LITTER_CHANGED-specific: flock_id REQUIRED (Phase 6.3-11)
+    if submission.event_type == "LITTER_CHANGED":
+        if submission.anchors.flock_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=error_envelope("litter_changed_requires_flock", "LITTER_CHANGED requires a flock_id anchor (coop-scoped event)."),
+            )
+        if not isinstance(submission.payload, dict):
+            raise HTTPException(400, error_envelope("invalid_payload", "Payload must be a dict."))
+
+    # 2o. COOP_CLEANED-specific: flock_id REQUIRED, disinfectant_id valid POULTRY_DISINFECTANT if provided (Phase 6.3-12)
+    if submission.event_type == "COOP_CLEANED":
+        if submission.anchors.flock_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=error_envelope("coop_cleaned_requires_flock", "COOP_CLEANED requires a flock_id anchor (coop-scoped event)."),
+            )
+        if not isinstance(submission.payload, dict):
+            raise HTTPException(400, error_envelope("invalid_payload", "Payload must be a dict."))
+        disinfectant_id_value = submission.payload.get("disinfectant_id")
+        if disinfectant_id_value is not None:
+            try:
+                disinfectant_uuid = UUID(str(disinfectant_id_value))
+            except (ValueError, TypeError):
+                raise HTTPException(400, error_envelope("invalid_disinfectant_id", "disinfectant_id must be a valid UUID."))
+            disinfectant_check = await db.execute(
+                text("""
+                    SELECT library_id FROM shared.farm_libraries
+                    WHERE library_id = :did AND library_type = 'POULTRY_DISINFECTANT' AND is_active = TRUE
+                """),
+                {"did": disinfectant_uuid},
+            )
+            if disinfectant_check.first() is None:
+                raise HTTPException(
+                    404,
+                    error_envelope("disinfectant_not_found", f"Disinfectant {disinfectant_id_value} not found or not active."),
+                )
+
     # 3. Validate payload against registered schema
     try:
         validated_payload = payload_schema_class(**submission.payload)
