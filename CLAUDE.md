@@ -11,7 +11,7 @@ Read before any group-related sprint planning or build work:
 
 ## Current state (refreshed every session — this section is mutable)
 
-**Last verified:** 2026-05-03 (Sprint 7 close)
+**Last verified:** 2026-05-03 (Sprint 7 in-flight, foundation cadence)
 
 **Production:** healthy. teivaka.com HTTPS live.
 - 6 containers running (all healthy as of Phase 8-2b commit 1194331):
@@ -21,11 +21,11 @@ Read before any group-related sprint planning or build work:
   - `teivaka_caddy` — healthy (was unhealthy pre-8-2b; healthcheck URL fixed)
   - `teivaka_worker_ai` — healthy (was unhealthy pre-8-2b; YAML list-form fix + hostname stability)
   - `teivaka_beat` — healthy (was unhealthy pre-8-2b; mtime healthcheck added)
-- Last commit: `25dfafe` (Phase 10-1b: TIS prompt enforces lookup_nutrition tool; verification-scope fix bundled)
+- Last commit: `19d7318` (Phase 6.3-17/18: VISITOR_LOGGED + PEST_CONTROL_APPLIED biosecurity-continuation pack)
 - Last migration: `059_visitor_pest_ctrl` (Phase 6.3-17/18: VISITOR_LOGGED + PEST_CONTROL_APPLIED catalog + audit CHECK extends)
 - Branch: `feature/option-3-plus-nav-v2-1`
 
-**Phase status (Sprint 6 + 7 closed):**
+**Phase status (Sprint 6 closed; Sprint 7 in-flight, foundation marathon underway):**
 
 *Sprint 6 closed:*
 - ✅ Phase 5.10g — Vertical Completeness Doctrine locked
@@ -37,7 +37,7 @@ Read before any group-related sprint planning or build work:
 - ✅ Phase 6.10-1/1b — Bank Evidence PDF + Cashflow Statement restructure
 - ✅ Phase 9-1/1b — Public verify endpoint + infra hygiene
 
-*Sprint 7 closed:*
+*Sprint 7 in-flight:*
 - ✅ Phase 9-2 — QR + ISO timestamp prettification + JSON-LD on verify page
 - ✅ Phase 9-3 — Public About Verification page at /verify
 - ✅ Phase 6.3-9/10 — HEALTH_OBSERVATION + FEED_USED 2-form pack
@@ -56,7 +56,7 @@ Read before any group-related sprint planning or build work:
 - ✅ Phase 6.3-15/16 — MORTALITY_INVESTIGATED + CULL_LOGGED 2-form mortality-detail pack (mortality story complete: LOGGED → INVESTIGATED → CULL chain audit-emitting)
 - ✅ Phase 6.3-17/18 — VISITOR_LOGGED + PEST_CONTROL_APPLIED 2-form biosecurity-continuation pack (outbreak traceability + chemical_id TEXT FK to shared.chemical_library; CROSSES 50% Form Coverage threshold)
 
-**POULTRY Vertical Completeness (Sprint 7 close):**
+**POULTRY Vertical Completeness (Sprint 7 in-flight):**
 - Gate 1 Event Taxonomy: ✅ PASS
 - Gate 2 Vocabulary: ✅ PASS
 - Gate 3 Form Coverage: 19/35 events user-facing (~54%)
@@ -66,13 +66,13 @@ Read before any group-related sprint planning or build work:
 - Gate 7 Bank Evidence + Verify: 🟢 ~95%
 - Gate 8 Solo Voice + Kadavu: 🟡 ~60%
 
-**Cross-vertical agronomy primitive (Sprint 7 close):**
+**Cross-vertical agronomy primitive (Sprint 7 in-flight):**
 - Phase 10-1 + 10-1b shipped: TIS responds to nutrition questions with cited NPK guidance from structured KB; no LLM-generated dosages.
 - 42 seeded rows for Taro across 6 Pacific countries (FJI, PNG, SLB, VUT, WSM, TON) × 7 BBCH stages
 - Verification status enum surfaces caveat: SEED_FAO_UNVERIFIED → EXTENSION_REVIEWED → FIELD_VALIDATED
 - TIS chat restored end-to-end for all users (latent break since deployment, masked by upstream Anthropic 401)
 
-**Strikes filed: 1-78** (51 process upgrades across Sprint 6 + 7)
+**Strikes filed: 1-84** (57 process upgrades across Sprint 6 + 7)
 
 Recent strikes (added in Sprint 7):
 - #61: every Phase commit updates Section 14 (operational hygiene)
@@ -92,6 +92,12 @@ Recent strikes (added in Sprint 7):
 - #76: domain-boundary translation belongs in resolver functions, not data migration
 - #77: pre-existing bug discovery during phase verification → bundle minimum fix as "verification-scope plumbing"
 - #78: cascading failures mask each other; smoke through full request lifecycle, not just modified layer
+- #79: foundational lower-numbered phases must complete before strategic-frontier work; build phases 1→10 in numerical order
+- #80: `farm_libraries.library_type` CHECK constraint hardcoded; future Phase 6.5 hardening replaces with FK to `library_type_catalog` — persisted to memory
+- #81: per-event handler block insertion in `events.py` — sequence labels (2a, 2b, 2c) must match insertion order; insert AFTER last existing block; verify post-edit via `grep "^    # 2[a-z]\."` — persisted to memory
+- #82: operator preference — every Architect output includes the next execution paste pack ready to paste with one godlike recommendation locked; decision-gate prose removed unless genuine architectural fork — persisted to memory
+- #83: Claude Code sessions verify host context at session start (`pwd && hostname && ls /opt/teivaka`); prevents wasted PRE-CHECK runs against wrong host — persisted to memory
+- #84: Section 14 doc-sync via `sed -i` can silently chain-fail across consecutive phase commits; every doc-sync must `git rev-parse HEAD` pre-commit and `grep -c` verify both new SHA present (≥1) and old SHA removed (=0) for header pointer fields, fail commit if mismatch — persisted to memory
 
 **Doctrine status:**
 - ✅ Section 4 Universal Naming Doctrine — framework approved
@@ -128,7 +134,7 @@ Recent strikes (added in Sprint 7):
 - B40 kernel reboot routine: 2026-05-09T06:13:27Z (routine `trig_014kMVmVwdx7z3X2QgkqHcRH`)
 - Post-reboot validator routine: 2026-05-09T06:18:00Z (routine `trig_015tW3eyQqmL75V5avLMcHer`); 4 curl checks against teivaka.com endpoints
 
-**Strategic position (Sprint 7 close):**
+**Strategic position (Sprint 7 in-flight):**
 TFOS POULTRY ships the only agtech stack with: hash-chained Bank Evidence PDFs (lender-verifiable), audit-anchored compliance enforcement (regulator-verifiable), automated compliance task generation (operator-completable), Solo voice delivery (low-literacy-accessible), productivity charts (banker-readable), and **cited agronomy intelligence grounded in structured KB rather than LLM hallucination** (Phase 10-1 + 10-1b operational close on Strikes #62/63).
 
 The Pacific smallholder workflow loop is operational end-to-end:
