@@ -130,6 +130,8 @@ const EVENT_ROUTES = {
   COOP_CLEANED:       "/farm/poultry/coop/cleaned",
   FEED_PURCHASED:     "/farm/poultry/feed/purchased",
   WATER_CONSUMED:     "/farm/poultry/water/consumed",
+  MORTALITY_INVESTIGATED: "/farm/poultry/mortality/investigated",
+  CULL_LOGGED:        "/farm/poultry/cull/logged",
 };
 
 const EVENT_ICONS = {

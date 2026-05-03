@@ -739,6 +739,33 @@ async def submit_event(
         if not isinstance(submission.payload, dict):
             raise HTTPException(400, error_envelope("invalid_payload", "Payload must be a dict."))
 
+    # 2r. MORTALITY_INVESTIGATED-specific: flock_id REQUIRED, optional mortality_event_id UUID format check (Phase 6.3-15)
+    if submission.event_type == "MORTALITY_INVESTIGATED":
+        if submission.anchors.flock_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=error_envelope("mortality_investigated_requires_flock", "MORTALITY_INVESTIGATED requires a flock_id anchor (flock-scoped event)."),
+            )
+        if not isinstance(submission.payload, dict):
+            raise HTTPException(400, error_envelope("invalid_payload", "Payload must be a dict."))
+        # If mortality_event_id provided, validate UUID format (existence check is soft - audit chain link only)
+        mortality_event_id_value = submission.payload.get("mortality_event_id")
+        if mortality_event_id_value is not None:
+            try:
+                UUID(str(mortality_event_id_value))
+            except (ValueError, TypeError):
+                raise HTTPException(400, error_envelope("invalid_mortality_event_id", "mortality_event_id must be a valid UUID."))
+
+    # 2s. CULL_LOGGED-specific: flock_id REQUIRED (Phase 6.3-16)
+    if submission.event_type == "CULL_LOGGED":
+        if submission.anchors.flock_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=error_envelope("cull_logged_requires_flock", "CULL_LOGGED requires a flock_id anchor (flock-scoped event)."),
+            )
+        if not isinstance(submission.payload, dict):
+            raise HTTPException(400, error_envelope("invalid_payload", "Payload must be a dict."))
+
     # 3. Validate payload against registered schema
     try:
         validated_payload = payload_schema_class(**submission.payload)

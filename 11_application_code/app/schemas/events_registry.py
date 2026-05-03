@@ -250,21 +250,52 @@ class WaterConsumedPayload(BaseModel):
         json_encoders = {Decimal: str}
 
 
+class MortalityInvestigatedPayload(BaseModel):
+    """Phase 6.3-15: MORTALITY_INVESTIGATED event payload. flock_id REQUIRED.
+
+    Captures investigation details following a mortality event. Optional
+    mortality_event_id links back to the originating MORTALITY_LOGGED audit event.
+    """
+    suspected_cause: Literal["DISEASE", "PREDATOR", "HEAT_STRESS", "FEED_RELATED", "INJURY", "UNKNOWN", "OTHER"]
+    investigation_method: Literal["VISUAL_INSPECTION", "NECROPSY", "VET_CONSULTATION", "LAB_TEST", "EXTERNAL_EXAMINATION_ONLY"]
+    findings: str = Field(..., max_length=500, description="Investigation findings; what was observed.")
+    action_taken: Optional[str] = Field(default=None, max_length=300, description="Actions taken in response.")
+    mortality_event_id: Optional[str] = Field(default=None, description="Optional UUID linking to a prior MORTALITY_LOGGED audit event.")
+    notes: Optional[str] = Field(default=None, max_length=500)
+
+
+class CullLoggedPayload(BaseModel):
+    """Phase 6.3-16: CULL_LOGGED event payload. flock_id REQUIRED.
+
+    Records intentional bird removal (culling) - distinct from natural mortality.
+    """
+    qty_culled: Decimal = Field(..., gt=0, max_digits=8, decimal_places=0, description="Number of birds culled.")
+    reason: Literal["DISEASE", "INJURY", "POOR_PRODUCTION", "END_OF_CYCLE", "OVERCROWDING", "OTHER"]
+    disposal_method: Literal["BURIED", "BURNED", "COMPOSTED", "RENDERING", "OTHER"]
+    cleared_by: Literal["OWNER", "VET", "EXTENSION_OFFICER", "WORKER"]
+    notes: Optional[str] = Field(default=None, max_length=500)
+
+    class Config:
+        json_encoders = {Decimal: str}
+
+
 EVENT_TYPE_REGISTRY: dict = {
-    "EGGS_COLLECTED":     (EggsCollectedPayload,     "tenant.poultry_event_log", 1),
-    "MORTALITY_LOGGED":   (MortalityLoggedPayload,   "tenant.poultry_event_log", 1),
-    "VACCINATION_GIVEN":  (VaccinationGivenPayload,  "tenant.poultry_event_log", 1),
-    "FEED_RECEIVED":      (FeedReceivedPayload,      "tenant.poultry_event_log", 1),
-    "WEIGHT_CHECK":       (WeightCheckPayload,       "tenant.poultry_event_log", 1),
-    "BIRD_REPLACEMENT":   (BirdReplacementPayload,   "tenant.poultry_event_log", 1),
-    "EGGS_SOLD":          (EggsSoldPayload,          "tenant.poultry_event_log", 1),
-    "BIRDS_SOLD":         (BirdsSoldPayload,         "tenant.poultry_event_log", 1),
-    "HEALTH_OBSERVATION": (HealthObservationPayload, "tenant.poultry_event_log", 1),
-    "FEED_USED":          (FeedUsedPayload,          "tenant.poultry_event_log", 1),
-    "LITTER_CHANGED":     (LitterChangedPayload,     "tenant.poultry_event_log", 1),
-    "COOP_CLEANED":       (CoopCleanedPayload,       "tenant.poultry_event_log", 1),
-    "FEED_PURCHASED":     (FeedPurchasedPayload,     "tenant.poultry_event_log", 1),
-    "WATER_CONSUMED":     (WaterConsumedPayload,     "tenant.poultry_event_log", 1),
+    "EGGS_COLLECTED":         (EggsCollectedPayload,         "tenant.poultry_event_log", 1),
+    "MORTALITY_LOGGED":       (MortalityLoggedPayload,       "tenant.poultry_event_log", 1),
+    "VACCINATION_GIVEN":      (VaccinationGivenPayload,      "tenant.poultry_event_log", 1),
+    "FEED_RECEIVED":          (FeedReceivedPayload,          "tenant.poultry_event_log", 1),
+    "WEIGHT_CHECK":           (WeightCheckPayload,           "tenant.poultry_event_log", 1),
+    "BIRD_REPLACEMENT":       (BirdReplacementPayload,       "tenant.poultry_event_log", 1),
+    "EGGS_SOLD":              (EggsSoldPayload,              "tenant.poultry_event_log", 1),
+    "BIRDS_SOLD":             (BirdsSoldPayload,             "tenant.poultry_event_log", 1),
+    "HEALTH_OBSERVATION":     (HealthObservationPayload,     "tenant.poultry_event_log", 1),
+    "FEED_USED":              (FeedUsedPayload,              "tenant.poultry_event_log", 1),
+    "LITTER_CHANGED":         (LitterChangedPayload,         "tenant.poultry_event_log", 1),
+    "COOP_CLEANED":           (CoopCleanedPayload,           "tenant.poultry_event_log", 1),
+    "FEED_PURCHASED":         (FeedPurchasedPayload,         "tenant.poultry_event_log", 1),
+    "WATER_CONSUMED":         (WaterConsumedPayload,         "tenant.poultry_event_log", 1),
+    "MORTALITY_INVESTIGATED": (MortalityInvestigatedPayload, "tenant.poultry_event_log", 1),
+    "CULL_LOGGED":            (CullLoggedPayload,            "tenant.poultry_event_log", 1),
 }
 
 # Vocabularies (used for app-layer validation in events.py)
