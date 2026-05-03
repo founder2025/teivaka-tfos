@@ -832,6 +832,16 @@ async def submit_event(
         if not isinstance(submission.payload, dict):
             raise HTTPException(400, error_envelope("invalid_payload", "Payload must be a dict."))
 
+    # 2z. INCIDENT_REPORTED-specific: farm_id required (flock_id OPTIONAL — whole-farm or coop-specific) (Phase 6.3-23)
+    if submission.event_type == "INCIDENT_REPORTED":
+        if not isinstance(submission.payload, dict):
+            raise HTTPException(400, error_envelope("invalid_payload", "Payload must be a dict."))
+
+    # 2aa. SUPPLIES_RECEIVED-specific: farm_id required (flock_id OPTIONAL) (Phase 6.3-24)
+    if submission.event_type == "SUPPLIES_RECEIVED":
+        if not isinstance(submission.payload, dict):
+            raise HTTPException(400, error_envelope("invalid_payload", "Payload must be a dict."))
+
     # 3. Validate payload against registered schema
     try:
         validated_payload = payload_schema_class(**submission.payload)

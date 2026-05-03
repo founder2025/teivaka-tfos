@@ -138,6 +138,8 @@ const EVENT_ROUTES = {
   EGGS_GRADED:           "/farm/poultry/eggs/graded",
   FLOCK_MOVED:           "/farm/poultry/flock/moved",
   EQUIPMENT_MAINTAINED:  "/farm/poultry/equipment/maintained",
+  INCIDENT_REPORTED:     "/farm/poultry/incident/reported",
+  SUPPLIES_RECEIVED:     "/farm/poultry/supplies/received",
 };
 
 const EVENT_ICONS = {

@@ -21,8 +21,8 @@ Read before any group-related sprint planning or build work:
   - `teivaka_caddy` — healthy (was unhealthy pre-8-2b; healthcheck URL fixed)
   - `teivaka_worker_ai` — healthy (was unhealthy pre-8-2b; YAML list-form fix + hostname stability)
   - `teivaka_beat` — healthy (was unhealthy pre-8-2b; mtime healthcheck added)
-- Last commit: `ad2b14a117f5263a3e61586be38b189138cf82a4` (Phase 6.3-21/22: FLOCK_MOVED + EQUIPMENT_MAINTAINED coop-management pack)
-- Last migration: `061_flock_equip_maint` (Phase 6.3-21/22: FLOCK_MOVED + EQUIPMENT_MAINTAINED catalog + audit CHECK extends)
+- Last commit: `5d89fcd5103c2d249242ae53c35bcff6b141e5cb` (Phase 6.3-23/24: INCIDENT_REPORTED + SUPPLIES_RECEIVED risk-management + supply-chain pack)
+- Last migration: `062_incident_supplies` (Phase 6.3-23/24: INCIDENT_REPORTED + SUPPLIES_RECEIVED catalog + audit CHECK extends)
 - Branch: `feature/option-3-plus-nav-v2-1`
 
 **Phase status (Sprint 6 closed; Sprint 7 in-flight, foundation marathon underway):**
@@ -57,11 +57,12 @@ Read before any group-related sprint planning or build work:
 - ✅ Phase 6.3-17/18 — VISITOR_LOGGED + PEST_CONTROL_APPLIED 2-form biosecurity-continuation pack (outbreak traceability + chemical_id TEXT FK to shared.chemical_library; CROSSES 50% Form Coverage threshold)
 - ✅ Phase 6.3-19/20 — TEMPERATURE_RECORDED + EGGS_GRADED 2-form environmental + sales-prep pack (heat-stress tracking + Grade A/B/cracked/dirty grading with subtotal=total validator + Bank Evidence pricing inputs; Form Coverage 21/35 ~60%)
 - ✅ Phase 6.3-21/22 — FLOCK_MOVED + EQUIPMENT_MAINTAINED 2-form coop-management pack (movement audit chain for quarantine/separation + maintenance cost capture for cashflow with whole-farm toggle; Form Coverage 23/35 ~66%)
+- ✅ Phase 6.3-23/24 — INCIDENT_REPORTED + SUPPLIES_RECEIVED 2-form risk-management + supply-chain pack (severity-classified incident logging + supply receipt with Bank Evidence cashflow; first phase exercising multi-char sequence label 2aa; Form Coverage 25/35 ~71%)
 
 **POULTRY Vertical Completeness (Sprint 7 in-flight):**
 - Gate 1 Event Taxonomy: ✅ PASS
 - Gate 2 Vocabulary: ✅ PASS
-- Gate 3 Form Coverage: 23/35 events user-facing (~66%)
+- Gate 3 Form Coverage: 25/35 events user-facing (~71%)
 - Gate 4 Library Completeness: ✅ 100%
 - Gate 5 Reports + Dashboards: 🟢 ~60%
 - Gate 6 Compliance: 🟢 ~90%
@@ -96,7 +97,7 @@ Recent strikes (added in Sprint 7):
 - #78: cascading failures mask each other; smoke through full request lifecycle, not just modified layer
 - #79: foundational lower-numbered phases must complete before strategic-frontier work; build phases 1→10 in numerical order
 - #80: `farm_libraries.library_type` CHECK constraint hardcoded; future Phase 6.5 hardening replaces with FK to `library_type_catalog` — persisted to memory
-- #81: per-event handler block insertion in `events.py` — sequence labels (2a, 2b, 2c) must match insertion order; insert AFTER last existing block; verify post-edit via `grep "^    # 2[a-z]\."` — persisted to memory
+- #81: per-event handler block insertion in `events.py` — sequence labels (2a, 2b, 2c, ..., 2z, 2aa, ...) must match insertion order; insert AFTER last existing block; verify post-edit via `grep "^    # 2[a-z]+\."` (multi-char regex, exercised at Phase 6.3-23/24 with 2aa) — persisted to memory
 - #82: operator preference — every Architect output includes the next execution paste pack ready to paste with one godlike recommendation locked; decision-gate prose removed unless genuine architectural fork — persisted to memory
 - #83: Claude Code sessions verify host context at session start (`pwd && hostname && ls /opt/teivaka`); prevents wasted PRE-CHECK runs against wrong host — persisted to memory
 - #84: Section 14 doc-sync via `sed -i` can silently chain-fail across consecutive phase commits; every doc-sync must `git rev-parse HEAD` pre-commit and `grep -c` verify both new SHA present (≥1) and old SHA removed (=0) for header pointer fields, fail commit if mismatch — persisted to memory

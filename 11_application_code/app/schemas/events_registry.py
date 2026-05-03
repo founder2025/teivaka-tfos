@@ -390,6 +390,40 @@ class EquipmentMaintainedPayload(BaseModel):
         json_encoders = {Decimal: str}
 
 
+class IncidentReportedPayload(BaseModel):
+    """Phase 6.3-23: INCIDENT_REPORTED event payload. flock_id OPTIONAL.
+
+    Risk tracking for predator attacks, theft, structural damage, equipment failure, etc.
+    Bank Evidence input via estimated_loss_fjd.
+    """
+    incident_type: Literal["PREDATOR_ATTACK", "THEFT", "ESCAPE", "INJURY", "STRUCTURAL_DAMAGE", "EQUIPMENT_FAILURE", "UTILITY_OUTAGE", "OTHER"]
+    severity: Literal["LOW", "MEDIUM", "HIGH", "CRITICAL"]
+    birds_affected_qty: Optional[int] = Field(default=None, ge=0, description="Number of birds affected (0 if no direct impact).")
+    estimated_loss_fjd: Optional[Decimal] = Field(default=None, ge=0, max_digits=10, decimal_places=2, description="Estimated financial loss in FJD.")
+    requires_followup: bool = Field(default=False, description="Does this incident require additional action / followup task?")
+    notes: Optional[str] = Field(default=None, max_length=500)
+
+    class Config:
+        json_encoders = {Decimal: str}
+
+
+class SuppliesReceivedPayload(BaseModel):
+    """Phase 6.3-24: SUPPLIES_RECEIVED event payload. flock_id OPTIONAL.
+
+    Records receipt of poultry supplies (bedding, medical, cleaning, packaging, feed additives, etc.).
+    Bank Evidence cashflow input via cost_fjd.
+    """
+    supply_type: Literal["BEDDING", "EQUIPMENT", "MEDICAL", "CLEANING", "FEED_ADDITIVES", "PACKAGING", "OTHER"]
+    qty_received: Decimal = Field(..., gt=0, max_digits=10, decimal_places=3, description="Quantity received.")
+    unit: Literal["KG", "L", "UNITS", "BAGS", "BOXES"]
+    cost_fjd: Optional[Decimal] = Field(default=None, ge=0, max_digits=10, decimal_places=2, description="Total cost in FJD.")
+    supplier_name: Optional[str] = Field(default=None, max_length=100, description="Supplier name (free text).")
+    notes: Optional[str] = Field(default=None, max_length=500)
+
+    class Config:
+        json_encoders = {Decimal: str}
+
+
 EVENT_TYPE_REGISTRY: dict = {
     "EGGS_COLLECTED":         (EggsCollectedPayload,         "tenant.poultry_event_log", 1),
     "MORTALITY_LOGGED":       (MortalityLoggedPayload,       "tenant.poultry_event_log", 1),
@@ -413,6 +447,8 @@ EVENT_TYPE_REGISTRY: dict = {
     "EGGS_GRADED":            (EggsGradedPayload,            "tenant.poultry_event_log", 1),
     "FLOCK_MOVED":            (FlockMovedPayload,            "tenant.poultry_event_log", 1),
     "EQUIPMENT_MAINTAINED":   (EquipmentMaintainedPayload,   "tenant.poultry_event_log", 1),
+    "INCIDENT_REPORTED":      (IncidentReportedPayload,      "tenant.poultry_event_log", 1),
+    "SUPPLIES_RECEIVED":      (SuppliesReceivedPayload,      "tenant.poultry_event_log", 1),
 }
 
 # Vocabularies (used for app-layer validation in events.py)
