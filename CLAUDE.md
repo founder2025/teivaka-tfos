@@ -142,6 +142,7 @@ Recent strikes (added in Sprint 7):
 - B71: Verify Phase 8-2b fix has not regressed on beat + worker_ai post-Strike-#94 container recreation. Confirm both still healthy after a rebuild.
 - B72: WORKER_DATABASE_URL using teivaka superuser (BYPASSRLS) for genuinely cross-tenant worker aggregation. Phase 5 Decision Engine + Phase 9 verify endpoint scope. New connection pool, secrets management, get_sync_db rewrite.
 - B73: `_evaluate_all_rules` per-farm `column "farm_id" does not exist`. Surfaced during Strike #95 functional verify; engine completed successfully but every farm's rule eval crashed and was rolled back. Rule SQL needs farm_id qualified or added to the local query context. Strike #95-followup per operator instruction.
+- B74: Reconcile parallel-terminal commits (6e53d60 Parallel Execution Doctrine + 5db74d5 Classroom pause handover). CLAUDE.md Section 3 Authority Stack tier 6 cross-reference to TFOS_Parallel_Execution_Doctrine.md still pending per 6e53d60 body. docs/doctrine/SESSION_HANDOVER_2026-05-04_classroom_pause.md says "4 healthy, 2 unhealthy" which is now stale (Strike #95 closed it). docs/doctrine/ root-owned and unwritable to tfos user — `sudo chown -R tfos:tfos /opt/teivaka/docs/doctrine` to regularize. Strike #95 close-out handover routed to 00_project_overview/ as workaround. POULTRY-lane chat acknowledgment of doctrine + Lane A assignment also pending per classroom pause handover open items.
 
 **Open blockers:**
 - Q14 TTS provider — RESOLVED via Web Speech API in Phase 8-1 scope; SoloTaskCard.jsx already uses it
