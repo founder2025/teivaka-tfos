@@ -75,7 +75,7 @@ Read before any group-related sprint planning or build work:
 - Verification status enum surfaces caveat: SEED_FAO_UNVERIFIED → EXTENSION_REVIEWED → FIELD_VALIDATED
 - TIS chat restored end-to-end for all users (latent break since deployment, masked by upstream Anthropic 401)
 
-**Strikes filed: 1-91** (58 process upgrades across Sprint 6 + 7)
+**Strikes filed: 1-92** (58 process upgrades across Sprint 6 + 7)
 
 Recent strikes (added in Sprint 7):
 - #61: every Phase commit updates Section 14 (operational hygiene)
@@ -163,6 +163,7 @@ Every step hash-chained in audit.events, verifiable via /verify/{audit_hash}, sc
 - #90: Architect must verify file-system state assumptions before authoring transformation paste packs. Every paste pack that moves/copies/transforms existing files must include PRE-CHECK verifying file presence + specify halt-and-report behavior on absence. Triggered by Strike #88 hotfix attempting to move four strike files when only one existed on disk. Full archive: 00_project_overview/strikes/strike_90_filesystem_assumption_verification.md.
 
 - #91: Paste pack injection points must use fail-loud sentinels, not plain bracketed placeholders. Banned patterns inside heredocs: [PASTE ... HERE], [INSERT ... HERE], [FILL IN ...], plain bracketed markers that bash will accept as valid content. Default: inline all content directly in paste pack. Triggered by corrected #88 hotfix containing placeholder strings inside heredocs that would have committed literal placeholder text as canonical institutional knowledge. Full archive: 00_project_overview/strikes/strike_91_paste_pack_injection_sentinels.md.
+- #92: "PHASE COMPLETE" reports verify smoke-test-passes + commit-clean but NOT user-reachability from (+) catalog UI. Hardening: every form-shipping Phase commit must include authenticated catalog-fetch smoke asserting new event_type appears in /api/v1/event-catalog response with expected catalog_group, not just that /api/v1/events accepts submission. Triggered by 13 forms code-shipped over Phases 6.3-11 through 6.3-23 being invisible to operator due to misderived has_livestock flag in event_catalog.py + WEIGHT_CHECK miscategorized in LIVESTOCK group despite poultry-themed form/route/validation. Almost-broke-prod near-miss: first fix attempt produced Python IndentationError; AST parse-check post-edit now binding pattern. Backlog opened: B58 (livestock_only over-flag review), B59 (24 padlocked catalog rows pending forms), B60 (FEED_GIVEN vs FEED_USED naming drift), B63 (catalog_group/code-alignment sweep across all 11 pillars). Full archive: 00_project_overview/strikes/strike_92_phase_complete_user_reachable_gate.md.
 
 ## Architecture
 
