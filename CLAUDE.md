@@ -75,7 +75,7 @@ Read before any group-related sprint planning or build work:
 - Verification status enum surfaces caveat: SEED_FAO_UNVERIFIED → EXTENSION_REVIEWED → FIELD_VALIDATED
 - TIS chat restored end-to-end for all users (latent break since deployment, masked by upstream Anthropic 401)
 
-**Strikes filed: 1-88** (58 process upgrades across Sprint 6 + 7)
+**Strikes filed: 1-91** (58 process upgrades across Sprint 6 + 7)
 
 Recent strikes (added in Sprint 7):
 - #61: every Phase commit updates Section 14 (operational hygiene)
@@ -102,6 +102,11 @@ Recent strikes (added in Sprint 7):
 - #83: Claude Code sessions verify host context at session start (`pwd && hostname && ls /opt/teivaka`); prevents wasted PRE-CHECK runs against wrong host — persisted to memory
 - #84: Section 14 doc-sync via `sed -i` can silently chain-fail across consecutive phase commits; every doc-sync must `git rev-parse HEAD` pre-commit and `grep -c` verify both new SHA present (≥1) and old SHA removed (=0) for header pointer fields, fail commit if mismatch — persisted to memory
 - #85: Strike #84 SHA-grep alone insufficient — `sed -i` for the SHA can succeed while leaving the parenthetical phase description stale (surfaced Phase 6.3-19/20 verification); every doc-sync must grep-verify BOTH the new SHA AND the new phase description on the Last commit line, with old SHA + old description both removed (=0), before commit — persisted to memory
+- #86: Architect must author NEXT phase paste pack the moment CURRENT phase's execution begins on Claude Code, not after Claude Code reports COMPLETE. Latency hiding pattern. ~25-30% effective cadence improvement. No parallelism risk. Full archive: 00_project_overview/strikes/strike_86_architect_latency_hiding.md.
+
+- #87: Multi-terminal parallel execution allowed IF AND ONLY IF: different feature branches + non-overlapping pillar file domains + migration sequence reservations per branch + one branch owns Section 14 updates + container rebuild coordination protocol + all Strikes 1-86 apply to both branches independently. Naive parallel execution (same branch, "different events") is BANNED — 80% catastrophic failure rate. Full archive: 00_project_overview/strikes/strike_87_pillar_parallelism_conditional.md.
+
+
 - #88: Section 14 doc-sync amend-dance creates post-amend SHA pointer drift — original commit captures THIS_SHA via `git rev-parse HEAD`, sed updates CLAUDE.md to that SHA, Strikes #84/#85 verifications PASS, then `git commit --amend` rewrites the commit producing a new SHA; CLAUDE.md is left referencing a pre-amend SHA that no longer exists in git (surfaced Phase 6.3-23/24, real HEAD 7be5cea vs CLAUDE.md pointer 5d89fcd). Hardening: Section 14 SHA pointer update must happen in a SEPARATE follow-up commit AFTER the phase commit is finalized — (a) commit phase work with CLAUDE.md content updates only, no SHA pointer; (b) capture `git rev-parse HEAD` of finalized phase commit; (c) author small operational-hygiene commit that updates CLAUDE.md SHA pointer; (d) push both commits together. Replace amend-dance pattern in all future Phase 6.3-x paste packs — persisted to memory
 
 **Doctrine status:**
@@ -153,6 +158,11 @@ All 6 production containers healthy (first time since Sprint 6).
 TIS chat restored end-to-end (was silently 500-ing for unknown duration; revealed during Phase 10-1b verification gate per Strike #78).
 
 Every step hash-chained in audit.events, verifiable via /verify/{audit_hash}, scannable from Bank Evidence PDF QR.
+- #89: Strikes filed in Architect advisory mode (not as part of a paste pack with explicit Section 14 sync) silently fail to land in /opt/teivaka/CLAUDE.md. Hardening: every Architect-filed strike must be accompanied by immediate doc-sync paste pack OR explicit deferral notation honored within 24 hours. Discovery rule: surface registry divergence immediately. Full archive: 00_project_overview/strikes/strike_89_advisory_mode_strike_drift.md.
+
+- #90: Architect must verify file-system state assumptions before authoring transformation paste packs. Every paste pack that moves/copies/transforms existing files must include PRE-CHECK verifying file presence + specify halt-and-report behavior on absence. Triggered by Strike #88 hotfix attempting to move four strike files when only one existed on disk. Full archive: 00_project_overview/strikes/strike_90_filesystem_assumption_verification.md.
+
+- #91: Paste pack injection points must use fail-loud sentinels, not plain bracketed placeholders. Banned patterns inside heredocs: [PASTE ... HERE], [INSERT ... HERE], [FILL IN ...], plain bracketed markers that bash will accept as valid content. Default: inline all content directly in paste pack. Triggered by corrected #88 hotfix containing placeholder strings inside heredocs that would have committed literal placeholder text as canonical institutional knowledge. Full archive: 00_project_overview/strikes/strike_91_paste_pack_injection_sentinels.md.
 
 ## Architecture
 
