@@ -75,7 +75,7 @@ Read before any group-related sprint planning or build work:
 - Verification status enum surfaces caveat: SEED_FAO_UNVERIFIED → EXTENSION_REVIEWED → FIELD_VALIDATED
 - TIS chat restored end-to-end for all users (latent break since deployment, masked by upstream Anthropic 401)
 
-**Strikes filed: 1-92** (58 process upgrades across Sprint 6 + 7)
+**Strikes filed: 1-93** (58 process upgrades across Sprint 6 + 7)
 
 Recent strikes (added in Sprint 7):
 - #61: every Phase commit updates Section 14 (operational hygiene)
@@ -134,6 +134,7 @@ Recent strikes (added in Sprint 7):
 - B50: tenant.tenants.country format monitoring (silent-miss aspect closed by Strike #76; ongoing observability)
 - B51: Tool schema stage enum (9 values) broader than seeded data (7 stages for taro); document graceful 404 fallback
 - B52: tenant.ai_commands schema design review — command_type should have DB default; other NOT NULL columns may have similar app-side gaps
+- B64: Stale event_type CHECK constraints on unidentified tables. Probe: `SELECT conrelid::regclass, conname, pg_get_constraintdef(oid) FROM pg_constraint WHERE conname LIKE '%event_type%' AND contype='c'`. 5 stale verb-style enum values (PLANTING, FERTILIZE, IRRIGATE, SPRAY, PRUNE) surfaced during B63 recon. Don't match current event_type vocabulary. Hypothesis: constraints on partition-children, deprecated tables, or non-audit-events tables. Effort: ~30 min recon + scoped fix migration if needed.
 
 **Open blockers:**
 - Q14 TTS provider — RESOLVED via Web Speech API in Phase 8-1 scope; SoloTaskCard.jsx already uses it
@@ -164,6 +165,7 @@ Every step hash-chained in audit.events, verifiable via /verify/{audit_hash}, sc
 
 - #91: Paste pack injection points must use fail-loud sentinels, not plain bracketed placeholders. Banned patterns inside heredocs: [PASTE ... HERE], [INSERT ... HERE], [FILL IN ...], plain bracketed markers that bash will accept as valid content. Default: inline all content directly in paste pack. Triggered by corrected #88 hotfix containing placeholder strings inside heredocs that would have committed literal placeholder text as canonical institutional knowledge. Full archive: 00_project_overview/strikes/strike_91_paste_pack_injection_sentinels.md.
 - #92: "PHASE COMPLETE" reports verify smoke-test-passes + commit-clean but NOT user-reachability from (+) catalog UI. Hardening: every form-shipping Phase commit must include authenticated catalog-fetch smoke asserting new event_type appears in /api/v1/event-catalog response with expected catalog_group, not just that /api/v1/events accepts submission. Triggered by 13 forms code-shipped over Phases 6.3-11 through 6.3-23 being invisible to operator due to misderived has_livestock flag in event_catalog.py + WEIGHT_CHECK miscategorized in LIVESTOCK group despite poultry-themed form/route/validation. Almost-broke-prod near-miss: first fix attempt produced Python IndentationError; AST parse-check post-edit now binding pattern. Backlog opened: B58 (livestock_only over-flag review), B59 (24 padlocked catalog rows pending forms), B60 (FEED_GIVEN vs FEED_USED naming drift), B63 (catalog_group/code-alignment sweep across all 11 pillars). Full archive: 00_project_overview/strikes/strike_92_phase_complete_user_reachable_gate.md.
+- #93: B63 Cluster A — WORKER_PAID -> MONEY, WORKER_TASK_DONE -> OTHER. Migration 066. Three drift classes (clear/judgment/false-positive); only Class 1 fixes belong in catalog sweeps. Cluster B (CYCLE_*/NURSERY_*/GRADING/POST_HARVEST_LOSS in OTHER) deferred — cross-pillar bucket is correct architectural choice. B64 filed for stale event_type CHECK enum probe. Full archive: 00_project_overview/strikes/strike_93_b63_cluster_a.md.
 
 ## Architecture
 
