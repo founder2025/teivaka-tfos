@@ -21,7 +21,7 @@ Read before any group-related sprint planning or build work:
   - `teivaka_caddy` — healthy (was unhealthy pre-8-2b; healthcheck URL fixed)
   - `teivaka_worker_ai` — healthy (was unhealthy pre-8-2b; YAML list-form fix + hostname stability)
   - `teivaka_beat` — healthy (was unhealthy pre-8-2b; mtime healthcheck added)
-- Last commit: `5d89fcd5103c2d249242ae53c35bcff6b141e5cb` (Phase 6.3-23/24: INCIDENT_REPORTED + SUPPLIES_RECEIVED risk-management + supply-chain pack)
+- Last commit: `7be5cea9f8f51a185451a0799460622638f8a7f4` (Phase 6.3-23/24: INCIDENT_REPORTED + SUPPLIES_RECEIVED risk-management + supply-chain pack)
 - Last migration: `062_incident_supplies` (Phase 6.3-23/24: INCIDENT_REPORTED + SUPPLIES_RECEIVED catalog + audit CHECK extends)
 - Branch: `feature/option-3-plus-nav-v2-1`
 
@@ -75,7 +75,7 @@ Read before any group-related sprint planning or build work:
 - Verification status enum surfaces caveat: SEED_FAO_UNVERIFIED → EXTENSION_REVIEWED → FIELD_VALIDATED
 - TIS chat restored end-to-end for all users (latent break since deployment, masked by upstream Anthropic 401)
 
-**Strikes filed: 1-85** (58 process upgrades across Sprint 6 + 7)
+**Strikes filed: 1-88** (58 process upgrades across Sprint 6 + 7)
 
 Recent strikes (added in Sprint 7):
 - #61: every Phase commit updates Section 14 (operational hygiene)
@@ -102,6 +102,7 @@ Recent strikes (added in Sprint 7):
 - #83: Claude Code sessions verify host context at session start (`pwd && hostname && ls /opt/teivaka`); prevents wasted PRE-CHECK runs against wrong host — persisted to memory
 - #84: Section 14 doc-sync via `sed -i` can silently chain-fail across consecutive phase commits; every doc-sync must `git rev-parse HEAD` pre-commit and `grep -c` verify both new SHA present (≥1) and old SHA removed (=0) for header pointer fields, fail commit if mismatch — persisted to memory
 - #85: Strike #84 SHA-grep alone insufficient — `sed -i` for the SHA can succeed while leaving the parenthetical phase description stale (surfaced Phase 6.3-19/20 verification); every doc-sync must grep-verify BOTH the new SHA AND the new phase description on the Last commit line, with old SHA + old description both removed (=0), before commit — persisted to memory
+- #88: Section 14 doc-sync amend-dance creates post-amend SHA pointer drift — original commit captures THIS_SHA via `git rev-parse HEAD`, sed updates CLAUDE.md to that SHA, Strikes #84/#85 verifications PASS, then `git commit --amend` rewrites the commit producing a new SHA; CLAUDE.md is left referencing a pre-amend SHA that no longer exists in git (surfaced Phase 6.3-23/24, real HEAD 7be5cea vs CLAUDE.md pointer 5d89fcd). Hardening: Section 14 SHA pointer update must happen in a SEPARATE follow-up commit AFTER the phase commit is finalized — (a) commit phase work with CLAUDE.md content updates only, no SHA pointer; (b) capture `git rev-parse HEAD` of finalized phase commit; (c) author small operational-hygiene commit that updates CLAUDE.md SHA pointer; (d) push both commits together. Replace amend-dance pattern in all future Phase 6.3-x paste packs — persisted to memory
 
 **Doctrine status:**
 - ✅ Section 4 Universal Naming Doctrine — framework approved
