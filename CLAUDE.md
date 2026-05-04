@@ -62,7 +62,7 @@ Read before any group-related sprint planning or build work:
 **POULTRY Vertical Completeness (Sprint 7 in-flight):**
 - Gate 1 Event Taxonomy: ✅ PASS
 - Gate 2 Vocabulary: ✅ PASS
-- Gate 3 Form Coverage: 25/35 events user-facing (~71%)
+- Gate 3 Form Coverage: 25/49 events user-facing (~51%, Pacific Vertical Completeness Doctrine — Form Coverage Reality Audit 2026-05-04)
 - Gate 4 Library Completeness: ✅ 100%
 - Gate 5 Reports + Dashboards: 🟢 ~60%
 - Gate 6 Compliance: 🟢 ~90%
