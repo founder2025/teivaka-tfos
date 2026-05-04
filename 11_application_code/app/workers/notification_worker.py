@@ -13,6 +13,7 @@ import psycopg2
 import psycopg2.extras
 import httpx
 from app.workers.celery_app import app as celery_app
+from app.workers.rls_helpers import with_rls
 from app.config import settings
 import logging
 
@@ -254,47 +255,64 @@ def send_batched_low_alerts():
     """
     conn = get_sync_db()
     try:
+        # Stage 1: enumerate active tenants (tenant.tenants has no RLS policy).
         cur = conn.cursor()
-        cur.execute(
-            """
-            SELECT DISTINCT tenant_id::TEXT, farm_id
-            FROM tenant.alerts
-            WHERE severity = 'LOW'
-              AND alert_status = 'ACTIVE'
-              AND whatsapp_sent = false
-              AND triggered_at > NOW() - INTERVAL '2 hours'
-            """
-        )
-        farms = cur.fetchall()
+        cur.execute("""
+            SELECT tenant_id::TEXT AS tenant_id
+            FROM tenant.tenants
+            WHERE subscription_status = 'ACTIVE'
+        """)
+        tenants = cur.fetchall()
+        cur.close()
+        conn.commit()
+
         batches_sent = 0
+        farms_checked = 0
 
-        for farm in farms:
-            tenant_id = farm["tenant_id"]
-            farm_id = farm["farm_id"]
-            cur.execute("SET LOCAL app.tenant_id = %s", (tenant_id,))
-            cur.execute(
-                """
-                SELECT title, message FROM tenant.alerts
-                WHERE farm_id = %s
-                  AND severity = 'LOW'
-                  AND alert_status = 'ACTIVE'
-                  AND whatsapp_sent = false
-                ORDER BY triggered_at DESC
-                LIMIT 5
-                """,
-                (farm_id,),
-            )
-            alerts = cur.fetchall()
-            if alerts:
-                digest = (
-                    f"📋 Daily digest — {len(alerts)} LOW alert(s) for {farm_id}:\n\n"
-                    + "\n• ".join([a["title"] for a in alerts])
-                )
-                dispatch_whatsapp_to_roles(
-                    tenant_id, farm_id, "LOW", digest, ["FOUNDER", "MANAGER"]
-                )
-                batches_sent += 1
+        for tenant in tenants:
+            tenant_id = tenant["tenant_id"]
 
-        return {"batches_sent": batches_sent, "farms_checked": len(farms)}
+            # Stage 2: per-tenant LOW alerts under RLS context.
+            with with_rls(conn, tenant_id) as cur:
+                cur.execute(
+                    """
+                    SELECT DISTINCT farm_id
+                    FROM tenant.alerts
+                    WHERE severity = 'LOW'
+                      AND alert_status = 'ACTIVE'
+                      AND whatsapp_sent = false
+                      AND triggered_at > NOW() - INTERVAL '2 hours'
+                    """
+                )
+                farms = cur.fetchall()
+
+                for farm in farms:
+                    farm_id = farm["farm_id"]
+                    farms_checked += 1
+                    cur.execute(
+                        """
+                        SELECT title, message FROM tenant.alerts
+                        WHERE farm_id = %s
+                          AND severity = 'LOW'
+                          AND alert_status = 'ACTIVE'
+                          AND whatsapp_sent = false
+                        ORDER BY triggered_at DESC
+                        LIMIT 5
+                        """,
+                        (farm_id,),
+                    )
+                    alerts = cur.fetchall()
+                    if alerts:
+                        digest = (
+                            f"📋 Daily digest — {len(alerts)} LOW alert(s) for {farm_id}:\n\n"
+                            + "\n• ".join([a["title"] for a in alerts])
+                        )
+                        dispatch_whatsapp_to_roles(
+                            tenant_id, farm_id, "LOW", digest, ["FOUNDER", "MANAGER"]
+                        )
+                        batches_sent += 1
+            conn.commit()
+
+        return {"batches_sent": batches_sent, "farms_checked": farms_checked}
     finally:
         conn.close()

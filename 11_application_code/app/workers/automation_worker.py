@@ -46,6 +46,7 @@ import json
 import uuid
 from app.config import settings
 from app.workers.celery_app import app as celery_app
+from app.workers.rls_helpers import with_rls
 
 logger = logging.getLogger(__name__)
 
@@ -192,45 +193,62 @@ def run_automation_engine(self):
     conn = get_sync_db()
 
     try:
+        # Stage 1: enumerate active tenants. tenant.tenants has no RLS policy
+        # so this scan does not need a tenant context.
         cur = conn.cursor()
-
         cur.execute("""
-            SELECT DISTINCT
-                t.tenant_id::TEXT AS tenant_id,
-                t.subscription_tier,
-                f.farm_id,
-                f.farm_name,
-                f.island_logistics
-            FROM tenant.tenants t
-            JOIN tenant.farms f ON f.tenant_id = t.tenant_id
-            WHERE t.subscription_status = 'ACTIVE'
-              AND f.is_active = true
-            ORDER BY t.tenant_id, f.farm_id
+            SELECT tenant_id::TEXT AS tenant_id, subscription_tier
+            FROM tenant.tenants
+            WHERE subscription_status = 'ACTIVE'
         """)
-        farms = cur.fetchall()
+        tenants = cur.fetchall()
+        cur.close()
+        conn.commit()
 
         total_alerts = 0
-        for farm in farms:
-            tenant_id = farm["tenant_id"]
-            farm_id = farm["farm_id"]
+        farms_processed = 0
 
-            # Row-level security context for multi-tenant isolation
-            cur.execute("SET LOCAL app.tenant_id = %s", (tenant_id,))
+        for tenant in tenants:
+            tenant_id = tenant["tenant_id"]
+            subscription_tier = tenant["subscription_tier"]
 
-            try:
-                alerts = _evaluate_all_rules(cur, tenant_id, farm_id, farm)
-                total_alerts += alerts
-                conn.commit()
-            except Exception as e:
-                logger.error(
-                    f"Error evaluating rules for farm {farm_id}: {e}", exc_info=True
-                )
-                conn.rollback()
+            # Stage 2a: list this tenant's active farms under per-tenant RLS.
+            with with_rls(conn, tenant_id) as cur:
+                cur.execute("""
+                    SELECT farm_id, farm_name, island_logistics
+                    FROM tenant.farms
+                    WHERE is_active = true
+                """)
+                farms = cur.fetchall()
+            conn.commit()
+
+            # Stage 2b: per-farm rule evaluation, each its own transaction so
+            # one farm's failure does not roll back its tenant siblings.
+            for farm_row in farms:
+                farm_id = farm_row["farm_id"]
+                farm = {
+                    "tenant_id": tenant_id,
+                    "subscription_tier": subscription_tier,
+                    "farm_id": farm_id,
+                    "farm_name": farm_row["farm_name"],
+                    "island_logistics": farm_row["island_logistics"],
+                }
+                with with_rls(conn, tenant_id) as cur:
+                    try:
+                        alerts = _evaluate_all_rules(cur, tenant_id, farm_id, farm)
+                        total_alerts += alerts
+                        conn.commit()
+                    except Exception as e:
+                        logger.error(
+                            f"Error evaluating rules for farm {farm_id}: {e}", exc_info=True
+                        )
+                        conn.rollback()
+                farms_processed += 1
 
         logger.info(
-            f"[AUTOMATION ENGINE] Complete. {total_alerts} new alerts across {len(farms)} farms."
+            f"[AUTOMATION ENGINE] Complete. {total_alerts} new alerts across {farms_processed} farms."
         )
-        return {"farms_processed": len(farms), "new_alerts": total_alerts}
+        return {"farms_processed": farms_processed, "new_alerts": total_alerts}
 
     except Exception as e:
         conn.rollback()

@@ -111,7 +111,7 @@ services:
       --loglevel=info
       --queues=automation
       --concurrency=4
-      --hostname=worker-automation@%h
+      --hostname=worker-automation@localhost
       --max-tasks-per-child=500
     env_file:
       - .env
@@ -128,9 +128,7 @@ services:
       redis:
         condition: service_healthy
     healthcheck:
-      test: >
-        ["CMD", "celery", "-A", "app.workers.celery_app", "inspect",
-         "ping", "-d", "worker-automation@$$HOSTNAME", "--timeout", "5"]
+      test: ["CMD", "celery", "-A", "app.workers.celery_app", "inspect", "ping", "-d", "worker-automation@localhost", "--timeout", "5"]
       interval: 60s
       timeout: 15s
       retries: 3
@@ -221,7 +219,7 @@ services:
       --loglevel=info
       --queues=notifications
       --concurrency=4
-      --hostname=worker-notifications@%h
+      --hostname=worker-notifications@localhost
       --max-tasks-per-child=1000
     env_file:
       - .env
@@ -238,9 +236,7 @@ services:
       redis:
         condition: service_healthy
     healthcheck:
-      test: >
-        ["CMD", "celery", "-A", "app.workers.celery_app", "inspect",
-         "ping", "-d", "worker-notifications@$$HOSTNAME", "--timeout", "5"]
+      test: ["CMD", "celery", "-A", "app.workers.celery_app", "inspect", "ping", "-d", "worker-notifications@localhost", "--timeout", "5"]
       interval: 60s
       timeout: 15s
       retries: 3
