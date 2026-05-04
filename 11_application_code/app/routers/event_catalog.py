@@ -99,13 +99,19 @@ async def list_event_catalog(
     tenant_mode = (mode_row[0] if mode_row and mode_row[0] else "SOLO").upper()
     tenant_mode_rank = MODE_RANK.get(tenant_mode, 0)
 
-    # ---- 4. Compute has_livestock on demand ----
+    # ---- 4. Compute has_livestock from configured farm_active_groups (Strike #92 fix) ----
+    # Old logic derived has_livestock from audit.events history (LIVESTOCK_% prefix lookup).
+    # That was structurally broken: POULTRY events don't carry that prefix, and fresh tenants
+    # who configure POULTRY can't see catalog until they log — chicken-and-egg.
+    # New logic: a tenant has_livestock if any of LIVESTOCK / POULTRY / AQUACULTURE
+    # is in their farm_active_groups configuration.
     livestock_row = (await db.execute(
         text("""
             SELECT EXISTS(
-                SELECT 1 FROM audit.events
-                WHERE tenant_id = :tid
-                  AND event_type LIKE 'LIVESTOCK_%'
+                SELECT 1 FROM tenant.farm_active_groups fag
+                JOIN tenant.farms f ON f.farm_id = fag.farm_id
+                WHERE f.tenant_id = :tid
+                  AND fag.catalog_group IN ('LIVESTOCK', 'POULTRY', 'AQUACULTURE')
                 LIMIT 1
             ) AS has_livestock
         """),
