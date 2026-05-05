@@ -192,6 +192,7 @@ async def create_cycle(
     tenant_id: str,
     override_reason: Optional[str] = None,
     farm_id: Optional[str] = None,
+    layer: Optional[str] = None,  # Strike #104 — shared.farm_layer enum value
 ) -> dict:
     """
     Creates a production cycle. Validates rotation first.
@@ -255,11 +256,11 @@ async def create_cycle(
                     (cycle_id, tenant_id, pu_id, zone_id, farm_id, production_id,
                      cycle_status, planting_date, planned_area_sqm, planned_yield_kg,
                      cycle_notes, created_by, total_labor_cost_fjd, total_input_cost_fjd,
-                     total_other_cost_fjd, total_revenue_fjd)
+                     total_other_cost_fjd, total_revenue_fjd, layer)
                 SELECT
                     :cycle_id, :tenant_id, :pu_id, pu.zone_id, :farm_id, :production_id,
                     :final_status, :planting_date, :planned_area_sqm, :planned_yield_kg,
-                    :cycle_notes, :created_by, 0, 0, 0, 0
+                    :cycle_notes, :created_by, 0, 0, 0, 0, :layer
                 FROM tenant.production_units pu
                 WHERE pu.pu_id = :pu_id
             """),
@@ -275,6 +276,7 @@ async def create_cycle(
                 "cycle_notes": cycle_notes,
                 "created_by": created_by_user_id,
                 "final_status": final_status,
+                "layer": layer,
             }
         )
     except IntegrityError as e:

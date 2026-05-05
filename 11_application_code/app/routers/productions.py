@@ -66,7 +66,10 @@ async def list_productions(
                        is_perennial,
                        is_livestock,
                        is_forestry,
-                       is_aquaculture
+                       is_aquaculture,
+                       suggested_layer,
+                       requires_classification_at_creation,
+                       layer_rationale
                 FROM shared.productions
                 {where_clause}
                 ORDER BY production_name

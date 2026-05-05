@@ -13,7 +13,7 @@ AVOID with override → 201 + audit row in tenant.rotation_override_log.
 """
 from datetime import date
 from decimal import Decimal
-from typing import Optional
+from typing import Optional, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field, field_validator
@@ -40,10 +40,15 @@ class CycleCreate(BaseModel):
     planned_yield_kg: Optional[float] = Field(default=None, gt=0)
     cycle_notes: Optional[str] = None
     override_reason: Optional[str] = None  # required iff rotation = AVOID
+    layer: Optional[Literal['CASH_FLOW','FOOD_SECURITY','LONG_TERM_ASSET']] = None  # Strike #104
 
 
 class CycleClose(BaseModel):
     closing_notes: Optional[str] = None
+
+
+class CycleClassifyLayer(BaseModel):
+    layer: Literal['CASH_FLOW','FOOD_SECURITY','LONG_TERM_ASSET']
 
 
 class CyclePatch(BaseModel):
@@ -147,6 +152,7 @@ async def create_cycle(
             created_by_user_id=str(user["user_id"]),
             tenant_id=str(user["tenant_id"]),
             override_reason=payload.override_reason,
+            layer=payload.layer,
         )
     except ValueError as e:
         msg = str(e)
@@ -169,6 +175,39 @@ async def create_cycle(
         )
     await db.commit()
     return success_envelope(result)
+
+
+@router.get("/needing-classification", summary="Cycles missing layer classification (Strike #104 backfill)")
+async def list_needing_classification(
+    user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_tenant_db),
+):
+    """Returns cycles where layer IS NULL for current tenant, joined with
+    suggested_layer + requires_classification_at_creation + layer_rationale
+    from shared.productions to drive LayerBackfillBanner per-cycle prefill."""
+    rows = (await db.execute(
+        text("""
+            SELECT pc.cycle_id, pc.farm_id, pc.pu_id, pc.production_id,
+                   p.production_name,
+                   p.suggested_layer,
+                   p.requires_classification_at_creation,
+                   p.layer_rationale,
+                   pc.cycle_status, pc.planting_date,
+                   pu.farmer_label AS pu_farmer_label,
+                   ROW_NUMBER() OVER (
+                       PARTITION BY pc.pu_id
+                       ORDER BY pc.planting_date ASC NULLS LAST, pc.cycle_id ASC
+                   ) AS block_sequence
+            FROM   tenant.production_cycles pc
+            JOIN   shared.productions p ON p.production_id = pc.production_id
+            LEFT JOIN tenant.production_units pu ON pu.pu_id = pc.pu_id
+            WHERE  pc.tenant_id = :tid AND pc.layer IS NULL
+            ORDER BY pc.planting_date ASC, pc.cycle_id ASC
+        """),
+        {"tid": str(user["tenant_id"])},
+    )).mappings().all()
+    cycles = [dict(r) for r in rows]
+    return success_envelope({"cycles": cycles, "count": len(cycles)})
 
 
 @router.get("/{cycle_id}", summary="Cycle detail")
@@ -253,6 +292,32 @@ async def patch_cycle(
         )
     await db.commit()
     return success_envelope(result)
+
+
+@router.patch("/{cycle_id}/classify-layer", summary="Set layer on existing cycle (Strike #104 backfill)")
+async def classify_cycle_layer(
+    cycle_id: str,
+    payload: CycleClassifyLayer,
+    user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_tenant_db),
+):
+    result = await db.execute(
+        text("""
+            UPDATE tenant.production_cycles
+            SET layer = :layer, updated_at = NOW()
+            WHERE cycle_id = :cid AND tenant_id = :tid
+            RETURNING cycle_id, layer
+        """),
+        {"layer": payload.layer, "cid": cycle_id, "tid": str(user["tenant_id"])},
+    )
+    row = result.mappings().first()
+    if not row:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=error_envelope("CYCLE_NOT_FOUND", f"Cycle {cycle_id!r} not found"),
+        )
+    await db.commit()
+    return success_envelope(dict(row))
 
 
 @router.patch("/{cycle_id}/close", summary="Close production cycle (sugar → PATCH)")

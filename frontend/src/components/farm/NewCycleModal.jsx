@@ -164,11 +164,18 @@ function AlternativesList({ alternatives, onPick }) {
   );
 }
 
+const LAYER_OPTIONS = [
+  { value: "CASH_FLOW",       label: "Cash Flow Engine" },
+  { value: "FOOD_SECURITY",   label: "Food Security" },
+  { value: "LONG_TERM_ASSET", label: "Long-Term Asset" },
+];
+
 export default function NewCycleModal({ isOpen, onClose, onCreated, farmId }) {
   const [puId, setPuId] = useState("");
   const [productionId, setProductionId] = useState("");
   const [plantingDate, setPlantingDate] = useState(todayISO());
   const [overrideReason, setOverrideReason] = useState("");
+  const [layer, setLayer] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
   const [verdict, setVerdict] = useState(null);
@@ -194,9 +201,27 @@ export default function NewCycleModal({ isOpen, onClose, onCreated, farmId }) {
     setProductionId("");
     setPlantingDate(todayISO());
     setOverrideReason("");
+    setLayer("");
     setSubmitError("");
     setVerdict(null);
   }, [isOpen]);
+
+  // Strike #104a — layer pre-fill logic from selected production.
+  const selectedProduction = useMemo(
+    () => (productionsQuery.data || []).find((p) => p.production_id === productionId),
+    [productionsQuery.data, productionId],
+  );
+  const layerRequired   = !!selectedProduction?.requires_classification_at_creation;
+  const layerSuggestion = selectedProduction?.suggested_layer || null;
+  const layerRationale  = selectedProduction?.layer_rationale || null;
+
+  // When production changes: reset layer; pre-fill from suggested unless borderline.
+  useEffect(() => {
+    if (!productionId) { setLayer(""); return; }
+    if (layerRequired) { setLayer(""); return; }
+    if (layerSuggestion) { setLayer(layerSuggestion); }
+    else { setLayer(""); }
+  }, [productionId, layerRequired, layerSuggestion]);
 
   // Default PU once the list resolves.
   useEffect(() => {
@@ -237,12 +262,14 @@ export default function NewCycleModal({ isOpen, onClose, onCreated, farmId }) {
   const needsOverride = status && REQUIRES_OVERRIDE.has(status);
   const blocked = status && HARD_BLOCK.has(status);
   const overrideOk = !needsOverride || overrideReason.trim().length > 0;
+  const layerOk = !!productionId && !!layer;  // Strike #104a — required field
   const submitDisabled =
     submitting ||
     verdictLoading ||
     !puId ||
     !productionId ||
     !plantingDate ||
+    !layerOk ||
     blocked ||
     !overrideOk;
 
@@ -254,6 +281,7 @@ export default function NewCycleModal({ isOpen, onClose, onCreated, farmId }) {
         pu_id: puId,
         production_id: productionId,
         planting_date: plantingDate,
+        layer: layer,
       };
       if (needsOverride && overrideReason.trim()) {
         body.override_reason = overrideReason.trim();
@@ -384,6 +412,37 @@ export default function NewCycleModal({ isOpen, onClose, onCreated, farmId }) {
               </option>
               <CategoryGroupedOptions productions={productions} />
             </select>
+          </div>
+
+          {/* Strategic layer — Strike #104a */}
+          <div>
+            <label className="text-xs uppercase tracking-wider font-medium block mb-1" style={{ color: C.muted }}>
+              Strategic layer
+            </label>
+            <select
+              value={layer}
+              onChange={(e) => setLayer(e.target.value)}
+              disabled={!productionId}
+              required
+              className="w-full px-3 py-2 rounded-lg text-sm focus:outline-none"
+              style={{ background: "white", border: `1px solid ${C.border}`, color: C.soil }}
+            >
+              <option value="">
+                {!productionId
+                  ? "Pick a crop first"
+                  : layerRequired
+                    ? "This crop is layer-ambiguous; please classify"
+                    : "Select layer..."}
+              </option>
+              {LAYER_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
+            {layerRationale && productionId && (
+              <p className="text-xs italic mt-1" style={{ color: C.muted }}>
+                {layerRationale}
+              </p>
+            )}
           </div>
 
           {/* Start date */}

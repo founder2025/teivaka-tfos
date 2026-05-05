@@ -37,6 +37,7 @@ import FarmSelector     from "../../components/farm/FarmSelector";
 import ModeDropdown     from "../../components/farm/ModeDropdown";
 import NewCycleButton   from "../../components/farm/NewCycleButton";
 import NewCycleModal    from "../../components/farm/NewCycleModal";
+import LayerBackfillBanner from "../../components/farm/LayerBackfillBanner";
 
 const C = {
   soil:   "#5C4033",
@@ -227,6 +228,9 @@ function FarmOverview() {
           />
         ))}
       </div>
+
+      {/* Strike #104a — layer-classification backfill banner (non-dismissable per Amendment 3) */}
+      <LayerBackfillBanner />
 
       <section
         className="bg-white rounded-2xl px-4 py-4"
