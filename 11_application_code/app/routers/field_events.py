@@ -58,6 +58,7 @@ class FieldEventCreate(BaseModel):
     farm_id: str
     pu_id: str
     cycle_id: str  # DB is NOT NULL — required despite task spec saying optional
+    production_id: str  # Strike #100 — user-explicit even though redundant with cycle_id FK
     event_type: str
     event_date: date
     performed_by_worker_id: Optional[str] = None

@@ -27,6 +27,7 @@ async def list_productions(
     prefix: Optional[str] = Query(None, description="Filter by production_id prefix (e.g. CRP, FRT, LIV, FOR, AQU, SUP)"),
     search: Optional[str] = Query(None, description="Free-text substring search on production_name"),
     is_active: Optional[bool] = Query(None, description="Filter on is_active_in_system. Default none — returns the full catalog including inactive seed rows."),
+    crop_only: Optional[bool] = Query(None, description="If true, exclude livestock/aquaculture/forestry productions (CROPS pillar selectors)."),
     user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -36,6 +37,10 @@ async def list_productions(
     if is_active is not None:
         filters.append("COALESCE(is_active_in_system, true) = :is_active")
         params["is_active"] = is_active
+    if crop_only:
+        filters.append("COALESCE(is_livestock, false) = false")
+        filters.append("COALESCE(is_aquaculture, false) = false")
+        filters.append("COALESCE(is_forestry, false) = false")
     if category:
         filters.append("category ILIKE :category")
         params["category"] = f"%{category}%"
@@ -64,7 +69,7 @@ async def list_productions(
                        is_aquaculture
                 FROM shared.productions
                 {where_clause}
-                ORDER BY category, production_name
+                ORDER BY production_name
                 """
             ),
             params,

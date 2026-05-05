@@ -199,6 +199,7 @@ class ComplianceCheckRequest(BaseModel):
 class HarvestCreate(BaseModel):
     cycle_id: str
     pu_id: str
+    production_id: str  # Strike #100 — user-explicit even though redundant with cycle_id FK
     harvest_date: date
     qty_kg: Decimal = Field(gt=0)
     grade: Optional[str] = None  # A | B | C

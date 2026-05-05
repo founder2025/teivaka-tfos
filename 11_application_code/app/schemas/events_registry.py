@@ -432,7 +432,10 @@ class SuppliesReceivedPayload(BaseModel):
 # CATALOG_TO_FIELD_VERB. WHD trigger on field_events fires off chemical_id presence.
 
 class PlantingPayload(BaseModel):
-    """Payload for PLANTING event."""
+    """Payload for PLANTING event. Strike #100 added production_id + variety_id + variety_other."""
+    production_id: str = Field(..., max_length=120)
+    variety_id: Optional[str] = Field(default=None, max_length=120)
+    variety_other: Optional[str] = Field(default=None, max_length=120)
     variety: Optional[str] = Field(default=None, max_length=120)
     plant_count: Optional[int] = Field(default=None, ge=0)
     spacing_cm: Optional[int] = Field(default=None, ge=0)
@@ -441,7 +444,8 @@ class PlantingPayload(BaseModel):
 
 
 class IrrigationPayload(BaseModel):
-    """Payload for IRRIGATION event."""
+    """Payload for IRRIGATION event. Strike #100 added production_id."""
+    production_id: str = Field(..., max_length=120)
     duration_minutes: Optional[int] = Field(default=None, ge=0)
     method: Optional[Literal['DRIP','OVERHEAD','FLOOD','HAND','OTHER']] = Field(default=None)
     water_source: Optional[str] = Field(default=None, max_length=120)
@@ -449,7 +453,8 @@ class IrrigationPayload(BaseModel):
 
 
 class ChemicalAppliedPayload(BaseModel):
-    """Payload for CHEMICAL_APPLIED event. WHD trigger fires off chemical_id."""
+    """Payload for CHEMICAL_APPLIED event. WHD trigger fires off chemical_id. Strike #100 added production_id."""
+    production_id: str = Field(..., max_length=120)
     chemical_id: str = Field(..., description="FK to shared.chemical_library — required.")
     application_rate: Optional[float] = Field(default=None, ge=0, description="Maps to chemical_dose_per_liter.")
     unit: Optional[Literal['ML_PER_L','G_PER_L','L_PER_HA','KG_PER_HA']] = Field(default=None)
@@ -459,7 +464,8 @@ class ChemicalAppliedPayload(BaseModel):
 
 
 class FertilizerAppliedPayload(BaseModel):
-    """Payload for FERTILIZER_APPLIED event."""
+    """Payload for FERTILIZER_APPLIED event. Strike #100 added production_id."""
+    production_id: str = Field(..., max_length=120)
     input_id: Optional[str] = Field(default=None, description="FK to tenant.inputs — preferred over product_name.")
     product_name: Optional[str] = Field(default=None, max_length=120)
     rate_kg_per_ha: Optional[float] = Field(default=None, ge=0)
@@ -468,7 +474,8 @@ class FertilizerAppliedPayload(BaseModel):
 
 
 class WeedManagementPayload(BaseModel):
-    """Payload for WEED_MANAGEMENT event (new CHECK enum value)."""
+    """Payload for WEED_MANAGEMENT event (new CHECK enum value). Strike #100 added production_id."""
+    production_id: str = Field(..., max_length=120)
     method: Literal['MANUAL','MECHANICAL','CHEMICAL','MULCH','COVER_CROP','OTHER'] = Field(...)
     area_treated_ha: Optional[float] = Field(default=None, ge=0)
     labor_hours: Optional[float] = Field(default=None, ge=0)
@@ -476,7 +483,8 @@ class WeedManagementPayload(BaseModel):
 
 
 class PruningTrainingPayload(BaseModel):
-    """Payload for PRUNING_TRAINING event."""
+    """Payload for PRUNING_TRAINING event. Strike #100 added production_id."""
+    production_id: str = Field(..., max_length=120)
     activity: Literal['PRUNE','TRAIN','STAKE','TIE','TOPPING','OTHER'] = Field(...)
     plants_count: Optional[int] = Field(default=None, ge=0)
     labor_hours: Optional[float] = Field(default=None, ge=0)
@@ -484,7 +492,10 @@ class PruningTrainingPayload(BaseModel):
 
 
 class TransplantLoggedPayload(BaseModel):
-    """Payload for TRANSPLANT_LOGGED event."""
+    """Payload for TRANSPLANT_LOGGED event. Strike #100 added production_id + variety_id + variety_other."""
+    production_id: str = Field(..., max_length=120)
+    variety_id: Optional[str] = Field(default=None, max_length=120)
+    variety_other: Optional[str] = Field(default=None, max_length=120)
     source_nursery_batch_id: Optional[str] = Field(default=None, max_length=120)
     plants_transplanted: int = Field(..., ge=0)
     spacing_cm: Optional[int] = Field(default=None, ge=0)
@@ -492,7 +503,8 @@ class TransplantLoggedPayload(BaseModel):
 
 
 class LandPrepPayload(BaseModel):
-    """Payload for LAND_PREP event (new CHECK enum value)."""
+    """Payload for LAND_PREP event (new CHECK enum value). Strike #100 added production_id."""
+    production_id: str = Field(..., max_length=120)
     activity: Literal['PLOUGH','HARROW','BED_FORM','CLEAR','AMEND_SOIL','OTHER'] = Field(...)
     area_prepared_ha: Optional[float] = Field(default=None, ge=0)
     labor_hours: Optional[float] = Field(default=None, ge=0)

@@ -7,7 +7,8 @@
  * fields per event type.
  *
  * Backend contract (POST /api/v1/field-events, FieldEventCreate):
- *   - farm_id, pu_id, cycle_id, event_type, event_date — required
+ *   - farm_id, pu_id, cycle_id, production_id, event_type, event_date — required
+ *     (Strike #100 added production_id as user-explicit field)
  *   - SPRAY events ALSO require chemical_application (chem_name string),
  *     quantity, quantity_unit. Server resolves chem_name against
  *     shared.chemical_library and returns 422 UNKNOWN_CHEMICAL if not
@@ -18,8 +19,10 @@
  * via the v4.1 Bank Evidence spine. Idempotency-Key header supported but
  * not used here.
  *
- * Gate: user must have at least one ACTIVE cycle. Empty-state CTA routes
- * to /farm to start one if not.
+ * Strike #100: every Crops form uses the shared CropAndCycleFields
+ * component (CROP -> CYCLE dropdown pair, CYCLE filtered by selected
+ * crop, ordinal labels). PLANTING + TRANSPLANT_LOGGED additionally have
+ * a VARIETY dropdown after CYCLE.
  */
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
@@ -75,23 +78,136 @@ function todayISO() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-function cycleLabel(c, allCycles) {
-  const name = c.production_name || c.production_id || "—";
-  const dupCount = (allCycles || []).reduce(
-    (n, x) => n + (x.production_name === c.production_name ? 1 : 0),
-    0,
-  );
-  return dupCount > 1
-    ? `${name} — ${c.pu_farmer_label || c.pu_id || "—"}`
-    : name;
-}
-
 async function fetchActiveCycles() {
   const res = await fetch("/api/v1/cycles?cycle_status=ACTIVE", { headers: authHeaders() });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const body = await res.json();
   // Part 13 envelope: { status, data: { cycles: [...] }, meta }
   return body?.data?.cycles ?? body?.cycles ?? [];
+}
+
+async function fetchCropProductions() {
+  const res = await fetch("/api/v1/productions?is_active=true&crop_only=true", {
+    headers: authHeaders(),
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const body = await res.json();
+  return body?.data?.productions ?? body?.productions ?? [];
+}
+
+async function fetchCropVarieties(productionId) {
+  if (!productionId) return [];
+  const res = await fetch(
+    `/api/v1/crop-varieties?production_id=${encodeURIComponent(productionId)}`,
+    { headers: authHeaders() },
+  );
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const body = await res.json();
+  return body?.data?.varieties ?? body?.varieties ?? [];
+}
+
+// ============================================================================
+// Strike #100 — shared CROP + CYCLE selector hook + render component
+// ============================================================================
+// Used by every Crops event form (PLANTING, TRANSPLANT_LOGGED, IRRIGATION,
+// FERTILIZER_APPLIED, WEED_MANAGEMENT, PRUNING_TRAINING, LAND_PREP,
+// legacy SPRAY). CYCLE dropdown is filtered to the selected crop and
+// renders ordinals ("Cycle 1", "Cycle 2") instead of crop-name labels.
+
+function useCropAndCycle() {
+  const [cropId, setCropId] = useState("");
+  const [cycleId, setCycleId] = useState("");
+
+  const productionsQuery = useQuery({
+    queryKey: ["productions", "crops"],
+    queryFn: fetchCropProductions,
+  });
+  const cyclesQuery = useQuery({
+    queryKey: ["cycles", "active"],
+    queryFn: fetchActiveCycles,
+  });
+
+  const filteredCycles = useMemo(() => {
+    const all = cyclesQuery.data ?? [];
+    if (!cropId) return [];
+    return all.filter((c) => c.production_id === cropId);
+  }, [cyclesQuery.data, cropId]);
+
+  useEffect(() => {
+    setCycleId("");
+  }, [cropId]);
+
+  useEffect(() => {
+    if (!cycleId && filteredCycles.length > 0) {
+      setCycleId(filteredCycles[0].cycle_id);
+    }
+  }, [cycleId, filteredCycles]);
+
+  const selectedCycle = useMemo(
+    () => filteredCycles.find((c) => c.cycle_id === cycleId),
+    [filteredCycles, cycleId],
+  );
+
+  return {
+    cropId, setCropId,
+    cycleId, setCycleId,
+    productionsQuery,
+    cyclesQuery,
+    filteredCycles,
+    selectedCycle,
+  };
+}
+
+function CropAndCycleFields({
+  cropId, setCropId, cycleId, setCycleId,
+  productionsQuery, cyclesQuery, filteredCycles,
+}) {
+  const cyclePlaceholder = !cropId
+    ? "Pick a crop first"
+    : filteredCycles.length === 0
+      ? "No active cycles for this crop"
+      : "Select cycle...";
+
+  return (
+    <>
+      <div>
+        <label className="text-xs uppercase tracking-wider font-medium block mb-1" style={{ color: C.muted }}>
+          Crop *
+        </label>
+        <ThemedSelect
+          id="crop"
+          name="production_id"
+          value={cropId}
+          onChange={setCropId}
+          options={(productionsQuery.data ?? []).map((p) => ({
+            value: p.production_id,
+            label: p.production_name,
+          }))}
+          placeholder="Select crop..."
+          required
+          disabled={productionsQuery.isLoading}
+        />
+      </div>
+      <div>
+        <label className="text-xs uppercase tracking-wider font-medium block mb-1" style={{ color: C.muted }}>
+          Cycle *
+        </label>
+        <ThemedSelect
+          id="cycle"
+          name="cycle_id"
+          value={cycleId}
+          onChange={setCycleId}
+          options={filteredCycles.map((c) => ({
+            value: c.cycle_id,
+            label: `Cycle ${c.block_sequence ?? c.cycle_id}`,
+          }))}
+          placeholder={cyclePlaceholder}
+          required
+          disabled={!cropId || cyclesQuery.isLoading}
+        />
+      </div>
+    </>
+  );
 }
 
 const queryClient = new QueryClient({
@@ -162,42 +278,60 @@ const STRIKE_96_FIELDS = {
   },
 };
 
-function Strike96CropsForm({ eventType }) {
+// ============================================================================
+// Strike #100 — CROPS PLANTING + TRANSPLANT_LOGGED three-dropdown form
+// ============================================================================
+// CROP -> CYCLE -> VARIETY (with "Other (specify)" free-text fallback).
+// Strike #98 Rule 6 satisfaction for plant-identity events.
+
+function CropSelectionForm({ eventType, schema }) {
   const navigate = useNavigate();
   const qc = useQueryClient();
-  const schema = STRIKE_96_FIELDS[eventType];
 
-  const [cycleId, setCycleId]       = useState("");
-  const [eventDate, setEventDate]   = useState(todayISO());
-  const [values, setValues]         = useState({});
-  const [notes, setNotes]           = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError]           = useState("");
+  const cc = useCropAndCycle();
+  const [varietyId, setVarietyId]       = useState("");
+  const [varietyOther, setVarietyOther] = useState("");
+  const [eventDate, setEventDate]       = useState(todayISO());
+  const [values, setValues]             = useState({});
+  const [notes, setNotes]               = useState("");
+  const [submitting, setSubmitting]     = useState(false);
+  const [error, setError]               = useState("");
 
-  const cyclesQuery = useQuery({
-    queryKey: ["cycles", "active"],
-    queryFn: fetchActiveCycles,
+  const varietiesQuery = useQuery({
+    queryKey: ["varieties", cc.cropId],
+    queryFn: () => fetchCropVarieties(cc.cropId),
+    enabled: !!cc.cropId,
   });
 
+  // Reset variety state when crop changes (cycle reset is handled by useCropAndCycle).
   useEffect(() => {
-    if (!cycleId && cyclesQuery.data && cyclesQuery.data.length > 0) {
-      setCycleId(cyclesQuery.data[0].cycle_id);
-    }
-  }, [cycleId, cyclesQuery.data]);
-
-  const selectedCycle = useMemo(
-    () => (cyclesQuery.data || []).find((c) => c.cycle_id === cycleId),
-    [cyclesQuery.data, cycleId],
-  );
+    setVarietyId("");
+    setVarietyOther("");
+  }, [cc.cropId]);
 
   function setField(name, val) {
     setValues((v) => ({ ...v, [name]: val }));
   }
 
-  const requiredOK = schema.fields.every(
+  // For PLANTING, the legacy `variety` text field is superseded by the VARIETY dropdown.
+  const renderableSchemaFields = (schema?.fields || []).filter(
+    (f) => f.name !== "variety",
+  );
+
+  const requiredOK = renderableSchemaFields.every(
     (f) => !f.required || (values[f.name] !== undefined && values[f.name] !== ""),
   );
-  const submitDisabled = submitting || !cycleId || !selectedCycle || !requiredOK;
+
+  const varietySelected =
+    !!varietyId && (varietyId !== "OTHER" || !!varietyOther.trim());
+
+  const submitDisabled =
+    submitting ||
+    !cc.cropId ||
+    !cc.cycleId ||
+    !cc.selectedCycle ||
+    !varietySelected ||
+    !requiredOK;
 
   async function submit(e) {
     e.preventDefault();
@@ -205,8 +339,13 @@ function Strike96CropsForm({ eventType }) {
     setSubmitting(true);
     setError("");
 
-    const payload = {};
-    for (const f of schema.fields) {
+    const payload = { production_id: cc.cropId };
+    if (varietyId && varietyId !== "OTHER") {
+      payload.variety_id = varietyId;
+    } else if (varietyId === "OTHER" && varietyOther.trim()) {
+      payload.variety_other = varietyOther.trim();
+    }
+    for (const f of renderableSchemaFields) {
       const v = values[f.name];
       if (v === undefined || v === "" || v === null) continue;
       if (f.type === "int")          payload[f.name] = parseInt(v, 10);
@@ -221,9 +360,9 @@ function Strike96CropsForm({ eventType }) {
       event_type: eventType,
       occurred_at: occurredAt,
       anchors: {
-        farm_id:  selectedCycle.farm_id,
-        pu_id:    selectedCycle.pu_id,
-        cycle_id: cycleId,
+        farm_id:  cc.selectedCycle.farm_id,
+        pu_id:    cc.selectedCycle.pu_id,
+        cycle_id: cc.cycleId,
       },
       payload,
     };
@@ -259,23 +398,243 @@ function Strike96CropsForm({ eventType }) {
     }
   }
 
-  if (!cyclesQuery.isLoading && (!cyclesQuery.data || cyclesQuery.data.length === 0)) {
-    return (
-      <div className="max-w-md mx-auto p-6 text-center">
-        <h1 className="text-xl font-bold mb-2" style={{ color: C.soil }}>No active cycle</h1>
-        <p className="text-sm mb-6" style={{ color: C.muted }}>
-          CROPS events must be logged against an active production cycle.
-        </p>
-        <button
-          type="button"
-          onClick={() => navigate("/farm")}
-          className="text-sm font-semibold px-5 py-2 rounded-lg text-white"
-          style={{ background: C.green }}
-        >
-          Go to Farm Overview
-        </button>
+  return (
+    <div className="max-w-md mx-auto p-4">
+      <div className="bg-white rounded-2xl px-5 py-5" style={{ border: `1px solid ${C.border}` }}>
+        <header className="mb-4">
+          <div className="text-xs uppercase tracking-wider font-medium" style={{ color: C.muted }}>
+            CROPS event
+          </div>
+          <h1 className="text-xl font-bold mt-1" style={{ color: C.soil }}>
+            {schema?.label || eventType}
+          </h1>
+        </header>
+
+        <form onSubmit={submit} className="space-y-4">
+          <CropAndCycleFields
+            cropId={cc.cropId} setCropId={cc.setCropId}
+            cycleId={cc.cycleId} setCycleId={cc.setCycleId}
+            productionsQuery={cc.productionsQuery}
+            cyclesQuery={cc.cyclesQuery}
+            filteredCycles={cc.filteredCycles}
+          />
+
+          {/* Variety */}
+          <div>
+            <label className="text-xs uppercase tracking-wider font-medium block mb-1" style={{ color: C.muted }}>
+              Variety *
+            </label>
+            <ThemedSelect
+              id="variety"
+              name="variety_id"
+              value={varietyId}
+              onChange={setVarietyId}
+              options={(varietiesQuery.data ?? []).map((v) => ({
+                value: v.variety_id,
+                label: v.variety_name,
+              }))}
+              placeholder={cc.cropId ? "Select variety..." : "Pick a crop first"}
+              required
+              disabled={!cc.cropId || varietiesQuery.isLoading}
+            />
+            {varietyId === "OTHER" && (
+              <input
+                type="text"
+                value={varietyOther}
+                onChange={(e) => setVarietyOther(e.target.value)}
+                placeholder="Specify variety"
+                required
+                maxLength={120}
+                className="w-full px-3 py-2 rounded-lg text-sm focus:outline-none mt-2"
+                style={{ background: "white", border: `1px solid ${C.border}`, color: C.soil }}
+              />
+            )}
+          </div>
+
+          {/* Date */}
+          <div>
+            <label className="text-xs uppercase tracking-wider font-medium block mb-1" style={{ color: C.muted }}>
+              Date *
+            </label>
+            <input
+              type="date"
+              value={eventDate}
+              max={todayISO()}
+              onChange={(e) => setEventDate(e.target.value)}
+              required
+              className="w-full px-3 py-2 rounded-lg text-sm focus:outline-none"
+              style={{ background: "white", border: `1px solid ${C.border}`, color: C.soil }}
+            />
+          </div>
+
+          {/* Schema-driven event-specific fields (variety filtered out for PLANTING) */}
+          {renderableSchemaFields.map((f) => (
+            <div key={f.name}>
+              <label className="text-xs uppercase tracking-wider font-medium block mb-1" style={{ color: C.muted }}>
+                {f.label}{f.required ? " *" : ""}
+              </label>
+              {f.type === "select" ? (
+                <ThemedSelect
+                  id={f.name}
+                  name={f.name}
+                  value={values[f.name] || ""}
+                  onChange={(v) => setField(f.name, v)}
+                  options={f.options.map((o) => ({ value: o, label: o }))}
+                  placeholder="Select..."
+                  required={!!f.required}
+                />
+              ) : (
+                <input
+                  type={f.type === "text" ? "text" : "number"}
+                  inputMode={f.type === "int" ? "numeric" : f.type === "number" ? "decimal" : undefined}
+                  step={f.type === "int" ? "1" : f.type === "number" ? "0.01" : undefined}
+                  min={f.min}
+                  maxLength={f.maxLength}
+                  value={values[f.name] || ""}
+                  onChange={(e) => setField(f.name, e.target.value)}
+                  required={!!f.required}
+                  className="w-full px-3 py-2 rounded-lg text-sm focus:outline-none"
+                  style={{ background: "white", border: `1px solid ${C.border}`, color: C.soil }}
+                />
+              )}
+            </div>
+          ))}
+
+          {/* Notes */}
+          <div>
+            <label className="text-xs uppercase tracking-wider font-medium block mb-1" style={{ color: C.muted }}>
+              Notes
+            </label>
+            <textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              rows={3}
+              maxLength={500}
+              placeholder="Optional details about this activity"
+              className="w-full px-3 py-2 rounded-lg text-sm focus:outline-none"
+              style={{ background: "white", border: `1px solid ${C.border}`, color: C.soil }}
+            />
+          </div>
+
+          {error && (
+            <div
+              className="rounded-lg p-2 text-xs"
+              style={{ background: "#FDECEE", color: C.red, border: `1px solid ${C.border}` }}
+            >
+              {error}
+            </div>
+          )}
+
+          {/* Footer */}
+          <div className="flex items-center justify-end gap-2 pt-2">
+            <button
+              type="button"
+              onClick={() => navigate("/farm")}
+              disabled={submitting}
+              className="text-sm font-medium px-3 py-2 rounded-lg disabled:opacity-40"
+              style={{ background: "white", border: `1px solid ${C.border}`, color: C.soil }}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={submitDisabled}
+              className="text-sm font-semibold px-4 py-2 rounded-lg text-white disabled:opacity-40"
+              style={{ background: C.green }}
+            >
+              {submitting ? "Logging…" : "Log activity"}
+            </button>
+          </div>
+        </form>
       </div>
-    );
+    </div>
+  );
+}
+
+function Strike96CropsForm({ eventType }) {
+  const navigate = useNavigate();
+  const qc = useQueryClient();
+  const schema = STRIKE_96_FIELDS[eventType];
+
+  const cc = useCropAndCycle();
+  const [eventDate, setEventDate]   = useState(todayISO());
+  const [values, setValues]         = useState({});
+  const [notes, setNotes]           = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError]           = useState("");
+
+  function setField(name, val) {
+    setValues((v) => ({ ...v, [name]: val }));
+  }
+
+  const requiredOK = schema.fields.every(
+    (f) => !f.required || (values[f.name] !== undefined && values[f.name] !== ""),
+  );
+  const submitDisabled =
+    submitting ||
+    !cc.cropId ||
+    !cc.cycleId ||
+    !cc.selectedCycle ||
+    !requiredOK;
+
+  async function submit(e) {
+    e.preventDefault();
+    if (submitDisabled) return;
+    setSubmitting(true);
+    setError("");
+
+    const payload = { production_id: cc.cropId };
+    for (const f of schema.fields) {
+      const v = values[f.name];
+      if (v === undefined || v === "" || v === null) continue;
+      if (f.type === "int")          payload[f.name] = parseInt(v, 10);
+      else if (f.type === "number")  payload[f.name] = Number(v);
+      else                           payload[f.name] = v;
+    }
+    if (notes.trim()) payload.notes = notes.trim();
+
+    const occurredAt = `${eventDate}T12:00:00+12:00`;
+
+    const body = {
+      event_type: eventType,
+      occurred_at: occurredAt,
+      anchors: {
+        farm_id:  cc.selectedCycle.farm_id,
+        pu_id:    cc.selectedCycle.pu_id,
+        cycle_id: cc.cycleId,
+      },
+      payload,
+    };
+
+    try {
+      const res = await fetch("/api/v1/events", {
+        method: "POST",
+        headers: authHeaders(),
+        body: JSON.stringify(body),
+      });
+      const parsed = await res.json().catch(() => null);
+      if (res.status === 201 && parsed?.status === "success") {
+        const eventId = parsed.data?.event_id || "";
+        const hash    = parsed.data?.audit_hash || "";
+        emitToast(`Logged · ${eventId}${hash ? ` · ${hash}` : ""}`);
+        qc.invalidateQueries({ queryKey: ["field-events"] });
+        qc.invalidateQueries({ queryKey: ["cycles", "active"] });
+        qc.invalidateQueries({ queryKey: ["tasks-next"] });
+        navigate("/farm");
+        return;
+      }
+      const msg =
+        parsed?.error?.message ||
+        parsed?.detail?.error?.message ||
+        parsed?.detail?.message ||
+        (typeof parsed?.detail === "string" ? parsed.detail : null) ||
+        `${res.status} ${res.statusText}`;
+      setError(msg);
+    } catch (err) {
+      setError(`Network error: ${err.message}`);
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   return (
@@ -291,25 +650,13 @@ function Strike96CropsForm({ eventType }) {
         </header>
 
         <form onSubmit={submit} className="space-y-4">
-          {/* Cycle */}
-          <div>
-            <label className="text-xs uppercase tracking-wider font-medium block mb-1" style={{ color: C.muted }}>
-              Cycle *
-            </label>
-            <ThemedSelect
-              id="cycle"
-              name="cycle_id"
-              value={cycleId}
-              onChange={setCycleId}
-              options={(cyclesQuery.data ?? []).map((c, _, all) => ({
-                value: c.cycle_id,
-                label: cycleLabel(c, all),
-              }))}
-              placeholder="Select cycle..."
-              required
-              disabled={cyclesQuery.isLoading}
-            />
-          </div>
+          <CropAndCycleFields
+            cropId={cc.cropId} setCropId={cc.setCropId}
+            cycleId={cc.cycleId} setCycleId={cc.setCycleId}
+            productionsQuery={cc.productionsQuery}
+            cyclesQuery={cc.cyclesQuery}
+            filteredCycles={cc.filteredCycles}
+          />
 
           {/* Date */}
           <div>
@@ -415,39 +762,21 @@ function FieldEventForm() {
   const navigate = useNavigate();
   const qc = useQueryClient();
 
-  const [cycleId, setCycleId]       = useState("");
-  const [eventType, setEventType]   = useState("");
-  const [eventDate, setEventDate]   = useState(todayISO());
-  const [chemName, setChemName]     = useState("");
-  const [quantity, setQuantity]     = useState("");
+  const cc = useCropAndCycle();
+  const [eventType, setEventType]       = useState("");
+  const [eventDate, setEventDate]       = useState(todayISO());
+  const [chemName, setChemName]         = useState("");
+  const [quantity, setQuantity]         = useState("");
   const [quantityUnit, setQuantityUnit] = useState("L");
-  const [notes, setNotes]           = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError]           = useState("");
-
-  const cyclesQuery = useQuery({
-    queryKey: ["cycles", "active"],
-    queryFn: fetchActiveCycles,
-  });
-
-  // Default to first cycle once loaded.
-  useEffect(() => {
-    if (!cycleId && cyclesQuery.data && cyclesQuery.data.length > 0) {
-      setCycleId(cyclesQuery.data[0].cycle_id);
-    }
-  }, [cycleId, cyclesQuery.data]);
-
-  // Look up the selected cycle to grab farm_id / pu_id (required by backend).
-  const selectedCycle = useMemo(
-    () => (cyclesQuery.data || []).find((c) => c.cycle_id === cycleId),
-    [cyclesQuery.data, cycleId],
-  );
+  const [notes, setNotes]               = useState("");
+  const [submitting, setSubmitting]     = useState(false);
+  const [error, setError]               = useState("");
 
   const isSpray = eventType === "SPRAY";
 
   // Chemicals catalog — fetched only when SPRAY is selected and we have a cycle.
-  // Scoped to the cycle's production_id so the datalist is crop-relevant.
-  const cropFilter = selectedCycle?.production_id || null;
+  // Scoped to the selected crop so the datalist is crop-relevant.
+  const cropFilter = cc.cropId || null;
   const chemicalsQuery = useQuery({
     queryKey: ["chemicals", cropFilter ?? "_all"],
     queryFn: async () => {
@@ -458,7 +787,7 @@ function FieldEventForm() {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       return res.json();
     },
-    enabled: isSpray && !!selectedCycle,
+    enabled: isSpray && !!cc.selectedCycle,
     staleTime: 5 * 60_000,
   });
 
@@ -474,8 +803,9 @@ function FieldEventForm() {
 
   const submitDisabled =
     submitting ||
-    !cycleId ||
-    !selectedCycle ||
+    !cc.cropId ||
+    !cc.cycleId ||
+    !cc.selectedCycle ||
     !eventType ||
     !eventDate ||
     !sprayValid;
@@ -487,11 +817,12 @@ function FieldEventForm() {
     setError("");
 
     const body = {
-      farm_id:    selectedCycle.farm_id,
-      pu_id:      selectedCycle.pu_id,
-      cycle_id:   cycleId,
-      event_type: eventType,
-      event_date: eventDate,
+      farm_id:        cc.selectedCycle.farm_id,
+      pu_id:          cc.selectedCycle.pu_id,
+      cycle_id:       cc.cycleId,
+      production_id:  cc.cropId,
+      event_type:     eventType,
+      event_date:     eventDate,
     };
     if (notes.trim()) body.notes = notes.trim();
     if (isSpray) {
@@ -530,29 +861,6 @@ function FieldEventForm() {
     }
   }
 
-  // Empty state: no active cycle.
-  if (!cyclesQuery.isLoading && (!cyclesQuery.data || cyclesQuery.data.length === 0)) {
-    return (
-      <div className="max-w-md mx-auto p-6 text-center">
-        <h1 className="text-xl font-bold mb-2" style={{ color: C.soil }}>
-          No active cycle
-        </h1>
-        <p className="text-sm mb-6" style={{ color: C.muted }}>
-          Field activities must be logged against an active production cycle.
-          Start a cycle first, then come back here to log activity.
-        </p>
-        <button
-          type="button"
-          onClick={() => navigate("/farm")}
-          className="text-sm font-semibold px-5 py-2 rounded-lg text-white"
-          style={{ background: C.green }}
-        >
-          Go to Farm Overview
-        </button>
-      </div>
-    );
-  }
-
   return (
     <div className="max-w-md mx-auto p-4">
       <div
@@ -572,25 +880,13 @@ function FieldEventForm() {
         </header>
 
         <form onSubmit={submit} className="space-y-4">
-          {/* Cycle */}
-          <div>
-            <label className="text-xs uppercase tracking-wider font-medium block mb-1" style={{ color: C.muted }}>
-              Cycle *
-            </label>
-            <ThemedSelect
-              id="cycle"
-              name="cycle_id"
-              value={cycleId}
-              onChange={setCycleId}
-              options={(cyclesQuery.data ?? []).map((c, _, all) => ({
-                value: c.cycle_id,
-                label: cycleLabel(c, all),
-              }))}
-              placeholder="Select cycle..."
-              required
-              disabled={cyclesQuery.isLoading}
-            />
-          </div>
+          <CropAndCycleFields
+            cropId={cc.cropId} setCropId={cc.setCropId}
+            cycleId={cc.cycleId} setCycleId={cc.setCycleId}
+            productionsQuery={cc.productionsQuery}
+            cyclesQuery={cc.cyclesQuery}
+            filteredCycles={cc.filteredCycles}
+          />
 
           {/* Event type */}
           <div>
@@ -745,6 +1041,9 @@ function FieldEventForm() {
 function FieldEventDispatcher() {
   const [searchParams] = useSearchParams();
   const typeParam = searchParams.get("type");
+  if (typeParam === "PLANTING" || typeParam === "TRANSPLANT_LOGGED") {
+    return <CropSelectionForm eventType={typeParam} schema={STRIKE_96_FIELDS[typeParam]} />;
+  }
   if (typeParam && STRIKE_96_FIELDS[typeParam]) {
     return <Strike96CropsForm eventType={typeParam} />;
   }

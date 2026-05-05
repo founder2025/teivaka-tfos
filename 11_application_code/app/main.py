@@ -31,6 +31,7 @@ from app.routers import (
     poultry_compliance,
     verify,
     chemicals,
+    crop_varieties,
     cycles,
     rotation,
     harvests,
@@ -257,6 +258,7 @@ app.include_router(agronomy.router,            prefix=PREFIX,                   
 app.include_router(verify.router,              prefix=PREFIX,                         tags=["Verify (JSON)"])
 app.include_router(verify.html_router,         prefix="",                             tags=["Verify (HTML)"])
 app.include_router(chemicals.router,           prefix="/api/v1",                      tags=["chemicals"])
+app.include_router(crop_varieties.router,      prefix=f"{PREFIX}/crop-varieties",     tags=["Crop Varieties"])
 app.include_router(cycles.router,             prefix=f"{PREFIX}/cycles",             tags=["Production Cycles"])
 app.include_router(rotation.router,           prefix=f"{PREFIX}/rotation",           tags=["Rotation Engine"])
 app.include_router(harvests.router,           prefix=f"{PREFIX}/harvests",           tags=["Harvests"])

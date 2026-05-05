@@ -1,12 +1,15 @@
 /**
  * HarvestNew.jsx — /farm/harvest/new (Phase 4b MVP Week 1).
  *
- * Farmer-friendly harvest form. Replaces the raw cycle_id/pu_id text inputs of
- * HarvestLog.jsx with an active-cycle dropdown. Cycle selection sets both
- * cycle_id and pu_id on the request body.
+ * Farmer-friendly harvest form. Strike #100 redesigned the cycle picker
+ * into a CROP -> CYCLE two-dropdown flow: pick crop first, then cycle
+ * ordinal ("Cycle 1") filtered to that crop. Cycle selection sets
+ * cycle_id, pu_id, and production_id on the request body.
  *
  * Backend contract (app/routers/harvests.py): POST /api/v1/harvests
- *   { cycle_id, pu_id, harvest_date, qty_kg, grade, destination, notes? }
+ *   { cycle_id, pu_id, production_id, harvest_date, qty_kg, grade,
+ *     destination, notes? }
+ *   (Strike #100 added production_id as user-explicit field.)
  *
  *   NOTE: backend grade validator accepts only "A" | "B" | "C". The brief
  *   mentioned "reject" — not supported by backend; surfaced to Cody in the
@@ -18,7 +21,7 @@
  * All sub-components are at module scope so re-rendering the parent does not
  * re-mount inputs (focus-loss bug the brief flagged).
  */
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import ThemedSelect from "../../components/inputs/ThemedSelect.jsx";
 
@@ -45,17 +48,6 @@ function authHeaders() {
 
 function todayISO() {
   return new Date().toISOString().slice(0, 10);
-}
-
-function cycleLabel(c, allCycles) {
-  const name = c.production_name || c.production_id || "—";
-  const dupCount = (allCycles || []).reduce(
-    (n, x) => n + (x.production_name === c.production_name ? 1 : 0),
-    0,
-  );
-  return dupCount > 1
-    ? `${name} — ${c.pu_farmer_label || c.pu_id || "—"}`
-    : name;
 }
 
 const inputCls =
@@ -171,10 +163,15 @@ function ComplianceModal({ open, detail, onClose }) {
 export default function HarvestNew() {
   const navigate = useNavigate();
 
-  const [cycles, setCycles]             = useState([]);
+  const [cycles, setCycles]               = useState([]);
   const [cyclesLoading, setCyclesLoading] = useState(true);
-  const [cyclesError, setCyclesError]   = useState("");
+  const [cyclesError, setCyclesError]     = useState("");
 
+  const [productions, setProductions]               = useState([]);
+  const [productionsLoading, setProductionsLoading] = useState(true);
+  const [productionsError, setProductionsError]     = useState("");
+
+  const [cropId, setCropId]             = useState("");
   const [cycleId, setCycleId]           = useState("");
   const [harvestDate, setHarvestDate]   = useState(todayISO());
   const [qtyKg, setQtyKg]               = useState("");
@@ -183,12 +180,12 @@ export default function HarvestNew() {
   const [destinationOther, setDestinationOther] = useState("");
   const [notes, setNotes]               = useState("");
 
-  const [submitting, setSubmitting]     = useState(false);
-  const [submitError, setSubmitError]   = useState("");
-  const [toast, setToast]               = useState("");
-  const [modal, setModal]               = useState(null);     // compliance-violation payload
+  const [submitting, setSubmitting]   = useState(false);
+  const [submitError, setSubmitError] = useState("");
+  const [toast, setToast]             = useState("");
+  const [modal, setModal]             = useState(null);     // compliance-violation payload
 
-  // Load user's active cycles on mount.
+  // Load active cycles on mount.
   useEffect(() => {
     let cancelled = false;
     setCyclesLoading(true);
@@ -200,24 +197,65 @@ export default function HarvestNew() {
       })
       .then((body) => {
         if (cancelled) return;
-        // Tolerate Part 13 envelope: {status, data:{cycles:[...]}, meta} or legacy {cycles:[...]}.
         const payload = body?.data ?? body;
         const list = Array.isArray(payload?.cycles) ? payload.cycles : [];
         setCycles(list);
-        if (list.length === 1) setCycleId(list[0].cycle_id);
       })
       .catch((e) => { if (!cancelled) setCyclesError(e.message || "Could not load cycles"); })
       .finally(() => { if (!cancelled) setCyclesLoading(false); });
     return () => { cancelled = true; };
   }, []);
 
-  const selectedCycle = cycles.find((c) => c.cycle_id === cycleId) || null;
+  // Load crop productions catalog on mount.
+  useEffect(() => {
+    let cancelled = false;
+    setProductionsLoading(true);
+    fetch("/api/v1/productions?is_active=true&crop_only=true", { headers: authHeaders() })
+      .then(async (r) => {
+        const body = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(typeof body?.detail === "string" ? body.detail : `HTTP ${r.status}`);
+        return body;
+      })
+      .then((body) => {
+        if (cancelled) return;
+        const payload = body?.data ?? body;
+        const list = Array.isArray(payload?.productions) ? payload.productions : [];
+        setProductions(list);
+      })
+      .catch((e) => { if (!cancelled) setProductionsError(e.message || "Could not load crops"); })
+      .finally(() => { if (!cancelled) setProductionsLoading(false); });
+    return () => { cancelled = true; };
+  }, []);
+
+  // Cycles filtered to selected crop.
+  const filteredCycles = useMemo(() => {
+    if (!cropId) return [];
+    return cycles.filter((c) => c.production_id === cropId);
+  }, [cycles, cropId]);
+
+  // Reset cycleId when crop changes.
+  useEffect(() => {
+    setCycleId("");
+  }, [cropId]);
+
+  // Auto-select first cycle when filtered list resolves to a single option.
+  useEffect(() => {
+    if (!cycleId && filteredCycles.length > 0) {
+      setCycleId(filteredCycles[0].cycle_id);
+    }
+  }, [cycleId, filteredCycles]);
+
+  const selectedCycle = useMemo(
+    () => filteredCycles.find((c) => c.cycle_id === cycleId) || null,
+    [filteredCycles, cycleId],
+  );
 
   const finalDestination =
     destination === "OTHER" ? destinationOther.trim() : destination;
 
   const canSubmit =
     !submitting &&
+    !!cropId &&
     !!selectedCycle &&
     !!harvestDate &&
     Number(qtyKg) > 0 &&
@@ -231,12 +269,13 @@ export default function HarvestNew() {
     setSubmitting(true);
     try {
       const body = {
-        cycle_id:     selectedCycle.cycle_id,
-        pu_id:        selectedCycle.pu_id,
-        harvest_date: harvestDate,
-        qty_kg:       Number(qtyKg),
+        cycle_id:       selectedCycle.cycle_id,
+        pu_id:          selectedCycle.pu_id,
+        production_id:  cropId,
+        harvest_date:   harvestDate,
+        qty_kg:         Number(qtyKg),
         grade,
-        destination:  finalDestination,
+        destination:    finalDestination,
       };
       if (notes.trim()) body.notes = notes.trim();
 
@@ -254,7 +293,6 @@ export default function HarvestNew() {
       }
 
       if (res.status === 409) {
-        // Compliance violation — extract detail payload (standard shape from harvest_service)
         const payload = data?.detail?.error?.data || data?.detail?.data || data?.detail || data;
         setModal(payload || { days_remaining: null, blocking_chemicals: [] });
         return;
@@ -271,6 +309,12 @@ export default function HarvestNew() {
       setSubmitting(false);
     }
   }
+
+  const cyclePlaceholder = !cropId
+    ? "Pick a crop first"
+    : filteredCycles.length === 0
+      ? "No active cycles for this crop"
+      : "Select a cycle…";
 
   return (
     <div className="space-y-4">
@@ -291,26 +335,43 @@ export default function HarvestNew() {
         className="bg-white rounded-2xl px-4 py-5 space-y-4"
         style={{ border: `1px solid ${C.border}` }}
       >
-        <Field label="Production cycle" htmlFor="cycle_id" hint="Only active cycles are shown.">
+        <Field label="Crop" htmlFor="crop_id">
+          {productionsLoading ? (
+            <div className="text-sm" style={{ color: C.muted }}>Loading crops…</div>
+          ) : productionsError ? (
+            <div className="text-sm" style={{ color: C.red }}>Could not load crops: {productionsError}</div>
+          ) : (
+            <ThemedSelect
+              id="crop_id"
+              name="production_id"
+              value={cropId}
+              onChange={setCropId}
+              options={productions.map((p) => ({
+                value: p.production_id,
+                label: p.production_name,
+              }))}
+              placeholder="Select a crop…"
+            />
+          )}
+        </Field>
+
+        <Field label="Cycle" htmlFor="cycle_id" hint="Filtered to active cycles for the selected crop.">
           {cyclesLoading ? (
             <div className="text-sm" style={{ color: C.muted }}>Loading cycles…</div>
           ) : cyclesError ? (
             <div className="text-sm" style={{ color: C.red }}>Could not load cycles: {cyclesError}</div>
-          ) : cycles.length === 0 ? (
-            <div className="text-sm" style={{ color: C.muted }}>
-              No active cycles. Plant one before logging a harvest.
-            </div>
           ) : (
             <ThemedSelect
               id="cycle_id"
               name="cycle_id"
               value={cycleId}
               onChange={setCycleId}
-              options={cycles.map((c, _, all) => ({
+              options={filteredCycles.map((c) => ({
                 value: c.cycle_id,
-                label: cycleLabel(c, all),
+                label: `Cycle ${c.block_sequence ?? c.cycle_id}`,
               }))}
-              placeholder="Select a cycle…"
+              placeholder={cyclePlaceholder}
+              disabled={!cropId}
             />
           )}
         </Field>
