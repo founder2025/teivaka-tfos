@@ -98,10 +98,10 @@ export default function ActiveCyclesTable({ farmId }) {
           {cycles.map((c) => (
             <tr key={c.cycle_id}>
               <td
-                className="px-2 py-2 font-mono text-[11px]"
+                className="px-2 py-2"
                 style={TD_STYLE}
               >
-                {c.cycle_id}
+                Cycle {c.block_sequence ?? c.cycle_id}
               </td>
               <td className="px-2 py-2" style={TD_STYLE}>
                 {c.production_name || c.production_id || "—"}

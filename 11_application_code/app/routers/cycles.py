@@ -92,7 +92,11 @@ async def list_cycles(
                    pc.expected_harvest_date, pc.actual_yield_kg, pc.cogk_fjd_per_kg,
                    pc.created_at,
                    pc.farmer_label,
-                   pu.farmer_label AS pu_farmer_label
+                   pu.farmer_label AS pu_farmer_label,
+                   ROW_NUMBER() OVER (
+                       PARTITION BY pc.pu_id
+                       ORDER BY pc.planting_date ASC NULLS LAST, pc.cycle_id ASC
+                   ) AS block_sequence
             FROM   tenant.production_cycles pc
             JOIN   shared.productions p ON p.production_id = pc.production_id
             LEFT JOIN tenant.production_units pu ON pu.pu_id = pc.pu_id

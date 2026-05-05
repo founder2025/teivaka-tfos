@@ -75,6 +75,17 @@ function todayISO() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
+function cycleLabel(c, allCycles) {
+  const name = c.production_name || c.production_id || "—";
+  const dupCount = (allCycles || []).reduce(
+    (n, x) => n + (x.production_name === c.production_name ? 1 : 0),
+    0,
+  );
+  return dupCount > 1
+    ? `${name} — ${c.pu_farmer_label || c.pu_id || "—"}`
+    : name;
+}
+
 async function fetchActiveCycles() {
   const res = await fetch("/api/v1/cycles?cycle_status=ACTIVE", { headers: authHeaders() });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -290,9 +301,9 @@ function Strike96CropsForm({ eventType }) {
               name="cycle_id"
               value={cycleId}
               onChange={setCycleId}
-              options={(cyclesQuery.data ?? []).map((c) => ({
+              options={(cyclesQuery.data ?? []).map((c, _, all) => ({
                 value: c.cycle_id,
-                label: `${c.production_name || c.production_id || "—"} on ${c.pu_farmer_label || c.pu_id}`,
+                label: cycleLabel(c, all),
               }))}
               placeholder="Select cycle..."
               required
@@ -571,9 +582,9 @@ function FieldEventForm() {
               name="cycle_id"
               value={cycleId}
               onChange={setCycleId}
-              options={(cyclesQuery.data ?? []).map((c) => ({
+              options={(cyclesQuery.data ?? []).map((c, _, all) => ({
                 value: c.cycle_id,
-                label: `${c.production_name || c.production_id || "—"} on ${c.pu_farmer_label || c.pu_id}`,
+                label: cycleLabel(c, all),
               }))}
               placeholder="Select cycle..."
               required

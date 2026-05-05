@@ -47,6 +47,17 @@ function todayISO() {
   return new Date().toISOString().slice(0, 10);
 }
 
+function cycleLabel(c, allCycles) {
+  const name = c.production_name || c.production_id || "—";
+  const dupCount = (allCycles || []).reduce(
+    (n, x) => n + (x.production_name === c.production_name ? 1 : 0),
+    0,
+  );
+  return dupCount > 1
+    ? `${name} — ${c.pu_farmer_label || c.pu_id || "—"}`
+    : name;
+}
+
 const inputCls =
   "w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#6AA84F]";
 
@@ -295,9 +306,9 @@ export default function HarvestNew() {
               name="cycle_id"
               value={cycleId}
               onChange={setCycleId}
-              options={cycles.map((c) => ({
+              options={cycles.map((c, _, all) => ({
                 value: c.cycle_id,
-                label: `${c.production_name || c.production_id || "—"} on ${c.pu_farmer_label || c.pu_id}`,
+                label: cycleLabel(c, all),
               }))}
               placeholder="Select a cycle…"
             />
