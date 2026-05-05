@@ -424,6 +424,82 @@ class SuppliesReceivedPayload(BaseModel):
         json_encoders = {Decimal: str}
 
 
+# ============================================================================
+# CROPS event payload schemas (Strike #96 — B2 polymorphic wrapper to tenant.field_events)
+# ============================================================================
+# All CROPS events route to tenant.field_events via target_table dispatch in events.py.
+# Vocabulary translation (catalog → field_events.event_type) lives in the handler:
+# CATALOG_TO_FIELD_VERB. WHD trigger on field_events fires off chemical_id presence.
+
+class PlantingPayload(BaseModel):
+    """Payload for PLANTING event."""
+    variety: Optional[str] = Field(default=None, max_length=120)
+    plant_count: Optional[int] = Field(default=None, ge=0)
+    spacing_cm: Optional[int] = Field(default=None, ge=0)
+    planted_at: Optional[datetime] = Field(default=None, description="Override; defaults to occurred_at if absent.")
+    notes: Optional[str] = Field(default=None, max_length=500)
+
+
+class IrrigationPayload(BaseModel):
+    """Payload for IRRIGATION event."""
+    duration_minutes: Optional[int] = Field(default=None, ge=0)
+    method: Optional[Literal['DRIP','OVERHEAD','FLOOD','HAND','OTHER']] = Field(default=None)
+    water_source: Optional[str] = Field(default=None, max_length=120)
+    notes: Optional[str] = Field(default=None, max_length=500)
+
+
+class ChemicalAppliedPayload(BaseModel):
+    """Payload for CHEMICAL_APPLIED event. WHD trigger fires off chemical_id."""
+    chemical_id: str = Field(..., description="FK to shared.chemical_library — required.")
+    application_rate: Optional[float] = Field(default=None, ge=0, description="Maps to chemical_dose_per_liter.")
+    unit: Optional[Literal['ML_PER_L','G_PER_L','L_PER_HA','KG_PER_HA']] = Field(default=None)
+    tank_volume_liters: Optional[float] = Field(default=None, ge=0)
+    target_pest_or_disease: Optional[str] = Field(default=None, max_length=120)
+    notes: Optional[str] = Field(default=None, max_length=500)
+
+
+class FertilizerAppliedPayload(BaseModel):
+    """Payload for FERTILIZER_APPLIED event."""
+    input_id: Optional[str] = Field(default=None, description="FK to tenant.inputs — preferred over product_name.")
+    product_name: Optional[str] = Field(default=None, max_length=120)
+    rate_kg_per_ha: Optional[float] = Field(default=None, ge=0)
+    application_method: Optional[Literal['BROADCAST','BAND','FOLIAR','FERTIGATION','OTHER']] = Field(default=None)
+    notes: Optional[str] = Field(default=None, max_length=500)
+
+
+class WeedManagementPayload(BaseModel):
+    """Payload for WEED_MANAGEMENT event (new CHECK enum value)."""
+    method: Literal['MANUAL','MECHANICAL','CHEMICAL','MULCH','COVER_CROP','OTHER'] = Field(...)
+    area_treated_ha: Optional[float] = Field(default=None, ge=0)
+    labor_hours: Optional[float] = Field(default=None, ge=0)
+    notes: Optional[str] = Field(default=None, max_length=500)
+
+
+class PruningTrainingPayload(BaseModel):
+    """Payload for PRUNING_TRAINING event."""
+    activity: Literal['PRUNE','TRAIN','STAKE','TIE','TOPPING','OTHER'] = Field(...)
+    plants_count: Optional[int] = Field(default=None, ge=0)
+    labor_hours: Optional[float] = Field(default=None, ge=0)
+    notes: Optional[str] = Field(default=None, max_length=500)
+
+
+class TransplantLoggedPayload(BaseModel):
+    """Payload for TRANSPLANT_LOGGED event."""
+    source_nursery_batch_id: Optional[str] = Field(default=None, max_length=120)
+    plants_transplanted: int = Field(..., ge=0)
+    spacing_cm: Optional[int] = Field(default=None, ge=0)
+    notes: Optional[str] = Field(default=None, max_length=500)
+
+
+class LandPrepPayload(BaseModel):
+    """Payload for LAND_PREP event (new CHECK enum value)."""
+    activity: Literal['PLOUGH','HARROW','BED_FORM','CLEAR','AMEND_SOIL','OTHER'] = Field(...)
+    area_prepared_ha: Optional[float] = Field(default=None, ge=0)
+    labor_hours: Optional[float] = Field(default=None, ge=0)
+    equipment_used: Optional[str] = Field(default=None, max_length=120)
+    notes: Optional[str] = Field(default=None, max_length=500)
+
+
 EVENT_TYPE_REGISTRY: dict = {
     "EGGS_COLLECTED":         (EggsCollectedPayload,         "tenant.poultry_event_log", 1),
     "MORTALITY_LOGGED":       (MortalityLoggedPayload,       "tenant.poultry_event_log", 1),
@@ -449,6 +525,15 @@ EVENT_TYPE_REGISTRY: dict = {
     "EQUIPMENT_MAINTAINED":   (EquipmentMaintainedPayload,   "tenant.poultry_event_log", 1),
     "INCIDENT_REPORTED":      (IncidentReportedPayload,      "tenant.poultry_event_log", 1),
     "SUPPLIES_RECEIVED":      (SuppliesReceivedPayload,      "tenant.poultry_event_log", 1),
+    # CROPS — B2 polymorphic wrapper (Strike #96)
+    "PLANTING":               (PlantingPayload,              "tenant.field_events", 1),
+    "IRRIGATION":             (IrrigationPayload,            "tenant.field_events", 1),
+    "CHEMICAL_APPLIED":       (ChemicalAppliedPayload,       "tenant.field_events", 1),
+    "FERTILIZER_APPLIED":     (FertilizerAppliedPayload,     "tenant.field_events", 1),
+    "WEED_MANAGEMENT":        (WeedManagementPayload,        "tenant.field_events", 1),
+    "PRUNING_TRAINING":       (PruningTrainingPayload,       "tenant.field_events", 1),
+    "TRANSPLANT_LOGGED":      (TransplantLoggedPayload,      "tenant.field_events", 1),
+    "LAND_PREP":              (LandPrepPayload,              "tenant.field_events", 1),
 }
 
 # Vocabularies (used for app-layer validation in events.py)

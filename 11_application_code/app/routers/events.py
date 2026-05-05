@@ -20,7 +20,7 @@ Phase 6.2-1 scope: EGGS_COLLECTED only. flock_id added Phase 6.2-3.
 
 from datetime import datetime, timezone
 from typing import Optional
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field, ValidationError
@@ -842,6 +842,23 @@ async def submit_event(
         if not isinstance(submission.payload, dict):
             raise HTTPException(400, error_envelope("invalid_payload", "Payload must be a dict."))
 
+    # 2bb. CROPS-specific: cycle_id + pu_id REQUIRED for all 8 CROPS event types (Strike #96)
+    if submission.event_type in {"PLANTING", "IRRIGATION", "CHEMICAL_APPLIED",
+                                  "FERTILIZER_APPLIED", "WEED_MANAGEMENT",
+                                  "PRUNING_TRAINING", "TRANSPLANT_LOGGED", "LAND_PREP"}:
+        if submission.anchors.cycle_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=error_envelope("crops_event_requires_cycle", "CROPS events require a cycle_id anchor (production cycle instance)."),
+            )
+        if submission.anchors.pu_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=error_envelope("crops_event_requires_pu", "CROPS events require a pu_id anchor (production unit)."),
+            )
+        if not isinstance(submission.payload, dict):
+            raise HTTPException(400, error_envelope("invalid_payload", "Payload must be a dict."))
+
     # 3. Validate payload against registered schema
     try:
         validated_payload = payload_schema_class(**submission.payload)
@@ -871,13 +888,18 @@ async def submit_event(
         "payload_schema_version": schema_version,
     }
 
+    # 4b. Pre-generate field_event_id for CROPS branch (Strike #96 Path A — D1: FE-{12-hex})
+    field_event_id_text: Optional[str] = None
+    if target_table == "tenant.field_events":
+        field_event_id_text = f"FE-{uuid4().hex[:12]}"
+
     audit_event_id, audit_hash = await emit_audit_event(
         db=db,
         tenant_id=tenant_uuid,
         actor_user_id=actor_uuid,
         event_type=submission.event_type,
-        entity_type="poultry_event",
-        entity_id=None,
+        entity_type="field_event" if target_table == "tenant.field_events" else "poultry_event",
+        entity_id=field_event_id_text,
         occurred_at=occurred_ts,
         payload=audit_payload,
     )
@@ -885,37 +907,103 @@ async def submit_event(
     if audit_event_id is None or not audit_hash:
         raise HTTPException(500, error_envelope("audit_emission_failed", "Audit event emission failed."))
 
-    # 5. INSERT event row with audit_event_id linked (TEXT anchors per Strike #21; flock_id added Phase 6.2-3)
-    insert_result = await db.execute(
-        text("""
-            INSERT INTO tenant.poultry_event_log (
-                tenant_id, farm_id, pu_id, cycle_id, flock_id, created_by,
-                event_type, occurred_at, payload_jsonb, payload_schema_version, audit_event_id
-            )
-            VALUES (
-                :tid, :fid, :pu, :cid, :flk, :uid,
-                :et, :occ, CAST(:p AS jsonb), :ver, :aud
-            )
-            RETURNING event_id
-        """),
-        {
-            "tid": tenant_uuid,
-            "fid": submission.anchors.farm_id,
-            "pu": submission.anchors.pu_id,
-            "cid": submission.anchors.cycle_id,
-            "flk": submission.anchors.flock_id,
-            "uid": actor_uuid,
-            "et": submission.event_type,
-            "occ": occurred_ts,
-            "p": payload_json,
-            "ver": schema_version,
-            "aud": audit_event_id,
-        },
-    )
-    new_row = insert_result.first()
-    if new_row is None:
-        raise HTTPException(500, error_envelope("insert_failed", "Event row insert failed after audit emission."))
-    event_id = new_row.event_id
+    # 5. INSERT event row — registry's target_table decides destination (Strike #96 Path A)
+    if target_table == "tenant.field_events":
+        # 5b. CROPS branch — vocabulary translation + structured-column mapping + payload_jsonb overflow
+        CATALOG_TO_FIELD_VERB = {
+            "PLANTING":           "PLANTING",
+            "IRRIGATION":         "IRRIGATE",
+            "CHEMICAL_APPLIED":   "SPRAY",
+            "FERTILIZER_APPLIED": "FERTILIZE",
+            "WEED_MANAGEMENT":    "WEED_MANAGEMENT",
+            "PRUNING_TRAINING":   "PRUNE",
+            "TRANSPLANT_LOGGED":  "TRANSPLANT",
+            "LAND_PREP":          "LAND_PREP",
+        }
+        field_event_type = CATALOG_TO_FIELD_VERB[submission.event_type]
+        is_chemical = submission.event_type == "CHEMICAL_APPLIED"
+
+        await db.execute(
+            text("""
+                INSERT INTO tenant.field_events (
+                    event_id, tenant_id, cycle_id, pu_id, farm_id,
+                    event_type, event_date,
+                    input_id, input_qty_used, input_cost_fjd,
+                    labor_hours, labor_cost_fjd,
+                    observation_text, photo_url, gps_lat, gps_lng,
+                    chemical_application, chemical_id,
+                    chemical_dose_per_liter, tank_volume_liters,
+                    created_by, payload_jsonb
+                )
+                VALUES (
+                    :event_id, :tid, :cid, :pu, :fid,
+                    :etype, :event_date,
+                    :input_id, :input_qty_used, :input_cost_fjd,
+                    :labor_hours, :labor_cost_fjd,
+                    :observation_text, :photo_url, :gps_lat, :gps_lng,
+                    :chemical_application, :chemical_id,
+                    :chemical_dose_per_liter, :tank_volume_liters,
+                    :created_by, CAST(:payload_jsonb AS jsonb)
+                )
+            """),
+            {
+                "event_id": field_event_id_text,
+                "tid": tenant_uuid,
+                "cid": submission.anchors.cycle_id,
+                "pu": submission.anchors.pu_id,
+                "fid": submission.anchors.farm_id,
+                "etype": field_event_type,
+                "event_date": occurred_ts,
+                "input_id": payload_dict.get("input_id"),
+                "input_qty_used": payload_dict.get("input_qty_used"),
+                "input_cost_fjd": payload_dict.get("input_cost_fjd"),
+                "labor_hours": payload_dict.get("labor_hours"),
+                "labor_cost_fjd": payload_dict.get("labor_cost_fjd"),
+                "observation_text": payload_dict.get("notes"),
+                "photo_url": payload_dict.get("photo_url"),
+                "gps_lat": payload_dict.get("gps_lat"),
+                "gps_lng": payload_dict.get("gps_lng"),
+                "chemical_application": is_chemical,
+                "chemical_id": payload_dict.get("chemical_id") if is_chemical else None,
+                "chemical_dose_per_liter": payload_dict.get("application_rate") if is_chemical else None,
+                "tank_volume_liters": payload_dict.get("tank_volume_liters") if is_chemical else None,
+                "created_by": actor_uuid,
+                "payload_jsonb": payload_json,
+            },
+        )
+        event_id = field_event_id_text
+    else:
+        # 5. (existing POULTRY path) INSERT event row with audit_event_id linked (TEXT anchors per Strike #21; flock_id added Phase 6.2-3)
+        insert_result = await db.execute(
+            text("""
+                INSERT INTO tenant.poultry_event_log (
+                    tenant_id, farm_id, pu_id, cycle_id, flock_id, created_by,
+                    event_type, occurred_at, payload_jsonb, payload_schema_version, audit_event_id
+                )
+                VALUES (
+                    :tid, :fid, :pu, :cid, :flk, :uid,
+                    :et, :occ, CAST(:p AS jsonb), :ver, :aud
+                )
+                RETURNING event_id
+            """),
+            {
+                "tid": tenant_uuid,
+                "fid": submission.anchors.farm_id,
+                "pu": submission.anchors.pu_id,
+                "cid": submission.anchors.cycle_id,
+                "flk": submission.anchors.flock_id,
+                "uid": actor_uuid,
+                "et": submission.event_type,
+                "occ": occurred_ts,
+                "p": payload_json,
+                "ver": schema_version,
+                "aud": audit_event_id,
+            },
+        )
+        new_row = insert_result.first()
+        if new_row is None:
+            raise HTTPException(500, error_envelope("insert_failed", "Event row insert failed after audit emission."))
+        event_id = new_row.event_id
 
     # 6. Side effect for MORTALITY_LOGGED: decrement tenant.flocks.current_count
     #    Same transaction; CHECK constraint on flocks (current_count >= 0) catches underflow
