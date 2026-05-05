@@ -22,7 +22,7 @@
  * to /farm to start one if not.
  */
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import ThemedSelect from "../../components/inputs/ThemedSelect.jsx";
 import ThemedCombobox from "../../components/inputs/ThemedCombobox.jsx";
@@ -86,6 +86,319 @@ async function fetchActiveCycles() {
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false, staleTime: 60_000 } },
 });
+
+// ============================================================================
+// Strike #97 — CROPS B2 polymorphic forms (new codepath)
+// ============================================================================
+// 7 event types unlocked by Strike #97. Catalog vocab; submits to /api/v1/events
+// with nested anchors per Strike #96. CHEMICAL_APPLIED stays on legacy form.
+const STRIKE_96_FIELDS = {
+  PLANTING: {
+    label: "Planting",
+    fields: [
+      { name: "variety",      type: "text",   label: "Variety",      maxLength: 120 },
+      { name: "plant_count",  type: "int",    label: "Plant count",  min: 0 },
+      { name: "spacing_cm",   type: "int",    label: "Spacing (cm)", min: 0 },
+    ],
+  },
+  IRRIGATION: {
+    label: "Irrigation",
+    fields: [
+      { name: "duration_minutes", type: "int",    label: "Duration (min)", min: 0 },
+      { name: "method",           type: "select", label: "Method",         options: ["DRIP","OVERHEAD","FLOOD","HAND","OTHER"] },
+      { name: "water_source",     type: "text",   label: "Water source",   maxLength: 120 },
+    ],
+  },
+  FERTILIZER_APPLIED: {
+    label: "Fertilizer applied",
+    fields: [
+      { name: "product_name",       type: "text",   label: "Product name",  maxLength: 120 },
+      { name: "rate_kg_per_ha",     type: "number", label: "Rate (kg/ha)",  min: 0 },
+      { name: "application_method", type: "select", label: "Method",        options: ["BROADCAST","BAND","FOLIAR","FERTIGATION","OTHER"] },
+    ],
+  },
+  WEED_MANAGEMENT: {
+    label: "Weed management",
+    fields: [
+      { name: "method",           type: "select", label: "Method",            options: ["MANUAL","MECHANICAL","CHEMICAL","MULCH","COVER_CROP","OTHER"], required: true },
+      { name: "area_treated_ha",  type: "number", label: "Area treated (ha)", min: 0 },
+      { name: "labor_hours",      type: "number", label: "Labor hours",       min: 0 },
+    ],
+  },
+  PRUNING_TRAINING: {
+    label: "Pruning / training",
+    fields: [
+      { name: "activity",     type: "select", label: "Activity",     options: ["PRUNE","TRAIN","STAKE","TIE","TOPPING","OTHER"], required: true },
+      { name: "plants_count", type: "int",    label: "Plants count", min: 0 },
+      { name: "labor_hours",  type: "number", label: "Labor hours",  min: 0 },
+    ],
+  },
+  TRANSPLANT_LOGGED: {
+    label: "Transplant",
+    fields: [
+      { name: "plants_transplanted", type: "int", label: "Plants transplanted", min: 0, required: true },
+      { name: "spacing_cm",          type: "int", label: "Spacing (cm)",        min: 0 },
+    ],
+  },
+  LAND_PREP: {
+    label: "Land preparation",
+    fields: [
+      { name: "activity",         type: "select", label: "Activity",          options: ["PLOUGH","HARROW","BED_FORM","CLEAR","AMEND_SOIL","OTHER"], required: true },
+      { name: "area_prepared_ha", type: "number", label: "Area prepared (ha)", min: 0 },
+      { name: "labor_hours",      type: "number", label: "Labor hours",        min: 0 },
+      { name: "equipment_used",   type: "text",   label: "Equipment used",     maxLength: 120 },
+    ],
+  },
+};
+
+function Strike96CropsForm({ eventType }) {
+  const navigate = useNavigate();
+  const qc = useQueryClient();
+  const schema = STRIKE_96_FIELDS[eventType];
+
+  const [cycleId, setCycleId]       = useState("");
+  const [eventDate, setEventDate]   = useState(todayISO());
+  const [values, setValues]         = useState({});
+  const [notes, setNotes]           = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError]           = useState("");
+
+  const cyclesQuery = useQuery({
+    queryKey: ["cycles", "active"],
+    queryFn: fetchActiveCycles,
+  });
+
+  useEffect(() => {
+    if (!cycleId && cyclesQuery.data && cyclesQuery.data.length > 0) {
+      setCycleId(cyclesQuery.data[0].cycle_id);
+    }
+  }, [cycleId, cyclesQuery.data]);
+
+  const selectedCycle = useMemo(
+    () => (cyclesQuery.data || []).find((c) => c.cycle_id === cycleId),
+    [cyclesQuery.data, cycleId],
+  );
+
+  function setField(name, val) {
+    setValues((v) => ({ ...v, [name]: val }));
+  }
+
+  const requiredOK = schema.fields.every(
+    (f) => !f.required || (values[f.name] !== undefined && values[f.name] !== ""),
+  );
+  const submitDisabled = submitting || !cycleId || !selectedCycle || !requiredOK;
+
+  async function submit(e) {
+    e.preventDefault();
+    if (submitDisabled) return;
+    setSubmitting(true);
+    setError("");
+
+    const payload = {};
+    for (const f of schema.fields) {
+      const v = values[f.name];
+      if (v === undefined || v === "" || v === null) continue;
+      if (f.type === "int")          payload[f.name] = parseInt(v, 10);
+      else if (f.type === "number")  payload[f.name] = Number(v);
+      else                           payload[f.name] = v;
+    }
+    if (notes.trim()) payload.notes = notes.trim();
+
+    const occurredAt = `${eventDate}T12:00:00+12:00`;
+
+    const body = {
+      event_type: eventType,
+      occurred_at: occurredAt,
+      anchors: {
+        farm_id:  selectedCycle.farm_id,
+        pu_id:    selectedCycle.pu_id,
+        cycle_id: cycleId,
+      },
+      payload,
+    };
+
+    try {
+      const res = await fetch("/api/v1/events", {
+        method: "POST",
+        headers: authHeaders(),
+        body: JSON.stringify(body),
+      });
+      const parsed = await res.json().catch(() => null);
+      if (res.status === 201 && parsed?.status === "success") {
+        const eventId = parsed.data?.event_id || "";
+        const hash    = parsed.data?.audit_hash || "";
+        emitToast(`Logged · ${eventId}${hash ? ` · ${hash}` : ""}`);
+        qc.invalidateQueries({ queryKey: ["field-events"] });
+        qc.invalidateQueries({ queryKey: ["cycles", "active"] });
+        qc.invalidateQueries({ queryKey: ["tasks-next"] });
+        navigate("/farm");
+        return;
+      }
+      const msg =
+        parsed?.error?.message ||
+        parsed?.detail?.error?.message ||
+        parsed?.detail?.message ||
+        (typeof parsed?.detail === "string" ? parsed.detail : null) ||
+        `${res.status} ${res.statusText}`;
+      setError(msg);
+    } catch (err) {
+      setError(`Network error: ${err.message}`);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  if (!cyclesQuery.isLoading && (!cyclesQuery.data || cyclesQuery.data.length === 0)) {
+    return (
+      <div className="max-w-md mx-auto p-6 text-center">
+        <h1 className="text-xl font-bold mb-2" style={{ color: C.soil }}>No active cycle</h1>
+        <p className="text-sm mb-6" style={{ color: C.muted }}>
+          CROPS events must be logged against an active production cycle.
+        </p>
+        <button
+          type="button"
+          onClick={() => navigate("/farm")}
+          className="text-sm font-semibold px-5 py-2 rounded-lg text-white"
+          style={{ background: C.green }}
+        >
+          Go to Farm Overview
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-w-md mx-auto p-4">
+      <div className="bg-white rounded-2xl px-5 py-5" style={{ border: `1px solid ${C.border}` }}>
+        <header className="mb-4">
+          <div className="text-xs uppercase tracking-wider font-medium" style={{ color: C.muted }}>
+            CROPS event
+          </div>
+          <h1 className="text-xl font-bold mt-1" style={{ color: C.soil }}>
+            {schema.label}
+          </h1>
+        </header>
+
+        <form onSubmit={submit} className="space-y-4">
+          {/* Cycle */}
+          <div>
+            <label className="text-xs uppercase tracking-wider font-medium block mb-1" style={{ color: C.muted }}>
+              Cycle *
+            </label>
+            <ThemedSelect
+              id="cycle"
+              name="cycle_id"
+              value={cycleId}
+              onChange={setCycleId}
+              options={(cyclesQuery.data ?? []).map((c) => ({
+                value: c.cycle_id,
+                label: `${c.production_name || c.production_id || "—"} on ${c.pu_farmer_label || c.pu_id}`,
+              }))}
+              placeholder="Select cycle..."
+              required
+              disabled={cyclesQuery.isLoading}
+            />
+          </div>
+
+          {/* Date */}
+          <div>
+            <label className="text-xs uppercase tracking-wider font-medium block mb-1" style={{ color: C.muted }}>
+              Date *
+            </label>
+            <input
+              type="date"
+              value={eventDate}
+              max={todayISO()}
+              onChange={(e) => setEventDate(e.target.value)}
+              required
+              className="w-full px-3 py-2 rounded-lg text-sm focus:outline-none"
+              style={{ background: "white", border: `1px solid ${C.border}`, color: C.soil }}
+            />
+          </div>
+
+          {/* Dynamic event-type fields */}
+          {schema.fields.map((f) => (
+            <div key={f.name}>
+              <label className="text-xs uppercase tracking-wider font-medium block mb-1" style={{ color: C.muted }}>
+                {f.label}{f.required ? " *" : ""}
+              </label>
+              {f.type === "select" ? (
+                <ThemedSelect
+                  id={f.name}
+                  name={f.name}
+                  value={values[f.name] || ""}
+                  onChange={(v) => setField(f.name, v)}
+                  options={f.options.map((o) => ({ value: o, label: o }))}
+                  placeholder="Select..."
+                  required={!!f.required}
+                />
+              ) : (
+                <input
+                  type={f.type === "text" ? "text" : "number"}
+                  inputMode={f.type === "int" ? "numeric" : f.type === "number" ? "decimal" : undefined}
+                  step={f.type === "int" ? "1" : f.type === "number" ? "0.01" : undefined}
+                  min={f.min}
+                  maxLength={f.maxLength}
+                  value={values[f.name] || ""}
+                  onChange={(e) => setField(f.name, e.target.value)}
+                  required={!!f.required}
+                  className="w-full px-3 py-2 rounded-lg text-sm focus:outline-none"
+                  style={{ background: "white", border: `1px solid ${C.border}`, color: C.soil }}
+                />
+              )}
+            </div>
+          ))}
+
+          {/* Notes */}
+          <div>
+            <label className="text-xs uppercase tracking-wider font-medium block mb-1" style={{ color: C.muted }}>
+              Notes
+            </label>
+            <textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              rows={3}
+              maxLength={500}
+              placeholder="Optional details about this activity"
+              className="w-full px-3 py-2 rounded-lg text-sm focus:outline-none"
+              style={{ background: "white", border: `1px solid ${C.border}`, color: C.soil }}
+            />
+          </div>
+
+          {error && (
+            <div
+              className="rounded-lg p-2 text-xs"
+              style={{ background: "#FDECEE", color: C.red, border: `1px solid ${C.border}` }}
+            >
+              {error}
+            </div>
+          )}
+
+          {/* Footer */}
+          <div className="flex items-center justify-end gap-2 pt-2">
+            <button
+              type="button"
+              onClick={() => navigate("/farm")}
+              disabled={submitting}
+              className="text-sm font-medium px-3 py-2 rounded-lg disabled:opacity-40"
+              style={{ background: "white", border: `1px solid ${C.border}`, color: C.soil }}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={submitDisabled}
+              className="text-sm font-semibold px-4 py-2 rounded-lg text-white disabled:opacity-40"
+              style={{ background: C.green }}
+            >
+              {submitting ? "Logging…" : "Log activity"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
 
 function FieldEventForm() {
   const navigate = useNavigate();
@@ -418,10 +731,19 @@ function FieldEventForm() {
   );
 }
 
+function FieldEventDispatcher() {
+  const [searchParams] = useSearchParams();
+  const typeParam = searchParams.get("type");
+  if (typeParam && STRIKE_96_FIELDS[typeParam]) {
+    return <Strike96CropsForm eventType={typeParam} />;
+  }
+  return <FieldEventForm />;
+}
+
 export default function FieldEventNew() {
   return (
     <QueryClientProvider client={queryClient}>
-      <FieldEventForm />
+      <FieldEventDispatcher />
     </QueryClientProvider>
   );
 }
