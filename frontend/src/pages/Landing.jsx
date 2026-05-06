@@ -83,7 +83,9 @@ export default function Landing() {
   return (
     <div className="tv-landing">
       <nav className="tv-nav">
-        <Link to="/" className="tv-wordmark">Teivaka<span className="tv-dot">.</span></Link>
+        <Link to="/" className="tv-wordmark" style={{ display: "inline-flex", alignItems: "center", textDecoration: "none" }}>
+        <img src="/teivaka_logo.png" alt="Teivaka" style={{ height: 48, width: "auto", display: "block" }} />
+      </Link>
         <div className="tv-nav-links">
           <a href="#platform">Platform</a>
           <a href="#how">How it works</a>
@@ -96,7 +98,10 @@ export default function Landing() {
         <div className="tv-hero-bg" aria-hidden="true" />
         <div className="tv-hero-grid">
           <div className="tv-hero-copy">
-            <div className="tv-eyebrow"><span className="tv-rule" /> GENERATE WEALTH FROM IDLE LANDS</div>
+            <div className="tv-hero-logo" style={{ marginBottom: 22 }}>
+            <img src="/teivaka_logo.png" alt="Teivaka" style={{ height: 140, width: "auto", display: "block" }} />
+          </div>
+          <div className="tv-eyebrow"><span className="tv-rule" /> GENERATE WEALTH FROM IDLE LANDS</div>
             <h1 className="tv-h1">The operating system for <em>Pacific Island</em> farming.</h1>
             <p className="tv-lead">Plan your crops, run your team, track every dollar, and talk to an AI agronomist trained on Pacific soils — all from one platform, built in Fiji, for the Pacific.</p>
             <div className="tv-cta-row">
@@ -210,7 +215,7 @@ export default function Landing() {
       <footer className="tv-footer">
         <div className="tv-footer-inner">
           <div className="tv-footer-left">
-            <p className="tv-footer-wordmark">Teivaka<span>.</span></p>
+            <p className="tv-footer-wordmark"><img src="/teivaka_logo.png" alt="Teivaka" style={{ height: 40, width: "auto", display: "inline-block" }} /></p>
             <p className="tv-footer-tagline">Built for the Pacific, by the Pacific.</p>
           </div>
           <div className="tv-footer-right">

@@ -187,20 +187,16 @@ export default function FarmerLayout({ children }) {
 
       {/* ── Fixed Top Nav ──────────────────────────────────────────────── */}
       <header className="fixed top-0 left-0 right-0 z-50 shadow-sm"
-        style={{ background: C.soil, borderBottom: `2px solid ${C.green}` }}>
+        style={{ background: "#F8F3E9", borderBottom: `2px solid ${C.green}` }}>
         <div className="max-w-screen-xl mx-auto px-4 h-14 flex items-center gap-3">
 
           {/* Logo + wordmark + farm dropdown */}
           <div className="flex items-center gap-3 shrink-0">
             <Link to="/home" className="flex items-center gap-2">
-              <span className="text-2xl leading-none">🌿</span>
-              <span className="text-white font-bold tracking-tight"
-                style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: "1.1rem" }}>
-                Teivaka
-              </span>
+              <img src="/teivaka_logo.png" alt="Teivaka" style={{ height: 48, width: "auto", display: "block" }} />
             </Link>
-            <div className="hidden sm:flex items-center gap-1 text-white/60 text-sm border-l pl-3"
-              style={{ borderColor: "rgba(255,255,255,0.2)" }}>
+            <div className="hidden sm:flex items-center gap-1 text-[#5C4033]/60 text-sm border-l pl-3"
+              style={{ borderColor: "rgba(92,64,51,0.2)" }}>
               <span className="truncate max-w-32">My Farm</span>
               <svg className="w-3 h-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
@@ -211,21 +207,21 @@ export default function FarmerLayout({ children }) {
           {/* Search bar */}
           <div className="flex-1 max-w-xl mx-2">
             <div className="relative">
-              <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/40"
+              <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#5C4033]/40"
                 fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                   d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
               </svg>
               <input type="text"
                 placeholder="Search knowledge, posts, crops, farmers..."
-                className="w-full pl-9 pr-4 py-2 rounded-full text-sm text-white placeholder-white/40 focus:outline-none focus:ring-2"
-                style={{ background: "rgba(255,255,255,0.12)", focusRingColor: C.green }}
+                className="w-full pl-9 pr-4 py-2 rounded-full text-sm text-[#5C4033] placeholder-[#5C4033]/40 focus:outline-none focus:ring-2"
+                style={{ background: "rgba(92,64,51,0.06)", focusRingColor: C.green }}
               />
             </div>
           </div>
 
           {/* Right icons */}
-          <div className="flex items-center gap-1 shrink-0 text-white">
+          <div className="flex items-center gap-1 shrink-0 text-[#5C4033]">
             <TrialChip trialEndsAt={trialEndsAt} subscriptionTier={subscriptionTier} />
             <MessagesIcon count={3} />
             <NotificationBell count={7} />

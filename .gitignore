@@ -62,3 +62,7 @@ dist.old*
 *.bak.*
 **/*.bak
 **/*.bak.*
+
+# Operator-pattern backup files from paste-pack-driven edits
+*.bak-pre-*
+*.old-*

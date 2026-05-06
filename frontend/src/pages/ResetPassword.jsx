@@ -42,8 +42,7 @@ export default function ResetPassword() {
     return (
       <div className="min-h-screen flex items-center justify-center p-4" style={{ backgroundColor: C.cream }}>
         <div className="bg-white rounded-2xl shadow-lg w-full max-w-md p-8 text-center" style={{ border: `1px solid ${C.border}` }}>
-          <div className="text-4xl mb-3">🌿</div>
-          <h1 className="text-xl font-bold mb-2" style={{ color: C.soil }}>Teivaka</h1>
+          <img src="/teivaka_logo.png" alt="Teivaka" style={{ height: 88, width: "auto", display: "block", margin: "0 auto 14px" }} />
           <p className="text-red-600 font-medium mb-4">This link is invalid or has expired.</p>
           <Link to="/forgot-password" className="inline-block px-5 py-2.5 rounded-lg text-white font-semibold" style={{ backgroundColor: C.green }}>
             Request a new reset link
@@ -88,9 +87,8 @@ export default function ResetPassword() {
     <div className="min-h-screen flex items-center justify-center p-4" style={{ backgroundColor: C.cream }}>
       <div className="bg-white rounded-2xl shadow-lg w-full max-w-md p-8" style={{ border: `1px solid ${C.border}` }}>
         <div className="text-center mb-6">
-          <div className="text-4xl mb-2">🌿</div>
-          <h1 className="text-2xl font-bold" style={{ color: C.soil }}>Teivaka</h1>
-          <p className="text-sm mt-1" style={{ color: C.soil, opacity: 0.7 }}>Set a new password</p>
+          <img src="/teivaka_logo.png" alt="Teivaka" style={{ height: 88, width: "auto", display: "block", margin: "0 auto 8px" }} />
+          <p className="text-sm" style={{ color: "#5C4033", opacity: 0.7 }}>Set a new password</p>
         </div>
 
         {success ? (

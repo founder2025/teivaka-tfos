@@ -123,10 +123,10 @@ function PrivacyGate({ onAccept }) {
     <div className="min-h-screen bg-gradient-to-br from-green-50 to-emerald-100 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg">
         {/* Header */}
-        <div className="bg-emerald-600 rounded-t-2xl px-6 py-5 text-white text-center">
-          <div className="text-3xl mb-1">🌿</div>
-          <h1 className="text-xl font-bold">Welcome to Teivaka Farm OS</h1>
-          <p className="text-emerald-100 text-sm mt-1">
+        <div className="rounded-t-2xl px-6 py-5 text-center" style={{ background: "#F8F3E9", borderBottom: "1px solid #E5DCC9" }}>
+          <img src="/teivaka_logo.png" alt="Teivaka" style={{ height: 88, width: "auto", display: "block", margin: "0 auto 10px" }} />
+          <h1 className="text-xl font-bold" style={{ color: "#5C4033" }}>Welcome to Teivaka Farm OS</h1>
+          <p className="text-sm mt-1" style={{ color: "#5C4033", opacity: 0.7 }}>
             Please read and accept our policies before continuing
           </p>
         </div>
@@ -391,10 +391,10 @@ function RegistrationForm({ onSuccess }) {
     <div className="min-h-screen bg-gradient-to-br from-green-50 to-emerald-100 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg">
         {/* Header */}
-        <div className="bg-emerald-600 rounded-t-2xl px-6 py-5 text-white text-center">
-          <div className="text-3xl mb-1">🌿</div>
-          <h1 className="text-xl font-bold">Create Your Teivaka Account</h1>
-          <p className="text-emerald-100 text-sm mt-1">
+        <div className="rounded-t-2xl px-6 py-5 text-center" style={{ background: "#F8F3E9", borderBottom: "1px solid #E5DCC9" }}>
+          <img src="/teivaka_logo.png" alt="Teivaka" style={{ height: 88, width: "auto", display: "block", margin: "0 auto 10px" }} />
+          <h1 className="text-xl font-bold" style={{ color: "#5C4033" }}>Create Your Teivaka Account</h1>
+          <p className="text-sm mt-1" style={{ color: "#5C4033", opacity: 0.7 }}>
             Your farm management platform starts here
           </p>
         </div>

@@ -113,8 +113,8 @@ function PageLoader() {
     <div className="min-h-screen flex items-center justify-center"
       style={{ background: "#F5EFE0" }}>
       <div className="flex flex-col items-center gap-3">
-        <span className="text-4xl animate-pulse">🌿</span>
-        <p className="text-sm font-medium" style={{ color: "#3D8C40" }}>Loading…</p>
+        <img src="/teivaka_logo.png" alt="Teivaka" style={{ height: 72, width: "auto", display: "block" }} className="animate-pulse" />
+        <p className="text-sm font-medium" style={{ color: "#6AA84F" }}>Loading…</p>
       </div>
     </div>
   );

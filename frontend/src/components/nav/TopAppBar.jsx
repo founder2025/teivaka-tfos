@@ -16,18 +16,11 @@ const C = {
 
 function TeivakaLogo() {
   return (
-    <span
-      className="tracking-tight"
-      style={{
-        color: C.greenDk,
-        fontSize: 18,
-        fontWeight: 700,
-        fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, sans-serif",
-        lineHeight: 1,
-      }}
-    >
-      teivaka
-    </span>
+    <img
+      src="/teivaka_logo.png"
+      alt="Teivaka"
+      style={{ height: 48, width: "auto", display: "block" }}
+    />
   );
 }
 

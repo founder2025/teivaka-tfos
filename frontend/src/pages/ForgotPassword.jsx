@@ -35,9 +35,8 @@ export default function ForgotPassword() {
   return (
     <div className="min-h-screen flex flex-col" style={{ background: C.cream, fontFamily: "'Lora', Georgia, serif" }}>
       <div className="text-center py-6" style={{ borderBottom: `1px solid ${C.border}` }}>
-        <Link to="/" className="inline-flex items-center gap-2">
-          <span className="text-2xl">🌿</span>
-          <span className="font-bold text-xl" style={{ color: C.soil, fontFamily: "'Playfair Display', Georgia, serif" }}>Teivaka</span>
+        <Link to="/" className="inline-flex items-center justify-center">
+          <img src="/teivaka_logo.png" alt="Teivaka" style={{ height: 88, width: "auto", display: "block" }} />
         </Link>
       </div>
 

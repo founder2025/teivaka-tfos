@@ -175,7 +175,7 @@ function FarmBasicsInner() {
           className="max-w-md w-full mx-4 bg-white rounded-3xl p-8 text-center"
           style={{ border: `1px solid ${C.border}` }}
         >
-          <div className="text-5xl mb-4">🌿</div>
+          <img src="/teivaka_logo.png" alt="Teivaka" style={{ height: 104, width: "auto", display: "block", margin: "0 auto 16px" }} />
           <h1 className="text-2xl font-bold mb-2" style={{ color: C.soil }}>
             Voice-first onboarding
           </h1>

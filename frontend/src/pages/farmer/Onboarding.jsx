@@ -285,10 +285,7 @@ export default function Onboarding() {
 
       {/* Header */}
       <div className="text-center py-6" style={{ borderBottom: `1px solid ${C.border}` }}>
-        <span className="text-2xl mr-2">🌿</span>
-        <span className="font-bold text-xl" style={{ color: C.soil, fontFamily: "'Playfair Display', Georgia, serif" }}>
-          Teivaka
-        </span>
+        <img src="/teivaka_logo.png" alt="Teivaka" style={{ height: 88, width: "auto", display: "block", margin: "0 auto" }} />
       </div>
 
       {/* Card */}

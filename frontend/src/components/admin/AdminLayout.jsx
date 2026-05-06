@@ -33,12 +33,11 @@ export default function AdminLayout({ children }) {
   }
 
   return (
-    <div className="min-h-screen bg-gray-950 text-gray-100">
+    <div className="min-h-screen bg-[#F8F3E9] text-[#5C4033]">
       {/* ── Top bar ─────────────────────────────────────────────────────── */}
-      <header className="bg-gray-900 border-b border-gray-800 px-4 py-3 flex items-center justify-between">
+      <header className="bg-[#F8F3E9] border-b border-[#E5DCC9] px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <span className="text-2xl">🌿</span>
-          <span className="font-bold text-white text-lg tracking-tight">Teivaka</span>
+          <img src="/teivaka_logo.png" alt="Teivaka" style={{ height: 52, width: "auto", display: "block" }} />
           {/* Platform badge */}
           <span className="text-xs bg-amber-500 text-amber-950 font-bold px-2 py-0.5 rounded-full uppercase tracking-wide">
             Platform Admin
@@ -51,13 +50,13 @@ export default function AdminLayout({ children }) {
             <div className="w-8 h-8 rounded-full bg-amber-500 flex items-center justify-center text-amber-950 font-bold text-sm">
               A
             </div>
-            <span className="text-sm text-gray-300 hidden sm:block">
+            <span className="text-sm text-[#5C4033] hidden sm:block">
               {user?.sub?.slice(0, 8)}…
             </span>
           </div>
           <button
             onClick={handleLogout}
-            className="text-xs text-gray-400 hover:text-red-400 transition-colors px-2 py-1 rounded border border-gray-700 hover:border-red-700"
+            className="text-xs text-[#5C4033]/70 hover:text-red-400 transition-colors px-2 py-1 rounded border border-[#E5DCC9] hover:border-red-700"
           >
             Logout
           </button>
@@ -65,7 +64,7 @@ export default function AdminLayout({ children }) {
       </header>
 
       {/* ── Secondary nav (admin tabs) ──────────────────────────────────── */}
-      <nav className="bg-gray-900 border-b border-gray-800 px-4">
+      <nav className="bg-[#F8F3E9] border-b border-[#E5DCC9] px-4">
         <div className="flex gap-1 overflow-x-auto">
           {ADMIN_TABS.map((tab) => (
             <NavLink
@@ -76,7 +75,7 @@ export default function AdminLayout({ children }) {
                 `flex items-center gap-1.5 px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
                   isActive
                     ? "border-amber-400 text-amber-400"
-                    : "border-transparent text-gray-400 hover:text-gray-200 hover:border-gray-600"
+                    : "border-transparent text-[#5C4033]/70 hover:text-[#5C4033] hover:border-[#E5DCC9]"
                 }`
               }
             >
