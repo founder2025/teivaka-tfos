@@ -109,7 +109,7 @@ services:
     command: >
       celery -A app.workers.celery_app worker
       --loglevel=info
-      --queues=automation
+      --queues=automation,maintenance
       --concurrency=4
       --hostname=worker-automation@localhost
       --max-tasks-per-child=500
@@ -163,7 +163,7 @@ services:
     command: >
       celery -A app.workers.celery_app worker
       --loglevel=info
-      --queues=ai
+      --queues=ai,decision
       --concurrency=8
       --hostname=worker-ai@localhost
       --max-tasks-per-child=200
@@ -269,7 +269,7 @@ services:
     container_name: teivaka_beat
     restart: unless-stopped
     command: >
-      celery -A app.workers.celery_app beat
+      celery -A app.workers.celery_app beat --max-interval=60
       --loglevel=info
       --scheduler=celery.beat.PersistentScheduler
       --schedule=/app/data/celerybeat-schedule
