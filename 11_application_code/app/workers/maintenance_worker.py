@@ -1,5 +1,6 @@
 """Maintenance worker — materialized view refresh and DB housekeeping."""
 import psycopg2
+import psycopg2.errors
 import psycopg2.extras
 from app.workers.celery_app import app as celery_app
 from app.config import settings
@@ -29,8 +30,15 @@ def refresh_materialized_views(self):
     conn = get_sync_db()
     try:
         cur = conn.cursor()
-        cur.execute("SELECT * FROM tenant.refresh_all_materialized_views()")
-        results = cur.fetchall()
+        try:
+            cur.execute("SELECT * FROM tenant.refresh_all_materialized_views()")
+            results = cur.fetchall()
+        except psycopg2.errors.UndefinedFunction:
+            # Migration 004 (materialized views) stubbed as no-op pending
+            # inputs.farm_id scoping. Worker returns success no-op until function exists.
+            conn.rollback()
+            logger.warning("[MV REFRESH] Skipped: tenant.refresh_all_materialized_views() not yet defined (Migration 004 stub)")
+            return {"views_refreshed": 0, "skipped_reason": "matviews not yet created"}
         conn.commit()
 
         failed = [r["view_name"] for r in results if not r["success"]]

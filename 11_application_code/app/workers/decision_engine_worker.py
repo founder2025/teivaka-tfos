@@ -6,6 +6,7 @@ Stores snapshots — NEVER compute on-demand.
 import psycopg2
 import psycopg2.extras
 from app.workers.celery_app import app as celery_app
+from app.workers.rls_helpers import with_rls
 from app.config import settings
 from datetime import datetime
 import logging
@@ -217,41 +218,62 @@ def run_decision_engine(self):
     logger.info(f"[DECISION ENGINE] Starting at {datetime.now().isoformat()}")
     conn = get_sync_db()
     try:
+        # Stage 1: enumerate active tenants. tenant.tenants has no RLS policy
+        # so this scan does not need a tenant context.
         cur = conn.cursor()
         cur.execute("""
-            SELECT DISTINCT t.tenant_id::TEXT, f.farm_id
-            FROM tenant.tenants t
-            JOIN tenant.farms f ON f.tenant_id = t.tenant_id
-            WHERE t.subscription_status = 'ACTIVE'
-              AND t.subscription_tier IN ('PREMIUM','CUSTOM','BASIC')
-              AND f.is_active = true
+            SELECT tenant_id::TEXT AS tenant_id
+            FROM tenant.tenants
+            WHERE subscription_status = 'ACTIVE'
+              AND subscription_tier IN ('PREMIUM','CUSTOM','BASIC')
         """)
-        farms = cur.fetchall()
+        tenants = cur.fetchall()
+        cur.close()
+        conn.commit()
 
         total_snapshots = 0
-        for farm in farms:
-            tenant_id = farm["tenant_id"]
-            farm_id = farm["farm_id"]
-            cur.execute("SET LOCAL app.tenant_id = %s", (tenant_id,))
-            try:
-                signals = compute_signals_sql(cur, farm_id, tenant_id)
-                for signal_id, value in signals:
-                    status = value_to_status(signal_id, value)
-                    snapshot_id = f"DSS-{uuid.uuid4().hex[:12].upper()}"
-                    cur.execute("""
-                        INSERT INTO tenant.decision_signal_snapshots
-                            (snapshot_id, snapshot_date, tenant_id, farm_id, signal_id, computed_value, signal_status)
-                        VALUES (%s, NOW(), %s, %s, %s, %s, %s)
-                    """, (snapshot_id, tenant_id, farm_id, signal_id, value, status))
-                    total_snapshots += 1
-                conn.commit()
-                logger.info(f"[DECISION ENGINE] {farm_id}: {len(signals)} signals stored")
-            except Exception as e:
-                logger.error(f"Signal compute error for {farm_id}: {e}", exc_info=True)
-                conn.rollback()
+        farms_processed = 0
 
-        logger.info(f"[DECISION ENGINE] Complete. {total_snapshots} snapshots for {len(farms)} farms.")
-        return {"farms_processed": len(farms), "snapshots_stored": total_snapshots}
+        for tenant in tenants:
+            tenant_id = tenant["tenant_id"]
+
+            # Stage 2a: list this tenant's active farms under per-tenant RLS.
+            with with_rls(conn, tenant_id) as cur:
+                cur.execute("""
+                    SELECT farm_id
+                    FROM tenant.farms
+                    WHERE is_active = true
+                """)
+                farms = cur.fetchall()
+            conn.commit()
+
+            farms_processed += len(farms)
+
+            # Stage 2b: per-farm signal compute + INSERT under same RLS context.
+            # Each farm its own transaction so one farm's failure doesn't roll
+            # back its tenant siblings.
+            for farm_row in farms:
+                farm_id = farm_row["farm_id"]
+                with with_rls(conn, tenant_id) as cur:
+                    try:
+                        signals = compute_signals_sql(cur, farm_id, tenant_id)
+                        for signal_id, value in signals:
+                            status = value_to_status(signal_id, value)
+                            snapshot_id = f"DSS-{uuid.uuid4().hex[:12].upper()}"
+                            cur.execute("""
+                                INSERT INTO tenant.decision_signal_snapshots
+                                    (snapshot_id, snapshot_date, tenant_id, farm_id, signal_id, computed_value, signal_status)
+                                VALUES (%s, NOW(), %s, %s, %s, %s, %s)
+                            """, (snapshot_id, tenant_id, farm_id, signal_id, value, status))
+                            total_snapshots += 1
+                        conn.commit()
+                        logger.info(f"[DECISION ENGINE] {farm_id}: {len(signals)} signals stored")
+                    except Exception as e:
+                        logger.error(f"Signal compute error for {farm_id}: {e}", exc_info=True)
+                        conn.rollback()
+
+        logger.info(f"[DECISION ENGINE] Complete. {total_snapshots} snapshots across {farms_processed} farms in {len(tenants)} tenants.")
+        return {"tenants_processed": len(tenants), "farms_processed": farms_processed, "snapshots_stored": total_snapshots}
     except Exception as e:
         conn.rollback()
         raise self.retry(exc=e)
