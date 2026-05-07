@@ -52,6 +52,7 @@ class Input(TenantBase):
 
     input_id: Mapped[str] = mapped_column(Text, primary_key=True)  # INP-001
     tenant_id: Mapped[str] = mapped_column(UUID(as_uuid=False), nullable=False)
+    farm_id: Mapped[str] = mapped_column(Text, nullable=False)
     input_name: Mapped[str] = mapped_column(Text, nullable=False)
     input_category: Mapped[str] = mapped_column(Text, nullable=False)
     unit_of_measure: Mapped[str] = mapped_column(Text, nullable=False)  # kg, L, pkt, unit
