@@ -11,7 +11,7 @@ Read before any group-related sprint planning or build work:
 
 ## Current state (refreshed every session — this section is mutable)
 
-**Last verified:** 2026-05-06 (Sprint 7 in-flight, foundation cadence)
+**Last verified:** 2026-05-07 (Sprint 7 in-flight, Decision Engine restoration cascade complete)
 
 **Production:** healthy. teivaka.com HTTPS live.
 - 6 containers running (all healthy as of Phase 8-2b commit 1194331):
@@ -21,8 +21,8 @@ Read before any group-related sprint planning or build work:
   - `teivaka_caddy` — healthy (was unhealthy pre-8-2b; healthcheck URL fixed)
   - `teivaka_worker_ai` — healthy (was unhealthy pre-8-2b; YAML list-form fix + hostname stability)
   - `teivaka_beat` — healthy (was unhealthy pre-8-2b; mtime healthcheck added)
-- Last commit: `6f1bf05` (Strike #105: Logo deployment + brand consistency sweep)
-- Last migration: `072_layer_enum_schema` (Strike #103: 3-Layer Doctrine schema)
+- Last commit: `656e5ec` (Strike #114: Add farm_id to tenant.inputs — Migration 074 closes Bug E real fix; Decision Engine schema gap eliminated)
+- Last migration: `074_inputs_farm_id` (Strike #114: farm_id NOT NULL + FK CASCADE + btree index on tenant.inputs)
 - Branch: `feature/option-3-plus-nav-v2-1`
 
 **Phase status (Sprint 6 closed; Sprint 7 in-flight, foundation marathon underway):**
@@ -59,6 +59,11 @@ Read before any group-related sprint planning or build work:
 - ✅ Phase 6.3-21/22 — FLOCK_MOVED + EQUIPMENT_MAINTAINED 2-form coop-management pack (movement audit chain for quarantine/separation + maintenance cost capture for cashflow with whole-farm toggle; Form Coverage 23/35 ~66%)
 - ✅ Phase 6.3-23/24 — INCIDENT_REPORTED + SUPPLIES_RECEIVED 2-form risk-management + supply-chain pack (severity-classified incident logging + supply receipt with Bank Evidence cashflow; first phase exercising multi-char sequence label 2aa; Form Coverage 25/35 ~71%)
 - ✅ Strike #105 — Logo deployment + brand consistency sweep (cream/soil palette unified across Auth + Admin + FarmerLayout; PWA assets + manifest baseline; commit 6f1bf05)
+- ✅ Strike #110: Celery scheduler restoration + decision queue wiring (52h silent death fix + max-interval=60 hardening + worker-ai/automation queue extension + 15-day backlog purge)
+- ✅ Strike #111: Decision Engine RLS fix + maintenance worker guard (Strike #95 two-stage scan pattern; mv-refresh UndefinedFunction fail-soft guard)
+- ✅ Strike #112: DS-002 nested-aggregate fix + decision_signal_config seed (CTE rewrite + Migration 073 anchored to F001-A0EE; FK anchor populated for first time)
+- ✅ Strike #113: Decision Engine per-signal SAVEPOINT isolation (Path B resilience; first 20 fresh snapshots in production history)
+- ✅ Strike #114: Add farm_id to tenant.inputs (Migration 074 — Bug E real fix; greenfield NOT NULL + FK CASCADE + btree index)
 
 **POULTRY Vertical Completeness (Sprint 7 in-flight):**
 - Gate 1 Event Taxonomy: ✅ PASS
@@ -76,7 +81,7 @@ Read before any group-related sprint planning or build work:
 - Verification status enum surfaces caveat: SEED_FAO_UNVERIFIED → EXTENSION_REVIEWED → FIELD_VALIDATED
 - TIS chat restored end-to-end for all users (latent break since deployment, masked by upstream Anthropic 401)
 
-**Strikes filed: 1-105** (58 process upgrades across Sprint 6 + 7)
+**Strikes filed: 1-114** (63 process upgrades across Sprint 6 + 7)
 
 Recent strikes (added in Sprint 7):
 - #61: every Phase commit updates Section 14 (operational hygiene)
