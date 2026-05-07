@@ -20,26 +20,24 @@ def get_sync_db():
     return psycopg2.connect(db_url, cursor_factory=psycopg2.extras.RealDictCursor)
 
 
-SIGNAL_THRESHOLDS = {
-    # signal_id: (green, amber, lower_is_better)
-    "DS-001": (0.80, 1.20, True),   # CoKG as ratio to market price
-    "DS-002": (7, 14, True),         # Inactivity days (CRP-KAV uses 180 override)
-    "DS-003": (0, 2, True),          # Active CRITICAL/HIGH alerts
-    "DS-004": (80.0, 50.0, False),   # Input stock adequacy %
-    "DS-005": (40.0, 60.0, True),    # Labor cost ratio % of revenue
-    "DS-006": (30, 60, True),        # AR days outstanding
-    "DS-007": (85.0, 70.0, False),   # Harvest yield attainment %
-    "DS-008": (3.0, 1.0, False),     # Cash flow months runway
-    "DS-009": (90.0, 75.0, False),   # Rotation compliance %
-    "DS-010": (14, 7, False),        # Ferry buffer days (F002 only)
-}
+# SIGNAL_THRESHOLDS dict deleted in Strike #116. Thresholds now read from
+# tenant.decision_signal_config (per-tenant). _threshold_to_status takes
+# explicit thresholds passed in by the caller — no module-level lookup.
 
 
-def value_to_status(signal_id: str, value) -> str:
-    if value is None:
+def _threshold_to_status(value, green, amber, lower_is_better: bool) -> str:
+    """Map a computed signal value to GREEN/AMBER/RED/NULL using explicit thresholds.
+
+    Thresholds passed in by caller (read from tenant.decision_signal_config under
+    RLS context). No fallback dict; if caller passes None for any threshold,
+    returns NULL (loud-but-safe — schema gap should not produce credible-looking
+    status from a default).
+    """
+    if value is None or green is None or amber is None or lower_is_better is None:
         return "NULL"
     value = float(value)
-    green, amber, lower_is_better = SIGNAL_THRESHOLDS.get(signal_id, (1, 0.5, True))
+    green = float(green)
+    amber = float(amber)
     if lower_is_better:
         if value <= green:
             return "GREEN"
@@ -282,7 +280,9 @@ def run_decision_engine(self):
         for tenant in tenants:
             tenant_id = tenant["tenant_id"]
 
-            # Stage 2a: list this tenant's active farms under per-tenant RLS.
+            # Stage 2a: list this tenant's active farms + fetch threshold config
+            # under per-tenant RLS. Single SELECT per tenant covers all farms;
+            # threshold dict passed into compute_signals_sql for per-signal use.
             with with_rls(conn, tenant_id) as cur:
                 cur.execute("""
                     SELECT farm_id
@@ -290,6 +290,19 @@ def run_decision_engine(self):
                     WHERE is_active = true
                 """)
                 farms = cur.fetchall()
+                cur.execute("""
+                    SELECT signal_id, green_threshold, amber_threshold, threshold_direction
+                    FROM tenant.decision_signal_config
+                    WHERE is_active = true
+                """)
+                thresholds = {
+                    r["signal_id"]: (
+                        r["green_threshold"],
+                        r["amber_threshold"],
+                        r["threshold_direction"] == "LOWER_IS_BETTER",
+                    )
+                    for r in cur.fetchall()
+                }
             conn.commit()
 
             farms_processed += len(farms)
@@ -303,7 +316,10 @@ def run_decision_engine(self):
                     try:
                         signals = compute_signals_sql(cur, farm_id, tenant_id, failed_signals)
                         for signal_id, value in signals:
-                            status = value_to_status(signal_id, value)
+                            green, amber, lower_is_better = thresholds.get(
+                                signal_id, (None, None, None)
+                            )
+                            status = _threshold_to_status(value, green, amber, lower_is_better)
                             snapshot_id = f"DSS-{uuid.uuid4().hex[:12].upper()}"
                             cur.execute("""
                                 INSERT INTO tenant.decision_signal_snapshots
