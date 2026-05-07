@@ -70,20 +70,26 @@ def compute_signals_sql(cur, farm_id: str, tenant_id: str) -> list:
     signals.append(("DS-001", float(row["avg_cogk"]) if row and row["avg_cogk"] else None))
 
     # DS-002: Max days inactive across active cycles (CRP-KAV excluded from >7 threshold)
+    # CTE pattern: per-cycle inactivity inside, farm-level aggregation outside.
+    # Avoids nested-aggregate error (Strike #112).
     cur.execute("""
+        WITH cycle_inactivity AS (
+            SELECT
+                pc.cycle_id,
+                p.production_id,
+                CURRENT_DATE - COALESCE(MAX(fe.event_date::DATE), pc.planting_date) AS days_inactive
+            FROM tenant.production_cycles pc
+            JOIN shared.productions p ON p.production_id = pc.production_id
+            LEFT JOIN tenant.field_events fe ON fe.cycle_id = pc.cycle_id
+            WHERE pc.farm_id = %s AND pc.cycle_status = 'ACTIVE'
+            GROUP BY pc.cycle_id, pc.planting_date, p.production_id
+        )
         SELECT MAX(
-            CASE WHEN p.production_id = 'CRP-KAV' THEN
-                CASE WHEN CURRENT_DATE - COALESCE(MAX(fe.event_date::DATE), pc.planting_date) > 180
-                     THEN CURRENT_DATE - COALESCE(MAX(fe.event_date::DATE), pc.planting_date)
-                     ELSE 0 END
-            ELSE CURRENT_DATE - COALESCE(MAX(fe.event_date::DATE), pc.planting_date)
+            CASE WHEN production_id = 'CRP-KAV' AND days_inactive <= 180 THEN 0
+                 ELSE days_inactive
             END
         ) AS max_inactive_days
-        FROM tenant.production_cycles pc
-        JOIN shared.productions p ON p.production_id = pc.production_id
-        LEFT JOIN tenant.field_events fe ON fe.cycle_id = pc.cycle_id
-        WHERE pc.farm_id = %s AND pc.cycle_status = 'ACTIVE'
-        GROUP BY pc.cycle_id, pc.planting_date, p.production_id
+        FROM cycle_inactivity
     """, (farm_id,))
     row = cur.fetchone()
     signals.append(("DS-002", float(row["max_inactive_days"]) if row and row["max_inactive_days"] else 0))
