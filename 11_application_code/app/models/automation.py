@@ -225,7 +225,7 @@ class DecisionSignalConfig(TenantBase):
     __table_args__ = {"schema": "tenant"}
 
     signal_id: Mapped[str] = mapped_column(Text, primary_key=True)  # DS-001..DS-010
-    tenant_id: Mapped[str] = mapped_column(UUID(as_uuid=False), nullable=False)
+    tenant_id: Mapped[str] = mapped_column(UUID(as_uuid=False), primary_key=True, nullable=False)
     signal_name: Mapped[str] = mapped_column(Text, nullable=False)
     signal_category: Mapped[str] = mapped_column(Text, nullable=False)
     green_threshold: Mapped[Optional[Decimal]] = mapped_column(Numeric)
@@ -278,8 +278,13 @@ class DecisionSignalSnapshot(TenantBase):
 
     signal_config: Mapped[Optional[DecisionSignalConfig]] = relationship(
         "DecisionSignalConfig",
-        foreign_keys=[signal_id],
-        primaryjoin="DecisionSignalSnapshot.signal_id == DecisionSignalConfig.signal_id",
+        foreign_keys=[signal_id, tenant_id],
+        primaryjoin=(
+            "and_("
+            "DecisionSignalSnapshot.signal_id == DecisionSignalConfig.signal_id, "
+            "DecisionSignalSnapshot.tenant_id == DecisionSignalConfig.tenant_id"
+            ")"
+        ),
         back_populates="snapshots",
     )
 
