@@ -283,3 +283,46 @@ Phantom-recipient repo sweep filed as B96. Known instances at filing:
   ever needs ACME outreach)
 
 See backlog.md B96 for full scope.
+
+---
+
+## V7-REDUX CLOSEOUT — 2026-05-09 03:52 Fiji
+
+Operator confirmed receipt of V7-redux test alert in
+founder@teivaka.com Gmail inbox at **2026-05-09 03:52 Fiji**
+(2026-05-08 15:53 UTC, ~60 seconds after Resend dispatch).
+
+- Sender: `noreply@teivaka.com`
+- Recipient: `founder@teivaka.com`
+- Subject: `TFOS V7-REDUX TEST — teivaka-prod-2025 2026-05-08T15:52:45Z`
+- Resend delivery ID: `037e9bc8-7a95-4bd8-afe4-e1d6f9119d41`
+- Routing: Gmail Inbox (no spam folder, no Promotions/Updates tab
+  segregation, sub-minute end-to-end delivery)
+
+### What this verifies
+
+- Resend API key + sender domain DKIM/SPF: **valid**
+- `teivaka.com` → Google Workspace MX routing: **working**
+- `founder@teivaka.com` mailbox: **real, monitored**
+- Gmail spam classifier on `noreply@teivaka.com`: **trusted**
+- `.env`-sourced `ALERT_RECIPIENT` (Path C refactor): **working e2e**
+- Strike #122 alert path: **receipt-verified**
+
+### Doctrine implication
+
+PR.2 *("Verified-loud beats assumed-quiet — alert path is not shipped
+until it has demonstrably fired and been received")* is now
+battle-tested. The original V7 false-pass + V7-redux receipt-verification
+cycle is the canonical example for this inviolable when it lands in
+CLAUDE.md.
+
+### Side benefit
+
+Bank Evidence PDF dispatcher (Phase 9) can route through the same
+sender domain (`noreply@teivaka.com`) with confidence — Gmail trust +
+DKIM/SPF + sub-minute delivery already proven on this exact path.
+
+### Strike #122 status: **SEALED**
+
+B84 fully closed (on-host portion verified end-to-end, including the
+alert path that was the gap in the original V7).
