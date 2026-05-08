@@ -206,3 +206,80 @@ for the test alert email sent at 2026-05-08 14:44:54 UTC (subject:
 - Strike #98: Vertical Completeness — N/A here (this is infrastructure,
   not a pillar)
 - Phase 6 audit document: 00_project_overview/audits/2026-05-07_full_platform_audit/06_infrastructure_topology.md
+
+---
+
+## V7-REDUX — 2026-05-09 (Path C)
+
+**Status:** code commit `7c7a0ea` shipped; Operator host-side .env update
+pending; V7-redux test send pending Operator action.
+
+### Why V7-original was a false pass
+
+V7 (2026-05-08, original Strike #122) reported PASS on the basis of:
+- Resend HTTP 200 response
+- Returned delivery ID `6db938c1-09b8-4c00-96cd-8c34cddb87b1`
+- Log line "Alert email sent via Resend API to cody@teivaka.com"
+
+What was actually true:
+- `cody@teivaka.com` mailbox **does not exist**
+- `ALERT_RECIPIENT` was hardcoded at `scripts/teivaka_backup.sh:42`
+- Resend's HTTP 200 is "API accepted the request" — NOT "email delivered
+  to a real inbox"
+- The misread was conflating *acceptance* with *receipt*
+
+The doctrine PR.2 was already proposed during the original strike:
+*"Verified-loud beats assumed-quiet — alert path is not shipped until it
+has demonstrably fired and been received."* V7-redux is the real-time
+validation of why PR.2 belongs in CLAUDE.md inviolables: even with PR.2
+proposed but not yet ratified, the original V7 closure paragraph violated
+its spirit.
+
+### Path C refactor (commit `7c7a0ea`)
+
+- `scripts/teivaka_backup.sh`:
+  - Header comment line 14: rewrote to describe new architecture
+  - CONFIG block line 42: removed hardcoded
+    `ALERT_RECIPIENT="cody@teivaka.com"`; replaced with explanatory
+    comment pointing to send_alert() resolution
+  - `send_alert()` body: added `local recipient="${ALERT_RECIPIENT:-founder@teivaka.com}"`
+    immediately after `source "$ENV_FILE"`. .env value wins; fallback
+    fires only if .env lacks the key
+  - All call-sites updated from `$ALERT_RECIPIENT` to `$recipient`
+  - Zero `cody@teivaka.com` references remain
+- `04_environment/.env.example`:
+  - Added `ALERT_RECIPIENT=founder@teivaka.com` in Section 10
+    (MONITORING & LOGGING) below `MONITORING_ALERT_EMAIL`
+  - Force-added via `git add -f` per the documented override at
+    `.gitignore:25` ("If you later want .env.example tracked as a
+    template, use: git add -f 04_environment/.env.example")
+  - First time `.env.example` is tracked in repo; future updates flow
+    through normal `git add` (gitignore only blocks first-add of
+    untracked files)
+
+### Operator action pending
+
+```
+ssh root@teivaka.com
+cd /opt/teivaka
+echo "ALERT_RECIPIENT=founder@teivaka.com" >> 04_environment/.env
+grep "^ALERT_RECIPIENT=" 04_environment/.env
+```
+
+### Doctrine implication
+
+PR.2 (proposed, not yet ratified) — *"alert path is not shipped until
+it has demonstrably fired and been received"* — validated in real time
+by this exact recipient bug. Strengthens case for ratification at
+Operator review.
+
+### B96 filed
+
+Phantom-recipient repo sweep filed as B96. Known instances at filing:
+- ALERT_RECIPIENT (closed by this V7-redux)
+- CADDY_EMAIL=cody@teivaka.com defaults in docker-compose.yml + 4×
+  .bak-* snapshots + .env.example line 212 (Let's Encrypt ACME contact
+  pointing at non-existent mailbox — separate severity if cert renewal
+  ever needs ACME outreach)
+
+See backlog.md B96 for full scope.

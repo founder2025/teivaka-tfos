@@ -239,3 +239,48 @@ must use HTTPS API path, not assume SMTP works from this host.
 
 ---
 
+## B96 — Phantom-recipient audit (filed 2026-05-09)
+
+**Filed:** 2026-05-08 surfaced; 2026-05-09 logged. Strike #122 V7-redux.
+
+**Scope:** sweep entire repo for every email address in
+source/config/docs; confirm each mailbox exists and is monitored;
+replace any that don't.
+
+**Why filed:** Strike #122 V7 originally reported PASS based on Resend
+HTTP 200 + delivery ID, but `cody@teivaka.com` (the hardcoded
+recipient) was a non-existent mailbox. Resend's 200 means *accepted*,
+not *received*. False-confidence failure mode. Validates PR.2 proposed
+inviolable in real time.
+
+**Known instances at filing:**
+
+| Address | Where | State |
+|---|---|---|
+| `cody@teivaka.com` (ALERT_RECIPIENT) | scripts/teivaka_backup.sh:42 | RESOLVED — Strike #122 V7-redux (commit `7c7a0ea`); now sourced from .env with founder@ fallback |
+| `cody@teivaka.com` (CADDY_EMAIL default) | 04_environment/docker-compose.yml:470 | OPEN — Let's Encrypt ACME contact; if renewal ever needs operator outreach, DO can't reach you |
+| `cody@teivaka.com` (CADDY_EMAIL default) | 04_environment/.env.example:212 | OPEN — scaffold for future deploys propagates the bug |
+| `cody@teivaka.com` (CADDY_EMAIL default) | 4× docker-compose.yml.bak-* | OPEN — pollutes grep, but pre-strike snapshots arguably immutable |
+| (full sweep TBD) | repo-wide | not yet enumerated |
+
+**Doctrine implication:** candidate addition to Section 13 Forbidden
+Moves — *"No email address ships in code or config without
+mailbox-existence verification recorded in strike archive."*
+Mailbox-existence check = MX record present + send-and-confirm-receipt
+test from Operator's actual inbox.
+
+**Strike eligibility:** anytime; recommended bundling with closeout of
+Strike #122 to capture full sweep in one strike. CADDY_EMAIL fix is a
+config-only edit + container reload (Caddy only — db/api/etc unaffected).
+
+**Owners:** Architect (sweep + catalog), Operator (per-address mailbox
+confirmation).
+
+**Cross-references:**
+- Strike #122 V7-redux (this strike's V7-redux section)
+- PR.2 proposed inviolable (verified-loud over assumed-quiet)
+- Phase 6 audit document Section J (DNS state) — basis for any future
+  MX/CAA verification per address
+
+---
+
