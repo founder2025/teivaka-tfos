@@ -11,7 +11,7 @@ Read before any group-related sprint planning or build work:
 
 ## Current state (refreshed every session — this section is mutable)
 
-**Last verified:** 2026-05-08 (Strike #122: production backup pipeline — on-host complete with off-host stub; audit Phases 1-6 shipped, Phases 7-10 pending; B84 closed)
+**Last verified:** 2026-05-09 (Strike #122 V7-redux SEALED — backup alert path receipt-verified end-to-end via founder@teivaka.com Gmail inbox; B84 fully closed)
 
 **Production:** healthy. teivaka.com HTTPS live.
 - 6 containers running (all healthy as of Phase 8-2b commit 1194331):
@@ -21,7 +21,7 @@ Read before any group-related sprint planning or build work:
   - `teivaka_caddy` — healthy (was unhealthy pre-8-2b; healthcheck URL fixed)
   - `teivaka_worker_ai` — healthy (was unhealthy pre-8-2b; YAML list-form fix + hostname stability)
   - `teivaka_beat` — healthy (was unhealthy pre-8-2b; mtime healthcheck added)
-- Last commit: `093afda` (Strike #122: production backup pipeline — pg_dump + Resend HTTPS API alert + restore drill + systemd timer; closes B84 single-disk-failure data-loss risk surfaced by audit Phase 6)
+- Last commit: `0556139` (Strike #122 V7-redux SEALED — Operator confirmed founder@teivaka.com Gmail inbox receipt of test alert at 2026-05-09 03:52 Fiji; PR.2 verified-loud doctrine battle-tested)
 - Last migration: `076_farm_groups_tenant_id` (Strike #121: tenant_id NOT NULL + FK CASCADE + index + FORCED RLS + canonical isolation policy on tenant.farm_active_groups)
 - Branch: `feature/option-3-plus-nav-v2-1`
 
