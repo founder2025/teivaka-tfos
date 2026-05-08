@@ -10,8 +10,9 @@
 #      stable — call site does not change)
 #   4. Retention rotation: 7 daily, 4 weekly (Sunday), 6 monthly (day=01)
 #      via hardlinks. No double disk usage.
-#   5. Failure path: bash trap on ERR → tail 50 lines of log, send via
-#      curl SMTP to cody@teivaka.com using existing .env SMTP creds
+#   5. Failure path: bash trap on ERR → fail() helper → tail 50 lines of
+#      log, send via Resend HTTPS API to ALERT_RECIPIENT (sourced from .env,
+#      fallback founder@teivaka.com). DO blocks outbound SMTP — see B95.
 #   6. Logs: /opt/teivaka/logs/backup.log (tfos-writable; /var/log requires sudo)
 #
 # Strike #122 — On-host complete; off-host bolt-on is Strike #122b (B93).
@@ -39,7 +40,10 @@ DB_NAME="teivaka_db"
 TIMESTAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 BACKUP_FILE="teivaka_db_${TIMESTAMP}.dump.gz"
 
-ALERT_RECIPIENT="cody@teivaka.com"
+# ALERT_RECIPIENT is sourced from .env inside send_alert() (after `source
+# "$ENV_FILE"` so the env value wins over the fallback). Fallback default
+# founder@teivaka.com applies if the key is unset in .env. See B96
+# phantom-recipient audit + Strike #122 V7-redux.
 
 RETENTION_DAILY=7
 RETENTION_WEEKLY=4
@@ -85,6 +89,10 @@ send_alert() {
   local resend_api_key="${SMTP_PASSWORD:-}"
   local sender="${SMTP_FROM:-}"
 
+  # Resolve recipient AFTER source: .env value wins, fallback to founder@.
+  # Hardcoded recipient was the V7-original false-pass root cause (B96).
+  local recipient="${ALERT_RECIPIENT:-founder@teivaka.com}"
+
   if [ -z "$resend_api_key" ] || [ -z "$sender" ]; then
     log_err "Resend credentials missing (SMTP_PASSWORD or SMTP_FROM empty) — cannot send alert"
     return 1
@@ -94,7 +102,7 @@ send_alert() {
   local payload
   payload="$(jq -n \
     --arg from "$sender" \
-    --arg to "$ALERT_RECIPIENT" \
+    --arg to "$recipient" \
     --arg subject "$subject" \
     --arg body "$body" \
     '{from: $from, to: [$to], subject: $subject, text: $body}')"
@@ -116,7 +124,7 @@ send_alert() {
   if [ "$http_code" = "200" ] || [ "$http_code" = "201" ] || [ "$http_code" = "202" ]; then
     local email_id
     email_id="$(jq -r '.id // "(no id in response)"' "$response_file" 2>/dev/null || echo "(parse failed)")"
-    log "Alert email sent via Resend API to $ALERT_RECIPIENT (id=$email_id, http=$http_code)"
+    log "Alert email sent via Resend API to $recipient (id=$email_id, http=$http_code)"
   else
     local err_body
     err_body="$(head -c 500 "$response_file" 2>/dev/null || true)"
