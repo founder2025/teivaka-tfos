@@ -120,3 +120,122 @@ synthesizes a clean coverage map.
 - Inviolable Rule #11
 
 ---
+
+## B84 — Backup mechanism — **CLOSED 2026-05-08** (on-host portion)
+
+**Filed:** Phase 6 audit (Section L.1, severity 🔴 critical)
+**Closed:** Strike #122 (commit `093afda`)
+
+On-host pg_dump pipeline + restore drill + systemd timer + Resend HTTPS
+API failure alerts shipped. `postgres_data` is no longer a single point
+of failure for accidental volume rm or corruption.
+
+Off-host portion remains open as B93 (Strike #122b) — same disk failure
+that takes down `postgres_data` still takes down `/opt/teivaka/backups/`
+without an off-host destination configured.
+
+**See:** `00_project_overview/strikes/strike_122_backup_pipeline.md`
+
+---
+
+## B92 — Notification CLI extraction (deferred from Strike #122)
+
+**Filed:** 2026-05-08 (Strike #122 build)
+
+Bash backup script currently calls Resend HTTPS API directly via curl
+inside `send_alert()`. Production app code (`app/utils/email.py`)
+duplicates the same Resend call pattern in Python. Two implementations
+of the same alert pattern is acceptable for #122's tight scope but
+becomes maintenance debt as more host-side scripts grow.
+
+**Future shape:** extract a `scripts/teivaka_notify.sh` that wraps the
+Resend POST and is callable from any host-side script with a uniform
+interface. Bash backup script + restore drill + future ops scripts call
+into it. Python app code stays separate (different runtime, different
+needs).
+
+**Strike eligibility:** non-blocking; file when a second host-side
+script needs the alert path.
+
+**Owners:** Architect.
+
+---
+
+## B93 — Strike #122b: off-host upload bolt-on (pending vendor credentials)
+
+**Filed:** 2026-05-08 (Strike #122 build)
+
+Strike #122 ships the on-host backup with `upload_offhost(local_filepath,
+remote_filename)` stubbed. Function signature is stable; #122b swaps only
+the body.
+
+**Vendor decision pending:**
+- Supabase: `.env` already scaffolded but URL/KEY empty placeholders
+  (15 min Operator effort to wire)
+- DO Spaces: ~$5/mo, new credential, S3-compat tooling (30 min)
+- Other off-host: B2, S3, etc.
+
+**Architect leans:** Supabase, since `.env` is already scaffolded and
+no new vendor footprint required. Operator dashboard wire = 15 min.
+
+**Strike-eligible:** as soon as Operator picks a vendor and wires
+credentials.
+
+**Owners:** Boss (vendor + credential), Architect (function body).
+
+**Cross-references:**
+- Strike #122 archive: `00_project_overview/strikes/strike_122_backup_pipeline.md`
+- B84 (parent — on-host portion closed)
+
+---
+
+## B94 — env key rename: `SMTP_*` → `RESEND_*` (cosmetic)
+
+**Filed:** 2026-05-08 (Strike #122 build)
+
+`.env` has `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`,
+`SMTP_FROM` — these are scaffolded as if for an SMTP server, but the
+actual transport is Resend's HTTPS API. `SMTP_PASSWORD` is a Resend
+`re_`-prefixed API key, `SMTP_HOST=smtp.resend.com` is unused for the
+HTTP API path, etc.
+
+**What this requires:** rename keys + update every consumer:
+- `app/utils/email.py` (Python — auth + cash flows)
+- `app/config.py` (settings model)
+- `scripts/teivaka_backup.sh` (Strike #122 alert path)
+- `04_environment/.env` + `.env.example`
+
+**Why deferred:** purely cosmetic; current names work; coordinated
+rename across Python + bash needs container recreation per Strike #69.
+
+**Strike-eligible:** anytime; not urgent.
+
+**Owners:** Architect.
+
+---
+
+## B95 — DigitalOcean outbound SMTP block (INFRASTRUCTURE_NOTE — not actionable)
+
+**Filed:** 2026-05-08 (Strike #122 build, surfaced V7)
+
+**State:** DO blocks all outbound SMTP ports (25, 465, 587, 2525) on
+this droplet by anti-spam policy. Verified via `bash -c "</dev/tcp/host/port"`
+during Strike #122 V7.
+
+**Workaround:** alert paths use HTTPS API (api.resend.com:443) which is
+not blocked. Same Resend API key works for both SMTP and HTTPS API.
+Strike #122 send_alert() uses HTTPS path.
+
+**Why this is an INFRASTRUCTURE_NOTE not a strike:** vendor (DO) policy
+is not actionable by us. Could file a DO support ticket to request
+unblock (multi-day turnaround, unpredictable approval), but the HTTPS
+API path is functionally superior — no port blocks, more reliable
+delivery, primary recommended Resend interface.
+
+**Awareness only:** future ops/admin scripts that need to send mail
+must use HTTPS API path, not assume SMTP works from this host.
+
+**Strike eligibility:** none. File-and-forget reference for future work.
+
+---
+

@@ -11,7 +11,7 @@ Read before any group-related sprint planning or build work:
 
 ## Current state (refreshed every session — this section is mutable)
 
-**Last verified:** 2026-05-08 (Strike #121: farm_active_groups tenant_id + RLS — cross-tenant exposure closed; forensic audit Phases 1-4 shipped, Phases 5-10 pending)
+**Last verified:** 2026-05-08 (Strike #122: production backup pipeline — on-host complete with off-host stub; audit Phases 1-6 shipped, Phases 7-10 pending; B84 closed)
 
 **Production:** healthy. teivaka.com HTTPS live.
 - 6 containers running (all healthy as of Phase 8-2b commit 1194331):
@@ -21,7 +21,7 @@ Read before any group-related sprint planning or build work:
   - `teivaka_caddy` — healthy (was unhealthy pre-8-2b; healthcheck URL fixed)
   - `teivaka_worker_ai` — healthy (was unhealthy pre-8-2b; YAML list-form fix + hostname stability)
   - `teivaka_beat` — healthy (was unhealthy pre-8-2b; mtime healthcheck added)
-- Last commit: `2187a49` (Strike #121: farm_active_groups tenant_id + RLS — Migration 076 closes cross-tenant exposure surfaced by audit Phase 3+4)
+- Last commit: `093afda` (Strike #122: production backup pipeline — pg_dump + Resend HTTPS API alert + restore drill + systemd timer; closes B84 single-disk-failure data-loss risk surfaced by audit Phase 6)
 - Last migration: `076_farm_groups_tenant_id` (Strike #121: tenant_id NOT NULL + FK CASCADE + index + FORCED RLS + canonical isolation policy on tenant.farm_active_groups)
 - Branch: `feature/option-3-plus-nav-v2-1`
 
@@ -84,7 +84,7 @@ Read before any group-related sprint planning or build work:
 - Verification status enum surfaces caveat: SEED_FAO_UNVERIFIED → EXTENSION_REVIEWED → FIELD_VALIDATED
 - TIS chat restored end-to-end for all users (latent break since deployment, masked by upstream Anthropic 401)
 
-**Strikes filed: 1-121** (66 process upgrades across Sprint 6 + 7; #117-#120 filed-deferred per backlog)
+**Strikes filed: 1-122** (67 process upgrades across Sprint 6 + 7; #117-#120 filed-deferred per backlog)
 
 Recent strikes (added in Sprint 7):
 - #61: every Phase commit updates Section 14 (operational hygiene)
