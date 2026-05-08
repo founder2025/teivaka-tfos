@@ -29,30 +29,34 @@ async def insert_default_active_groups(
     db: AsyncSession,
     farm_id: str,
     activated_by: str | None,
+    tenant_id: str,
 ) -> None:
     """Insert 11 default farm_active_groups rows for a newly-created farm.
 
     Defaults (Phase 5.10 Q3-revised): all 11 groups active=true. User trims
     via the in-pillar toggle panel (Phase 5.10c) when serious about farm
     management. No-ops on rows that already exist (ON CONFLICT DO NOTHING).
+
+    tenant_id is required (Strike #121, Migration 076): the column is
+    NOT NULL and RLS is forced. Caller must pass the authenticated tenant.
     """
     await db.execute(
         text("""
             INSERT INTO tenant.farm_active_groups
-                (farm_id, catalog_group, is_active, activated_at, activated_by)
+                (farm_id, tenant_id, catalog_group, is_active, activated_at, activated_by)
             VALUES
-                (:fid, 'CROPS',       true, now(), :uid),
-                (:fid, 'PERENNIALS',  true, now(), :uid),
-                (:fid, 'LIVESTOCK',   true, now(), :uid),
-                (:fid, 'POULTRY',     true, now(), :uid),
-                (:fid, 'APICULTURE',  true, now(), :uid),
-                (:fid, 'AQUACULTURE', true, now(), :uid),
-                (:fid, 'FORESTRY',    true, now(), :uid),
-                (:fid, 'SPECIALTY',   true, now(), :uid),
-                (:fid, 'MONEY',       true, now(), :uid),
-                (:fid, 'NOTES',       true, now(), :uid),
-                (:fid, 'OTHER',       true, now(), :uid)
+                (:fid, :tid, 'CROPS',       true, now(), :uid),
+                (:fid, :tid, 'PERENNIALS',  true, now(), :uid),
+                (:fid, :tid, 'LIVESTOCK',   true, now(), :uid),
+                (:fid, :tid, 'POULTRY',     true, now(), :uid),
+                (:fid, :tid, 'APICULTURE',  true, now(), :uid),
+                (:fid, :tid, 'AQUACULTURE', true, now(), :uid),
+                (:fid, :tid, 'FORESTRY',    true, now(), :uid),
+                (:fid, :tid, 'SPECIALTY',   true, now(), :uid),
+                (:fid, :tid, 'MONEY',       true, now(), :uid),
+                (:fid, :tid, 'NOTES',       true, now(), :uid),
+                (:fid, :tid, 'OTHER',       true, now(), :uid)
             ON CONFLICT (farm_id, catalog_group) DO NOTHING
         """),
-        {"fid": farm_id, "uid": activated_by},
+        {"fid": farm_id, "tid": tenant_id, "uid": activated_by},
     )

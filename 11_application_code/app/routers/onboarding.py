@@ -317,7 +317,8 @@ async def farm_basics(
             )
             # Wire default farm_active_groups rows per Catalog Redesign Doctrine
             # Amendment v2 (272f513) Q3 lock — same transaction as the farm INSERT.
-            await insert_default_active_groups(session, farm_id, user["user_id"])
+            # tenant_id required by Migration 076 (Strike #121).
+            await insert_default_active_groups(session, farm_id, user["user_id"], tenant_id)
             created = True
 
         # Persist tenant-scoped preferences.

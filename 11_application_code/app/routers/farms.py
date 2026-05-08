@@ -140,7 +140,8 @@ async def create_farm(
     # Wire farm_active_groups defaults per Catalog Redesign Doctrine Amendment v2 (272f513).
     # MONEY/NOTES/OTHER active; 8 production groups inactive (user opts in via onboarding).
     # Same transaction as the farm INSERT — atomic via get_tenant_db's session.begin().
-    await insert_default_active_groups(db, payload.farm_id, user["user_id"])
+    # tenant_id required by Migration 076 (Strike #121).
+    await insert_default_active_groups(db, payload.farm_id, user["user_id"], str(user["tenant_id"]))
 
     logger.info(f"Farm created: {row['farm_id']} by user {user['user_id']}")
     return dict(row)

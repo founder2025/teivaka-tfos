@@ -164,20 +164,22 @@ async def put_active_groups(
                 "new_state": new_state,
             })
 
-    # Upsert the toggles (INSERT ... ON CONFLICT)
+    # Upsert the toggles (INSERT ... ON CONFLICT). tenant_id is required by
+    # Migration 076 (Strike #121); RLS WITH CHECK enforces match with
+    # current_setting('app.tenant_id') at the DB level.
     for g in body.groups:
         await db.execute(
             text("""
                 INSERT INTO tenant.farm_active_groups
-                    (farm_id, catalog_group, is_active, activated_at, activated_by)
-                VALUES (:fid, :group, :is_active, now(), :uid)
+                    (farm_id, tenant_id, catalog_group, is_active, activated_at, activated_by)
+                VALUES (:fid, :tid, :group, :is_active, now(), :uid)
                 ON CONFLICT (farm_id, catalog_group)
                 DO UPDATE SET
                     is_active    = EXCLUDED.is_active,
                     activated_at = now(),
                     activated_by = EXCLUDED.activated_by
             """),
-            {"fid": farm_id, "group": g.catalog_group, "is_active": g.is_active, "uid": user_id_raw},
+            {"fid": farm_id, "tid": tid, "group": g.catalog_group, "is_active": g.is_active, "uid": user_id_raw},
         )
 
     # Emit FARM_GROUP_TOGGLED audit row per change via the canonical helper.
