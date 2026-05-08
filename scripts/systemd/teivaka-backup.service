@@ -1,0 +1,21 @@
+[Unit]
+Description=TFOS production database backup (Strike #122)
+Documentation=https://github.com/founder2025/teivaka-tfos
+Wants=teivaka-backup.timer
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+User=tfos
+Group=tfos
+ExecStart=/opt/teivaka/scripts/teivaka_backup.sh
+StandardOutput=append:/opt/teivaka/logs/backup.log
+StandardError=append:/opt/teivaka/logs/backup.log
+TimeoutStartSec=1800
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,14 @@
+[Unit]
+Description=TFOS daily database backup at 14:00 UTC (02:00 Fiji)
+Documentation=https://github.com/founder2025/teivaka-tfos
+Requires=teivaka-backup.service
+
+[Timer]
+OnCalendar=*-*-* 14:00:00
+Persistent=true
+AccuracySec=1min
+Unit=teivaka-backup.service
+RandomizedDelaySec=0
+
+[Install]
+WantedBy=timers.target
