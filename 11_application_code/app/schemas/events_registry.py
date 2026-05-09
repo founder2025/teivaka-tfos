@@ -14,7 +14,7 @@ Cross-group reuse: livestock, aquaculture, crops events all register here as the
 payload_schema_version: increment when payload shape changes for an existing event_type.
 """
 
-from datetime import datetime
+from datetime import datetime, date
 from decimal import Decimal
 from typing import Optional, Literal
 from pydantic import BaseModel, Field, model_validator
@@ -430,6 +430,27 @@ class SuppliesReceivedPayload(BaseModel):
 # All CROPS events route to tenant.field_events via target_table dispatch in events.py.
 # Vocabulary translation (catalog → field_events.event_type) lives in the handler:
 # CATALOG_TO_FIELD_VERB. WHD trigger on field_events fires off chemical_id presence.
+#
+# Exception: CYCLE_CREATED routes to tenant.production_cycles (lifecycle, not action).
+
+class CycleCreatedPayload(BaseModel):
+    """Payload for CYCLE_CREATED event (Strike #C2a).
+
+    Initiates a new production cycle on a specific block (anchors.pu_id) with a
+    specific crop. cycle_id is generated server-side as
+    CYC-{farm_id}-{pu_short}-{year}-{seq:03d}. Default cycle_status is PLANNED.
+    """
+    production_id: str = Field(..., min_length=1, max_length=32, description="Crop FK to shared.productions")
+    planting_date: date = Field(..., description="Date crop planted/transplanted")
+    expected_harvest_date: Optional[date] = Field(default=None, description="Estimated harvest date")
+    planned_area_sqm: Optional[Decimal] = Field(default=None, ge=0, description="Planned cultivation area in m²")
+    planned_yield_kg: Optional[Decimal] = Field(default=None, ge=0, description="Expected yield in kg")
+    layer: Optional[Literal['CASH_FLOW', 'FOOD_SECURITY', 'LONG_TERM_ASSET']] = Field(
+        default=None, description="3-Layer assignment (Strike #103)"
+    )
+    farmer_label: Optional[str] = Field(default=None, max_length=64, description="Farmer's plain-language label")
+    cycle_notes: Optional[str] = Field(default=None, max_length=500, description="Optional notes")
+
 
 class PlantingPayload(BaseModel):
     """Payload for PLANTING event. Strike #100 added production_id + variety_id + variety_other."""
@@ -537,6 +558,8 @@ EVENT_TYPE_REGISTRY: dict = {
     "EQUIPMENT_MAINTAINED":   (EquipmentMaintainedPayload,   "tenant.poultry_event_log", 1),
     "INCIDENT_REPORTED":      (IncidentReportedPayload,      "tenant.poultry_event_log", 1),
     "SUPPLIES_RECEIVED":      (SuppliesReceivedPayload,      "tenant.poultry_event_log", 1),
+    # CROPS — Lifecycle (Strike #C2a)
+    "CYCLE_CREATED":          (CycleCreatedPayload,          "tenant.production_cycles", 1),
     # CROPS — B2 polymorphic wrapper (Strike #96)
     "PLANTING":               (PlantingPayload,              "tenant.field_events", 1),
     "IRRIGATION":             (IrrigationPayload,            "tenant.field_events", 1),

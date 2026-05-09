@@ -859,6 +859,32 @@ async def submit_event(
         if not isinstance(submission.payload, dict):
             raise HTTPException(400, error_envelope("invalid_payload", "Payload must be a dict."))
 
+    # 2cc. CYCLE_CREATED-specific: pu_id REQUIRED + 409 ACTIVE_CYCLE_EXISTS guard (Strike #C2a)
+    if submission.event_type == "CYCLE_CREATED":
+        if submission.anchors.pu_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=error_envelope("cycle_create_requires_pu", "CYCLE_CREATED requires a pu_id anchor (block where cycle goes)."),
+            )
+        active_cycle_check = await db.execute(
+            text("""
+                SELECT cycle_id FROM tenant.production_cycles
+                WHERE pu_id = :pu
+                  AND cycle_status IN ('ACTIVE', 'HARVESTING', 'CLOSING')
+                LIMIT 1
+            """),
+            {"pu": submission.anchors.pu_id},
+        )
+        existing_active = active_cycle_check.first()
+        if existing_active is not None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=error_envelope(
+                    code="ACTIVE_CYCLE_EXISTS",
+                    message=f"Block {submission.anchors.pu_id} already has an active cycle: {existing_active.cycle_id}",
+                ),
+            )
+
     # 3. Validate payload against registered schema
     try:
         validated_payload = payload_schema_class(**submission.payload)
@@ -890,16 +916,37 @@ async def submit_event(
 
     # 4b. Pre-generate field_event_id for CROPS branch (Strike #96 Path A — D1: FE-{12-hex})
     field_event_id_text: Optional[str] = None
+    cycle_id_text: Optional[str] = None
     if target_table == "tenant.field_events":
         field_event_id_text = f"FE-{uuid4().hex[:12]}"
+    elif target_table == "tenant.production_cycles":
+        # Strike #C2a: pre-generate structured cycle_id CYC-{farm_id}-{pu_short}-{year}-{seq:03d}
+        pu_short = submission.anchors.pu_id.rsplit("-", 1)[-1]
+        planting_date_val = payload_dict["planting_date"]
+        year = planting_date_val.year if hasattr(planting_date_val, "year") else int(str(planting_date_val)[:4])
+        seq_check = await db.execute(
+            text("""
+                SELECT COALESCE(MAX(SUBSTRING(cycle_id FROM '(\\d+)$')::int), 0) + 1 AS next_seq
+                FROM tenant.production_cycles
+                WHERE pu_id = :pu
+                  AND EXTRACT(YEAR FROM planting_date) = :yr
+            """),
+            {"pu": submission.anchors.pu_id, "yr": year},
+        )
+        next_seq = seq_check.first().next_seq
+        cycle_id_text = f"CYC-{submission.anchors.farm_id}-{pu_short}-{year}-{next_seq:03d}"
 
     audit_event_id, audit_hash = await emit_audit_event(
         db=db,
         tenant_id=tenant_uuid,
         actor_user_id=actor_uuid,
         event_type=submission.event_type,
-        entity_type="field_event" if target_table == "tenant.field_events" else "poultry_event",
-        entity_id=field_event_id_text,
+        entity_type=(
+            "field_event" if target_table == "tenant.field_events"
+            else "production_cycle" if target_table == "tenant.production_cycles"
+            else "poultry_event"
+        ),
+        entity_id=field_event_id_text or cycle_id_text,
         occurred_at=occurred_ts,
         payload=audit_payload,
     )
@@ -972,6 +1019,49 @@ async def submit_event(
             },
         )
         event_id = field_event_id_text
+    elif target_table == "tenant.production_cycles":
+        # 5c. CYCLE_CREATED branch (Strike #C2a) — derive zone_id from PU then INSERT lifecycle row
+        zone_check = await db.execute(
+            text("SELECT zone_id FROM tenant.production_units WHERE pu_id = :pu"),
+            {"pu": submission.anchors.pu_id},
+        )
+        zone_row = zone_check.first()
+        if zone_row is None:
+            raise HTTPException(404, error_envelope("pu_not_found", f"Production unit {submission.anchors.pu_id} not found."))
+
+        await db.execute(
+            text("""
+                INSERT INTO tenant.production_cycles (
+                    cycle_id, tenant_id, pu_id, zone_id, farm_id, production_id,
+                    cycle_status, planting_date, expected_harvest_date,
+                    planned_area_sqm, planned_yield_kg,
+                    layer, farmer_label, cycle_notes, created_by
+                )
+                VALUES (
+                    :cycle_id, :tid, :pu, :zone, :fid, :prod,
+                    'PLANNED', :planting_date, :expected_harvest_date,
+                    :planned_area_sqm, :planned_yield_kg,
+                    :layer, :farmer_label, :cycle_notes, :created_by
+                )
+            """),
+            {
+                "cycle_id": cycle_id_text,
+                "tid": tenant_uuid,
+                "pu": submission.anchors.pu_id,
+                "zone": zone_row.zone_id,
+                "fid": submission.anchors.farm_id,
+                "prod": payload_dict["production_id"],
+                "planting_date": payload_dict["planting_date"],
+                "expected_harvest_date": payload_dict.get("expected_harvest_date"),
+                "planned_area_sqm": payload_dict.get("planned_area_sqm"),
+                "planned_yield_kg": payload_dict.get("planned_yield_kg"),
+                "layer": payload_dict.get("layer"),
+                "farmer_label": payload_dict.get("farmer_label"),
+                "cycle_notes": payload_dict.get("cycle_notes"),
+                "created_by": actor_uuid,
+            },
+        )
+        event_id = cycle_id_text
     else:
         # 5. (existing POULTRY path) INSERT event row with audit_event_id linked (TEXT anchors per Strike #21; flock_id added Phase 6.2-3)
         insert_result = await db.execute(
