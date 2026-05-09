@@ -24,7 +24,7 @@ Read before any group-related sprint planning or build work:
   - `teivaka_worker_notifications` — healthy (added post-8-2b)
   - `teivaka_beat` — healthy (was unhealthy pre-8-2b; mtime healthcheck added)
   - `teivaka_diag` — running (no healthcheck; diagnostic container)
-- Last commit: `0556139` (Strike #122 V7-redux SEALED — Operator confirmed founder@teivaka.com Gmail inbox receipt of test alert at 2026-05-09 03:52 Fiji; PR.2 verified-loud doctrine battle-tested)
+- Last commit: `a3162cd` (Doctrine: Inviolable Doctrine section ratified — PR.1 + PR.2 from Strike #122 closeout; Current state container count reconciled 6→9 closing B68 drift)
 - Last migration: `076_farm_groups_tenant_id` (Strike #121: tenant_id NOT NULL + FK CASCADE + index + FORCED RLS + canonical isolation policy on tenant.farm_active_groups)
 - Branch: `feature/option-3-plus-nav-v2-1`
 
