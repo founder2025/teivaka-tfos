@@ -11,7 +11,7 @@ Read before any group-related sprint planning or build work:
 
 ## Current state (refreshed every session — this section is mutable)
 
-**Last verified:** 2026-05-09 (Strike #C2a SEALED — CYCLE_CREATED backend live; CycleCreatedPayload + handler branch + 409 ACTIVE_CYCLE_EXISTS guard; smoke-tested on prod with cycle CYC-F001-A0EE-PU002-2026-001 + audit hash 7d6c5ce0; Crops Wave 2 form layer construction begins)
+**Last verified:** 2026-05-09 (Strike #C2b SEALED — CYCLE_CREATED frontend live; CycleNew.jsx form at /farm/cycles/new; entry from CycleList + LogSheet (+); Crops Wave 2 first user-visible feature shipped)
 
 **Production:** healthy. teivaka.com HTTPS live.
 - 9 containers running (all healthy as of Strike #122 V7-redux seal commit 0556139):
@@ -24,7 +24,7 @@ Read before any group-related sprint planning or build work:
   - `teivaka_worker_notifications` — healthy (added post-8-2b)
   - `teivaka_beat` — healthy (was unhealthy pre-8-2b; mtime healthcheck added)
   - `teivaka_diag` — running (no healthcheck; diagnostic container)
-- Last commit: `9905d1c` (Strike #C2a: CYCLE_CREATED backend — CycleCreatedPayload schema + handler branch; structured cycle_id generator + zone_id derivation + 409 ACTIVE_CYCLE_EXISTS guard; smoke-tested with audit chain delta verified)
+- Last commit: `a69d4bb` (Strike #C2b: CYCLE_CREATED frontend — CycleNew.jsx form at /farm/cycles/new; ThemedSelect dropdowns + suggested_layer + current_production_id auto-fill; 409 ACTIVE_CYCLE_EXISTS inline error; CycleList "Start crop" button rewired)
 - Last migration: `077_crops_taxonomy_lock` (Strike #C1: Crops taxonomy lock — widens catalog_group CHECK + 20 new event_types + 26 recategorizations; introduces LABOR/COMPLIANCE/OPERATIONS catalog_groups; 147 total catalog rows)
 - Branch: `feature/option-3-plus-nav-v2-1`
 
