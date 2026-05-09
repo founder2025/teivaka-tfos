@@ -122,7 +122,7 @@ const EVENT_ROUTES = {
   CASH_OUT:          "/farm/cash",
   CASH_IN:           "/farm/cash",
   WORKER_CHECKIN:    "/farm/labor",
-  CYCLE_CREATED:     { action: "new-cycle", route: "/farm?action=new-cycle" },
+  CYCLE_CREATED:     "/farm/cycles/new",
   EGGS_COLLECTED:     "/farm/poultry/eggs/new",
   FLOCK_PLACED:       "/farm/poultry/flocks/new",
   MORTALITY_LOGGED:   "/farm/poultry/mortality/new",

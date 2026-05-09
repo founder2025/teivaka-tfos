@@ -113,7 +113,7 @@ function HeaderBar() {
         </p>
       </div>
       <Link
-        to="/farm"
+        to="/farm/cycles/new"
         className="px-4 py-2 rounded-lg text-sm font-semibold text-white shadow-sm"
         style={{ background: C.green }}
       >
@@ -154,7 +154,7 @@ function EmptyState() {
         No crops planted yet
       </p>
       <Link
-        to="/farm"
+        to="/farm/cycles/new"
         className="inline-block mt-2 text-sm underline"
         style={{ color: C.green }}
       >

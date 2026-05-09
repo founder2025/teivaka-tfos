@@ -52,6 +52,7 @@ const CashLedger    = lazy(() => import("./pages/farmer/CashLedger"));
 const FarmerShell   = lazy(() => import("./layouts/FarmerShell"));
 const FarmDashboard = lazy(() => import("./pages/farmer/FarmDashboard"));
 const HarvestNew    = lazy(() => import("./pages/farmer/HarvestNew"));
+const CycleNew      = lazy(() => import("./pages/farmer/CycleNew"));
 const EggsNew         = lazy(() => import("./pages/farmer/poultry/EggsNew"));
 const FlockPlacedNew      = lazy(() => import("./pages/farmer/poultry/FlockPlacedNew"));
 const MortalityLoggedNew    = lazy(() => import("./pages/farmer/poultry/MortalityLoggedNew"));
@@ -227,6 +228,7 @@ export default function App() {
 
             <Route path="/farm/tasks"        element={<ComingSoon title="Tasks"        phase="4.2" />} />
             <Route path="/farm/cycles"       element={<CycleList />} />
+            <Route path="/farm/cycles/new"   element={<CycleNew />} />
             <Route path="/farm/harvests"     element={<HarvestList />} />
             <Route path="/farm/field-events" element={<FieldEventNew />} />
             <Route path="/farm/inventory"    element={<InventoryList />} />
