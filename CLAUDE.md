@@ -11,7 +11,7 @@ Read before any group-related sprint planning or build work:
 
 ## Current state (refreshed every session — this section is mutable)
 
-**Last verified:** 2026-05-09 (Strike #C1 SEALED — Crops taxonomy locked at 39 events; 3 new catalog_groups (LABOR, COMPLIANCE, OPERATIONS); migration 077 applied with CHECK constraint widening; Crops vertical Wave 1 foundation laid; alembic head 076 → 077)
+**Last verified:** 2026-05-09 (Strike #C2a SEALED — CYCLE_CREATED backend live; CycleCreatedPayload + handler branch + 409 ACTIVE_CYCLE_EXISTS guard; smoke-tested on prod with cycle CYC-F001-A0EE-PU002-2026-001 + audit hash 7d6c5ce0; Crops Wave 2 form layer construction begins)
 
 **Production:** healthy. teivaka.com HTTPS live.
 - 9 containers running (all healthy as of Strike #122 V7-redux seal commit 0556139):
@@ -24,7 +24,7 @@ Read before any group-related sprint planning or build work:
   - `teivaka_worker_notifications` — healthy (added post-8-2b)
   - `teivaka_beat` — healthy (was unhealthy pre-8-2b; mtime healthcheck added)
   - `teivaka_diag` — running (no healthcheck; diagnostic container)
-- Last commit: `bf93f15` (Strike #C1: Crops taxonomy lock — migration 077 widens catalog_group CHECK to include LABOR/COMPLIANCE/OPERATIONS; 20 new event_types + 26 recategorizations; CROPS=39, LABOR=6, COMPLIANCE=4, OPERATIONS=6)
+- Last commit: `9905d1c` (Strike #C2a: CYCLE_CREATED backend — CycleCreatedPayload schema + handler branch; structured cycle_id generator + zone_id derivation + 409 ACTIVE_CYCLE_EXISTS guard; smoke-tested with audit chain delta verified)
 - Last migration: `077_crops_taxonomy_lock` (Strike #C1: Crops taxonomy lock — widens catalog_group CHECK + 20 new event_types + 26 recategorizations; introduces LABOR/COMPLIANCE/OPERATIONS catalog_groups; 147 total catalog rows)
 - Branch: `feature/option-3-plus-nav-v2-1`
 
