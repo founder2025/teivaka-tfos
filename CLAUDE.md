@@ -11,7 +11,7 @@ Read before any group-related sprint planning or build work:
 
 ## Current state (refreshed every session — this section is mutable)
 
-**Last verified:** 2026-05-09 (Strike #122 V7-redux SEALED — backup pipeline operational, alert path receipt-verified end-to-end via founder@teivaka.com Gmail inbox; PR.1 + PR.2 ratified into Inviolable Doctrine section; B68 container drift reconciled)
+**Last verified:** 2026-05-09 (Section 17 ratified — Sidebar Completion + Vertical Context operationalization; CLAUDE.md now binds Claude Code sessions to MBI Parts 4b.0-4b.3 before any Farm pillar work)
 
 **Production:** healthy. teivaka.com HTTPS live.
 - 9 containers running (all healthy as of Strike #122 V7-redux seal commit 0556139):
@@ -24,7 +24,7 @@ Read before any group-related sprint planning or build work:
   - `teivaka_worker_notifications` — healthy (added post-8-2b)
   - `teivaka_beat` — healthy (was unhealthy pre-8-2b; mtime healthcheck added)
   - `teivaka_diag` — running (no healthcheck; diagnostic container)
-- Last commit: `a3162cd` (Doctrine: Inviolable Doctrine section ratified — PR.1 + PR.2 from Strike #122 closeout; Current state container count reconciled 6→9 closing B68 drift)
+- Last commit: `9bd1cb1` (Doctrine: Section 17 — Sidebar Completion + Vertical Context operationalization; MBI Parts 4b.0-4b.3 pointer + 7 forbidden moves)
 - Last migration: `076_farm_groups_tenant_id` (Strike #121: tenant_id NOT NULL + FK CASCADE + index + FORCED RLS + canonical isolation policy on tenant.farm_active_groups)
 - Branch: `feature/option-3-plus-nav-v2-1`
 
