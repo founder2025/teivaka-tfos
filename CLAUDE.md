@@ -285,6 +285,133 @@ Operational implication: every new alert channel ships with a test-receipt entry
 
 Ratified: 2026-05-09 via Strike #122 closeout.
 
+## Sidebar Completion + Vertical Context (operationalization)
+
+The verticals doctrine, vertical context doctrine, seven-vertical
+scope, and 16 sub-page surface are ratified law in
+`TFOS_Master_Build_Instruction.md` Parts 4b.0 through 4b.3. This
+section operationalizes that doctrine for Claude Code sessions —
+it does not redefine it. Claude Code must read MBI Parts 4b.0–4b.3
+before any Farm pillar work.
+
+### The Seven Verticals (per MBI Part 4b.1, restated for in-session reference)
+
+| Priority | Vertical | Sub-verticals |
+|---|---|---|
+| 1 | **Crops** | Annual + biennial field crops |
+| 2 | **Horticulture** | Tree crops, fruit, perennials |
+| 3 | **Livestock** | Poultry, Cattle, Goats, Pigs, Sheep, Apiculture |
+| 4 | **Aquaculture** | Pond, tank, cage culture, seaweed |
+| 5 | **Forestry** | Timber, non-timber, agroforestry |
+| 6 | **Floriculture** | Cut flowers, ornamentals |
+| 7 | **Protected Agriculture** | Greenhouse, shade-house, hydroponics, nursery |
+| Overlay | **Integrated Systems** | Cross-vertical operations (only after all 7 individually complete) |
+
+Poultry is a Livestock sub-vertical — not standalone. Apiculture
+(bees) is a Livestock sub-vertical — not standalone. Mixed/agroforestry
+sits inside Forestry. The Integrated Systems overlay handles
+cross-vertical operations and only opens after every individual
+vertical hits 100%.
+
+### The Vertical Completeness Sequencing Rule (per MBI Part 4b.1, Strike #98 Rule 5)
+
+**Crops ships to 100% before any other vertical receives Layer B
+work beyond a stub dashboard.** Horticulture is priority 2;
+Livestock is priority 3; the rest follow priority order.
+
+100% means the 7-criterion checklist defined in MBI Part 4b.1:
+event taxonomy locked, form coverage complete, schema 4-anchor
+compliant, variety catalog Operator-locked, 3-Layer integration
+verified, dashboard + reporting matches prototype contract, TIS
+context-aware. Each criterion is verifiable by query, browser, or
+document — no "looks done" allowed.
+
+Sequencing is binding regardless of "interesting feature work"
+elsewhere. A Layer B task that would advance a non-Crops vertical
+past stub status while Crops is below 100% is auto-rejected.
+
+### The Sidebar Completion Rule
+
+Every navigation surface that exists in
+`TFOS_Platform_Interactive_Prototype.html` (the sacred prototype,
+MBI Part 36) must be functional end-to-end in production before
+that surface is considered shipped. Functional end-to-end means:
+
+1. The route resolves to a real page in production (the prototype
+   navigates via JavaScript state mutation; production renders via
+   real React routes — both must reach the same surfaces).
+2. The page renders with real data from `tenant.*` or read-only
+   computed views over `audit.events`.
+3. Any (+) action on the page emits a real `audit.events` row
+   through the Universal Event Form Contract (MBI Section 4a.4).
+4. The page is reachable from at least one prototype-level entry
+   point.
+
+Stub pages, "coming soon" placeholders, dead links, and broken
+routes are forbidden in production. A nav button that doesn't work
+is worse than a nav button that doesn't exist — it is a credibility
+leak to any user, lender, or partner scanning the platform.
+
+### The Stub Dashboard Contract
+
+A vertical not yet at 100% renders a stub dashboard at
+`/farm/<vertical>` showing:
+
+- Vertical name as page header
+- One-sentence note that the vertical is on the build roadmap
+- "Notify me when ready" CTA that emits an `attribution_event` with
+  `event_type = 'vertical_access_requested'`, payload carrying
+  farm_id + vertical_name + occurred_at
+- No fake data, no mock charts, no placeholder content
+
+The stub itself does real work — lead capture for vertical
+expansion. Stub status is a real status, not a hidden state.
+
+### Mode-Specific Vertical Behavior (per MBI Part 4b.0 Path C)
+
+| Mode | Default vertical | Dropdown behavior |
+|---|---|---|
+| **Solo** | Last-used (or single if farmer operates one) | Hidden — Solo never sees nav |
+| **Growth** | Last-used | Visible passive indicator showing current vertical; switching requires `/me/farm/settings` |
+| **Commercial** | Unified Farm Dashboard | Fully interactive switcher; "All verticals" aggregation option |
+
+Mode is derived per MBI Part 20 — never user-toggled. The
+vertical-default behavior follows mode automatically.
+
+### Forbidden Moves (additions to CLAUDE.md Inviolable rules)
+
+1. Build a sub-page in production that does not exist in
+   `TFOS_Platform_Interactive_Prototype.html`, or fails to be
+   reachable from at least one prototype-defined entry point.
+2. Build Layer B work for any non-Crops vertical beyond stub
+   dashboard status while Crops is below 100% per the 7-criterion
+   checklist (MBI Part 4b.1).
+3. Render a vertical's dashboard with mock data, "coming soon"
+   copy, or any content that does not flow from real `tenant.*`
+   events or `shared.*` reads.
+4. Hide a stub dashboard from a user's nav. If the route exists in
+   the prototype, it is reachable in production.
+5. Show the vertical dropdown in Solo mode.
+6. Treat Poultry, Apiculture, or any other Livestock sub-vertical
+   as a standalone vertical at the dropdown level. They are
+   sub-verticals under Livestock per MBI Part 4b.1.
+7. Build the Integrated Systems overlay before all seven verticals
+   individually hit 100%.
+
+### Cross-references
+
+- Verticals doctrine: MBI Part 4b.0 (Vertical Context Doctrine),
+  4b.1 (Seven Verticals), 4b.2 (16 Sub-Pages), 4b.3 (3-Layer Doctrine)
+- Sacred prototype: MBI Part 36 (Documentation Discipline — Sacred Files)
+- Inviolable Doctrine: PR.1 (backup restore-drill) and PR.2 (alert
+  path receipt verification) apply to all surfaces this section creates
+- Universal Event Form Contract: MBI Section 4a.4 — every (+)
+  action on every sub-page emits exactly one `audit.events` row
+- Mode derivation: MBI Part 20 — mode is never user-toggled
+
+Ratified: 2026-05-09 — Section 17 of project alignment, operationalizing
+MBI Parts 4b.0–4b.3 for Claude Code sessions.
+
 ## Schema reality (master spec has DRIFT — use these names)
 
 Confirmed against live DB on 2026-04-15. When the master spec disagrees, the live DB wins.
