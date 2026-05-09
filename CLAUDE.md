@@ -11,16 +11,19 @@ Read before any group-related sprint planning or build work:
 
 ## Current state (refreshed every session — this section is mutable)
 
-**Last verified:** 2026-05-09 (Strike #122 V7-redux SEALED — backup alert path receipt-verified end-to-end via founder@teivaka.com Gmail inbox; B84 fully closed)
+**Last verified:** 2026-05-09 (Strike #122 V7-redux SEALED — backup pipeline operational, alert path receipt-verified end-to-end via founder@teivaka.com Gmail inbox; PR.1 + PR.2 ratified into Inviolable Doctrine section; B68 container drift reconciled)
 
 **Production:** healthy. teivaka.com HTTPS live.
-- 6 containers running (all healthy as of Phase 8-2b commit 1194331):
+- 9 containers running (all healthy as of Strike #122 V7-redux seal commit 0556139):
   - `teivaka_api` — healthy
   - `teivaka_db` — healthy
   - `teivaka_redis` — healthy
   - `teivaka_caddy` — healthy (was unhealthy pre-8-2b; healthcheck URL fixed)
   - `teivaka_worker_ai` — healthy (was unhealthy pre-8-2b; YAML list-form fix + hostname stability)
+  - `teivaka_worker_automation` — healthy (added post-8-2b)
+  - `teivaka_worker_notifications` — healthy (added post-8-2b)
   - `teivaka_beat` — healthy (was unhealthy pre-8-2b; mtime healthcheck added)
+  - `teivaka_diag` — running (no healthcheck; diagnostic container)
 - Last commit: `0556139` (Strike #122 V7-redux SEALED — Operator confirmed founder@teivaka.com Gmail inbox receipt of test alert at 2026-05-09 03:52 Fiji; PR.2 verified-loud doctrine battle-tested)
 - Last migration: `076_farm_groups_tenant_id` (Strike #121: tenant_id NOT NULL + FK CASCADE + index + FORCED RLS + canonical isolation policy on tenant.farm_active_groups)
 - Branch: `feature/option-3-plus-nav-v2-1`
@@ -255,6 +258,32 @@ Every step hash-chained in audit.events, verifiable via /verify/{audit_hash}, sc
 10. **Never skip Twilio signature verification on webhook endpoints.**
 11. **Every `tenant.*` table must enforce RLS using the `app.tenant_id` session variable** (set via `SET LOCAL app.tenant_id` in `get_tenant_db`). Set tenant context at session start, never bypass in business logic. NOTE: master spec says `app.current_tenant_id` — that is DRIFT. The deployed schema and middleware use `app.tenant_id`.
 12. **Migrations via Alembic only.** No raw SQL in production without a migration file. Every migration must be reversible.
+
+## Inviolable Doctrine (PR.1, PR.2)
+
+The "Inviolable rules" block above lists the original 12 inviolables inherited from TFOS Master Build Instruction. This block lists inviolables ratified through strike experience — doctrine that emerged from real production failures, not from initial design. Both blocks bind every session equally. Inviolables here are ratified by Operator decision and removable only by explicit Operator decision.
+
+### PR.1 — Backup restore-drill discipline
+
+Backups must restore-drill on the first business day of every calendar month, with the drill log committed to the strike archive. A backup script that has gone >35 days without a successful restore drill is treated as unverified, and the audit chain integrity claim is flagged in any Bank Evidence PDF dispatched during the unverified window.
+
+Rationale: a backup that has never been restored from is not a backup — it is a hopeful file. The audit chain that makes farmers bankable depends on backup integrity. Drift here = data loss waiting to happen, and worse, silent erosion of the moat the platform is built on.
+
+Operational implication: the monthly drill is not optional ops hygiene. Skipping it propagates a caveat into every Bank Evidence PDF dispatched during the unverified window — meaning the platform self-marks its own audit-chain claim as untrusted until the drill is restored.
+
+Ratified: 2026-05-09 via Strike #122 closeout.
+
+### PR.2 — Alert path receipt verification
+
+Verified-loud beats assumed-quiet. An alert path is not shipped until the recipient has confirmed receipt of a test message in the actual destination inbox or channel. Sender-side success codes (HTTP 200, delivery IDs, queue acceptance) are not receipts.
+
+Canonical example: Strike #122 V7-original assumed cody@teivaka.com existed; recipient verification on 2026-05-09 surfaced that the address was never real and the test alert went to a black-holed MX. V7-redux refactored the recipient into .env, re-fired the test, and Operator confirmed receipt in founder@teivaka.com Gmail inbox at 2026-05-09 03:52 Fiji. Alert paths must be receipt-verified end-to-end, with the verifying message preserved in the strike archive.
+
+Rationale: the entire purpose of an alert path is to prevent silent failure. An alert path that itself fails silently is worse than no alert path at all — it manufactures false confidence. Sender-side acceptance proves the request was syntactically valid, not that the message reached a human.
+
+Operational implication: every new alert channel ships with a test-receipt entry in the strike archive that includes the delivery ID, send timestamp, and Operator confirmation timestamp. Channels that cannot meet this standard are not shipped.
+
+Ratified: 2026-05-09 via Strike #122 closeout.
 
 ## Schema reality (master spec has DRIFT — use these names)
 
