@@ -395,6 +395,25 @@ export default function MarketingPage({ pageKey }) {
         <h1 style={h1Style}>{content.title}</h1>
         <p style={taglineStyle}>{content.tagline}</p>
 
+        {pageKey === "about" && (
+          <section className="fdr-quote">
+            <style>{`
+.fdr-quote{max-width:760px;margin:0 auto;padding:48px 0 40px;border-bottom:1px solid rgba(92,64,51,0.12);background:#F8F3E9}
+.fdr-quote .fdr-label{font-family:'IBM Plex Mono','SF Mono',Menlo,monospace;font-size:11px;letter-spacing:0.13em;text-transform:uppercase;color:#6AA84F;margin:0 0 18px}
+.fdr-quote .fdr-bq{font-family:'IBM Plex Serif',Georgia,serif;font-style:italic;font-size:19px;line-height:1.65;color:#5C4033;margin:0;border-left:3px solid #6AA84F;padding-left:24px}
+.fdr-quote .fdr-attr{font-family:'IBM Plex Sans',-apple-system,BlinkMacSystemFont,sans-serif;font-size:14px;font-weight:600;color:#5C4033;margin-top:24px;padding-left:24px;text-align:left}
+@media (max-width:640px){
+  .fdr-quote .fdr-bq{font-size:17px}
+}
+`}</style>
+            <p className="fdr-label">Founder</p>
+            <blockquote className="fdr-bq">
+              {"“I left a Science Degree and came home to Kadavu to farm — and in one season I learned what every Pacific farmer carries but no one says out loud: we work harder than farmers anywhere in the world, on land we cannot prove, with numbers we never had, for buyers who decide our worth in silence. Our grandfathers farmed by memory. We have been farming by memory too — and calling it tradition. It is not tradition. It is the reason a banker can look at a man with twenty years of harvest behind him and see nothing. The land is not the problem. The farmer is not the problem. The absence of a system that respects what we do — that is the problem. So I built one. On my own farms first. Before I asked a single other farmer to trust it with their season.”"}
+            </blockquote>
+            <p className="fdr-attr">{"— Uraia Koroi Kama, Founder"}</p>
+          </section>
+        )}
+
         {content.sections.map((section, idx) => (
           <section key={idx} style={sectionStyle}>
             <h2 style={h2Style}>{section.heading}</h2>
