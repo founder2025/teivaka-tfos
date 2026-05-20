@@ -72,7 +72,7 @@ If a feature serves neither, it is debt.
 
 ### Reach: Pacific First, Global by Design
 
-- **Pilot:** F001 Save-A-Lot Farm (Korovou, Serua, Fiji) and F002 Viyasiyasi Farm (Kadavu Island, Fiji). These are the Operator's farms used to **harden** the platform. They are not the product definition.
+- **Pilot:** F001 Save-A-Lot Farm (Korovou, Tailevu, Fiji) and F002 Viyasiyasi Farm (Kadavu Island, Fiji). These are the Operator's farms used to **harden** the platform. They are not the product definition.
 - **Phase 1 Reach:** Fiji smallholders across all 14 provinces.
 - **Phase 2 Reach:** Pacific Island states — Tonga, Samoa, Vanuatu, Solomon Islands, Papua New Guinea, Cook Islands, Kiribati, Tuvalu, Niue, Tokelau, Wallis and Futuna, Marshall Islands, FSM, Palau.
 - **Phase 3 Reach:** Global smallholder agriculture — Southeast Asia, Sub-Saharan Africa, Latin America, Caribbean.
@@ -82,7 +82,7 @@ If a feature serves neither, it is debt.
 ### The Two Pilot Farms (used to harden the system, not define it)
 
 **F001 — Save-A-Lot Farm**
-- Location: Korovou, Serua Province, Fiji (mainland, road access)
+- Location: Korovou, Tailevu Province, Fiji (mainland, road access)
 - Size: ~83 acres
 - Land tenure: iTaukei (NLTB) lease
 - Crops: Eggplant, Cassava, Pineapple, Kava
