@@ -452,8 +452,14 @@ function Header({ navigate }) {
   return (
     <header style={headerStyle}>
       <div style={headerInnerStyle}>
-        <a href="#" onClick={go("/")} style={brandLinkStyle}>
-          <img src="/teivaka-logo.png" alt="Teivaka" style={brandImgStyle} />
+        <style>{`
+.mkt-brand{display:inline-flex;align-items:center;gap:10px;text-decoration:none;cursor:pointer}
+.mkt-brand img{height:32px;width:auto;display:block}
+.mkt-brand span{font-family:'IBM Plex Serif',Georgia,serif;font-size:20px;font-weight:500;letter-spacing:0.15em;color:#5C4033}
+`}</style>
+        <a href="#" onClick={(e) => { e.preventDefault(); navigate("/"); }} className="mkt-brand">
+          <img src="/teivaka-mark.png" alt="Teivaka" />
+          <span>TEIVAKA</span>
         </a>
         <nav style={headerNavStyle}>
           <a href="#" onClick={go("/about")} style={navLinkStyle}>About</a>
