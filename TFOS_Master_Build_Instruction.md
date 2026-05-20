@@ -1621,6 +1621,134 @@ If reality has moved past Part 3 (Current Reality), update Part 3 as part of the
 
 ---
 
+## PART 39 — SITE VOICE DOCTRINE (BINDING)
+
+Locked 2026-05-20. Governs every public marketing surface: the L3 landing
+(#home/#what/#tis/#about/#contact/paths) and the 10 MarketingPage routes
+(/about, /what-we-do, /impact, /team, /partner, /contact, /tis-public,
+/tfos, /our-farms, /farms). The canonical voice reference is what is LIVE
+on /about and /what-we-do as of this date. Every future marketing edit
+matches that voice. No re-drift.
+
+### 39.1 — The two reference readers
+
+Every sentence is written for both at once:
+  1. A Kadavu smallholder who farms by memory and reads slowly.
+  2. A skeptical Fiji bank credit officer deciding if the record is real.
+If a sentence serves neither, cut it.
+
+### 39.2 — Voice (what it IS)
+
+- Plain, declarative, unhedged. State the thing, then stop.
+- Concrete over abstract: "the goat that died," not "livestock mortality."
+  Named farms (Save-A-Lot/Korovou, Viyasiyasi/Kadavu), named people, the
+  real company number.
+- Honest about stage: every claim carries its true status — Earning today /
+  Live on WhatsApp / In active build. Trust is the product; an overclaim
+  spends it.
+- Income-funded humility: built on our own farms first; we don't promise
+  what we haven't shipped.
+- Pacific-first, global-by-design. Fiji is the proving ground, not the ceiling.
+- Rhythm: short sentences carry weight; a long one must earn its length.
+  Lists of three. Em-dashes for the turn, not for decoration.
+
+### 39.3 — Voice (what it is NOT — banned)
+
+- No cinematic rewrites. We refine the live voice; we don't reinvent it.
+- No hype: revolutionary, seamless, cutting-edge, unleash, empower,
+  game-changing, world-class (one earned superlative, per Final Directive,
+  used at most once).
+- No vague benefit-speak ("operational excellence," "holistic solutions").
+- No second-person funnel ("Imagine if you could…"). Address the reader as
+  an equal, not a lead.
+- No emoji. No exclamation marks in body copy.
+- No corporate plural without grounding ("we believe," "our mission"). If we
+  mean I (the founder), say I. If we mean Teivaka PTE LTD, name the company.
+  Vague "we" is fluff.
+
+### 39.4 — Source-grounding (INVIOLABLE)
+
+Every factual claim traces to either:
+  (a) project knowledge (MBI, doctrines, /mnt/project KB, committed code), or
+  (b) a fact the Operator provides this session (photo, number, name, date).
+No invented numbers, buyers, yields, prices, farmer counts, acreage, or dates.
+If a number is needed and unsourced, rewrite the sentence to not need it, or
+ask the Operator. The same audit chain that makes farmers bankable makes our
+own public claims auditable — an unsourced figure is a liability.
+
+### 39.5 — The honest-stage rule
+
+Anything not yet live is labelled build-stage, never written in present tense
+as if shipped. Status pills (live = green, in-build = amber) are canonical.
+"In active build," stated plainly, is a trust signal — not a weakness to hide.
+
+### 39.6 — Canonical source of truth
+
+Where the same content lives on the landing and a standalone route, the
+LANDING section is canonical and the standalone mirrors it word-for-word
+(#what ↔ /what-we-do, locked 2026-05-20). Edit canonical first, then mirror.
+Never let the two drift into two voices again.
+
+### 39.7 — Placeholder protocol
+
+A page needing Operator-supplied facts is NOT shipped with invented stand-ins.
+It is (a) held until the facts arrive, or (b) shipped without the unsourced
+element. A page that cannot be honestly populated is pulled from nav until it
+can be (e.g. /impact without real numbers).
+
+### 39.8 — Per-page identity (SEO companion)
+
+Each route carries its own <title>, meta description, canonical URL, OG tags,
+and JSON-LD — written in this voice and server-visible, not JS-only. Generic
+site-wide meta on a specific page is a Tier-0 drift bug.
+
+### 39.9 — Process
+
+- Voice edits follow Part 37 (Six-Step Cadence) and Part 38 (first move).
+- Marketing pages are not sacred; Landing.l3.html IS (Part 26) — landing
+  voice edits need explicit per-session Operator authorization.
+- Every marketing edit names its source (39.4) in the commit body.
+
+### 39.10 — The test
+
+Before shipping a marketing sentence: "Would I say this to a farmer's face,
+and could I prove it to their banker?" Yes → ship. No → cut it or source it.
+
+### 39.11 — Voice Example Bank
+
+Five canonical exemplars from the live site. When in doubt, match these.
+
+1. Founder voice (/about):
+   "I left a Science Degree and came home to Kadavu to farm — and in one
+   season I learned what every Pacific farmer carries but no one says out
+   loud…" — Uraia Koroi Kama, Founder
+   (First person, lived, specific, no hedging. The spine of the voice.)
+
+2. The thesis (/#what and /what-we-do):
+   "One company. Three honest layers." / "We are transparent about the stage
+   of each part of Teivaka — because trust is the product."
+   (Names the structure plainly; states the trust principle as the reason.)
+
+3. Operational specificity (/#what and /what-we-do):
+   "Farmers use Teivaka daily to log what actually happens on their farm — the
+   harvest, the irrigation, the chemical application, the cash sale, the worker
+   hours, the goat that died. Each event is anchored to farm, block, crop, and
+   operator. Each is chained into a verified record that cannot be altered
+   after the fact."
+   (Concrete nouns, the unexpected true detail, the verifiability payoff.)
+
+4. Status-pill canon (every page):
+   "Earning today" (live) · "Live on WhatsApp" (live) · "In active build"
+   (build). Three words, true status, no spin.
+
+5. Footer tagline (every page):
+   "Generate Wealth from Idle Lands."
+   (The promise in five words — concrete verb, concrete object, no adjectives.)
+
+Binding. Removable only by explicit Operator decision via in-place edit (Part 36).
+
+---
+
 ## FINAL DIRECTIVE
 
 You are not building a generic farm management app.
@@ -1649,4 +1777,4 @@ When a decision could cost real money, real compliance failures, or real trust w
 
 *End of contract. Read again on every fresh session.*
 *Part 3 (Current Reality) is the only mutable section — update it on every commit.*
-*Parts 0-2, 4-37 + Final Directive are stable contract — change only by explicit Operator decision via in-place edit per Part 36.*
+*Parts 0-2, 4-39 + Final Directive are stable contract — change only by explicit Operator decision via in-place edit per Part 36.*
