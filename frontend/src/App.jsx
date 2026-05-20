@@ -176,7 +176,6 @@ export default function App() {
           <Route path="/" element={<Landing />} />
           <Route path="/about"        element={<MarketingPage pageKey="about" />} />
           <Route path="/what-we-do"   element={<MarketingPage pageKey="what-we-do" />} />
-          <Route path="/impact"       element={<MarketingPage pageKey="impact" />} />
           <Route path="/team"         element={<MarketingPage pageKey="team" />} />
           <Route path="/partner"      element={<MarketingPage pageKey="partner" />} />
           <Route path="/contact"      element={<MarketingPage pageKey="contact" />} />

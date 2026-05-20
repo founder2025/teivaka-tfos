@@ -71,7 +71,7 @@ export default function Landing() {
     function onMsg(e) {
       const d = e && e.data;
       if (d && d.tv === "nav" && typeof d.to === "string") {
-        const ALLOWED = ["/login","/register","/","/about","/what-we-do","/impact","/team","/partner","/contact","/tis-public","/tfos","/our-farms","/farms"];
+        const ALLOWED = ["/login","/register","/","/about","/what-we-do","/team","/partner","/contact","/tis-public","/tfos","/our-farms","/farms"];
         if (ALLOWED.includes(d.to)) navigate(d.to);
       }
     }

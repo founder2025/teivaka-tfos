@@ -506,7 +506,6 @@ function Header({ navigate }) {
           <a href="#" onClick={go("/tis")} style={navLinkStyle}>TIS</a>
           <a href="#" onClick={go("/tfos")} style={navLinkStyle}>TFOS</a>
           <a href="#" onClick={go("/our-farms")} style={navLinkStyle}>Farms</a>
-          <a href="#" onClick={go("/impact")} style={navLinkStyle}>Impact</a>
           <a href="#" onClick={go("/partner")} style={navLinkStyle}>Partner</a>
           <a href="#" onClick={go("/contact")} style={navLinkStyle}>Contact</a>
           <button onClick={() => navigate("/login")} style={loginButtonStyle}>Login</button>
@@ -559,7 +558,6 @@ function TeivakaFooter({ navigate, copyEmail, openGmail, emailCopied }) {
             <h4>Company</h4>
             <a href="#" onClick={go("/about")}>About</a>
             <a href="#" onClick={go("/what-we-do")}>What We Do</a>
-            <a href="#" onClick={go("/impact")}>Impact</a>
             <a href="#" onClick={go("/team")}>Team</a>
           </div>
           <div className="tvf-col">
