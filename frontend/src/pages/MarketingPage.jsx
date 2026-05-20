@@ -50,7 +50,7 @@ const PAGE_CONTENT = {
     sections: [
       {
         heading: "Who we are",
-        body: "Teivaka PTE LTD is a Fiji-incorporated agricultural company (Co. No. 2025RC001894) building TFOS — the Teivaka Farm Operating System. We are headquartered in Fiji, with active pilot farms in Korovou (Serua Province, mainland) and on Kadavu Island.",
+        body: "Teivaka PTE LTD is a Fiji-incorporated agricultural company (Co. No. 2025RC001894) building TFOS — the Teivaka Farm Operating System. We are headquartered in Fiji, with active pilot farms in Korovou (Tailevu Province, mainland) and on Kadavu Island.",
       },
       {
         heading: "Why we exist",
@@ -167,7 +167,7 @@ const PAGE_CONTENT = {
       },
       {
         heading: "Where we are",
-        body: "Headquarters in Fiji. Pilot operations at Save-A-Lot Farm (Korovou, Serua Province) and Viyasiyasi Farm (Kadavu Island).",
+        body: "Headquarters in Fiji. Pilot operations at Save-A-Lot Farm (Korovou, Tailevu Province) and Viyasiyasi Farm (Kadavu Island).",
       },
       {
         heading: "Response time",
@@ -236,12 +236,12 @@ const PAGE_CONTENT = {
     tagline: "Two working Fiji farms where TFOS is being hardened against reality.",
     sections: [
       {
-        heading: "Save-A-Lot Farm (F001)",
-        body: "Approximately 83 acres in Korovou, Serua Province on Fiji's main island, Viti Levu. Held under iTaukei (NLTB) lease. Active production includes eggplant, cassava, pineapple, and kava. Apiculture operation of four beehives. Primary buyer relationship with the Nayans supermarket group. One permanent worker plus casuals as the cycles demand.",
+        heading: "Save-A-Lot Farm",
+        body: "Approximately 83 acres in Korovou, Tailevu Province on Fiji's main island, Viti Levu. Held under iTaukei (NLTB) lease. Active production includes eggplant, cassava, pineapple, and kava. Apiculture operation of four beehives. Primary buyer relationship with the Nayans supermarket group. One permanent worker plus casuals as the cycles demand.",
       },
       {
-        heading: "Viyasiyasi Farm (F002)",
-        body: "Located on Kadavu Island, accessible only by ferry. Eight goats. F002 is the reference user for offline-first design — if a TFOS feature breaks on a flaky 3G connection on Kadavu, it is broken everywhere. Every architectural decision is tested against this constraint before it ships.",
+        heading: "Viyasiyasi Farm",
+        body: "Located on Kadavu Island, accessible only by ferry. Eight goats. Viyasiyasi is the reference user for offline-first design — if a TFOS feature breaks on a flaky 3G connection on Kadavu, it is broken everywhere. Every architectural decision is tested against this constraint before it ships.",
       },
       {
         heading: "Why two farms, not one",
@@ -459,7 +459,7 @@ export default function MarketingPage({ pageKey }) {
             </section>
             <section className="tm-sec">
               <h2 className="tm-h2">On the farm</h2>
-              <p className="tm-bio">One permanent farm worker on F001 Save-A-Lot — sole daily operator across all production blocks plus the apiculture work. Casual hands as cycles demand.</p>
+              <p className="tm-bio">One permanent farm worker on Save-A-Lot — sole daily operator across all production blocks plus the apiculture work. Casual hands as cycles demand.</p>
             </section>
             <section className="tm-sec">
               <h2 className="tm-h2">What's next</h2>
@@ -507,13 +507,11 @@ function Header({ navigate }) {
     <header style={headerStyle}>
       <div style={headerInnerStyle}>
         <style>{`
-.mkt-brand{display:inline-flex;align-items:center;gap:10px;text-decoration:none;cursor:pointer}
+.mkt-brand{display:inline-flex;align-items:center;text-decoration:none;cursor:pointer}
 .mkt-brand img{height:32px;width:auto;display:block}
-.mkt-brand span{font-family:'IBM Plex Serif',Georgia,serif;font-size:20px;font-weight:500;letter-spacing:0.15em;color:#5C4033}
 `}</style>
         <a href="#" onClick={(e) => { e.preventDefault(); navigate("/"); }} className="mkt-brand">
-          <img src="/teivaka-mark.png" alt="Teivaka" />
-          <span>TEIVAKA</span>
+          <img src="/teivaka-lockup-dark.png" alt="Teivaka" />
         </a>
         <nav style={headerNavStyle}>
           <a href="#" onClick={go("/about")} style={navLinkStyle}>About</a>
