@@ -14,6 +14,7 @@
 
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { Facebook, Instagram, Youtube } from "lucide-react";
 
 // ── Design tokens (matches Landing.l3.html) ───────────────────────────────────
 const COLORS = {
@@ -37,6 +38,42 @@ const FONTS = {
   body:    "'IBM Plex Sans', -apple-system, BlinkMacSystemFont, sans-serif",
   mono:    "'IBM Plex Mono', 'SF Mono', Menlo, monospace",
 };
+
+// ── Social channels ───────────────────────────────────────────────────────────
+// Five real Teivaka channels (confirmed by Boss 2026-05-20). No LinkedIn / X —
+// those accounts don't exist yet; per Doctrine 39.7 we don't show dormant
+// channels. lucide-react covers Facebook/Instagram/Youtube. TikTok + WhatsApp
+// have no lucide equivalent, so single-color inline brand marks are defined here
+// with fill="currentColor" so the surrounding CSS color drives them.
+const TikTokIcon = (props) => (
+  <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor" {...props}>
+    <path d="M12.525.02c1.31-.02 2.61-.01 3.91-.02.08 1.53.63 3.09 1.75 4.17 1.12 1.11 2.7 1.62 4.24 1.79v4.03c-1.44-.05-2.89-.35-4.2-.97-.57-.26-1.1-.59-1.62-.93-.01 2.92.01 5.84-.02 8.75-.08 1.4-.54 2.79-1.35 3.94-1.31 1.92-3.58 3.17-5.91 3.21-1.43.08-2.86-.31-4.08-1.03-2.02-1.19-3.44-3.37-3.65-5.71-.02-.5-.03-1-.01-1.49.18-1.9 1.12-3.72 2.58-4.96 1.66-1.44 3.98-2.13 6.15-1.72.02 1.48-.04 2.96-.04 4.44-.99-.32-2.15-.23-3.02.37-.63.41-1.11 1.04-1.36 1.75-.21.51-.15 1.07-.14 1.61.24 1.64 1.82 3.02 3.5 2.87 1.12-.01 2.19-.66 2.77-1.61.19-.33.4-.67.41-1.06.1-1.79.06-3.57.07-5.36.01-4.03-.01-8.05.02-12.07z"/>
+  </svg>
+);
+const WhatsAppIcon = (props) => (
+  <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor" {...props}>
+    <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.885-9.885 9.885M20.52 3.449C18.24 1.245 15.24 0 12.045 0 5.463 0 .104 5.36.101 11.946c0 2.105.549 4.16 1.595 5.973L0 24l6.335-1.652a11.96 11.96 0 005.71 1.454h.005c6.582 0 11.946-5.36 11.949-11.946A11.86 11.86 0 0020.52 3.449z"/>
+  </svg>
+);
+const SOCIAL_LINKS = [
+  { label: "Facebook",  href: "https://www.facebook.com/profile.php?id=61586061599745", Icon: Facebook },
+  { label: "Instagram", href: "https://www.instagram.com/teivakaa",                      Icon: Instagram },
+  { label: "YouTube",   href: "https://www.youtube.com/@TeivakaFarm",                     Icon: Youtube },
+  { label: "TikTok",    href: "https://www.tiktok.com/@teivaka",                          Icon: TikTokIcon },
+  { label: "WhatsApp",  href: "https://wa.me/6797336211",                                 Icon: WhatsAppIcon },
+];
+// Renders the five external social <a> links. The caller wraps these in a
+// container with the appropriate scoped class (.ct-social-row / .tvf-social),
+// which controls layout + color/hover for that surface.
+const SocialIconLinks = () => (
+  <>
+    {SOCIAL_LINKS.map(({ label, href, Icon }) => (
+      <a key={label} href={href} target="_blank" rel="noopener noreferrer" aria-label={label} title={label}>
+        <Icon aria-hidden="true" />
+      </a>
+    ))}
+  </>
+);
 
 // ── Content map ───────────────────────────────────────────────────────────────
 // Each entry: { title, tagline, sections: [{ heading, body, list? }] }
@@ -468,6 +505,22 @@ export default function MarketingPage({ pageKey }) {
           </div>
         )}
 
+        {pageKey === "contact" && (
+          <section style={sectionStyle} className="ct-social">
+            <style>{`
+.ct-social .ct-social-row{display:flex;align-items:center;gap:18px;margin-top:14px}
+.ct-social .ct-social-row a{display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;color:#5C4033;transition:color .2s;text-decoration:none}
+.ct-social .ct-social-row a:hover{color:#6AA84F}
+.ct-social .ct-social-row svg{width:24px;height:24px;display:block}
+`}</style>
+            <h2 style={h2Style}>Connect</h2>
+            <p style={pBodyStyle}>Find us on Pacific channels and beyond.</p>
+            <div className="ct-social-row">
+              <SocialIconLinks />
+            </div>
+          </section>
+        )}
+
         {content.sections.map((section, idx) => (
           <section key={idx} style={sectionStyle}>
             <h2 style={h2Style}>{section.heading}</h2>
@@ -550,6 +603,10 @@ const TVF_CSS = `
   .tvf-footer .tvf-grid{grid-template-columns:1fr}
   .tvf-footer .tvf-bottom{flex-direction:column}
 }
+.tvf-footer .tvf-social{display:flex;align-items:center;gap:16px;margin-top:16px;padding-top:16px;border-top:1px solid rgba(248,243,233,0.28)}
+.tvf-footer .tvf-social a{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;padding:0;color:rgba(248,243,233,0.6);transition:color .2s;cursor:pointer}
+.tvf-footer .tvf-social a:hover{color:#6AA84F}
+.tvf-footer .tvf-social svg{width:20px;height:20px;display:block}
 `;
 
 function TeivakaFooter({ navigate, copyEmail, openGmail, emailCopied }) {
@@ -588,6 +645,9 @@ function TeivakaFooter({ navigate, copyEmail, openGmail, emailCopied }) {
               {emailCopied ? "Copied!" : "founder@teivaka.com"}
             </a>
             <a href="#" onClick={openGmail}>Open in Gmail</a>
+            <div className="tvf-social">
+              <SocialIconLinks />
+            </div>
           </div>
         </div>
         <div className="tvf-legal">
