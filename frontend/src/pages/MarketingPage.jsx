@@ -199,6 +199,14 @@ const PAGE_CONTENT = {
         body: "founder@teivaka.com — this is the only inbox we monitor. Whether you are a farmer wanting to onboard, a partner exploring collaboration, a journalist, an investor, or someone reporting a bug on the platform, this is the right address.",
       },
       {
+        heading: "Phone — Company (WhatsApp Business)",
+        body: "+679 7336211 — the Teivaka company line, reachable on WhatsApp Business.",
+      },
+      {
+        heading: "Phone — Founder (direct)",
+        body: "+679 8730866 — the founder's direct line, also on WhatsApp.",
+      },
+      {
         heading: "Company details",
         body: "Teivaka PTE LTD. Company Number: 2025RC001894. Registered in Fiji. Currency for pilot operations: FJD. Working timezone: Pacific/Fiji (UTC+12).",
       },
