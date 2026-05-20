@@ -71,7 +71,8 @@ export default function Landing() {
     function onMsg(e) {
       const d = e && e.data;
       if (d && d.tv === "nav" && typeof d.to === "string") {
-        if (d.to === "/login" || d.to === "/register") navigate(d.to);
+        const ALLOWED = ["/login","/register","/","/about","/what-we-do","/impact","/team","/partner","/contact","/tis-public","/tfos","/our-farms","/farms"];
+        if (ALLOWED.includes(d.to)) navigate(d.to);
       }
     }
     window.addEventListener("message", onMsg);

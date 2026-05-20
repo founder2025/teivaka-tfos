@@ -24,7 +24,7 @@ import { AdminRoute, FarmerRoute, OnboardingRoute, PrivateRoute } from "./compon
 // ── Auth pages (public) ──────────────────────────────────────────────────────
 import Login    from "./pages/Login";
 import Register from "./pages/Register";
-import Landing  from "./pages/Landing";
+// LAZY: const Landing replaces this (line 36 area)
 import Privacy  from "./pages/Privacy";
 import Terms    from "./pages/Terms";
 import ForgotPassword from "./pages/ForgotPassword";
@@ -33,6 +33,8 @@ import VerifyEmail from "./pages/VerifyEmail";
 import Home from "./pages/farmer/Home";
 
 // ── Farmer pages (lazy — farmer bundle does NOT include admin code) ───────────
+const Landing       = lazy(() => import("./pages/Landing"));
+const MarketingPage = lazy(() => import("./pages/MarketingPage"));
 const Community     = lazy(() => import("./pages/farmer/Community"));
 const CommunityMap  = lazy(() => import("./pages/farmer/CommunityMap"));
 const Onboarding    = lazy(() => import("./pages/farmer/Onboarding"));
@@ -172,6 +174,16 @@ export default function App() {
           {/* ── Farmer routes ───────────────────────────────────────────── */}
           {/* FarmerRoute: redirects admin → /admin, new users → /onboarding */}
           <Route path="/" element={<Landing />} />
+          <Route path="/about"        element={<MarketingPage pageKey="about" />} />
+          <Route path="/what-we-do"   element={<MarketingPage pageKey="what-we-do" />} />
+          <Route path="/impact"       element={<MarketingPage pageKey="impact" />} />
+          <Route path="/team"         element={<MarketingPage pageKey="team" />} />
+          <Route path="/partner"      element={<MarketingPage pageKey="partner" />} />
+          <Route path="/contact"      element={<MarketingPage pageKey="contact" />} />
+          <Route path="/tis-public"   element={<MarketingPage pageKey="tis" />} />
+          <Route path="/tfos"         element={<MarketingPage pageKey="tfos" />} />
+          <Route path="/our-farms"    element={<MarketingPage pageKey="our-farms" />} />
+          <Route path="/farms"        element={<MarketingPage pageKey="farms" />} />
           <Route path="/community" element={
             <FarmerRoute><Community /></FarmerRoute>
           } />
