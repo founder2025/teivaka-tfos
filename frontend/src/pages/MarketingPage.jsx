@@ -70,12 +70,8 @@ const PAGE_CONTENT = {
 
   "what-we-do": {
     title: "What we do",
-    tagline: "We build the operational backbone for Pacific smallholder agriculture.",
+    tagline: "One company. Three honest layers.",
     sections: [
-      {
-        heading: "The platform",
-        body: "TFOS is a full-stack agricultural intelligence platform. Farmers use it daily to log what happened on their farm — the harvest, the irrigation, the chemical application, the cash sale, the worker hours, the goat that died. Each event is captured, anchored to the farm, block, crop, and operator, and chained into an audit record that cannot be altered after the fact.",
-      },
       {
         heading: "How farmers use it",
         body: "TFOS adapts to the farmer. A subsistence smallholder sees a single task card with voice playback and three buttons. A growing operation sees a five-pillar navigation across Home, Classroom, Farm, TIS, and Me. A commercial operator with multiple farms and many hectares sees analytics, multi-farm rollup, and the full operational depth. The same database. The same audit chain. Three different surfaces.",
@@ -412,6 +408,49 @@ export default function MarketingPage({ pageKey }) {
             </blockquote>
             <p className="fdr-attr">{"— Uraia Koroi Kama, Founder"}</p>
           </section>
+        )}
+
+        {pageKey === "what-we-do" && (
+          <div className="wwd">
+            <style>{`
+.wwd .wwd-lead{max-width:800px;margin:0 0 0;font-family:'IBM Plex Sans',-apple-system,BlinkMacSystemFont,sans-serif;font-size:19px;line-height:1.5;color:#5C4033}
+.wwd .wwd-descriptor{max-width:800px;margin:18px 0 36px;font-family:'IBM Plex Sans',-apple-system,BlinkMacSystemFont,sans-serif;font-size:17px;line-height:1.65;color:#241910;opacity:0.85}
+.wwd .wwd-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;margin-bottom:8px}
+.wwd .wwd-card{background:#FBF8F1;border:1px solid rgba(92,64,51,0.16);border-radius:4px;padding:34px 30px}
+.wwd .wwd-card .wwd-lt{font-family:'IBM Plex Mono','SF Mono',Menlo,monospace;font-size:11px;color:#4F8A37;letter-spacing:0.12em;text-transform:uppercase;font-weight:500}
+.wwd .wwd-card h3{font-family:'IBM Plex Serif',Georgia,serif;font-size:23px;font-weight:600;line-height:1.08;margin:12px 0;color:#241910}
+.wwd .wwd-card .wwd-pill{display:inline-flex;align-items:center;gap:7px;font-family:'IBM Plex Mono','SF Mono',Menlo,monospace;font-size:11px;font-weight:600;color:#fff;padding:5px 13px;border-radius:30px;margin-bottom:14px}
+.wwd .wwd-card .wwd-dot{width:7px;height:7px;border-radius:50%;background:#fff;display:inline-block}
+.wwd .wwd-pill-live{background:#6AA84F}
+.wwd .wwd-pill-build{background:#BF9000}
+.wwd .wwd-card p{font-size:15px;color:#5C4033;line-height:1.6;margin:0}
+@media (max-width:768px){
+  .wwd .wwd-cards{grid-template-columns:1fr}
+}
+`}</style>
+            <p className="wwd-lead">We are transparent about the stage of each part of Teivaka — because trust is the product.</p>
+            <p className="wwd-descriptor">Farmers use Teivaka daily to log what actually happens on their farm — the harvest, the irrigation, the chemical application, the cash sale, the worker hours, the goat that died. Each event is anchored to farm, block, crop, and operator. Each is chained into a verified record that cannot be altered after the fact.</p>
+            <div className="wwd-cards">
+              <div className="wwd-card">
+                <div className="wwd-lt">Layer 01</div>
+                <h3>The Operator</h3>
+                <div className="wwd-pill wwd-pill-live"><span className="wwd-dot"></span>Earning today</div>
+                <p>A working Fiji farm business that activates idle land through profit-share partnerships, manages it end-to-end, and sells to confirmed buyers. Real, and generating revenue now.</p>
+              </div>
+              <div className="wwd-card">
+                <div className="wwd-lt">Layer 02</div>
+                <h3>TIS — Live Pillar</h3>
+                <div className="wwd-pill wwd-pill-live"><span className="wwd-dot"></span>Live on WhatsApp</div>
+                <p>Teivaka Intelligent System — the live pillar of TFOS — turns Fiji's field-tested production systems into operational guidance on WhatsApp today, in the farmer's own language. No app to download.</p>
+              </div>
+              <div className="wwd-card">
+                <div className="wwd-lt">Layer 03</div>
+                <h3>TFOS — Platform</h3>
+                <div className="wwd-pill wwd-pill-build"><span className="wwd-dot"></span>In active build</div>
+                <p>The full agricultural operating system around four pillars — built on a disciplined, income-funded plan. It turns our proven method into a system every farmer can use.</p>
+              </div>
+            </div>
+          </div>
         )}
 
         {content.sections.map((section, idx) => (
