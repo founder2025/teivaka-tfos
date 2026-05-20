@@ -122,21 +122,8 @@ const PAGE_CONTENT = {
 
   team: {
     title: "Team",
-    tagline: "Founder-led. Built from a working Fiji farm.",
-    sections: [
-      {
-        heading: "Founder",
-        body: "Teivaka is led by Uraia Koroi Kama (Cody), a Fijian agricultural operator and the founder of Teivaka PTE LTD. Cody operates Save-A-Lot Farm in Korovou (eggplant, cassava, pineapple, kava, apiculture) and Viyasiyasi Farm on Kadavu Island (goats). The platform is being built on top of the daily reality of running those two farms.",
-      },
-      {
-        heading: "How we build",
-        body: "Teivaka follows an income-funded build discipline. Every feature is funded by farm revenue. There is no growth-at-all-costs runway. Every line of code has to justify itself against either making the next task clearer for a farmer or making the farm more legible to the farmer themselves.",
-      },
-      {
-        heading: "Joining the team",
-        body: "We are not actively hiring at the moment. As we open up, roles will be posted here. If you are an engineer, agronomist, designer, or Pacific-language educator who wants to know when we are hiring, the best path is to email the founder directly — that is the only inbox we monitor.",
-      },
-    ],
+    tagline: "Two people running two farms while building the platform.",
+    sections: [],
   },
 
   partner: {
@@ -450,6 +437,34 @@ export default function MarketingPage({ pageKey }) {
                 <p>The full agricultural operating system around four pillars — built on a disciplined, income-funded plan. It turns our proven method into a system every farmer can use.</p>
               </div>
             </div>
+          </div>
+        )}
+
+        {pageKey === "team" && (
+          <div className="tm">
+            <style>{`
+.tm .tm-sec{margin-bottom:40px}
+.tm .tm-h2{font-family:'IBM Plex Serif',Georgia,serif;font-weight:600;font-size:22px;color:#5C4033;margin:0 0 14px}
+.tm .tm-name{font-family:'IBM Plex Serif',Georgia,serif;font-weight:600;font-size:20px;color:#241910;margin:0 0 2px}
+.tm .tm-role{font-family:'IBM Plex Mono','SF Mono',Menlo,monospace;font-size:12px;letter-spacing:0.04em;color:#6AA84F;margin:0 0 12px}
+.tm .tm-bio{margin:0 0 14px;color:#2A2118;line-height:1.6}
+.tm .tm-link{display:inline-block;color:#4F8A37;text-decoration:underline;font-size:15px;cursor:pointer;background:none;border:none;padding:0;font-family:inherit}
+`}</style>
+            <section className="tm-sec">
+              <h2 className="tm-h2">Founder</h2>
+              <p className="tm-name">Uraia Koroi Kama</p>
+              <p className="tm-role">Founder, Teivaka PTE LTD</p>
+              <p className="tm-bio">Uraia Koroi Kama (Cody) founded Teivaka and operates both pilot farms — Save-A-Lot Farm (eggplant, cassava, pineapple, kava, four beehives) and Viyasiyasi Farm on Kadavu Island (goats). He builds the platform against the daily reality of running them: a workflow that does not survive a season on his own farms does not ship to anyone else's.</p>
+              <a href="#" className="tm-link" onClick={(e) => { e.preventDefault(); navigate("/about"); }}>Read the founder's story →</a>
+            </section>
+            <section className="tm-sec">
+              <h2 className="tm-h2">On the farm</h2>
+              <p className="tm-bio">One permanent farm worker on F001 Save-A-Lot — sole daily operator across all production blocks plus the apiculture work. Casual hands as cycles demand.</p>
+            </section>
+            <section className="tm-sec">
+              <h2 className="tm-h2">What's next</h2>
+              <p className="tm-bio">Teivaka is hiring as the work demands — not before. The platform is income-funded, built on our own farms first. Roles will be posted here as they open.</p>
+            </section>
           </div>
         )}
 
