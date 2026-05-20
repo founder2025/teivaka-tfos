@@ -383,7 +383,7 @@ export default function MarketingPage({ pageKey }) {
             </a>.
           </p>
         </main>
-        <Footer navigate={navigate} copyEmail={copyEmail} openGmail={openGmail} emailCopied={emailCopied} />
+        <TeivakaFooter navigate={navigate} copyEmail={copyEmail} openGmail={openGmail} emailCopied={emailCopied} />
       </div>
     );
   }
@@ -422,7 +422,7 @@ export default function MarketingPage({ pageKey }) {
           </button>
         </div>
       </main>
-      <Footer navigate={navigate} copyEmail={copyEmail} openGmail={openGmail} emailCopied={emailCopied} />
+      <TeivakaFooter navigate={navigate} copyEmail={copyEmail} openGmail={openGmail} emailCopied={emailCopied} />
     </div>
   );
 }
@@ -452,46 +452,79 @@ function Header({ navigate }) {
   );
 }
 
-// ── Footer ────────────────────────────────────────────────────────────────────
-function Footer({ navigate, copyEmail, openGmail, emailCopied }) {
+// ── Footer (TeivakaFooter — visually matches the landing homepage footer) ────────
+// Scoped <style> (all selectors under .tvf-footer) so it cannot bleed into the
+// rest of the inline-styled marketing pages. Inline style objects can't express
+// :hover or media queries, which the landing footer relies on.
+const TVF_CSS = `
+.tvf-footer{background:#241910;color:rgba(248,243,233,0.6);padding:64px 0 44px;font-family:'IBM Plex Sans',-apple-system,BlinkMacSystemFont,sans-serif;font-size:14px}
+.tvf-footer .tvf-wrap{max-width:1180px;margin:0 auto;padding:0 30px}
+.tvf-footer .tvf-grid{display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:44px;padding-bottom:42px;border-bottom:1px solid rgba(255,255,255,0.08)}
+.tvf-footer .tvf-brand{display:inline-flex;align-items:center;gap:11px;margin-bottom:16px;text-decoration:none;cursor:pointer}
+.tvf-footer .tvf-brand img{height:32px;width:auto;display:block}
+.tvf-footer .tvf-tagline{max-width:300px;line-height:1.6;margin:0;color:rgba(248,243,233,0.6)}
+.tvf-footer .tvf-col h4{font-family:'IBM Plex Mono','SF Mono',Menlo,monospace;font-size:11px;letter-spacing:0.13em;text-transform:uppercase;color:#6AA84F;margin:0 0 16px;font-weight:500}
+.tvf-footer .tvf-col a{display:block;color:rgba(248,243,233,0.6);padding:5px 0;font-size:14px;cursor:pointer;text-decoration:none}
+.tvf-footer .tvf-col a:hover{color:#F8F3E9}
+.tvf-footer .tvf-legal{display:flex;flex-wrap:wrap;gap:24px;padding-top:26px;font-family:'IBM Plex Mono','SF Mono',Menlo,monospace;font-size:12px}
+.tvf-footer .tvf-legal a{color:rgba(248,243,233,0.6);text-decoration:none;letter-spacing:0.03em;transition:color .2s;cursor:pointer}
+.tvf-footer .tvf-legal a:hover{color:#6AA84F}
+.tvf-footer .tvf-bottom{display:flex;justify-content:space-between;padding-top:28px;font-family:'IBM Plex Mono','SF Mono',Menlo,monospace;font-size:12px;color:rgba(248,243,233,0.45);flex-wrap:wrap;gap:12px}
+@media (max-width:768px){
+  .tvf-footer .tvf-grid{grid-template-columns:1fr}
+  .tvf-footer .tvf-bottom{flex-direction:column}
+}
+`;
+
+function TeivakaFooter({ navigate, copyEmail, openGmail, emailCopied }) {
   const go = (path) => (e) => { e.preventDefault(); navigate(path); };
   return (
-    <footer style={footerStyle}>
-      <div style={footerInnerStyle}>
-        <div style={footerColStyle}>
-          <a href="#" onClick={go("/")} style={footerBrandLinkStyle}>
-            <img src="/teivaka-logo.png" alt="Teivaka" style={footerBrandImgStyle} />
-          </a>
-          <p style={footerTaglineStyle}>
-            Generate wealth from idle lands. A Fiji agricultural company building the system for every Pacific smallholder.
-          </p>
+    <footer className="tvf-footer">
+      <style>{TVF_CSS}</style>
+      <div className="tvf-wrap">
+        <div className="tvf-grid">
+          <div>
+            <a href="#" onClick={go("/")} className="tvf-brand">
+              <img src="/teivaka-lockup.png" alt="Teivaka" />
+            </a>
+            <p className="tvf-tagline">
+              Generate wealth from idle lands. A Fiji agricultural company building the system for every Pacific smallholder.
+            </p>
+          </div>
+          <div className="tvf-col">
+            <h4>Company</h4>
+            <a href="#" onClick={go("/about")}>About</a>
+            <a href="#" onClick={go("/what-we-do")}>What We Do</a>
+            <a href="#" onClick={go("/impact")}>Impact</a>
+            <a href="#" onClick={go("/team")}>Team</a>
+          </div>
+          <div className="tvf-col">
+            <h4>Platform</h4>
+            <a href="#" onClick={go("/tis-public")}>TIS</a>
+            <a href="#" onClick={go("/tfos")}>TFOS</a>
+            <a href="#" onClick={go("/our-farms")}>Our Farms</a>
+            <a href="#" onClick={(e) => { e.preventDefault(); navigate("/login"); }}>Login</a>
+          </div>
+          <div className="tvf-col">
+            <h4>Connect</h4>
+            <a href="#" onClick={go("/partner")}>Partner</a>
+            <a href="#" onClick={go("/contact")}>Contact</a>
+            <a href="#" onClick={copyEmail} title="Click to copy">
+              {emailCopied ? "Copied!" : "founder@teivaka.com"}
+            </a>
+            <a href="#" onClick={openGmail}>Open in Gmail</a>
+          </div>
         </div>
-        <div style={footerColStyle}>
-          <h4 style={footerHeadingStyle}>Company</h4>
-          <a href="#" onClick={go("/about")} style={footerLinkStyle}>About</a>
-          <a href="#" onClick={go("/what-we-do")} style={footerLinkStyle}>What We Do</a>
-          <a href="#" onClick={go("/impact")} style={footerLinkStyle}>Impact</a>
-          <a href="#" onClick={go("/team")} style={footerLinkStyle}>Team</a>
+        <div className="tvf-legal">
+          <a href="#">Privacy Statement</a>
+          <a href="#">Terms of Service</a>
+          <a href="#">Agricultural Advisory Notice</a>
+          <a href="#">AI Use Policy</a>
         </div>
-        <div style={footerColStyle}>
-          <h4 style={footerHeadingStyle}>Platform</h4>
-          <a href="#" onClick={go("/tis")} style={footerLinkStyle}>TIS</a>
-          <a href="#" onClick={go("/tfos")} style={footerLinkStyle}>TFOS</a>
-          <a href="#" onClick={go("/our-farms")} style={footerLinkStyle}>Our Farms</a>
-          <a href="#" onClick={go("/login")} style={footerLinkStyle}>Login</a>
+        <div className="tvf-bottom">
+          <span>© 2026 Teivaka PTE LTD · Fiji</span>
+          <span>Generate Wealth from Idle Lands</span>
         </div>
-        <div style={footerColStyle}>
-          <h4 style={footerHeadingStyle}>Connect</h4>
-          <a href="#" onClick={go("/partner")} style={footerLinkStyle}>Partner</a>
-          <a href="#" onClick={go("/contact")} style={footerLinkStyle}>Contact</a>
-          <a href="#" onClick={copyEmail} style={footerLinkStyle} title="Click to copy">
-            {emailCopied ? "Copied!" : "founder@teivaka.com"}
-          </a>
-          <a href="#" onClick={openGmail} style={footerLinkStyle}>Open in Gmail</a>
-        </div>
-      </div>
-      <div style={footerBottomStyle}>
-        <p style={footerCopyStyle}>© 2026 Teivaka PTE LTD · Fiji · Co. No. 2025RC001894</p>
       </div>
     </footer>
   );
