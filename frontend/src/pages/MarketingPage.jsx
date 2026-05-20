@@ -237,7 +237,7 @@ const PAGE_CONTENT = {
     sections: [
       {
         heading: "Save-A-Lot Farm (F001)",
-        body: "Approximately 83 acres in Korovou, Serua Province on Fiji's main island, Viti Levu. Held under iTaukei (NLTB) lease. Active production includes eggplant, cassava, pineapple, and kava. Apiculture operation of four beehives. Primary buyer relationship with the Nayans supermarket group. One permanent worker (Laisenia Waqa) plus casuals as the cycles demand.",
+        body: "Approximately 83 acres in Korovou, Serua Province on Fiji's main island, Viti Levu. Held under iTaukei (NLTB) lease. Active production includes eggplant, cassava, pineapple, and kava. Apiculture operation of four beehives. Primary buyer relationship with the Nayans supermarket group. One permanent worker plus casuals as the cycles demand.",
       },
       {
         heading: "Viyasiyasi Farm (F002)",
