@@ -75,6 +75,10 @@ class Settings(BaseSettings):
     tis_daily_limit_basic: int = 20
     tis_daily_limit_premium: int = 999999
     tis_rag_confidence_threshold: float = 0.65
+    # Tuned 2026-05-21 vs v1 corpus: on-topic 0.57-0.62, off-topic ~0.21.
+    # 0.47 sits in the band, biased toward refusal. Separate from
+    # tis_rag_confidence_threshold (farmer KB, 0.65).
+    tis_public_rag_confidence_threshold: float = 0.47
     tis_voice_target_latency_ms: int = 5000
     tis_max_context_messages: int = 20
     tis_session_ttl_seconds: int = 1800  # 30 minutes
