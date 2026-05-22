@@ -52,6 +52,7 @@ EMBEDDING_MODEL = "text-embedding-3-small"
 RETRIEVAL_TOP_K = 4
 MAX_QUESTION_CHARS = 500
 INSUFFICIENT_CONFIDENCE_CATEGORY = "insufficient_confidence"
+SERVICE_UNAVAILABLE_CATEGORY = "service_temporarily_unavailable"
 
 REFUSAL_SCRIPTS_PATH = Path("/app/site_corpus/sources/refusal_scripts.md")
 
@@ -308,7 +309,7 @@ _REFUSAL_CATEGORIES = {
     "technical_internal", "off_topic", "personal_about_cody",
     "jailbreak_attempt", "comparison_to_competitor",
     "media_press_request", "partnership_pitch", "funding_question",
-    "insufficient_confidence",
+    "insufficient_confidence", "service_temporarily_unavailable",
 }
 
 
@@ -432,7 +433,44 @@ async def ask(
     cited_chunk_ids = [c.chunk_id for c in passing_chunks]
     corpus_version = passing_chunks[0].corpus_version if passing_chunks else None
 
-    model_output = await _generate(question, passing_chunks)
+    try:
+        model_output = await _generate(question, passing_chunks)
+    except anthropic.RateLimitError:
+        # Anthropic Tier-1 org budget (30k input tok/min) is shared with farmer
+        # TIS; concurrent traffic can trip it. Surface a graceful WhatsApp handoff
+        # through the normal refusal path rather than a generic 500. Narrow on
+        # purpose: auth/4xx errors must still bubble to the global handler so a
+        # masked-401 outage stays loud (Phase 10-1b lesson).
+        latency_ms = int((time.perf_counter() - start) * 1000)
+        logger.warning(
+            "Anthropic rate limit hit; returning %s handoff (session=%s)",
+            SERVICE_UNAVAILABLE_CATEGORY, session_id,
+        )
+        try:
+            await _log_telemetry(
+                session_id=session_id,
+                question=question,
+                answer_text=None,
+                refusal_category=SERVICE_UNAVAILABLE_CATEGORY,
+                cited_chunk_ids=[],
+                confidence_score=None,
+                handoff_to_whatsapp=True,
+                corpus_version=corpus_version,
+                latency_ms=latency_ms,
+                client_ip=client_ip,
+                user_agent=user_agent,
+            )
+        except Exception as exc:
+            logger.exception("Telemetry write failed (non-fatal): %s", exc)
+        return HarnessResult(
+            answer_text=None,
+            refusal_category=SERVICE_UNAVAILABLE_CATEGORY,
+            cited_chunk_ids=[],
+            confidence_score=None,
+            handoff_to_whatsapp=True,
+            latency_ms=latency_ms,
+            session_id=session_id,
+        )
 
     answer_text, refusal_category = _classify_output(model_output, chunks_passed)
     handoff_to_whatsapp = refusal_category is not None

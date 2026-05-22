@@ -54,6 +54,7 @@ class AuthMiddleware:
         "/static/",
         "/api/v1/verify/",
         "/verify/",
+        "/api/v1/tis-public/",
     )
 
     async def __call__(self, request: Request, call_next):

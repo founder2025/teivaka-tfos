@@ -67,6 +67,7 @@ services:
     volumes:
       # Mount logs directory for persistent access log storage
       - ../logs:/app/logs
+      - ../frontend/site_corpus/sources:/app/site_corpus/sources:ro  # TIS-Public refusal scripts (single source of truth w/ indexer)
     networks:
       - teivaka-network
     depends_on:
