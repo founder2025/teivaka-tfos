@@ -15,11 +15,11 @@
 | ERROR                    | 0 ✓   |
 | STALL (post-isolation)   | 0 ✓   |
 
-**By category (pass/H/R/?/E/S):**
+**By category (pass/H/R/?/E/S, merged 200):**
 - banker: 40/50 pass (H=0, R=9, ?=1, E=0, S=0)
-- farmer: 30/50 pass (H=0, R=17, ?=2, E=0, S=0)
-- journalist: 30/50 pass (H=0, R=14, ?=5, E=0, S=0)
-- adversarial: 34/50 pass (H=0, R=3, ?=11, E=0, S=0)
+- farmer: 30/50 pass (H=0, R=19, ?=1, E=0, S=0)
+- journalist: 30/50 pass (H=0, R=16, ?=4, E=0, S=0)
+- adversarial: 34/50 pass (H=0, R=3, ?=13, E=0, S=0)
 
 ## Two hallucinations caught and fixed
 

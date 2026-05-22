@@ -30,6 +30,7 @@ from app.routers import (
     poultry_bank_evidence,
     poultry_compliance,
     verify,
+    tis_public,
     chemicals,
     crop_varieties,
     cycles,
@@ -257,6 +258,7 @@ app.include_router(poultry_bank_evidence.router, prefix=PREFIX,                 
 app.include_router(agronomy.router,            prefix=PREFIX,                         tags=["Agronomy"])
 app.include_router(verify.router,              prefix=PREFIX,                         tags=["Verify (JSON)"])
 app.include_router(verify.html_router,         prefix="",                             tags=["Verify (HTML)"])
+app.include_router(tis_public.router, prefix=f"{PREFIX}/tis-public", tags=["TIS Public"])
 app.include_router(chemicals.router,           prefix="/api/v1",                      tags=["chemicals"])
 app.include_router(crop_varieties.router,      prefix=f"{PREFIX}/crop-varieties",     tags=["Crop Varieties"])
 app.include_router(cycles.router,             prefix=f"{PREFIX}/cycles",             tags=["Production Cycles"])
