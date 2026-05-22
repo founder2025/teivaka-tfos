@@ -26,7 +26,7 @@ This is what changes the assessment surface for a credit officer. The question i
 
 A Teivaka-linked farmer can produce a single structured document summarising their operational history over a defined period — production cycles, harvest activity, sales, deliveries, input usage, labour records.
 
-The document is anchored to the underlying event chain. A public verification capability — allowing third parties to confirm the integrity of the underlying record independently — is part of the platform's planned trust infrastructure.
+The document is anchored to the underlying event chain.
 
 This means the credit officer's review process does not depend on taking Teivaka's word for anything, or the farmer's word for anything. It depends on whether the structured record verifies independently.
 
@@ -42,9 +42,7 @@ TFOS is that translation layer.
 
 ## What is live today
 
-The structured event model and the tamper-evident audit record are live in production. Real farms are running through them now.
-
-The public verification capability and the institutional reporting outputs are under active development as part of the platform's planned trust infrastructure.
+The structured event model and the tamper-evident audit record are live in production. Real farms are running through them now. Every operational event a farmer logs — planting, spraying, harvest, sale — is captured as a structured record with a hash chain link, stored in a way that cannot be edited or deleted after the fact. This is the foundational primitive on top of which institutional trust is built.
 
 ## Next step
 

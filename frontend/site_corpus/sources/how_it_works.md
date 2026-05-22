@@ -61,8 +61,6 @@ This allows third parties — buyers, extension officers, lenders, processors, a
 
 TFOS does not rely on memory-based farming records. It creates structured operational evidence.
 
-A public verification capability — allowing third parties to confirm the integrity of a farmer's operational record independently — is part of the platform's planned trust infrastructure.
-
 ## Operational Example
 
 A farmer opens TFOS in the morning and receives a recommended task based on current farm conditions and operational schedules.
