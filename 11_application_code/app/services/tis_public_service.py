@@ -30,11 +30,12 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import os
 import time
 from dataclasses import dataclass
 from pathlib import Path
 
-import anthropic
+import httpx
 import openai
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
@@ -58,6 +59,11 @@ REFUSAL_SCRIPTS_PATH = Path("/app/site_corpus/sources/refusal_scripts.md")
 
 ANTHROPIC_MODEL = settings.anthropic_model
 ANTHROPIC_MAX_TOKENS = settings.anthropic_max_tokens
+
+# OpenClaw bridge (Max subscription) — the only generation path for the public
+# widget. Doctrine: no Anthropic API credits anywhere in Teivaka.
+BRIDGE_URL = os.getenv("TIS_BRIDGE_URL", "http://172.17.0.1:18790")
+BRIDGE_TOKEN = os.getenv("TIS_BRIDGE_TOKEN", "")
 
 _engine: AsyncEngine | None = None
 
@@ -280,23 +286,41 @@ def _format_chunks_block(chunks: list[RetrievedChunk]) -> str:
 
 
 async def _generate(question: str, chunks: list[RetrievedChunk]) -> str:
-    system_prompt = SYSTEM_PROMPT_TEMPLATE.format(
-        retrieved_chunks_block=_format_chunks_block(chunks),
-        refusal_scripts_block=_REFUSAL_SCRIPTS_BLOCK,
-        user_question=question,
-    )
+    # Route through the OpenClaw bridge (Max subscription) instead of the
+    # Anthropic API. The bridge's public agent (boot.md) supplies the persona +
+    # refusal logic; we pass the corpus grounding + the visitor's question as the
+    # message body (additive context), bounded to the bridge's 4000-char cap.
+    # Doctrine: no Anthropic API credits anywhere in Teivaka.
+    grounding = _format_chunks_block(chunks) if chunks else ""
+    if grounding:
+        bridge_message = (
+            f"Grounding from Teivaka's published material:\n{grounding}\n\n"
+            f"Visitor question: {question}"
+        )
+    else:
+        bridge_message = f"Visitor question: {question}"
+    if len(bridge_message) > 3800:
+        bridge_message = bridge_message[:3800]
 
-    client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
-    response = await client.messages.create(
-        model=ANTHROPIC_MODEL,
-        max_tokens=ANTHROPIC_MAX_TOKENS,
-        system=system_prompt,
-        messages=[{"role": "user", "content": question}],
-    )
+    bridge_user_id = "tfos-web-public-" + hashlib.sha256(
+        question.encode("utf-8")
+    ).hexdigest()[:16]
+    async with httpx.AsyncClient(timeout=60.0) as http_client:
+        bridge_response = await http_client.post(
+            f"{BRIDGE_URL}/chat",
+            headers={"Authorization": f"Bearer {BRIDGE_TOKEN}"},
+            json={
+                "message": bridge_message,
+                "user_id": bridge_user_id,
+            },
+        )
+        bridge_response.raise_for_status()
+        bridge_data = bridge_response.json()
 
-    return "".join(
-        block.text for block in response.content if hasattr(block, "text")
-    )
+    text_out = bridge_data.get("text")
+    if not text_out:
+        raise httpx.HTTPError("bridge returned empty text")
+    return text_out
 
 
 # ────────────────────────────────────────────────────────────────────
@@ -435,15 +459,17 @@ async def ask(
 
     try:
         model_output = await _generate(question, passing_chunks)
-    except anthropic.RateLimitError:
-        # Anthropic Tier-1 org budget (30k input tok/min) is shared with farmer
-        # TIS; concurrent traffic can trip it. Surface a graceful WhatsApp handoff
-        # through the normal refusal path rather than a generic 500. Narrow on
-        # purpose: auth/4xx errors must still bubble to the global handler so a
-        # masked-401 outage stays loud (Phase 10-1b lesson).
+    except httpx.TimeoutException:
+        # Bridge timeout (transient capacity hiccup) → graceful WhatsApp handoff
+        # via the normal refusal path rather than a generic 500. Kept NARROW on
+        # purpose: bridge auth/4xx/5xx and connection errors (and empty replies)
+        # still bubble to the global handler so a misconfig (bad token) or a down
+        # bridge stays LOUD rather than silently degrading (Phase 10-1b lesson).
+        # Doctrine: the OpenClaw bridge (Max subscription) is the only generation
+        # path now — no Anthropic API credits anywhere in Teivaka.
         latency_ms = int((time.perf_counter() - start) * 1000)
         logger.warning(
-            "Anthropic rate limit hit; returning %s handoff (session=%s)",
+            "TIS bridge timeout; returning %s handoff (session=%s)",
             SERVICE_UNAVAILABLE_CATEGORY, session_id,
         )
         try:
@@ -472,7 +498,11 @@ async def ask(
             session_id=session_id,
         )
 
-    answer_text, refusal_category = _classify_output(model_output, chunks_passed)
+    # Bridge-trust posture (Boss decision 2026-05-25): bridge persona's own refusal
+    # logic (boot.md Reality Rule + Forbidden Language + Protected Info routing) is
+    # the safety layer. FastAPI's citation-enforcement classifier bypassed.
+    # Adversarial re-test scheduled as Phase 2 polish work.
+    answer_text, refusal_category = model_output, None
     handoff_to_whatsapp = refusal_category is not None
 
     latency_ms = int((time.perf_counter() - start) * 1000)
