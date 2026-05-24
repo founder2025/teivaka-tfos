@@ -462,26 +462,50 @@ footer{background:var(--soilInk);color:rgba(248,243,233,0.6);padding:64px 0 44px
       <div class="hero-sub">A Fiji agricultural company turning idle land into real income — real farms operating today, a live AI advisor on WhatsApp, and the system being built for every Pacific smallholder.</div>
       <div class="hero-trust" style="margin-top:14px;font-size:clamp(14px,1.4vw,17px);font-style:italic;color:var(--soil);max-width:560px;padding:0 24px">Built on the trust layer every Pacific farmer was always missing.</div>
       <div style="margin-top:2rem;text-align:center;">
-        <a href="https://wa.me/6798730866?text=Bula%20Cody%2C%20I%27m%20a%20farmer%20interested%20in%20using%20TIS.%20My%20name%20is%20%5Btype%20your%20name%5D%20and%20I%20grow%20%5Btype%20what%20you%20grow%5D%20in%20%5Btype%20your%20location%5D.%20Looking%20forward%20to%20getting%20set%20up." target="_blank" rel="noopener" class="hero-cta-btn" style="display:inline-block;background:var(--green,#6AA84F);color:var(--cream,#F8F3E9);font-size:1.05rem;font-weight:600;letter-spacing:0.01em;padding:14px 28px;border-radius:999px;text-decoration:none;box-shadow:0 4px 12px rgba(106,168,79,0.35);transition:transform 0.2s ease,box-shadow 0.2s ease;animation:heroPulse 3s ease-in-out infinite;">Farmer ready to operate differently? Message Cody to get started <span style="display:inline-block;transform:translateX(2px);">→</span></a>
+        <a href="https://wa.me/6798730866?text=Bula%20Cody%2C%20I%27m%20a%20farmer%20interested%20in%20using%20TIS.%20My%20name%20is%20%5Btype%20your%20name%5D%20and%20I%20grow%20%5Btype%20what%20you%20grow%5D%20in%20%5Btype%20your%20location%5D.%20Looking%20forward%20to%20getting%20set%20up." target="_blank" rel="noopener" class="hero-cta-btn" style="display:inline-block;background:linear-gradient(180deg,#6AA84F 0%,#5B9242 100%);color:#FFFFFF;font-size:1.1rem;font-weight:600;letter-spacing:0.005em;padding:16px 32px;border-radius:999px;text-decoration:none;box-shadow:0 6px 16px rgba(106,168,79,0.35),0 1px 0 rgba(255,255,255,0.12) inset;transition:transform 0.25s ease,box-shadow 0.25s ease,background 0.25s ease;animation:heroPulse 2.6s ease-in-out infinite;will-change:transform,box-shadow;">Farmer ready to operate differently? Message Cody to get started <span style="display:inline-block;transform:translateX(2px);">→</span></a>
       </div>
       <div style="margin-top:1rem;text-align:center;">
-        <a href="#" onclick="parent.postMessage({tv:'nav',to:'/register'},'*');return false;" style="display:inline-block;color:var(--soil,#5C4033);font-size:0.95rem;font-weight:500;text-decoration:none;border-bottom:1px solid var(--soil,#5C4033);padding-bottom:2px;opacity:0.85;">Or sign up free and explore TFOS yourself →</a>
+        <a href="#" onclick="parent.postMessage({tv:'nav',to:'/register'},'*');return false;" class="hero-cta-secondary">Or sign up free and explore TFOS yourself <span class="arrow">→</span></a>
       </div>
       <style>
         @keyframes heroPulse {
-          0%, 100% { box-shadow: 0 4px 12px rgba(106,168,79,0.35); }
-          50% { box-shadow: 0 6px 20px rgba(106,168,79,0.55); }
+          0%, 100% { box-shadow: 0 6px 16px rgba(106,168,79,0.35), 0 1px 0 rgba(255,255,255,0.12) inset; }
+          50%      { box-shadow: 0 10px 28px rgba(106,168,79,0.6), 0 1px 0 rgba(255,255,255,0.12) inset; }
         }
         .hero-cta-btn:hover {
           transform: translateY(-2px);
-          box-shadow: 0 8px 24px rgba(106,168,79,0.55) !important;
+          background: linear-gradient(180deg,#75B557 0%,#5B9242 100%) !important;
+          box-shadow: 0 12px 32px rgba(106,168,79,0.55), 0 1px 0 rgba(255,255,255,0.18) inset !important;
         }
+        .hero-cta-btn:active {
+          transform: translateY(0px);
+          box-shadow: 0 4px 10px rgba(106,168,79,0.4) !important;
+        }
+        .hero-cta-secondary {
+          display:inline-block;
+          margin-top:1.25rem;
+          padding:13px 26px;
+          font-size:1rem;
+          font-weight:500;
+          color: var(--soil, #5C4033);
+          background: rgba(248,243,233,0.5);
+          border: 1.5px solid rgba(92,64,51,0.25);
+          border-radius: 999px;
+          text-decoration: none;
+          letter-spacing: 0.005em;
+          transition: background 0.2s ease, border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+          backdrop-filter: blur(2px);
+        }
+        .hero-cta-secondary:hover {
+          background: rgba(248,243,233,0.85);
+          border-color: var(--soil, #5C4033);
+          transform: translateY(-1px);
+          box-shadow: 0 4px 12px rgba(92,64,51,0.15);
+        }
+        .hero-cta-secondary .arrow { display:inline-block; transition: transform 0.2s ease; margin-left:4px; }
+        .hero-cta-secondary:hover .arrow { transform: translateX(3px); }
       </style>
       <div class="hero-tag">Teivaka · Fiji Agriculture</div>
-      <div class="hero-cta">
-        <a href="#what" class="btn-primary">What we do</a>
-        <a href="#" onclick="parent.postMessage({tv:'nav',to:'/login'},'*');return false;" class="btn-ghost">Login to the platform</a>
-      </div>
     </div>
     <div class="scroll-hint">Scroll
       <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg>
