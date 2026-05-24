@@ -87,6 +87,20 @@ class TisPublicAskRequest(BaseModel):
     )
 
 
+class TisPublicChatRequest(BaseModel):
+    """Widget-compatible payload shape — accepts 'message' field instead of 'question'."""
+    message: str = Field(
+        min_length=1,
+        max_length=500,
+        description="The visitor's message. Trimmed and length-capped server-side."
+    )
+    session_id: Optional[str] = Field(
+        default=None,
+        max_length=64,
+        description="Optional caller-provided session id. If omitted, server generates."
+    )
+
+
 class TisPublicAskResponse(BaseModel):
     answer_text: Optional[str] = Field(
         None, description="Grounded answer with citation line. None if refused."
@@ -146,3 +160,26 @@ async def tis_public_ask(
         latency_ms=result.latency_ms,
         session_id=result.session_id,
     )
+
+
+@router.post(
+    "/chat",
+    response_model=TisPublicAskResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Widget-compatible alias for /ask. Accepts {message, session_id} payload.",
+)
+async def tis_public_chat(
+    payload: TisPublicChatRequest,
+    request: Request,
+):
+    """
+    Widget-compatible endpoint — accepts {message, session_id} per the deployed
+    tis-widget.js contract. Delegates to the same ask() pipeline as /ask, just
+    with the field renamed. Bridge-trust posture per Memory #26 and #28.
+    """
+    # Construct the standard request shape and reuse the existing handler logic
+    standard_payload = TisPublicAskRequest(
+        question=payload.message,
+        session_id=payload.session_id,
+    )
+    return await tis_public_ask(payload=standard_payload, request=request)
