@@ -819,13 +819,13 @@ const h2Style = {
 
 const pBodyStyle = {
   maxWidth: 760,
-  margin: "0 auto 14px",
+  margin: "0 0 14px 0",
   color: COLORS.ink,
 };
 
 const ulStyle = {
   maxWidth: 760,
-  margin: "8px auto 14px",
+  margin: "8px 0 14px 0",
   padding: "0 0 0 22px",
 };
 
