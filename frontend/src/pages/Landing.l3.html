@@ -447,6 +447,7 @@ footer{background:var(--soilInk);color:rgba(248,243,233,0.6);padding:64px 0 44px
     <a href="#" onclick="parent.postMessage({tv:'nav',to:'/about'},'*');return false;">About</a><a href="#what">What We Do</a><a href="#" onclick="parent.postMessage({tv:'nav',to:'/tis-public'},'*');return false;">TIS</a>
     <a href="#" onclick="parent.postMessage({tv:'nav',to:'/tfos'},'*');return false;">Platform</a><a href="#" onclick="parent.postMessage({tv:'nav',to:'/our-farms'},'*');return false;">Farms</a>    <a href="#" onclick="parent.postMessage({tv:'nav',to:'/partner'},'*');return false;">Partner</a><a href="#" onclick="parent.postMessage({tv:'nav',to:'/contact'},'*');return false;">Contact</a>
     <a href="#" onclick="parent.postMessage({tv:'nav',to:'/login'},'*');return false;" class="nav-login">Login</a>
+    <a href="#" onclick="parent.postMessage({tv:'nav',to:'/register'},'*');return false;" class="nav-signup" style="margin-left:14px;display:inline-block;background:var(--green,#6AA84F);color:var(--cream,#F8F3E9);padding:8px 18px;border-radius:999px;font-weight:600;text-decoration:none;">Sign up free</a>
   </div>
   <button class="nav-toggle" id="navtoggle" aria-label="menu"><svg viewBox="0 0 24 24"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
 </nav>
@@ -462,6 +463,9 @@ footer{background:var(--soilInk);color:rgba(248,243,233,0.6);padding:64px 0 44px
       <div class="hero-trust" style="margin-top:14px;font-size:clamp(14px,1.4vw,17px);font-style:italic;color:var(--soil);max-width:560px;padding:0 24px">Built on the trust layer every Pacific farmer was always missing.</div>
       <div style="margin-top:2rem;text-align:center;">
         <a href="https://wa.me/6798730866?text=Bula%20Cody%2C%20I%27m%20a%20farmer%20interested%20in%20using%20TIS.%20My%20name%20is%20%5Btype%20your%20name%5D%20and%20I%20grow%20%5Btype%20what%20you%20grow%5D%20in%20%5Btype%20your%20location%5D.%20Looking%20forward%20to%20getting%20set%20up." target="_blank" rel="noopener" class="hero-cta-btn" style="display:inline-block;background:var(--green,#6AA84F);color:var(--cream,#F8F3E9);font-size:1.05rem;font-weight:600;letter-spacing:0.01em;padding:14px 28px;border-radius:999px;text-decoration:none;box-shadow:0 4px 12px rgba(106,168,79,0.35);transition:transform 0.2s ease,box-shadow 0.2s ease;animation:heroPulse 3s ease-in-out infinite;">Farmer ready to operate differently? Message Cody to get started <span style="display:inline-block;transform:translateX(2px);">→</span></a>
+      </div>
+      <div style="margin-top:1rem;text-align:center;">
+        <a href="#" onclick="parent.postMessage({tv:'nav',to:'/register'},'*');return false;" style="display:inline-block;color:var(--soil,#5C4033);font-size:0.95rem;font-weight:500;text-decoration:none;border-bottom:1px solid var(--soil,#5C4033);padding-bottom:2px;opacity:0.85;">Or sign up free and explore TFOS yourself →</a>
       </div>
       <style>
         @keyframes heroPulse {
@@ -629,10 +633,18 @@ footer{background:var(--soilInk);color:rgba(248,243,233,0.6);padding:64px 0 44px
       <h2>Four ways to be on TFOS.</h2>
       <p>TFOS scales with the farm. Start free, grow into the tier that fits.</p></div>
     <div class="impact">
-      <div class="icard fx"><h3>Free</h3><p>Full Community, Classroom and TIS. Limited Farm Management.</p><p style="margin-top:12px;font-style:italic;opacity:0.7">Every Fijian farmer — the starting point.</p></div>
-      <div class="icard fx"><h3>Basic</h3><p>The Free tier plus extended Farm Management access.</p><p style="margin-top:12px;font-style:italic;opacity:0.7">Farmers taking the first step up.</p></div>
-      <div class="icard fx"><h3>Premium</h3><p>Full access to all four pillars across seven verticals.</p><p style="margin-top:12px;font-style:italic;opacity:0.7">Farmers operating full TFOS on their own farm.</p></div>
-      <div class="icard fx"><h3>Custom</h3><p>Profit-share plus full TFOS plus Teivaka's network — input suppliers, mechanization, market access, operational management.</p><p style="margin-top:12px;font-style:italic;opacity:0.7">Landowners, communities and institutions.</p></div>
+      <div class="icard fx"><h3>Free</h3><p>Full Community, Classroom and TIS. Limited Farm Management.</p><p style="margin-top:12px;font-style:italic;opacity:0.7">Every Fijian farmer — the starting point.</p>
+          <a href="#" onclick="parent.postMessage({tv:'nav',to:'/register'},'*');return false;" style="display:inline-block;margin-top:1.25rem;background:var(--green,#6AA84F);color:var(--cream,#F8F3E9);font-size:0.9rem;font-weight:600;padding:10px 18px;border-radius:999px;text-decoration:none;text-align:center;align-self:stretch;box-shadow:0 2px 8px rgba(106,168,79,0.25);transition:transform 0.2s ease,box-shadow 0.2s ease;" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 4px 14px rgba(106,168,79,0.4)';" onmouseout="this.style.transform='none';this.style.boxShadow='0 2px 8px rgba(106,168,79,0.25)';">Sign up free →</a>
+      </div>
+      <div class="icard fx"><h3>Basic</h3><p>The Free tier plus extended Farm Management access.</p><p style="margin-top:12px;font-style:italic;opacity:0.7">Farmers taking the first step up.</p>
+          <a href="#" onclick="parent.postMessage({tv:'nav',to:'/register'},'*');return false;" style="display:inline-block;margin-top:1.25rem;background:transparent;color:var(--green-deep,#3F6B2C);font-size:0.9rem;font-weight:600;padding:10px 18px;border:2px solid var(--green,#6AA84F);border-radius:999px;text-decoration:none;text-align:center;align-self:stretch;transition:background 0.2s ease;" onmouseover="this.style.background='rgba(106,168,79,0.1)';" onmouseout="this.style.background='transparent';">Start with Basic →</a>
+      </div>
+      <div class="icard fx"><h3>Premium</h3><p>Full access to all four pillars across seven verticals.</p><p style="margin-top:12px;font-style:italic;opacity:0.7">Farmers operating full TFOS on their own farm.</p>
+          <a href="#" onclick="parent.postMessage({tv:'nav',to:'/register'},'*');return false;" style="display:inline-block;margin-top:1.25rem;background:transparent;color:var(--green-deep,#3F6B2C);font-size:0.9rem;font-weight:600;padding:10px 18px;border:2px solid var(--green,#6AA84F);border-radius:999px;text-decoration:none;text-align:center;align-self:stretch;transition:background 0.2s ease;" onmouseover="this.style.background='rgba(106,168,79,0.1)';" onmouseout="this.style.background='transparent';">Go Premium →</a>
+      </div>
+      <div class="icard fx"><h3>Custom</h3><p>Profit-share plus full TFOS plus Teivaka's network — input suppliers, mechanization, market access, operational management.</p><p style="margin-top:12px;font-style:italic;opacity:0.7">Landowners, communities and institutions.</p>
+          <a href="https://calendly.com/founder-teivaka/30min" target="_blank" rel="noopener" style="display:inline-block;margin-top:1.25rem;background:transparent;color:var(--cream,#F8F3E9);font-size:0.9rem;font-weight:600;padding:10px 18px;border:2px solid var(--cream,#F8F3E9);border-radius:999px;text-decoration:none;text-align:center;align-self:stretch;transition:background 0.2s ease;" onmouseover="this.style.background='rgba(248,243,233,0.1)';" onmouseout="this.style.background='transparent';">Talk to Cody →</a>
+      </div>
     </div>
           <p style="margin-top:2.5rem;font-size:0.95rem;font-style:italic;color:var(--soil,#5C4033);opacity:0.78;line-height:1.5;text-align:center;">Not sure which tier fits? <a href="https://wa.me/6798730866?text=Bula%20Cody%2C%20I%27m%20looking%20at%20TFOS%20but%20not%20sure%20which%20tier%20fits%20my%20situation.%20Can%20we%20chat%3F" target="_blank" rel="noopener" style="color:var(--green-deep,#3F6B2C);text-decoration:none;border-bottom:1px solid var(--green-deep,#3F6B2C);font-weight:500;">Talk to Cody on WhatsApp</a> — he'll walk you through it.</p>
   </div>
@@ -669,6 +681,12 @@ footer{background:var(--soilInk);color:rgba(248,243,233,0.6);padding:64px 0 44px
             <div style="font-size:0.78rem;letter-spacing:0.12em;text-transform:uppercase;color:#A8C786;font-weight:700;margin-bottom:0.7rem;">You're a journalist or researcher</div>
             <p style="margin:0 0 1.5rem 0;font-size:0.95rem;line-height:1.55;color:var(--cream,#F8F3E9);opacity:0.92;">We answer media requests within 24 hours. Same inbox, same person.</p>
             <div style="margin-top:auto;display:inline-flex;align-items:center;gap:0.5rem;background:rgba(168,199,134,0.18);color:#C9DFB0;padding:10px 16px;border-radius:999px;font-size:0.9rem;font-weight:600;align-self:flex-start;">Email Cody <span>→</span></div>
+          </a>
+
+          <a href="#" onclick="parent.postMessage({tv:'nav',to:'/register'},'*');return false;" class="path-card path-card--self-serve" style="background:rgba(248,243,233,0.08);border:1px solid rgba(248,243,233,0.18);border-radius:14px;padding:1.75rem 1.5rem;text-decoration:none;color:var(--cream,#F8F3E9);display:flex;flex-direction:column;transition:background 0.2s ease,transform 0.2s ease,border-color 0.2s ease;">
+            <div style="font-size:0.78rem;letter-spacing:0.12em;text-transform:uppercase;color:#A8C786;font-weight:700;margin-bottom:0.7rem;">You're ready to try TFOS</div>
+            <p style="margin:0 0 1.5rem 0;font-size:0.95rem;line-height:1.55;color:var(--cream,#F8F3E9);opacity:0.92;">Skip the conversation. Sign up free, explore TFOS yourself, talk to us when you want to.</p>
+            <div style="margin-top:auto;display:inline-flex;align-items:center;gap:0.5rem;background:rgba(168,199,134,0.18);color:#C9DFB0;padding:10px 16px;border-radius:999px;font-size:0.9rem;font-weight:600;align-self:flex-start;">Sign up free <span>→</span></div>
           </a>
 
         </div>
