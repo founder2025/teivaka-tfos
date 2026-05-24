@@ -781,7 +781,7 @@ const loginButtonStyle = {
 
 const mainStyle = {
   flex: 1,
-  maxWidth: 800,
+  maxWidth: 1200,
   margin: "0 auto",
   padding: "48px 24px 64px",
   width: "100%",
@@ -818,12 +818,14 @@ const h2Style = {
 };
 
 const pBodyStyle = {
-  margin: "0 0 14px",
+  maxWidth: 760,
+  margin: "0 auto 14px",
   color: COLORS.ink,
 };
 
 const ulStyle = {
-  margin: "8px 0 14px 0",
+  maxWidth: 760,
+  margin: "8px auto 14px",
   padding: "0 0 0 22px",
 };
 
