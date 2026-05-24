@@ -75,6 +75,7 @@ class Settings(BaseSettings):
     tis_daily_limit_basic: int = 20
     tis_daily_limit_premium: int = 999999
     tis_rag_confidence_threshold: float = 0.65
+    tis_public_rag_confidence_threshold: float = 0.47
     tis_voice_target_latency_ms: int = 5000
     tis_max_context_messages: int = 20
     tis_session_ttl_seconds: int = 1800  # 30 minutes
