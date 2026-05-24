@@ -105,6 +105,10 @@ class TisPublicAskResponse(BaseModel):
     answer_text: Optional[str] = Field(
         None, description="Grounded answer with citation line. None if refused."
     )
+    text: Optional[str] = Field(
+        None,
+        description="Widget-compatible alias for answer_text. Mirrors answer_text value. Added 2026-05-25 for tis-widget.js v1 compatibility (widget reads data.text).",
+    )
     refusal_category: Optional[str] = Field(
         None,
         description="Refusal script category (e.g., 'ship_dates', 'pricing'). None if answered.",
@@ -153,6 +157,7 @@ async def tis_public_ask(
 
     return TisPublicAskResponse(
         answer_text=result.answer_text,
+        text=result.answer_text,
         refusal_category=result.refusal_category,
         cited_chunk_ids=result.cited_chunk_ids,
         confidence_score=result.confidence_score,
