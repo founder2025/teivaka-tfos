@@ -55,10 +55,15 @@ h1,h2,h3,h4{font-family:var(--display);font-weight:600;line-height:1.08;
 .nav-links a{font-family:var(--mono);font-size:12px;letter-spacing:0.05em;
   color:var(--soil);text-transform:uppercase;font-weight:500;transition:color .2s}
 .nav-links a:hover{color:var(--greenD)}
-.nav-login{font-family:var(--mono);font-size:12px;letter-spacing:0.05em;
-  background:var(--greenD);color:#fff;padding:10px 22px;border-radius:2px;
-  text-transform:uppercase;font-weight:600;transition:all .2s}
-.nav-login:hover{background:var(--greenDp);transform:translateY(-1px);color:#fff}
+.nav-login{font-family:var(--body);font-size:13px;letter-spacing:0.01em;
+  background:transparent;color:var(--greenD);padding:9px 20px;border-radius:999px;
+  border:1.5px solid var(--greenD);font-weight:600;transition:all .2s}
+.nav-login:hover{background:var(--greenD);transform:translateY(-1px);color:var(--cream)}
+.nav-signup{font-family:var(--body);font-size:13px;letter-spacing:0.01em;
+  background:var(--green);color:var(--cream);padding:9px 20px;border-radius:999px;
+  border:1.5px solid var(--green);font-weight:600;text-decoration:none;
+  display:inline-block;margin-left:10px;transition:all .2s}
+.nav-signup:hover{background:var(--greenD);border-color:var(--greenD);transform:translateY(-1px);color:var(--cream)}
 .nav-toggle{display:none;background:none;border:none;color:var(--soilInk);cursor:pointer}
 .nav-toggle svg{width:26px;height:26px;stroke:currentColor;stroke-width:2;fill:none;stroke-linecap:round}
 
@@ -447,7 +452,7 @@ footer{background:var(--soilInk);color:rgba(248,243,233,0.6);padding:64px 0 44px
     <a href="#" onclick="parent.postMessage({tv:'nav',to:'/about'},'*');return false;">About</a><a href="#what">What We Do</a><a href="#" onclick="parent.postMessage({tv:'nav',to:'/tis-public'},'*');return false;">TIS</a>
     <a href="#" onclick="parent.postMessage({tv:'nav',to:'/tfos'},'*');return false;">Platform</a><a href="#" onclick="parent.postMessage({tv:'nav',to:'/our-farms'},'*');return false;">Farms</a>    <a href="#" onclick="parent.postMessage({tv:'nav',to:'/partner'},'*');return false;">Partner</a><a href="#" onclick="parent.postMessage({tv:'nav',to:'/contact'},'*');return false;">Contact</a>
     <a href="#" onclick="parent.postMessage({tv:'nav',to:'/login'},'*');return false;" class="nav-login">Login</a>
-    <a href="#" onclick="parent.postMessage({tv:'nav',to:'/register'},'*');return false;" class="nav-signup" style="margin-left:14px;display:inline-block;background:var(--green,#6AA84F);color:var(--cream,#F8F3E9);padding:8px 18px;border-radius:999px;font-weight:600;text-decoration:none;">Sign up free</a>
+    <a href="#" onclick="parent.postMessage({tv:'nav',to:'/register'},'*');return false;" class="nav-signup">Sign up free</a>
   </div>
   <button class="nav-toggle" id="navtoggle" aria-label="menu"><svg viewBox="0 0 24 24"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
 </nav>
@@ -462,10 +467,10 @@ footer{background:var(--soilInk);color:rgba(248,243,233,0.6);padding:64px 0 44px
       <div class="hero-sub">A Fiji agricultural company turning idle land into real income — real farms operating today, a live AI advisor on WhatsApp, and the system being built for every Pacific smallholder.</div>
       <div class="hero-trust" style="margin-top:14px;font-size:clamp(14px,1.4vw,17px);font-style:italic;color:var(--soil);max-width:560px;padding:0 24px">Built on the trust layer every Pacific farmer was always missing.</div>
       <div style="margin-top:2rem;text-align:center;">
-        <a href="https://wa.me/6798730866?text=Bula%20Cody%2C%20I%27m%20a%20farmer%20interested%20in%20using%20TIS.%20My%20name%20is%20%5Btype%20your%20name%5D%20and%20I%20grow%20%5Btype%20what%20you%20grow%5D%20in%20%5Btype%20your%20location%5D.%20Looking%20forward%20to%20getting%20set%20up." target="_blank" rel="noopener" class="hero-cta-btn" style="display:inline-block;background:linear-gradient(180deg,#6AA84F 0%,#5B9242 100%);color:#FFFFFF;font-size:1.1rem;font-weight:600;letter-spacing:0.005em;padding:16px 32px;border-radius:999px;text-decoration:none;box-shadow:0 6px 16px rgba(106,168,79,0.35),0 1px 0 rgba(255,255,255,0.12) inset;transition:transform 0.25s ease,box-shadow 0.25s ease,background 0.25s ease;animation:heroPulse 2.6s ease-in-out infinite;will-change:transform,box-shadow;">Farmer ready to operate differently? Message Cody to get started <span style="display:inline-block;transform:translateX(2px);">→</span></a>
+        <a href="https://wa.me/6798730866?text=Bula%20Cody%2C%20I%27m%20a%20farmer%20interested%20in%20using%20TIS.%20My%20name%20is%20%5Btype%20your%20name%5D%20and%20I%20grow%20%5Btype%20what%20you%20grow%5D%20in%20%5Btype%20your%20location%5D.%20Looking%20forward%20to%20getting%20set%20up." target="_blank" rel="noopener" class="hero-cta-btn" style="display:inline-block;background:linear-gradient(180deg,#6AA84F 0%,#5B9242 100%);color:#FFFFFF;font-size:1.1rem;font-weight:600;letter-spacing:0.005em;padding:16px 32px;border-radius:999px;text-decoration:none;box-shadow:0 6px 16px rgba(106,168,79,0.35),0 1px 0 rgba(255,255,255,0.12) inset;transition:transform 0.25s ease,box-shadow 0.25s ease,background 0.25s ease;animation:heroPulse 2.6s ease-in-out infinite;will-change:transform,box-shadow;">Message Cody on WhatsApp <span style="display:inline-block;transform:translateX(2px);">→</span></a>
       </div>
       <div style="margin-top:1rem;text-align:center;">
-        <a href="#" onclick="parent.postMessage({tv:'nav',to:'/register'},'*');return false;" class="hero-cta-secondary">Or sign up free and explore TFOS yourself <span class="arrow">→</span></a>
+        <a href="#" onclick="parent.postMessage({tv:'nav',to:'/register'},'*');return false;" class="hero-cta-secondary">Or sign up free <span class="arrow">→</span></a>
       </div>
       <style>
         @keyframes heroPulse {
@@ -522,11 +527,12 @@ footer{background:var(--soilInk);color:rgba(248,243,233,0.6);padding:64px 0 44px
   <div class="wrap">
     <div class="section-head fx"><div class="eyebrow">Why Teivaka Exists</div>
       <h2>From the founder.</h2></div>
-    <p class="what-descriptor fx">I left a Science Degree and farmed for seven years in Korovou and Kadavu — long enough to learn what every Fijian farmer carries but no one says out loud.</p>
+    <div class="founder-col" style="max-width:640px;margin:0 auto;">
+    <p class="what-descriptor fx" style="max-width:none;">I left a Science Degree and farmed for seven years in Korovou and Kadavu — long enough to learn what every Fijian farmer carries but no one says out loud.</p>
     <p class="what-descriptor fx">Generations of Fijian families have been trapped in subsistence farming. Not because the land is poor. Not because farmers don't work. Because the knowledge has been passed down by memory — most of it wrong — and the system to lift a farm from subsistence into commercial has never existed for us.</p>
     <p class="what-descriptor fx">Teivaka is what closes that gap.</p>
-        <p style="margin-top:1.25rem;font-size:0.95rem;font-style:italic;color:var(--soil,#5C4033);opacity:0.78;line-height:1.5;">If that resonates with where you're at — <a href="https://wa.me/6798730866?text=Bula%20Cody%2C%20I%20read%20your%20founding%20story%20on%20teivaka.com%20and%20wanted%20to%20reach%20out%20directly." target="_blank" rel="noopener" style="color:var(--green-deep,#3F6B2C);text-decoration:none;border-bottom:1px solid var(--green-deep,#3F6B2C);font-weight:500;">message Cody directly</a>.</p>
-    <div class="fx" style="font-style:italic;color:var(--soil);opacity:0.8;margin-top:8px">— Uraia Koroi Kama, Founder</div>
+        <p style="margin-top:1.75rem;font-size:0.95rem;font-style:italic;color:var(--soil,#5C4033);opacity:0.78;line-height:1.5;">If that resonates with where you're at — <a href="https://wa.me/6798730866?text=Bula%20Cody%2C%20I%20read%20your%20founding%20story%20on%20teivaka.com%20and%20wanted%20to%20reach%20out%20directly." target="_blank" rel="noopener" style="color:var(--green-deep,#3F6B2C);text-decoration:none;border-bottom:1px solid var(--green-deep,#3F6B2C);font-weight:500;">message Cody directly</a>.</p>
+    <div class="fx" style="font-style:italic;color:var(--soil);opacity:0.8;margin-top:0.5rem;">— Uraia Koroi Kama, Founder</div><div class="fx" style="margin-top:2rem;text-align:center;"><a href="#" onclick="parent.postMessage({tv:'nav',to:'/our-farms'},'*');return false;" style="display:inline-flex;align-items:center;gap:6px;background:transparent;color:var(--green-deep,#3F6B2C);font-size:0.9rem;font-weight:600;padding:10px 22px;border:2px solid var(--green,#6AA84F);border-radius:999px;text-decoration:none;text-transform:none;letter-spacing:normal;transition:background 0.2s ease,transform 0.2s ease;" onmouseover="this.style.background='rgba(106,168,79,0.1)';this.style.transform='translateX(2px)';" onmouseout="this.style.background='transparent';this.style.transform='none';">Read about the farms →</a></div></div>
   </div>
 </section>
 
@@ -666,7 +672,7 @@ footer{background:var(--soilInk);color:rgba(248,243,233,0.6);padding:64px 0 44px
       <div class="icard fx"><h3>Premium</h3><p>Full access to all four pillars across seven verticals.</p><p style="margin-top:12px;font-style:italic;opacity:0.7">Farmers operating full TFOS on their own farm.</p>
           <a href="#" onclick="parent.postMessage({tv:'nav',to:'/register'},'*');return false;" style="display:inline-block;margin-top:1.25rem;background:transparent;color:var(--green-deep,#3F6B2C);font-size:0.9rem;font-weight:600;padding:10px 18px;border:2px solid var(--green,#6AA84F);border-radius:999px;text-decoration:none;text-align:center;align-self:stretch;transition:background 0.2s ease;" onmouseover="this.style.background='rgba(106,168,79,0.1)';" onmouseout="this.style.background='transparent';">Go Premium →</a>
       </div>
-      <div class="icard fx"><h3>Custom</h3><p>Profit-share plus full TFOS plus Teivaka's network — input suppliers, mechanization, market access, operational management.</p><p style="margin-top:12px;font-style:italic;opacity:0.7">Landowners, communities and institutions.</p>
+      <div class="icard fx"><h3>Custom</h3><p>Profit-share plus full TFOS plus Teivaka's network — input suppliers, mechanization, market access, operational management.</p><p style="margin-top:12px;font-style:italic;opacity:0.7">Landowners, communities and institutions.</p><a href="https://wa.me/6798730866?text=Bula%20Cody%2C%20I%27m%20interested%20in%20the%20Custom%20tier%20%E2%80%94%20can%20we%20talk%3F" target="_blank" rel="noopener" style="display:inline-block;margin-top:1.25rem;background:transparent;color:var(--green-deep,#3F6B2C);font-size:0.9rem;font-weight:600;padding:10px 18px;border:2px solid var(--green,#6AA84F);border-radius:999px;text-decoration:none;text-align:center;align-self:stretch;transition:background 0.2s ease;" onmouseover="this.style.background='rgba(106,168,79,0.1)';" onmouseout="this.style.background='transparent';">Talk to Cody →</a>
           <a href="https://calendly.com/founder-teivaka/30min" target="_blank" rel="noopener" style="display:inline-block;margin-top:1.25rem;background:transparent;color:var(--cream,#F8F3E9);font-size:0.9rem;font-weight:600;padding:10px 18px;border:2px solid var(--cream,#F8F3E9);border-radius:999px;text-decoration:none;text-align:center;align-self:stretch;transition:background 0.2s ease;" onmouseover="this.style.background='rgba(248,243,233,0.1)';" onmouseout="this.style.background='transparent';">Talk to Cody →</a>
       </div>
     </div>
@@ -688,7 +694,7 @@ footer{background:var(--soilInk);color:rgba(248,243,233,0.6);padding:64px 0 44px
             <div style="margin-top:auto;display:inline-flex;align-items:center;gap:0.5rem;background:rgba(168,199,134,0.18);color:#C9DFB0;padding:10px 16px;border-radius:999px;font-size:0.9rem;font-weight:600;align-self:flex-start;">Message Cody on WhatsApp <span>→</span></div>
           </a>
 
-          <a href="mailto:founder@teivaka.com?subject=Buyer%20inquiry%20%E2%80%94%20Teivaka&body=Hi%20Cody%2C%0A%0AI%27m%20interested%20in%20buying%20from%20Teivaka.%20I%27m%20with%20%5Borganization%5D%20and%20we%27re%20looking%20at%20%5Bcrops%2Fvolume%5D.%20Best%20time%20to%20talk%3F%0A%0AThanks" class="path-card path-card--buyer" style="background:rgba(248,243,233,0.08);border:1px solid rgba(248,243,233,0.18);border-radius:14px;padding:1.75rem 1.5rem;text-decoration:none;color:var(--cream,#F8F3E9);display:flex;flex-direction:column;transition:background 0.2s ease,transform 0.2s ease,border-color 0.2s ease;">
+          <a href="https://mail.google.com/mail/?view=cm&fs=1&to=founder@teivaka.com&su=Buyer%20inquiry%20%E2%80%94%20Teivaka&body=Hi%20Cody%2C%0A%0AI%27m%20interested%20in%20buying%20from%20Teivaka.%20I%27m%20with%20%5Borganization%5D%20and%20we%27re%20looking%20at%20%5Bcrops%2Fvolume%5D.%20Best%20time%20to%20talk%3F%0A%0AThanks" target="_blank" rel="noopener noreferrer" class="path-card path-card--buyer" style="background:rgba(248,243,233,0.08);border:1px solid rgba(248,243,233,0.18);border-radius:14px;padding:1.75rem 1.5rem;text-decoration:none;color:var(--cream,#F8F3E9);display:flex;flex-direction:column;transition:background 0.2s ease,transform 0.2s ease,border-color 0.2s ease;">
             <div style="font-size:0.78rem;letter-spacing:0.12em;text-transform:uppercase;color:#A8C786;font-weight:700;margin-bottom:0.7rem;">You're a buyer or exporter</div>
             <p style="margin:0 0 1.5rem 0;font-size:0.95rem;line-height:1.55;color:var(--cream,#F8F3E9);opacity:0.92;">Tell us what you need, when you need it. We'll show you what's in the ground.</p>
             <div style="margin-top:auto;display:inline-flex;align-items:center;gap:0.5rem;background:rgba(168,199,134,0.18);color:#C9DFB0;padding:10px 16px;border-radius:999px;font-size:0.9rem;font-weight:600;align-self:flex-start;">Email Cody <span>→</span></div>
@@ -701,7 +707,7 @@ footer{background:var(--soilInk);color:rgba(248,243,233,0.6);padding:64px 0 44px
             <div style="margin-top:auto;display:inline-flex;align-items:center;gap:0.5rem;background:#A8C786;color:var(--soil,#5C4033);padding:10px 16px;border-radius:999px;font-size:0.9rem;font-weight:700;align-self:flex-start;">Book a 30-min call <span>→</span></div>
           </a>
 
-          <a href="mailto:founder@teivaka.com?subject=Media%20request%20%E2%80%94%20Teivaka&body=Hi%20Cody%2C%0A%0AI%27m%20a%20journalist%20with%20%5Boutlet%5D%20working%20on%20a%20story%20about%20%5Btopic%5D.%20Would%20you%20be%20available%20for%20a%20quick%20interview%3F%0A%0AMy%20deadline%20is%20%5Bdate%5D.%0A%0AThanks" class="path-card path-card--journalist" style="background:rgba(248,243,233,0.08);border:1px solid rgba(248,243,233,0.18);border-radius:14px;padding:1.75rem 1.5rem;text-decoration:none;color:var(--cream,#F8F3E9);display:flex;flex-direction:column;transition:background 0.2s ease,transform 0.2s ease,border-color 0.2s ease;">
+          <a href="https://mail.google.com/mail/?view=cm&fs=1&to=founder@teivaka.com&su=Media%20request%20%E2%80%94%20Teivaka&body=Hi%20Cody%2C%0A%0AI%27m%20a%20journalist%20with%20%5Boutlet%5D%20working%20on%20a%20story%20about%20%5Btopic%5D.%20Would%20you%20be%20available%20for%20a%20quick%20interview%3F%0A%0AMy%20deadline%20is%20%5Bdate%5D.%0A%0AThanks" target="_blank" rel="noopener noreferrer" class="path-card path-card--journalist" style="background:rgba(248,243,233,0.08);border:1px solid rgba(248,243,233,0.18);border-radius:14px;padding:1.75rem 1.5rem;text-decoration:none;color:var(--cream,#F8F3E9);display:flex;flex-direction:column;transition:background 0.2s ease,transform 0.2s ease,border-color 0.2s ease;">
             <div style="font-size:0.78rem;letter-spacing:0.12em;text-transform:uppercase;color:#A8C786;font-weight:700;margin-bottom:0.7rem;">You're a journalist or researcher</div>
             <p style="margin:0 0 1.5rem 0;font-size:0.95rem;line-height:1.55;color:var(--cream,#F8F3E9);opacity:0.92;">We answer media requests within 24 hours. Same inbox, same person.</p>
             <div style="margin-top:auto;display:inline-flex;align-items:center;gap:0.5rem;background:rgba(168,199,134,0.18);color:#C9DFB0;padding:10px 16px;border-radius:999px;font-size:0.9rem;font-weight:600;align-self:flex-start;">Email Cody <span>→</span></div>
@@ -805,16 +811,16 @@ footer{background:var(--soilInk);color:rgba(248,243,233,0.6);padding:64px 0 44px
     <div class="paths">
       <div class="path fx"><h3>Landowners</h3>
         <p>Have land sitting idle? Teivaka can activate it through a profit-share partnership — we bring the system, you keep ownership, we share what it earns.</p>
-        <a href="#" onclick="parent.postMessage({tv:'nav',to:'/contact'},'*');return false;">Talk to us about your land →</a></div>
+        <a href="#" onclick="parent.postMessage({tv:'nav',to:'/contact'},'*');return false;" style="display:inline-flex;align-items:center;gap:6px;margin-top:1.25rem;background:transparent;color:var(--green-deep,#3F6B2C);font-size:0.9rem;font-weight:600;padding:10px 20px;border:2px solid var(--green,#6AA84F);border-radius:999px;text-decoration:none;text-transform:none;letter-spacing:normal;align-self:flex-start;transition:background 0.2s ease,transform 0.2s ease;" onmouseover="this.style.background='rgba(106,168,79,0.1)';this.style.transform='translateX(2px)';" onmouseout="this.style.background='transparent';this.style.transform='none';">Talk about your land →</a></div>
       <div class="path fx"><h3>Buyers</h3>
         <p>Supermarkets, hotels and exporters: we supply reliably from farms we operate to a consistent standard. A dependable local supply, not a one-off.</p>
-        <a href="#" onclick="parent.postMessage({tv:'nav',to:'/contact'},'*');return false;">Discuss supply →</a></div>
+        <a href="#" onclick="parent.postMessage({tv:'nav',to:'/contact'},'*');return false;" style="display:inline-flex;align-items:center;gap:6px;margin-top:1.25rem;background:transparent;color:var(--green-deep,#3F6B2C);font-size:0.9rem;font-weight:600;padding:10px 20px;border:2px solid var(--green,#6AA84F);border-radius:999px;text-decoration:none;text-transform:none;letter-spacing:normal;align-self:flex-start;transition:background 0.2s ease,transform 0.2s ease;" onmouseover="this.style.background='rgba(106,168,79,0.1)';this.style.transform='translateX(2px)';" onmouseout="this.style.background='transparent';this.style.transform='none';">Discuss supply →</a></div>
       <div class="path fx"><h3>Institutions & Partners</h3>
         <p>NGOs, agribusinesses, government and development partners: Teivaka's model and TIS scale via per-farmer partnerships for outgrower networks.</p>
-        <a href="#" onclick="parent.postMessage({tv:'nav',to:'/contact'},'*');return false;">Explore partnership →</a></div>
+        <a href="#" onclick="parent.postMessage({tv:'nav',to:'/contact'},'*');return false;" style="display:inline-flex;align-items:center;gap:6px;margin-top:1.25rem;background:transparent;color:var(--green-deep,#3F6B2C);font-size:0.9rem;font-weight:600;padding:10px 20px;border:2px solid var(--green,#6AA84F);border-radius:999px;text-decoration:none;text-transform:none;letter-spacing:normal;align-self:flex-start;transition:background 0.2s ease,transform 0.2s ease;" onmouseover="this.style.background='rgba(106,168,79,0.1)';this.style.transform='translateX(2px)';" onmouseout="this.style.background='transparent';this.style.transform='none';">Explore partnership →</a></div>
       <div class="path fx"><h3>Farmers</h3>
         <p>Want field guidance now? TIS, the live pillar of TFOS, is on WhatsApp today. Reach out and we'll connect you so you can start asking it about your crops today.</p>
-        <a href="#" onclick="parent.postMessage({tv:'nav',to:'/contact'},'*');return false;">Get connected to TIS →</a></div>
+        <a href="#" onclick="parent.postMessage({tv:'nav',to:'/contact'},'*');return false;" style="display:inline-flex;align-items:center;gap:6px;margin-top:1.25rem;background:transparent;color:var(--green-deep,#3F6B2C);font-size:0.9rem;font-weight:600;padding:10px 20px;border:2px solid var(--green,#6AA84F);border-radius:999px;text-decoration:none;text-transform:none;letter-spacing:normal;align-self:flex-start;transition:background 0.2s ease,transform 0.2s ease;" onmouseover="this.style.background='rgba(106,168,79,0.1)';this.style.transform='translateX(2px)';" onmouseout="this.style.background='transparent';this.style.transform='none';">Get connected to TIS →</a></div>
     </div>
   </div>
 </section>
@@ -825,7 +831,7 @@ footer{background:var(--soilInk);color:rgba(248,243,233,0.6);padding:64px 0 44px
       <h2>Let's turn idle land into wealth — together.</h2></div>
     <div class="contact-grid">
       <div class="fx-l">
-        <div class="ci-row"><div class="ci-icon"><svg viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M22 7l-10 6L2 7"/></svg></div><div><div class="ci-k">Email</div><div class="ci-v"><a href="mailto:founder@teivaka.com" style="color:inherit;text-decoration:none">founder@teivaka.com</a></div></div></div>
+        <div class="ci-row"><div class="ci-icon"><svg viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M22 7l-10 6L2 7"/></svg></div><div><div class="ci-k">Email</div><div class="ci-v"><a href="https://mail.google.com/mail/?view=cm&fs=1&to=founder@teivaka.com" target="_blank" rel="noopener noreferrer" style="color:inherit;text-decoration:none">founder@teivaka.com</a></div></div></div>
         <div class="ci-row"><div class="ci-icon"><svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/></svg></div><div><div class="ci-k">Company (WhatsApp Business)</div><div class="ci-v"><a href="https://wa.me/6797336211" target="_blank" rel="noopener noreferrer" style="color:inherit;text-decoration:none">+679 7336211</a></div></div></div>
         <div class="ci-row"><div class="ci-icon"><svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/></svg></div><div><div class="ci-k">Founder (direct)</div><div class="ci-v"><a href="https://wa.me/6798730866" target="_blank" rel="noopener noreferrer" style="color:inherit;text-decoration:none">+679 8730866</a></div></div></div>
         <div class="ci-row"><div class="ci-icon"><svg viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg></div><div><div class="ci-k">Based In</div><div class="ci-v">Fiji — Korovou & Kadavu</div></div></div>
@@ -835,8 +841,8 @@ footer{background:var(--soilInk);color:rgba(248,243,233,0.6);padding:64px 0 44px
       <div class="fx-r">
         <h3 style="color:var(--cream);font-size:26px;margin-bottom:16px">Already a member?</h3>
         <p style="color:var(--sand);margin-bottom:26px;font-size:16px">Access the Teivaka platform and TIS directly.</p>
-        <a href="#" onclick="parent.postMessage({tv:'nav',to:'/login'},'*');return false;" class="btn-primary">Login to the platform</a>
-        <a href="#" onclick="parent.postMessage({tv:'nav',to:'/register'},'*');return false;" style="display:inline-block;margin-top:14px;color:var(--cream);font-size:15px;text-decoration:none;border-bottom:1px solid var(--cream);padding-bottom:2px;opacity:0.85;">New to Teivaka? Sign up free →</a>
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;"><a href="#" onclick="parent.postMessage({tv:'nav',to:'/login'},'*');return false;" style="display:inline-block;background:transparent;color:var(--cream);font-size:14px;font-weight:600;padding:10px 20px;border:2px solid var(--cream);border-radius:999px;text-decoration:none;text-transform:none;letter-spacing:normal;transition:background 0.2s ease,color 0.2s ease;" onmouseover="this.style.background='var(--cream)';this.style.color='var(--soil,#5C4033)';" onmouseout="this.style.background='transparent';this.style.color='var(--cream)';">Login →</a><a href="#" onclick="parent.postMessage({tv:'nav',to:'/register'},'*');return false;" style="display:inline-block;background:transparent;color:var(--cream);font-size:14px;font-weight:600;padding:10px 20px;border:2px solid var(--cream);border-radius:999px;text-decoration:none;text-transform:none;letter-spacing:normal;transition:background 0.2s ease,color 0.2s ease;" onmouseover="this.style.background='var(--cream)';this.style.color='var(--soil,#5C4033)';" onmouseout="this.style.background='transparent';this.style.color='var(--cream)';">Sign up free →</a></div>
+        
       </div>
     </div>
   </div>
@@ -851,7 +857,7 @@ footer{background:var(--soilInk);color:rgba(248,243,233,0.6);padding:64px 0 44px
       </div>
       <div class="foot-col"><h4>Company</h4><a href="#" onclick="parent.postMessage({tv:'nav',to:'/about'},'*');return false;">About</a><a href="#what">What We Do</a><a href="#" onclick="parent.postMessage({tv:'nav',to:'/impact'},'*');return false;">Impact</a><a href="#" onclick="parent.postMessage({tv:'nav',to:'/team'},'*');return false;">Team</a></div>
       <div class="foot-col"><h4>Platform</h4><a href="#" onclick="parent.postMessage({tv:'nav',to:'/tis-public'},'*');return false;">TIS</a><a href="#" onclick="parent.postMessage({tv:'nav',to:'/tfos'},'*');return false;">TFOS</a><a href="#" onclick="parent.postMessage({tv:'nav',to:'/our-farms'},'*');return false;">Our Farms</a><a href="#" onclick="parent.postMessage({tv:'nav',to:'/login'},'*');return false;">Login</a></div>
-      <div class="foot-col"><h4>Connect</h4><a href="#" onclick="parent.postMessage({tv:'nav',to:'/partner'},'*');return false;">Partner</a><a href="#" onclick="parent.postMessage({tv:'nav',to:'/contact'},'*');return false;">Contact</a><a href="mailto:founder@teivaka.com">founder@teivaka.com</a></div>
+      <div class="foot-col"><h4>Connect</h4><a href="#" onclick="parent.postMessage({tv:'nav',to:'/partner'},'*');return false;">Partner</a><a href="#" onclick="parent.postMessage({tv:'nav',to:'/contact'},'*');return false;">Contact</a><a href="https://mail.google.com/mail/?view=cm&fs=1&to=founder@teivaka.com" target="_blank" rel="noopener noreferrer">founder@teivaka.com</a></div>
     </div>
     <div class="foot-legal">
       <a href="#" data-legal="privacy">Privacy Statement</a>

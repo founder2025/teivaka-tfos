@@ -138,7 +138,7 @@ function ComplianceModal({ open, detail, onClose }) {
 
         <div className="px-5 py-3 flex gap-2 justify-end" style={{ borderTop: `1px solid ${C.border}` }}>
           <a
-            href="mailto:founder@teivaka.com?subject=Harvest%20compliance%20override%20request"
+            href="https://mail.google.com/mail/?view=cm&fs=1&to=founder@teivaka.com&su=Harvest%20compliance%20override%20request" target="_blank" rel="noopener noreferrer"
             className="px-3 py-2 rounded-lg text-sm font-semibold"
             style={{ border: `1px solid ${C.border}`, color: C.soil, background: "white" }}
           >

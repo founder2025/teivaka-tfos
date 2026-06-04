@@ -183,6 +183,7 @@ export default function App() {
           <Route path="/tfos"         element={<MarketingPage pageKey="tfos" />} />
           <Route path="/our-farms"    element={<MarketingPage pageKey="our-farms" />} />
           <Route path="/farms"        element={<MarketingPage pageKey="farms" />} />
+          <Route path="/the-work"     element={<MarketingPage pageKey="the-work" />} />
           <Route path="/community" element={
             <FarmerRoute><Community /></FarmerRoute>
           } />

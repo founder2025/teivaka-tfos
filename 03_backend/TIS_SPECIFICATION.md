@@ -1246,13 +1246,13 @@ POST /api/v1/incidents
 **Database records created:**
 - Table: `incident_log`, ID: `INC-YYYYMMDD-###` (e.g., `INC-20260407-001`)
 - Triggers: automation alert creation at severity level
-- If High/Critical: alert sent to farm manager's WhatsApp immediately
+- If High/Critical: alert sent to farm manager's WhatsApp immediately  _(SPECCED, NOT YET IMPLEMENTED as of 2026-05-27 — TIS has no working notification path; do not tell users an alert was delivered)_
 
 **Confirmation response:**
 ```
 Incident reported: Theft on F001-PU002. Severity: High.
 ID: INC-20260407-001. Estimated loss: FJD 450.00.
-Alert created for farm manager. Cody has been notified.
+Incident logged for farm-manager review.
 ```
 
 ---
