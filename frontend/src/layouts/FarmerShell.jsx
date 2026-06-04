@@ -38,6 +38,7 @@ const C = {
   red:     "#D4442E",
 };
 
+import { tisIdentityBody } from "../utils/tisIdentity";
 const TIS_ENDPOINT = import.meta.env.VITE_TIS_ENDPOINT || "/tis/chat";
 const TIS_TOKEN = import.meta.env.VITE_TIS_BRIDGE_TOKEN || "";
 
@@ -51,9 +52,7 @@ const NARROW_ROUTE_PREFIXES = [
 ];
 const NARROW_ROUTES_EXACT = new Set([]);
 
-const USER_ID = "U-CODY";
-const FARM_ID = "F001";
-const SESSION_ID = `tfos-web-${USER_ID}`;
+
 
 const LAYER_LABEL = {
   1: "Validated KB",
@@ -267,9 +266,7 @@ function ShellContent() {
         headers,
         body: JSON.stringify({
           message: text,
-          user_id: USER_ID,
-          farm_id: FARM_ID,
-          session_id: SESSION_ID,
+          ...tisIdentityBody(),
         }),
       });
       if (!res.ok) throw new Error(`TIS ${res.status}: ${await res.text()}`);

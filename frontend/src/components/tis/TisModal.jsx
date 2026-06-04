@@ -15,6 +15,7 @@
  */
 import { useState, useRef, useEffect } from "react";
 import { getCurrentUser } from "../../utils/auth";
+import { getCurrentFarmId } from "../../utils/tisIdentity";
 
 const TIS_ENDPOINT = import.meta.env.VITE_TIS_ENDPOINT || "/tis/chat";
 const TIS_TOKEN = import.meta.env.VITE_TIS_BRIDGE_TOKEN || "";
@@ -131,6 +132,7 @@ export default function TisModal({ open, onClose }) {
 
   const user = getCurrentUser();
   const userId = user?.sub || user?.user_id || "anon";
+  const farmId = getCurrentFarmId();
   const sessionId = `tfos-fab-${userId}`;
 
   useEffect(() => {
@@ -171,7 +173,7 @@ export default function TisModal({ open, onClose }) {
         body: JSON.stringify({
           message: text,
           user_id: userId,
-          farm_id: "F001",
+          farm_id: farmId,
           session_id: sessionId,
         }),
       });

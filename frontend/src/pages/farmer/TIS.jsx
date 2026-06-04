@@ -8,12 +8,11 @@
 import { useEffect, useRef, useState } from "react";
 import { Plus, Send } from "lucide-react";
 
+import { tisIdentityBody } from "../../utils/tisIdentity";
 const TIS_ENDPOINT = import.meta.env.VITE_TIS_ENDPOINT || "/tis/chat";
 const TIS_TOKEN = import.meta.env.VITE_TIS_BRIDGE_TOKEN || "";
 
-const USER_ID = "U-CODY";
-const FARM_ID = "F001";
-const SESSION_ID = `tfos-web-${USER_ID}`;
+
 
 const STARTER_CHIPS = [
   "Why are my kava leaves yellow?",
@@ -209,9 +208,7 @@ export default function TIS() {
         headers,
         body: JSON.stringify({
           message: text,
-          user_id: USER_ID,
-          farm_id: FARM_ID,
-          session_id: SESSION_ID,
+          ...tisIdentityBody(),
         }),
       });
       if (!res.ok) throw new Error(`TIS ${res.status}: ${await res.text()}`);

@@ -6,6 +6,7 @@
  */
 import { useState, useEffect, useRef, useCallback } from "react";
 
+import { tisIdentityBody } from "../utils/tisIdentity";
 const TIS_ENDPOINT = import.meta.env.VITE_TIS_ENDPOINT || "/tis/chat";
 const TIS_TOKEN = import.meta.env.VITE_TIS_BRIDGE_TOKEN || "";
 const STORAGE_KEY = "teivaka_tis_chat_history";
@@ -71,7 +72,7 @@ export default function TISWidget() {
       const res = await fetch(TIS_ENDPOINT, {
         method: "POST",
         headers,
-        body: JSON.stringify({ message: text, user_id: "U-CODY", farm_id: "F001" }),
+        body: JSON.stringify({ message: text, ...tisIdentityBody() }),
       });
       if (res.status === 429) {
         setRateLimited(true);
