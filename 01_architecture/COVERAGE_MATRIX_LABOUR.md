@@ -1,205 +1,216 @@
-# Prototype V262 — Coverage Matrix · Module 1: LABOUR (forensic, 100%)
+# Prototype V262 — Coverage Matrix · Module 1: LABOUR (COMPLETE · PROTOTYPE-ONLY)
 
-> **Method:** decomposed directly from prototype source (`coreLaborView` and its
-> 18 render functions + 5 data structures, lines ~20203–21700). Every object the
-> code emits is catalogued below — sections, tiles, buttons, inputs, tables,
-> charts, modals, states. Nothing grouped.
+> **Source: V262 prototype ONLY** (`coreLaborView`, `farmLaborEnhanced`, all
+> `labor*View`, `renderLabor*`, `workerDetailView`, `renderGpsHeatmap`, modals,
+> + 3 faces `smallholderHelpers`/`producerLaborEnhanced`/`commercialLabor`;
+> lines ~19116, 20203–21700). Every column = **what the object requires** (the
+> spec), derived from the prototype. No codebase/git comparison.
 >
-> **Backend baseline** (what production actually serves for Labour today):
-> `GET/POST /api/v1/workers`, `PATCH /api/v1/workers/{id}/rate`,
-> `GET/POST /api/v1/labor`. **Everything else below has no backend** — flagged
-> per row.
->
-> **Legend** — Type: SEC=section, BTN=button, KPI=tile, FORM=form, INP=input,
-> TBL=table, CHT=chart, MOD=modal, STATE=state, DATA=data. PR=Production-Ready
-> (✅ live / 🟡 partial / ❌ none).
+> Type: SEC/BTN/KPI/FORM/INP/TBL/CHT/MOD/STATE/DATA. Permission inferred from
+> prototype role gating (FOUNDER/MANAGER/WORKER/OWNER/any).
 
----
-
-## Page identity
-| Page | Route | Render fn | Faces | Entry points |
-|---|---|---|---|---|
-| Labour | `/farm/labor` | `coreLaborView` (v801) → `farmLaborEnhanced` splits by `state.farmerLevel` (smallholder→`smallholderHelpers`, producer→`producerLaborEnhanced`, commercial→`commercialLabor`) | 3 | Left-rail `Labor` nav; KPI tiles deep-link to tabs; worker cards → worker detail |
-
----
-
-## A. Page chrome
-| Section | Component | Type | Backend | DB | API | Workflow | Permission | PR | Missing / Notes |
-|---|---|---|---|---|---|---|---|---|---|
-| Titlebar | `h1` "Labor" | label | — | — | — | — | any farmer | ✅ | static |
-| Titlebar | subtitle "Your team · {farm} · N workers · M family" | label | yes | workers | `GET /workers` | — | any | 🟡 | counts live; "M family" needs `worker_type=family` (have type) |
-| Titlebar | Farm pill (`v801Pills`) | BTN | yes | farms | `GET /farms` | switch farm | any | ✅ | `FarmSelector` |
-| Titlebar | Mode pill (`v801Pills`) | BTN | derived | users | `/auth/me` mode | switch mode | any | 🟡 | mode derivation |
-| Titlebar | **Pay wages** | BTN(secondary) | yes | wage_ledger | **none** | batch-pay workflow | FOUNDER/MANAGER | ❌ | `openBatchPay`; no WAGE_PAID endpoint |
-| Titlebar | **Mark attendance** | BTN(primary) | yes | labor_attendance | `POST /labor` | log attendance | FOUNDER/MANAGER/WORKER | 🟡 | `openMarkAttendance`; API exists but no block/GPS/in-out |
-| Audit strip | Recent labor events (`v82bRenderReactiveActivityPanel`) | SEC | yes | audit.events | `GET /audit/events?entity_type=labor` | — | any | ❌ | audit read feed not wired for labour |
-
-## B. KPI strip — "Team today" (5 tiles, each deep-links to a tab)
-| Tile | Type | Source calc | Backend | API | PR | Missing |
-|---|---|---|---|---|---|---|
-| On-site now | KPI | count `status==='on-site'` | yes | **none** | ❌ | no check-in/status endpoint |
-| Expected today | KPI | count `status==='expected'` | yes | **none** | ❌ | same |
-| Hours this week | KPI | Σ `hoursThisWeek` | yes | **none** (derive from `GET /labor`) | 🟡 | needs week aggregation endpoint |
-| Wages owed | KPI | Σ `wagesOwed` | yes | **none** | ❌ | needs accrual/payment ledger |
-| Next payday | KPI | days-to-Friday calc | client | — | 🟡 | client-only; OK |
-
-## C. View tabs (8 — `renderLaborViewTabs`)
-| id | Label | Hint | PR | Backing |
-|---|---|---|---|---|
-| today | Today | Who's working | 🟡 | workers (grid live; status ❌) |
-| workers | Roster | Employees & teams | ✅ | `GET /workers` |
-| attendance | Timesheets | Hours & days | 🟡 | `GET /labor` (grid/GPS ❌) |
-| wages | Payroll | Owed & paid | ❌ | no wage endpoint |
-| tasks | Tasks | Assignments | ❌ | no task-assign endpoint |
-| costing | Costing | Labour cost | ❌ | no cost rollup |
-| develop | Training & safety | Skills & records | ❌ | no training table |
-| analytics | Productivity | Trends | ❌ | no productivity data |
-
-## D. Today view (`laborTodayView`)
-| Component | Type | Backend | API | PR | Missing |
-|---|---|---|---|---|---|
-| Snapshot strip (5 tiles, dup of B) | KPI×5 | yes | partial | ❌ | status/owed |
-| "Operator" label + operator card (`renderTodayWorkerCard`, isOperator) | card | yes | `GET /workers` | 🟡 | `isOperator` flag not in API |
-| "Team" grid of worker cards | card×N | yes | `GET /workers` | 🟡 | live status "—" |
-| Worker card: avatar, name(→detail), status pill, type, rate | card parts | yes | workers | 🟡 | status/avatar-photo missing |
-| Family helpers section + "Show family" checkbox (`toggleFamilyWorkers`) | INP(checkbox) | client | — | 🟡 | filter by `worker_type=family` |
-
-## E. Roster / Workers view (`laborWorkersView`)
-| Component | Type | Backend | API | Permission | PR | Missing |
-|---|---|---|---|---|---|---|
-| Type filter pills (All + 4 types, with counts) | BTN×5 | yes | `GET /workers?worker_type=` | any | ✅ | live |
-| Search input (`updateLaborSearch`) | INP(search) | client | — | any | ✅ | client filter |
-| **Add worker** (`openInviteWorkerFlow`) | BTN | yes | `POST /workers` | FOUNDER/MANAGER/AGRONOMIST | ✅ | live |
-| Worker directory grid (`renderWorkerDirectoryCard`) | card×N | yes | `GET /workers` | any | 🟡 | card has extra fields ↓ |
-| — avatar (photoLabel) | label | — | — | — | 🟡 | initials OK; photo ❌ |
-| — name, id, started date | label | yes | workers | — | ✅ | |
-| — type pill | badge | yes | workers | — | ✅ | |
-| — Day rate tile | KPI | yes | workers | — | ✅ | |
-| — Hours/week tile | KPI | yes | **none** | — | ❌ | needs labor aggregation |
-| — Wages owed tile | KPI | yes | **none** | — | ❌ | accrual ledger |
-| — YTD paid tile | KPI | yes | **none** | — | ❌ | payment ledger |
-| — Productivity kg/30d | KPI | yes | **none** | — | ❌ | productivity attribution |
-| — Reliability % | KPI | yes | **none** | — | ❌ | attendance scoring |
-| — card onclick → worker detail (`drillIntoWorkerDetail`) | nav | yes | `GET /workers/{id}` | any | 🟡 | detail page not built |
-| Empty state "No workers match these filters." | STATE | — | — | — | ✅ | |
-
-## F. Timesheets / Attendance view (`laborAttendanceView`)
-| Component | Type | Backend | API | PR | Missing |
-|---|---|---|---|---|---|
-| GPS precision banner | label | — | — | 🟡 | informational |
-| "Include family workers" checkbox | INP | client | — | ✅ | |
-| **Mark attendance** | BTN | yes | `POST /labor` | 🟡 | |
-| Month nav prev/next (`switchAttendanceMonth`) | BTN×2 | client | `GET /labor?date range` | ❌ | no month-window endpoint |
-| Attendance grid (workers × 31 days) | TBL | yes | `GET /labor` | ❌ | grid shape needs per-day matrix |
-| — day cell (full/partial/family/sunday) clickable | cell | yes | toast or `openMarkAttendance` | ❌ | per-cell state from labor rows |
-| — week-hours column | col | yes | **none** | ❌ | aggregation |
-| Daily-total summary row | row | yes | **none** | ❌ | aggregation |
-| Legend (5 swatches) | label | — | — | ✅ | static |
-
-## G. Payroll / Wages view (`laborWagesView`)
-| Component | Type | Backend | API | Permission | PR | Missing |
-|---|---|---|---|---|---|---|
-| Wages-owed banner (Friday variant) | SEC | yes | **none** | — | ❌ | accrual calc |
-| "Pay all owed" (`openBatchPay`) | BTN | yes | **none** | FOUNDER/MANAGER | ❌ | WAGE_PAID batch |
-| "Pay wages early" (`openPayWages`) | BTN | yes | **none** | FOUNDER/MANAGER | ❌ | |
-| Period filter (4: current-week/last-week/month/quarter) | BTN×4 | client | **none** | — | ❌ | |
-| Per-worker wages table (9 cols: Worker, Type, Hours, Day rate, Accrued, Paid, Owed, Method, Action) | TBL | yes | partial | — | ❌ | Accrued/Paid/Owed need ledger |
-| — "Pay now" per row (`openPayWages`) | BTN | yes | **none** | FOUNDER/MANAGER | ❌ | |
-| Recent payments table (8 cols incl Verify hash) | TBL | yes | **none** | — | ❌ | wage_ledger + audit hash |
-
-## H. Fiji compliance footer (`renderFijiComplianceFooter`)
-| Item | Type | Backend | Calc | PR | Missing |
-|---|---|---|---|---|---|
-| Minimum wage check (FJD 4.00/hr) | KPI | yes | `hourlyRate < min` | ❌ | needs hourly rate + check |
-| Sunday / PH events (1.5× / 2×) | KPI | yes | attendance flags | ❌ | needs Sun/PH attendance |
-| FNPF contributions YTD (8%) | KPI | yes | Σ fnpf permanent | ❌ | FNPF compute + remit |
-| Underpayment risk | KPI | yes | derived | ❌ | |
-| "Required for Phase 9 Bank Evidence PDF" note | label | — | — | 🟡 | ties to moat |
-
-## I. Tasks view (`laborTasksView`)
-| Component | Type | Backend | API | Permission | PR | Missing |
-|---|---|---|---|---|---|---|
-| Auto-attribution banner | label | — | — | — | 🟡 | |
-| **Assign task** (`openAssignTask`) | BTN | yes | **none** | FOUNDER/MANAGER | ❌ | task-assign endpoint |
-| Per-worker task summary cards (pending/completed/rate/overdue) | card×N | yes | **none** | — | ❌ | task data |
-| — "Assign task" per card | BTN | yes | **none** | FOUNDER/MANAGER | ❌ | |
-| Grouped task list (overdue/in-progress/pending/completed) | list | yes | **none** | — | ❌ | `TASK_ASSIGNMENTS` |
-| Task row (`renderTaskAssignmentRow`) → v3 task detail | row | yes | tasks router? | — | ❌ | cross-link to tasks |
-
-## J. Costing view (`laborCostingView`)
-| Component | Type | Backend | API | PR | Missing |
-|---|---|---|---|---|---|
-| Capital strip (Wages owed now / Hours this week / Season total paid="Building") | KPI×3 | yes | **none** | ❌ | |
-| Cost-by-worker card | list | yes | **none** | ❌ | |
-| Labour-cost-by-business card | SEC | yes | **none** | ❌ | per-block cost split |
-
-## K. Training & safety view (`laborDevelopView`)
-| Component | Type | Backend | API | PR | Missing |
-|---|---|---|---|---|---|
-| Training block + "Add training" | SEC+BTN | yes | **none** | ❌ | training table |
-| Certifications block + "Add certificate" | SEC+BTN | yes | **none** | ❌ | cert table (note: prod has no labour-cert) |
-| Safety block + "Log incident" | SEC+BTN | yes | **none** | ❌ | incident table |
-| Record modal (`openLaborRecord`→`saveLaborRecord`): What / Who / Date inputs | MOD/FORM | yes | **none** | FOUNDER/MANAGER | ❌ | client-only today |
-
-## L. Productivity / Analytics view (`laborAnalyticsView`)
-| Component | Type | Backend | Calc | PR | Missing |
-|---|---|---|---|---|---|
-| Productivity-by-worker bar chart + "Open full report" | CHT | yes | kg/30d per worker | ❌ | productivity attribution |
-| (2nd chart) + report link | CHT | yes | — | ❌ | |
-| Attendance reliability gauges + report link | CHT | yes | reliability % | ❌ | |
-| Cost-per-kg card (avg / best / worst) + report link | CHT | yes | labour$/kg | ❌ | needs cycle cost + harvest |
-
-## M. Worker Detail drill-down (`workerDetailView`, via `drillIntoWorkerDetail`)
-| Component | Type | Backend | API | PR | Missing |
-|---|---|---|---|---|---|
-| 4-panel worker detail (profile/attendance/wages/tasks) | SEC | yes | `GET /workers/{id}` | 🟡 | only profile fields live |
-| GPS block heatmap (`renderGpsHeatmap`) | CHT | yes | **none** | ❌ | GPS check-in data |
-
-## N. Modals (forms)
-| Modal | Trigger | Fields | Confirm fn | Backend | API | Permission | PR |
-|---|---|---|---|---|---|---|---|
-| Mark attendance | `openMarkAttendance` | worker(sel), block(sel), date, time-in, time-out, hours(num), task(textarea), +photo/+voice(stubs) | `confirmMarkAttendance` | yes | `POST /labor` | F/M/WORKER | 🟡 (block/GPS/in-out missing) |
-| Pay wages (single) | `openPayWages` | worker(sel), date, time, period-from, period-to, hours, amount, method, reference(text) | `confirmPayWages` | yes | **none** | F/M | ❌ |
-| Batch pay | `openBatchPay` | owed-worker list, total cash out, payment date, payment time | `confirmBatchPay` | yes | **none** | F/M | ❌ |
-| Assign task | `openAssignTask` | worker(sel), block(sel), date, time, task(textarea) | `confirmAssignTask` | yes | **none** | F/M | ❌ |
-| Labour record | `openLaborRecord` | what, who, date | `saveLaborRecord` | yes | **none** | F/M | ❌ |
-| Add worker | `openInviteWorkerFlow` | name, type, rate, contact… | (invite flow) | yes | `POST /workers` | F/M/AGRONOMIST | ✅ |
-
-## O. Data structures (the prototype's mock backing)
-| Const | Shape | Real source | PR |
+## 0. Faces (mode-adaptive — `farmLaborEnhanced` branches on `state.farmerLevel`)
+| Face | Fn | Objects (distinct from Producer) | Backend Req |
 |---|---|---|---|
-| `WORKER_TYPES` (4) | id,label | client enum | ✅ |
-| `FIJI_LABOR_REGS` | minWage, Sun/PH multipliers, FNPF%, PH list | should be `shared.*` config | ❌ |
-| `WORKERS_RICH` (7, ~25 fields each) | full worker incl status/hours/wages/fnpf/productivity/gps | `tenant.workers` (9 fields only) | 🟡 |
-| `ATTENDANCE_LOG` (generated 30d) | per-day per-worker hours+block+hash | `tenant.labor_attendance` | 🟡 |
-| `WAGE_LEDGER` | payments w/ hash | **no table** | ❌ |
-| `TASK_ASSIGNMENTS` | tasks per worker | **no labour-task table** | ❌ |
+| Smallholder | `smallholderHelpers` | greeting "Who helped", one helper card (name·worked·pay), 2 big job buttons ("Mark a work day", "Pay someone"), progress line | workers + labor + cash-out (simplified) |
+| Producer (default) | `producerLaborEnhanced`/`coreLaborView` | full 8-tab surface (this document) | full |
+| Commercial | `commercialLabor` | face-scope banner + commercial-capability cards (Team roster + roles/crews, Payroll run w/ FNPF+overtime, Productivity by worker) **then** full Producer surface | + teams/crews, payroll-run, productivity ranking |
 
-## P. States
-| State | Where | PR |
-|---|---|---|
-| Empty: "No workers match these filters." | Roster | ✅ |
-| Empty: "No workers on this farm yet." | Costing/Today | ✅ |
-| Loading: query `isLoading` text | all live tabs | 🟡 (text, no skeletons) |
-| Error: fetch throws → toast "Could not …" | all mutations | 🟡 |
-| Building: "Season total paid — Building" | Costing | 🟡 honest stub |
+## 1. Labour Dashboard (page chrome + KPI strip)
+| Component | Type | Backend Req | DB Req | API Req | Workflow | Permission |
+|---|---|---|---|---|---|---|
+| `h1` "Labor" + subtitle (farm·N workers·M family) | label | yes | workers | `GET workers` | — | any |
+| Farm pill / Mode pill (`v801Pills`) | BTN×2 | yes | farms/users | `GET farms`,`/auth/me` | switch farm/mode | any |
+| **Pay wages** | BTN | yes | wage_ledger | `POST wages/batch` | batch-pay | FOUNDER/MANAGER |
+| **Mark attendance** | BTN | yes | labor_attendance | `POST labor` | log attendance | F/M/WORKER |
+| Audit strip (recent labor events) | SEC | yes | audit.events | `GET audit?entity=labor` | — | any |
+| KPI: On-site now | KPI | yes | worker check-in status | `GET attendance/today` | drill→today | any |
+| KPI: Expected today | KPI | yes | roster + check-in | `GET attendance/today` | drill→today | any |
+| KPI: Hours this week | KPI | yes | labor_attendance | `GET labor/agg?week` | drill→timesheets | any |
+| KPI: Wages owed | KPI | yes | accrual ledger | `GET wages/owed` | drill→payroll | any |
+| KPI: Next payday | KPI | client | — | — | drill→payroll | any |
+| View tabs (8): Today·Roster·Timesheets·Payroll·Tasks·Costing·Training&safety·Productivity | nav | — | — | — | switch view | any |
 
-## Q. Notifications (Labour-triggered)
-| Notification | Trigger | Channel | Backend | PR |
+## 2. Today — "Who's working" (`laborTodayView`)
+| Component | Type | Backend Req | API Req | Permission |
 |---|---|---|---|---|
-| Friday wages-owed red banner | `isFriday()` + owed>0 | in-app | yes | ❌ (needs accrual) |
-| Toast on attendance/pay/record save | mutation success | in-app toast | client event | ✅ (live mutations) |
-| FNPF / min-wage compliance flag | footer calc | in-app | yes | ❌ |
+| Snapshot strip (5 tiles — dup of KPI) | KPI×5 | yes | as §1 | any |
+| Operator card (`renderTodayWorkerCard`, isOperator) | card | yes | `GET workers` (isOperator flag) | any |
+| Team grid of worker cards | card×N | yes | `GET workers` | any |
+| Worker card: avatar, name(→detail), status pill, type, rate | card | yes | workers + check-in status | any |
+| Family helpers section + "Show family" checkbox | INP | yes | workers(type=family) | any |
+
+## 3. Workers / Roster (`laborWorkersView` + `renderWorkerDirectoryCard`)
+| Component | Type | Backend Req | API Req | Permission |
+|---|---|---|---|---|
+| Type filter pills (All + 4 types + counts) | BTN×5 | yes | `GET workers?type=` | any |
+| Search input (name/ID) | INP | client | — | any |
+| **Add worker** (`openInviteWorkerFlow`) | BTN | yes | `POST workers` (invite) | F/M/AGRONOMIST |
+| Worker directory grid | card×N | yes | `GET workers` | any |
+| — avatar(photoLabel), name, id, started date, type pill | card parts | yes | workers | any |
+| — Day rate / Hours-week / Wages-owed / YTD-paid tiles | KPI×4 | yes | workers+labor+wage ledger | any |
+| — Productivity kg/30d, Reliability % | KPI×2 | yes | productivity attribution + attendance scoring | any |
+| — card → worker detail (`drillIntoWorkerDetail`) | nav | yes | `GET workers/{id}` | any |
+| Empty state "No workers match these filters." | STATE | — | — | — |
+
+## 4. Teams / Crews (Commercial face — `commercialLabor`)
+| Component | Type | Backend Req | DB Req | API Req | Permission | Notes |
+|---|---|---|---|---|---|---|
+| Team roster + roles | SEC | yes | teams/crews table + worker_role | `GET teams` | OWNER | commercial-only capability card in prototype |
+| Crew assignment | workflow | yes | crew_membership | `POST teams/{id}/members` | OWNER | implied by "assign roles and crews" |
+
+## 5. Attendance / Timesheets (`laborAttendanceView`)
+| Component | Type | Backend Req | API Req | Permission |
+|---|---|---|---|---|
+| GPS precision banner | label | — | — | any |
+| "Include family workers" checkbox | INP | yes | workers(type) | any |
+| **Mark attendance** | BTN | yes | `POST labor` | F/M/WORKER |
+| Month nav prev/next (`switchAttendanceMonth`) | BTN×2 | yes | `GET labor?month` | any |
+| Attendance grid (workers × 31 days) | TBL | yes | `GET labor?month-matrix` | any |
+| — day cell (full/partial/family/sunday) clickable → toast or mark | cell | yes | `GET labor`,`POST labor` | F/M/WORKER |
+| — week-hours column + Daily-total summary row | TBL | yes | `GET labor/agg` | any |
+| Legend (5 swatches) | label | — | — | — |
+
+## 6. Payroll / Wages (`laborWagesView` + Fiji footer + batch/single pay)
+| Component | Type | Backend Req | DB Req | API Req | Workflow | Permission |
+|---|---|---|---|---|---|---|
+| Wages-owed banner (Friday variant) | SEC | yes | accrual ledger | `GET wages/owed` | alert | OWNER |
+| "Pay all owed" (`openBatchPay`) | BTN | yes | wage_ledger | `POST wages/batch` | batch-pay→audit | F/M |
+| "Pay wages early" (`openPayWages`) | BTN | yes | wage_ledger | `POST wages` | pay→audit | F/M |
+| Period filter (current-week/last-week/month/quarter) | BTN×4 | yes | — | query param | — | any |
+| Per-worker wages table (9 cols: Worker/Type/Hours/Day rate/Accrued/Paid/Owed/Method/Action) | TBL | yes | workers+labor+wage ledger | `GET wages` | — | OWNER |
+| — "Pay now" per row (`openPayWages`) | BTN | yes | wage_ledger | `POST wages` | pay | F/M |
+| Recent payments table (8 cols incl Verify hash) | TBL | yes | wage_ledger + audit | `GET wages/payments` | — | OWNER |
+| **Fiji compliance footer** — Min wage check | KPI | yes | rates + FIJI_LABOR_REGS | computed | — | OWNER |
+| — Sunday/PH events (1.5×/2×) | KPI | yes | attendance flags | computed | — | OWNER |
+| — FNPF YTD (8% × permanent) | KPI | yes | wage ledger + fnpf | computed | — | OWNER |
+| — Underpayment risk | KPI | yes | derived | computed | — | OWNER |
+
+## 7. Assignments / Tasks (`laborTasksView` + `renderTaskAssignmentRow`)
+| Component | Type | Backend Req | API Req | Workflow | Permission |
+|---|---|---|---|---|---|
+| Auto-attribution banner | label | — | — | — | any |
+| **Assign task** (`openAssignTask`) | BTN | yes | `POST tasks/assign` | assign→notify | F/M |
+| Per-worker task summary cards (pending/completed/rate/overdue) | card×N | yes | `GET tasks?worker=` | — | any |
+| — "Assign task" per card | BTN | yes | `POST tasks/assign` | assign | F/M |
+| Grouped task list (overdue/in-progress/pending/completed) | list | yes | `GET tasks` | — | any |
+| Task row → v3 task detail | row | yes | `GET tasks/{id}` | drill | any |
+
+## 8. Labour Costs (`laborCostingView`)
+| Component | Type | Backend Req | API Req | Permission |
+|---|---|---|---|---|
+| Capital strip: Wages owed now / Hours this week / Season total paid | KPI×3 | yes | wage ledger + labor agg | OWNER |
+| Cost-by-worker card | list | yes | `GET wages/by-worker` | OWNER |
+| Labour-cost-by-business card (per block/animal split) | SEC | yes | labor↔cycle attribution | OWNER |
+
+## 9. Training & safety (`laborDevelopView` + `openLaborRecord`)
+| Component | Type | Backend Req | DB Req | API Req | Permission |
+|---|---|---|---|---|---|
+| Training block + "Add training" | SEC+BTN | yes | training_records | `POST labor-records/training` | F/M |
+| Certifications block + "Add certificate" (expiry reminders) | SEC+BTN | yes | worker_certifications | `POST labor-records/cert` | F/M |
+| Safety block + "Log incident" | SEC+BTN | yes | safety_incidents | `POST labor-records/safety` | F/M |
+| Record modal (`openLaborRecord`→`saveLaborRecord`): What / Who / Date | MOD/FORM | yes | resp. table | resp. POST | F/M |
+
+## 10. Productivity / Performance Tracking (`laborAnalyticsView`)
+| Component | Type | Backend Req | Calc | API Req |
+|---|---|---|---|---|
+| Productivity-by-worker bar chart (`productivity-bar` rows) + "Open full report" | CHT | yes | kg output / worker-hour | `GET analytics/productivity` |
+| 2nd chart (yield/output trend) + report | CHT | yes | trend | `GET analytics/labor-trend` |
+| Attendance reliability gauges (`reliability-gauge` ×N) + report | CHT | yes | attended/expected | `GET analytics/reliability` |
+| Cost-per-kg output card (Average / Best ratio / Worth reviewing) + report | CHT | yes | labour$ / kg harvested | `GET analytics/cost-per-kg` |
+
+## 11. Worker Detail drill-down (`workerDetailView` — 6 panels)
+| Component | Type | Backend Req | API Req | Permission |
+|---|---|---|---|---|
+| Breadcrumb (Crops/Labor/back — `climbLaborBreadcrumb`) | nav | — | — | any |
+| Action: Correct profile (`correctWorkerProfile`) | BTN | yes | `POST workers/{id}/correct` | F/M |
+| Action: Pay wages (`openPayWages`) | BTN | yes | `POST wages` | F/M |
+| Action: Assign task (`openAssignTask`) | BTN | yes | `POST tasks/assign` | F/M |
+| Action: Mark attendance (`openMarkAttendance`) | BTN | yes | `POST labor` | F/M/WORKER |
+| Panel 1 — This week (anchor tiles: Hours/Days worked/Wages accrued/Owed/Wages/Status) | KPI×6 | yes | labor+wage agg | `GET workers/{id}/week` | any |
+| Panel 2 — Cycle cost flow ("Total labor cost flowed to cycles" → `drillIntoCycleDetail`) | SEC | yes | labor↔cycle attribution | `GET workers/{id}/cycle-costs` | OWNER |
+| Panel 3 — Wage payments table (Paid/Period/Hours/Amount/Method/Reference/Verify) | TBL | yes | wage_ledger | `GET workers/{id}/payments` | OWNER |
+| Panel 4 — GPS heatmap (`renderGpsHeatmap`) | CHT | yes | GPS check-in per block | `GET workers/{id}/gps` | OWNER |
+| Panel 5 — Task history | TBL | yes | tasks | `GET workers/{id}/tasks` | any |
+| Panel 6 — Fiji compliance summary (Minimum wage / FNPF YTD / Service) | KPI×3 | yes | rates+fnpf+tenure | computed | OWNER |
+| GPS block cell (`gps-block`, clickable→toast) | cell | yes | GPS data | — | OWNER |
+
+## 12. Modals (full field lists)
+| Modal | Trigger | Fields | Confirm | Backend Req | Permission |
+|---|---|---|---|---|---|
+| Mark attendance | `openMarkAttendance(prefWorker,prefDate)` | worker(sel), block(sel), date, time-in, time-out, hours(num), task(textarea), +photo, +voice | `confirmMarkAttendance` | `POST labor` (+block+GPS+in/out) | F/M/WORKER |
+| Pay wages (single) | `openPayWages(workerId)` | worker(sel), date, time, period-from, period-to, hours(num), amount(num), method, reference(text MP-…) | `confirmPayWages` | `POST wages` | F/M |
+| Batch pay | `openBatchPay` | owed-worker list, total cash out, payment date, payment time | `confirmBatchPay` | `POST wages/batch` | F/M |
+| Assign task | `openAssignTask(workerId)` | worker(sel), block(sel), date, time, task(textarea) | `confirmAssignTask` | `POST tasks/assign` | F/M |
+| Labour record | `openLaborRecord(kind)` | what, who, date | `saveLaborRecord` | `POST labor-records/{kind}` | F/M |
+| Correct worker profile | `correctWorkerProfile`/`openCorrectWorkerProfile` | EVENT_CORRECTED fields | — | `POST workers/{id}/correct` | F/M |
+
+## 13. Labour Reports (implied outputs)
+| Report | Source | Output | Backend Req | Permission |
+|---|---|---|---|---|
+| Productivity report ("Open full report" ×4) | analytics | screen/PDF | `GET analytics/* ` + export | OWNER |
+| Payroll / wage register | wage_ledger | CSV/PDF | `GET wages/export` | OWNER |
+| FNPF per-employee statement | fnpf calc | PDF (prototype: "on the way") | `GET fnpf/statement` | OWNER |
+| Labour inputs to Bank Evidence PDF | Fiji footer | feeds Phase 9 PDF | report engine | OWNER |
+| Attendance timesheet export | labor_attendance | CSV | `GET labor/export` | OWNER |
+
+## 14. Labour Notifications (implied)
+| Notification | Trigger | Channel | Recipient |
+|---|---|---|---|
+| Friday wages-owed red banner | isFriday & owed>0 | in-app | OWNER |
+| Min-wage / FNPF compliance flag | footer calc fail | in-app | OWNER |
+| Certificate expiry reminder | cert near expiry | in-app/WhatsApp | OWNER |
+| Task assigned → worker | assign task | in-app/WhatsApp | WORKER |
+| Toast on attendance/pay/record/assign save | mutation success | in-app toast | actor |
+
+## 15. Labour Permissions matrix (inferred from prototype gating)
+| Action | FOUNDER | MANAGER | WORKER | VIEWER | OWNER(=F) |
+|---|---|---|---|---|---|
+| View Labour | ✓ | ✓ | ✓(self) | ✓ | ✓ |
+| Add worker | ✓ | ✓ | ✗ | ✗ | ✓ |
+| Edit rate / correct profile | ✓ | ✓ | ✗ | ✗ | ✓ |
+| Mark attendance | ✓ | ✓ | ✓(self) | ✗ | ✓ |
+| Pay wages / batch pay | ✓ | ✓ | ✗ | ✗ | ✓ |
+| Assign task | ✓ | ✓ | ✗ | ✗ | ✓ |
+| Add training/cert/safety record | ✓ | ✓ | ✗ | ✗ | ✓ |
+| View payroll/FNPF/costing | ✓ | ✓ | ✗ | ✗ | ✓ |
+| Generate labour reports | ✓ | ✓ | ✗ | ✗ | ✓ |
+
+## 16. Navigation paths (Labour)
+| From → To | Trigger |
+|---|---|
+| Rail → Labour (Today default) | nav |
+| KPI tile → tab | `switchLaborView` |
+| Worker card/row → Worker Detail | `drillIntoWorkerDetail` |
+| Worker Detail → Cycle Detail | `drillIntoCycleDetail` (cost flow) |
+| Worker Detail breadcrumb → back | `climbLaborBreadcrumb` |
+| Task row → v3 Task detail | onclick |
+| Attendance cell → mark/inspect | onclick |
+
+## 17. Data structures (prototype mock → implied schema)
+| Const | Implied table/config |
+|---|---|
+| `WORKER_TYPES` (4) | worker_type enum |
+| `FIJI_LABOR_REGS` (minWage/Sun/PH/FNPF%/PH list) | shared.labour_regs config |
+| `WORKERS_RICH` (7, ~25 fields) | tenant.workers (+status/hours/wages/fnpf/productivity/gps derived) |
+| `ATTENDANCE_LOG` (30d generated) | tenant.labor_attendance |
+| `WAGE_LEDGER` | tenant.wage_ledger (payments + hash) |
+| `TASK_ASSIGNMENTS` | tenant.labour_tasks |
+| `state.laborRecords` (training/cert/safety) | training/cert/incident tables |
+
+## 18. States
+| State | Where |
+|---|---|
+| Empty: "No workers match these filters." | Roster |
+| Empty: "No workers on this farm yet." | Costing/Today |
+| Loading | all data tabs |
+| Error (mutation fail → toast) | all writes |
+| Building: "Season total paid — Building" | Costing |
+| Profit/wage hidden for family/operator (N/A) | cards/tables |
 
 ---
 
-## Labour coverage summary
-- **Objects catalogued:** 90+ across 13 sections, 6 modals, 6 data structures.
-- **Production-ready breakdown:** ✅ ~14 (Roster core, Add worker, filters, search, type pills, mutation toasts, empty states) · 🟡 ~12 (Today grid, Timesheets log, worker detail profile) · ❌ ~64 (all of Payroll, Tasks, Costing, Training & safety, Productivity, GPS, FNPF, accruals).
-- **Backend gaps Labour needs for full parity:** wage-accrual + payment ledger (WAGE_PAID), attendance check-in/status + GPS, month-window + week aggregation endpoints, labour-task assignment, training/cert/safety tables, productivity attribution, cost-per-kg rollup, FNPF compute, `FIJI_LABOR_REGS` as `shared.*` config.
-- **Verdict:** Labour is **~22% production-ready by object count.** The Roster + basic attendance loop is real; the bankability surface (Payroll/FNPF/compliance) and all analytics are unbacked.
+## Labour — COMPLETE coverage statement
+**Sub-areas decomposed (your list, 13/13):** Dashboard §1 · Workers §3 · Teams §4 · Attendance §5 · Payroll §6 · Assignments §7 · Productivity §10 · Timesheets §5 · Labour Costs §8 · Performance Tracking §10/§11 · Labour Reports §13 · Labour Notifications §14 · Labour Permissions §15. **Plus:** 3 faces §0, Today §2, Training&safety §9, Worker Detail 6 panels §11, 6 modals §12, navigation §16, data §17, states §18.
 
----
-
-## Scope honesty for the full audit
-This is **Module 1 of ~20** (Labour, to 100% as you demanded). The remaining pages — Overview, Tasks, Decisions, Cycles, Harvests, Field Events, Inventory, Cash, Buyers, Equipment, Compliance, Analytics, Reports, Gallery, Locations, Weather, Library, Partnerships, + Home/Classroom/TIS/Me pillars — each decompose to a comparable 60–120 objects. The **full matrix is a large multi-pass artifact** (est. 1,500–2,000 rows). I'll produce them in this exact format, one module per pass, committing each. **No implementation resumes until you say coverage is sufficient.**
+**Total Labour objects catalogued: ~130** across 18 sections. Every prototype object the Labour module emits — across all three faces and the worker drill-down — is now individually listed with its implied backend/DB/API/workflow/permission. **Labour audit = 100% complete, prototype-only.**
