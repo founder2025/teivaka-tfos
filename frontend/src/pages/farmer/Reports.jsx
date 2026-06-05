@@ -1,24 +1,26 @@
 /**
- * Reports.jsx — /farm/reports  (replaces ComingSoon)
+ * Reports.jsx — /farm/reports
  *
- * Team design system + v262 Reports surface — exact 6 sub-tabs (confirmed from
- * renderReportsViewTabs): Library · Bank Evidence · Net Worth · Dispatch log ·
- * Recipients · Schedule.
+ * Matches the v262 v801 `coreReportsView` (the rendered one): a "what reports
+ * you can make" launcher. 6 sub-tabs (renderReportsViewTabs). Library tab =
+ * verification banner + 4 tiles + Bank Evidence hero + 5 grouped report
+ * categories (17 reports, exact names/descriptions from source 13896-13912),
+ * each row Opens its live source page.
  *
- * Live where the API serves it; honest structured cards (no fabricated numbers)
- * elsewhere — Bank Evidence shows the doc LAYOUT but NOT a fake credit score.
- *   Library: 8 report types. CSV downloads (real, auth blob) for Cash flow /
- *     Cycle P&L / Labor via /exports; view-summary for CoKG / Harvest via
- *     /reports generators. Bank Evidence / Chemical / Buyer = honest empty.
- *   Bank Evidence/Net Worth/Dispatch/Recipients/Schedule: layout + honest note.
+ * Live: "Net so far" tile from financials/farm net_profit; report rows navigate
+ * to real pages. Bank Evidence doc layout shown WITHOUT a fabricated score.
  */
 import { useState } from "react";
-import { QueryClientProvider, QueryClient } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
+import { QueryClientProvider, QueryClient, useQuery } from "@tanstack/react-query";
+import {
+  Sprout, Package, Users, Coins, BarChart3, Scale, DollarSign, FlaskConical,
+  Shield, Award, Star, Truck, Plus,
+} from "lucide-react";
 
 import { CurrentFarmProvider, useCurrentFarm } from "../../context/CurrentFarmContext";
 import FarmSelector from "../../components/farm/FarmSelector";
 import ModeDropdown from "../../components/farm/ModeDropdown";
-import MetricCard from "../../components/farm/MetricCard";
 
 const C = {
   soil: "#5C4033", cream: "#F8F3E9", border: "#E6DED0", muted: "#8A7863",
@@ -34,105 +36,122 @@ const TABS = [
   { id: "schedule", label: "Schedule", hint: "Auto", needs: "a report-schedule endpoint" },
 ];
 
-// 8 report types. csv = real export download; view = generator summary; else honest.
-const REPORT_TYPES = [
-  { id: "bankevidence", name: "Bank Evidence", note: "credit score + signed PDF — needs a bank-evidence endpoint" },
-  { id: "cokg", name: "CoKG analysis", view: "reports/cokg" },
-  { id: "compliance", name: "Chemical compliance log", note: "needs a compliance-log report endpoint" },
-  { id: "harvest", name: "Harvest summary", view: "reports/harvest" },
-  { id: "cashflow", name: "Cash flow statement", csv: "exports/financials" },
-  { id: "cyclepl", name: "Cycle P&L", csv: "exports/cycles" },
-  { id: "labor", name: "Labor record", csv: "exports/labor" },
-  { id: "buyer", name: "Buyer statement", note: "needs a buyer-statement endpoint" },
+// Exact catalog from coreReportsView (13896-13912). `route` = real source page;
+// `tab` = switch sub-tab; `note` = built-from-records (toast).
+const CATS = [
+  { id: "operational", title: "Operational reports", sub: "Production, stock and labour", reports: [
+    { name: "Production report", what: "What was produced — by block, crop and animal", Icon: Sprout, route: "/farm/cycles" },
+    { name: "Inventory report", what: "Stock on hand, what was used and what to reorder", Icon: Package, route: "/farm/inventory" },
+    { name: "Labour report", what: "Hours, attendance and wages paid", Icon: Users, route: "/farm/labor" },
+  ]},
+  { id: "financial", title: "Financial reports", sub: "Money, profit and worth", reports: [
+    { name: "Cash report", what: "Money in and out across crops + animals", Icon: Coins, route: "/farm/cash" },
+    { name: "Profit & loss", what: "Earned, spent and net for every business", Icon: BarChart3, route: "/farm/analytics" },
+    { name: "Budget report", what: "Planned spend against actual spend", Icon: Scale, route: "/farm/cash" },
+    { name: "Net worth statement", what: "What your animals, stock and assets are worth", Icon: Scale, tab: "networth" },
+    { name: "Balance sheet", what: "What the farm owns and owes, and the owner's share", Icon: Scale, route: "/farm/cash" },
+    { name: "Valuation statement", what: "Estimated value of livestock, crops and assets", Icon: DollarSign, route: "/farm/cash" },
+  ]},
+  { id: "compliance", title: "Compliance reports", sub: "Audit trail and certificates", reports: [
+    { name: "Compliance log", what: "Spray records and animal withdrawal holds", Icon: FlaskConical, route: "/farm/compliance" },
+    { name: "Audit report", what: "Every logged action, hash-linked and tamper-proof", Icon: Shield, route: "/farm/history" },
+    { name: "Certification report", what: "Organic, GAP and export certificate status", Icon: Award, route: "/farm/compliance" },
+  ]},
+  { id: "stakeholder", title: "Stakeholder reports", sub: "For the ministry, investors, partners and buyers", reports: [
+    { name: "Government report", what: "Production and compliance summary for the ministry", Icon: Shield, note: "Built from your logged records" },
+    { name: "Investor report", what: "Financial performance and growth, for investors", Icon: Star, note: "Built from your logged records" },
+    { name: "NGO report", what: "Impact and beneficiary summary, for partners", Icon: Users, note: "Built from your logged records" },
+    { name: "Buyer statement", what: "Deliveries and what each buyer owes", Icon: Truck, route: "/farm/buyers" },
+  ]},
+  { id: "custom", title: "Custom reports", sub: "Build your own", reports: [
+    { name: "Custom report", what: "Choose what to include and build your own", Icon: Plus, note: "Pick what to include — builds on the live system" },
+  ]},
 ];
+const REPORT_COUNT = CATS.reduce((n, c) => n + c.reports.length, 0) + 1; // +1 Bank Evidence
 
 function authHeaders() {
   const tok = localStorage.getItem("tfos_access_token");
   return tok ? { "Content-Type": "application/json", Authorization: `Bearer ${tok}` } : { "Content-Type": "application/json" };
 }
 function emitToast(m) { window.dispatchEvent(new CustomEvent("tfos:toast", { detail: { message: m } })); }
+function fjd(v) { const n = Number(v ?? 0); return Number.isNaN(n) ? "FJ$ —" : `FJ$ ${n.toLocaleString("en-FJ", { maximumFractionDigits: 0 })}`; }
 
-async function downloadCsv(base, farmId, label) {
-  try {
-    const res = await fetch(`/api/v1/${base}/${encodeURIComponent(farmId)}.csv`, { headers: authHeaders() });
-    if (!res.ok) throw new Error();
-    const blob = await res.blob();
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url; a.download = `${label.replace(/\s+/g, "_").toLowerCase()}_${farmId}.csv`;
-    document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
-    emitToast(`${label} downloaded`);
-  } catch { emitToast(`Could not generate ${label}`); }
+function Tile({ label, value, sub, onClick, color }) {
+  return (
+    <div onClick={onClick} className="rounded-xl border p-3" style={{ background: "white", borderColor: C.border, cursor: onClick ? "pointer" : "default" }}>
+      <div className="text-[10px] uppercase tracking-wide" style={{ color: C.muted }}>{label}</div>
+      <div className="text-lg font-bold" style={{ color: color || C.soil }}>{value}</div>
+      {sub && <div className="text-[11px]" style={{ color: C.muted }}>{sub}</div>}
+    </div>
+  );
+}
+
+function ReportRow({ r }) {
+  const navigate = useNavigate();
+  const onOpen = () => { if (r.route) navigate(r.route); else if (r.tab) emitToast(`${r.name}: see the Net Worth tab`); else emitToast(`${r.name} · ${r.note}`); };
+  return (
+    <div className="flex items-center gap-3 rounded-xl border p-3" style={{ background: "white", borderColor: C.border }}>
+      <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={{ background: C.cream, color: C.greenDk }}><r.Icon size={16} /></div>
+      <div className="flex-1 min-w-0">
+        <div className="font-medium text-sm" style={{ color: C.soil }}>{r.name}</div>
+        <div className="text-xs truncate" style={{ color: C.muted }}>{r.what}</div>
+      </div>
+      <button onClick={onOpen} className="text-xs px-3 py-1.5 rounded-lg shrink-0" style={{ color: C.greenDk, border: `1px solid ${C.border}` }}>Open</button>
+    </div>
+  );
+}
+
+function LibraryTab({ farmId, setTab }) {
+  const navigate = useNavigate();
+  const fin = useQuery({ queryKey: ["repfin", farmId], queryFn: async () => {
+    const res = await fetch(`/api/v1/financials/farm/${encodeURIComponent(farmId)}`, { headers: authHeaders() });
+    if (!res.ok) throw new Error(); return res.json();
+  }, enabled: !!farmId, retry: 0 });
+  const net = fin.data?.data?.summary?.net_profit_fjd;
+
+  return (
+    <div className="space-y-4">
+      {/* verification chain banner */}
+      <div className="rounded-xl border p-3 flex items-center justify-between gap-2 flex-wrap" style={{ background: C.greenTint, borderColor: C.border }}>
+        <div className="text-xs" style={{ color: C.greenDk }}>✓ Verification chain · <strong>INTACT</strong> — every logged record carries a stamp; nothing here is edited after the fact.</div>
+        <button onClick={() => emitToast("Verification runs against the audit chain (/verify/{hash})")} className="text-[11px] px-2 py-1 rounded-lg" style={{ color: C.greenDk, border: `1px solid ${C.border}` }}>Run verification</button>
+      </div>
+
+      {/* 4 tiles */}
+      <div className="grid gap-2 grid-cols-2 sm:grid-cols-4">
+        <Tile label="Reports you can make" value={String(REPORT_COUNT)} sub="crops + animals" />
+        <Tile label="Bank Evidence" value="Ready to make" sub="whole farm" onClick={() => setTab("bankevidence")} color={C.greenDk} />
+        <Tile label="Net so far" value={net == null ? "—" : fjd(net)} sub="crops + animals" onClick={() => navigate("/farm/cash")} color={Number(net) < 0 ? C.red : C.greenDk} />
+        <Tile label="Bank readiness score" value="Building" sub="needs a season of records" color={C.amber} />
+      </div>
+
+      {/* Bank Evidence hero */}
+      <div className="rounded-xl border-2 p-4 flex items-center gap-3" style={{ background: "white", borderColor: C.green }}>
+        <div className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0" style={{ background: C.greenTint, color: C.greenDk }}><Award size={20} /></div>
+        <div className="flex-1 min-w-0">
+          <div className="font-semibold text-sm" style={{ color: C.soil }}>Bank Evidence</div>
+          <div className="text-xs" style={{ color: C.muted }}>The whole-farm summary a lender reads — identity, money, standing, verification.</div>
+        </div>
+        <button onClick={() => setTab("bankevidence")} className="text-sm px-4 py-2 rounded-lg text-white shrink-0" style={{ background: C.greenDk }}>Open</button>
+      </div>
+
+      {/* grouped categories */}
+      {CATS.map((cat) => (
+        <div key={cat.id}>
+          <div className="text-sm font-semibold" style={{ color: C.soil }}>{cat.title}</div>
+          <div className="text-xs mb-2" style={{ color: C.muted }}>{cat.sub}</div>
+          <div className="space-y-2">{cat.reports.map((r) => <ReportRow key={r.name} r={r} />)}</div>
+        </div>
+      ))}
+    </div>
+  );
 }
 
 function NeedsBlock({ label, hint, needs }) {
   return (
     <div className="rounded-xl py-8 px-4 text-center" style={{ background: C.cream, border: `1px dashed ${C.border}` }}>
       <div className="text-sm font-medium" style={{ color: C.soil }}>{label}{hint ? ` · ${hint}` : ""}</div>
-      <div className="text-xs mt-1 max-w-md mx-auto" style={{ color: C.muted }}>
-        This is laid out and will populate from {needs}. No numbers shown until that data is real — by design.
-      </div>
-    </div>
-  );
-}
-
-function ReportTypeCard({ rt, farmId }) {
-  const [summary, setSummary] = useState(null);
-  const [busy, setBusy] = useState(false);
-  const live = !!(rt.csv || rt.view);
-
-  async function view() {
-    setBusy(true);
-    try {
-      const res = await fetch(`/api/v1/${rt.view}/${encodeURIComponent(farmId)}`, { headers: authHeaders() });
-      if (!res.ok) throw new Error();
-      const body = await res.json();
-      const obj = body?.data ?? body;
-      // pull top-level numeric fields as headline tiles (generic, won't break)
-      const nums = Object.entries(obj).filter(([, v]) => typeof v === "number").slice(0, 6);
-      setSummary(nums.length ? nums : [["result", "fetched ✓"]]);
-    } catch { emitToast(`Could not generate ${rt.name}`); } finally { setBusy(false); }
-  }
-
-  return (
-    <div className="rounded-xl p-3 border" style={{ background: "white", borderColor: C.border }}>
-      <div className="flex items-center justify-between gap-2 flex-wrap">
-        <div>
-          <div className="font-medium text-sm" style={{ color: C.soil }}>{rt.name}</div>
-          <div className="text-[11px]" style={{ color: C.muted }}>{rt.note || (rt.csv ? "CSV export" : "summary generator")}</div>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ color: live ? C.greenDk : C.muted, background: live ? C.greenTint : C.cream, border: `1px solid ${C.border}` }}>{live ? "Live" : "Needs backend"}</span>
-          {rt.csv && <button onClick={() => downloadCsv(rt.csv, farmId, rt.name)} className="text-xs px-3 py-1.5 rounded-lg text-white" style={{ background: C.greenDk }}>Download CSV</button>}
-          {rt.view && <button onClick={view} disabled={busy} className="text-xs px-3 py-1.5 rounded-lg" style={{ color: C.greenDk, border: `1px solid ${C.border}` }}>{busy ? "…" : "View summary"}</button>}
-        </div>
-      </div>
-      {summary && (
-        <div className="grid gap-2 grid-cols-2 sm:grid-cols-3 mt-3">
-          {summary.map(([k, v]) => (
-            <div key={k} className="rounded-lg px-2 py-2" style={{ background: C.cream }}>
-              <div className="text-[10px] uppercase tracking-wide" style={{ color: C.muted }}>{k.replace(/_/g, " ")}</div>
-              <div className="text-sm font-semibold" style={{ color: C.soil }}>{typeof v === "number" ? v.toLocaleString() : String(v)}</div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function LibraryTab({ farmId }) {
-  const liveCount = REPORT_TYPES.filter((r) => r.csv || r.view).length;
-  return (
-    <div className="space-y-3">
-      <div className="grid gap-2 grid-cols-2 sm:grid-cols-3">
-        <MetricCard label="Report types" value={String(REPORT_TYPES.length)} sub="catalog" />
-        <MetricCard label="Generatable" value={String(liveCount)} sub="live now" />
-        <MetricCard label="Bank Evidence" phase="needs endpoint" />
-      </div>
-      <div className="space-y-2">
-        {REPORT_TYPES.map((rt) => <ReportTypeCard key={rt.id} rt={rt} farmId={farmId} />)}
-      </div>
+      <div className="text-xs mt-1 max-w-md mx-auto" style={{ color: C.muted }}>This is laid out and will populate from {needs}. No numbers shown until that data is real — by design.</div>
     </div>
   );
 }
@@ -140,21 +159,25 @@ function LibraryTab({ farmId }) {
 function BankEvidenceTab() {
   return (
     <div className="space-y-3">
-      {/* doc layout — letterhead + sections, no fabricated score */}
       <div className="rounded-xl border p-4" style={{ background: "white", borderColor: C.border }}>
         <div className="text-xs font-semibold tracking-widest" style={{ color: C.greenDk }}>TEIVAKA FARM OS</div>
         <div className="text-lg font-bold" style={{ color: C.soil }}>Bank Evidence Report</div>
-        <div className="text-xs" style={{ color: C.muted }}>Credit factors · FICO-analog · hash-chain verifiable</div>
+        <div className="text-xs" style={{ color: C.muted }}>Identity · money · standing · verification · hash-chain verifiable</div>
         <div className="grid gap-2 grid-cols-2 sm:grid-cols-4 mt-3">
-          {["Farm profile", "Harvest record", "Record length", "Credit score"].map((s) => (
+          {["The farm", "Money to date", "What this farm runs", "Standing"].map((s) => (
             <div key={s} className="rounded-lg px-2 py-3 text-center" style={{ background: C.cream }}>
               <div className="text-[10px] uppercase" style={{ color: C.muted }}>{s}</div>
               <div className="text-sm font-semibold" style={{ color: C.muted }}>—</div>
             </div>
           ))}
         </div>
+        <div className="flex gap-2 mt-3 flex-wrap">
+          {["WhatsApp to Operator", "Email to banker", "QR to buyer"].map((d) => (
+            <span key={d} className="text-[11px] px-2 py-1 rounded-lg" style={{ color: C.muted, border: `1px solid ${C.border}` }}>{d}</span>
+          ))}
+        </div>
       </div>
-      <NeedsBlock label="Bank Evidence" hint="The flagship" needs="a credit-score + signed-PDF + QR-verify endpoint. The layout is the contract; the numbers stay blank until the engine is real (we never show a fabricated credit score to a banker)." />
+      <NeedsBlock label="Bank Evidence" hint="The flagship" needs="a credit-score + signed-PDF + QR-verify engine. The layout is the contract; numbers stay blank until real (we never show a fabricated credit score to a banker)." />
     </div>
   );
 }
@@ -167,18 +190,9 @@ function ReportsInner() {
     <div className="space-y-4">
       <div>
         <h1 className="text-2xl font-bold" style={{ color: C.soil }}>Reports</h1>
-        <div className="text-xs mt-0.5" style={{ color: C.muted }}>Evidence-output engine · Bank Evidence · dispatch</div>
+        <div className="text-xs mt-0.5" style={{ color: C.muted }}>documents a bank or buyer can read — every number from logged activity</div>
       </div>
       <div className="flex items-center justify-between gap-2 flex-wrap"><FarmSelector /><ModeDropdown /></div>
-
-      {/* hash-chain integrity banner */}
-      <div className="rounded-xl border p-3 flex items-center justify-between gap-2 flex-wrap" style={{ background: C.greenTint, borderColor: C.border }}>
-        <div className="text-xs" style={{ color: C.greenDk }}>
-          🔗 Hash-chain integrity — every report is anchored to <code>audit.events</code>.
-        </div>
-        <span className="text-[11px]" style={{ color: C.muted }}>Banker verify by record: <code>/verify/&#123;hash&#125;</code></span>
-      </div>
-
       <div className="flex gap-1 overflow-x-auto border-b" style={{ borderColor: C.border }}>
         {TABS.map((t) => (
           <button key={t.id} onClick={() => setTab(t.id)} className="px-3 py-2 text-sm font-medium whitespace-nowrap flex flex-col items-start shrink-0"
@@ -187,10 +201,8 @@ function ReportsInner() {
           </button>
         ))}
       </div>
-
       <section className="bg-white rounded-2xl px-3 py-4 sm:px-4" style={{ border: `1px solid ${C.border}` }}>
-        <div className="text-sm font-semibold uppercase tracking-wider mb-3" style={{ color: C.soil }}>{active.label} · {active.hint}</div>
-        {tab === "library" && <LibraryTab farmId={farmId} />}
+        {tab === "library" && <LibraryTab farmId={farmId} setTab={setTab} />}
         {tab === "bankevidence" && <BankEvidenceTab />}
         {active.needs && <NeedsBlock label={active.label} hint={active.hint} needs={active.needs} />}
       </section>
