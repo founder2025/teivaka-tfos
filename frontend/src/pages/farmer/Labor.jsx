@@ -38,14 +38,17 @@ const WORKER_TYPES = [
   { value: "CONTRACTOR", label: "Contractor" },
 ];
 
-// Prototype view tabs. `phase` set = dimmed stub (no backend yet).
+// Prototype view tabs (all 8, in prototype order). `needs` set = the specific
+// backend that tab waits on → rendered as an honest structured empty state.
 const TABS = [
-  { id: "roster", label: "Roster", hint: "Workers" },
+  { id: "today", label: "Today", hint: "Who's working" },
+  { id: "roster", label: "Roster", hint: "Employees & teams" },
   { id: "timesheets", label: "Timesheets", hint: "Hours & days" },
-  { id: "payroll", label: "Payroll", hint: "Owed & paid", phase: "Phase 4.2" },
-  { id: "tasks", label: "Tasks", hint: "Assignments", phase: "Phase 4.2" },
-  { id: "costing", label: "Costing", hint: "Labour cost", phase: "Phase 6" },
-  { id: "productivity", label: "Productivity", hint: "Trends", phase: "Phase 6" },
+  { id: "payroll", label: "Payroll", hint: "Owed & paid", needs: "a wage-payments + FNPF endpoint" },
+  { id: "tasks", label: "Tasks", hint: "Assignments", needs: "a task-assignment endpoint" },
+  { id: "costing", label: "Costing", hint: "Labour cost", needs: "per-cycle labour cost rollup" },
+  { id: "develop", label: "Training & safety", hint: "Skills & records", needs: "a training/skills records table" },
+  { id: "productivity", label: "Productivity", hint: "Trends", needs: "productivity attribution data" },
 ];
 
 function authHeaders() {
@@ -194,7 +197,7 @@ function LogAttendanceModal({ farmId, workers, isOpen, onClose, onSaved }) {
 function LaborInner() {
   const qc = useQueryClient();
   const { farmId } = useCurrentFarm();
-  const [tab, setTab] = useState("roster");
+  const [tab, setTab] = useState("today");
   const [addOpen, setAddOpen] = useState(false);
   const [logOpen, setLogOpen] = useState(false);
   const [rateWorker, setRateWorker] = useState(null);
@@ -233,7 +236,7 @@ function LaborInner() {
       <div className="flex gap-1 overflow-x-auto border-b" style={{ borderColor: C.border }}>
         {TABS.map((t) => (
           <button key={t.id} onClick={() => setTab(t.id)} className="px-3 py-2 text-sm font-medium whitespace-nowrap flex flex-col items-start"
-            style={{ color: tab === t.id ? C.greenDk : C.muted, borderBottom: tab === t.id ? `2px solid ${C.green}` : "2px solid transparent", opacity: t.phase ? 0.6 : 1 }}>
+            style={{ color: tab === t.id ? C.greenDk : C.muted, borderBottom: tab === t.id ? `2px solid ${C.green}` : "2px solid transparent", opacity: t.needs ? 0.6 : 1 }}>
             {t.label}<span className="text-[10px]" style={{ color: C.muted }}>{t.hint}</span>
           </button>
         ))}
@@ -246,10 +249,33 @@ function LaborInner() {
           {tab === "roster" && (
             <button onClick={() => setAddOpen(true)} className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-white text-sm" style={{ background: C.greenDk }}><Plus size={15} /> Add worker</button>
           )}
-          {tab === "timesheets" && (
+          {(tab === "timesheets" || tab === "today") && (
             <button onClick={() => setLogOpen(true)} className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-white text-sm" style={{ background: C.greenDk }}><Clock size={15} /> Mark attendance</button>
           )}
         </div>
+
+        {/* Today — who's working (real worker grid; live status awaits a check-in endpoint) */}
+        {tab === "today" && (
+          <div>
+            {workersQuery.isLoading && <p style={{ color: C.muted }}>Loading team…</p>}
+            {!workersQuery.isLoading && workers.length === 0 && <p style={{ color: C.muted }}>No workers on this farm yet. Add workers in the Roster tab.</p>}
+            <div className="grid gap-2 grid-cols-1 sm:grid-cols-2">
+              {workers.map((w) => (
+                <div key={w.worker_id} className="flex items-center gap-3 rounded-xl p-3" style={{ background: C.cream }}>
+                  <div className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-semibold text-white" style={{ background: C.green }}>{initials(w.full_name)}</div>
+                  <div className="flex-1">
+                    <div className="font-medium text-sm" style={{ color: C.soil }}>{w.full_name}</div>
+                    <div className="text-xs" style={{ color: C.muted }}>{typeLabel(w.worker_type)} · {formatFJD(w.daily_rate_fjd)}/day</div>
+                  </div>
+                  <span className="text-[10px] font-semibold px-2 py-1 rounded-full" style={{ color: C.muted, background: "white", border: `1px solid ${C.border}` }}>status —</span>
+                </div>
+              ))}
+            </div>
+            {workers.length > 0 && (
+              <p className="text-xs mt-3" style={{ color: C.muted }}>Live on-site / expected status needs a worker check-in endpoint — until then, status reads “—”. Use “Mark attendance” to log a day.</p>
+            )}
+          </div>
+        )}
 
         {/* Roster */}
         {tab === "roster" && (
@@ -294,11 +320,13 @@ function LaborInner() {
           </div>
         )}
 
-        {/* Phase-stub tabs */}
-        {activeTab.phase && (
-          <div className="py-10 text-center">
-            <div className="text-sm font-medium" style={{ color: C.soil }}>{activeTab.label} — coming in {activeTab.phase}</div>
-            <div className="text-xs mt-1" style={{ color: C.muted }}>This surface needs a backend endpoint before it shows real data. No mock numbers here on purpose.</div>
+        {/* Tabs awaiting a backend — full section structure, honest empty (no mock data) */}
+        {activeTab.needs && (
+          <div className="rounded-xl py-8 px-4 text-center" style={{ background: C.cream, border: `1px dashed ${C.border}` }}>
+            <div className="text-sm font-medium" style={{ color: C.soil }}>{activeTab.label}</div>
+            <div className="text-xs mt-1 max-w-md mx-auto" style={{ color: C.muted }}>
+              This tab is ready and will populate from {activeTab.needs}. No numbers are shown until that data is real — by design, so nothing here is fabricated.
+            </div>
           </div>
         )}
       </section>
