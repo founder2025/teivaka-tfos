@@ -41,6 +41,12 @@ async function createFarm(payload) {
   if (!res.ok) throw new Error(body?.detail || `Create failed (${res.status})`);
   return body;
 }
+async function updateFarm(farmId, payload) {
+  const res = await fetch(`/api/v1/farms/${farmId}`, { method:"PATCH", headers: authHeaders(), body: JSON.stringify(payload) });
+  const body = await res.json().catch(()=>({}));
+  if (!res.ok) throw new Error(body?.detail || `Update failed (${res.status})`);
+  return body;
+}
 function area(ha) {
   if (ha == null) return "—";
   const n = Number(ha);
@@ -78,6 +84,37 @@ export default function FarmSelector() {
       land_area_ha: form.land_area_ha ? Number(form.land_area_ha) : null,
       notes: form.notes.trim() || null,
     });
+  }
+
+  const [showManage, setShowManage] = useState(false);
+  const [editFarm, setEditFarm] = useState(null); // null = list view; farm obj = edit view
+  const [edit, setEdit] = useState({ farm_name:"", location_name:"", location_island:"", land_area_ha:"", notes:"" });
+  const [editErr, setEditErr] = useState("");
+  const editMut = useMutation({
+    mutationFn: ({ id, p }) => updateFarm(id, p),
+    onSuccess: () => { qc.invalidateQueries({ queryKey:["farms"] }); setEditFarm(null); setEditErr(""); },
+    onError: (e) => setEditErr(String(e.message || "Could not save changes")),
+  });
+  function openEdit(f) {
+    setEditFarm(f);
+    setEdit({
+      farm_name: f.farm_name || "",
+      location_name: f.location_name || "",
+      location_island: f.location_island || "",
+      land_area_ha: f.land_area_ha != null ? String(f.land_area_ha) : "",
+      notes: f.notes || "",
+    });
+    setEditErr("");
+  }
+  function submitEdit() {
+    if (!edit.farm_name.trim()) { setEditErr("Farm name is required."); return; }
+    editMut.mutate({ id: editFarm.farm_id, p: {
+      farm_name: edit.farm_name.trim(),
+      location_name: edit.location_name.trim() || null,
+      location_island: edit.location_island.trim() || null,
+      land_area_ha: edit.land_area_ha ? Number(edit.land_area_ha) : null,
+      notes: edit.notes.trim() || null,
+    }});
   }
 
   const { data: farms = [], isLoading } = useQuery({ queryKey:["farms"], queryFn: fetchFarms });
@@ -153,7 +190,7 @@ export default function FarmSelector() {
                 <Plus size={14} style={{ color:C.greenDk }} /> Add another farm
               </button>
             )}
-            <button onClick={()=>window.dispatchEvent(new CustomEvent("tfos:manage-farms"))} className="flex items-center gap-2 w-full text-left px-3 py-2 text-[13px]" style={{ color:C.soil, cursor:"pointer" }}
+            <button onClick={()=>{ setOpen(false); setEditFarm(null); setShowManage(true); }} className="flex items-center gap-2 w-full text-left px-3 py-2 text-[13px]" style={{ color:C.soil, cursor:"pointer" }}
               onMouseEnter={(e)=>e.currentTarget.style.background=C.cream} onMouseLeave={(e)=>e.currentTarget.style.background="transparent"}>
               <Settings size={14} style={{ color:C.greenDk }} /> Manage farms
             </button>
@@ -181,6 +218,49 @@ export default function FarmSelector() {
               <button onClick={()=>setShowAdd(false)} className="text-[13px] px-3 py-1.5 rounded-lg" style={{ border:`1px solid ${C.line}`, color:C.soil, cursor:"pointer" }}>Cancel</button>
               <button onClick={submitAdd} disabled={addMut.isPending} className="text-[13px] font-semibold px-3 py-1.5 rounded-lg text-white" style={{ background:C.green, cursor:"pointer", opacity:addMut.isPending?0.6:1 }}>{addMut.isPending?"Creating…":"Create farm"}</button>
             </div>
+          </div>
+        </div>
+      )}
+    
+      {showManage && (
+        <div onClick={()=>setShowManage(false)} style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.35)", zIndex:100, display:"flex", alignItems:"center", justifyContent:"center", padding:16 }}>
+          <div onClick={(e)=>e.stopPropagation()} className="rounded-2xl" style={{ background:C.paper, width:"100%", maxWidth:440, border:`1px solid ${C.line}`, overflow:"hidden" }}>
+            <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom:`1px solid ${C.line}`, background:C.cream }}>
+              <div className="flex items-center gap-2"><Settings size={15} style={{ color:C.greenDk }}/><strong style={{ color:C.soil, fontSize:15 }}>{editFarm ? `Edit ${editFarm.farm_name||editFarm.farm_id}` : "Manage farms"}</strong></div>
+              <button onClick={()=>setShowManage(false)} style={{ cursor:"pointer", color:C.muted, background:"none", border:"none" }}><X size={16}/></button>
+            </div>
+            {!editFarm && (
+              <div className="py-1" style={{ maxHeight:360, overflowY:"auto" }}>
+                {farms.map((f)=>(
+                  <button key={f.farm_id} onClick={()=>openEdit(f)} className="flex items-center gap-2.5 w-full text-left px-4 py-2.5" style={{ cursor:"pointer", borderBottom:`1px solid ${C.line}` }}
+                    onMouseEnter={(e)=>e.currentTarget.style.background=C.cream} onMouseLeave={(e)=>e.currentTarget.style.background="transparent"}>
+                    <div className="flex items-center justify-center rounded-lg" style={{ width:30, height:30, background:C.paper, border:`1px solid ${C.line}` }}><Leaf size={15} style={{ color:C.greenDk }}/></div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-semibold" style={{ color:C.soil }}>{f.farm_name||f.farm_id}</div>
+                      <div className="text-[11px]" style={{ color:C.muted }}>{[f.farm_id, f.location_island||f.location_name].filter(Boolean).join(" · ")} · {f.land_area_ha!=null?Number(f.land_area_ha).toFixed(2)+" ha":"—"}</div>
+                    </div>
+                    <Settings size={14} style={{ color:C.muted }} />
+                  </button>
+                ))}
+              </div>
+            )}
+            {editFarm && (
+              <>
+                <div className="px-4 py-3 flex flex-col gap-2.5">
+                  <div className="text-[11px]" style={{ color:C.muted }}>Farm ID: <strong style={{ color:C.soil }}>{editFarm.farm_id}</strong> (cannot change)</div>
+                  <Field label="Farm name *" value={edit.farm_name} onChange={(v)=>setEdit(f=>({...f,farm_name:v}))} />
+                  <Field label="Location" value={edit.location_name} onChange={(v)=>setEdit(f=>({...f,location_name:v}))} />
+                  <Field label="Island / province" value={edit.location_island} onChange={(v)=>setEdit(f=>({...f,location_island:v}))} />
+                  <Field label="Land area (hectares)" type="number" value={edit.land_area_ha} onChange={(v)=>setEdit(f=>({...f,land_area_ha:v}))} />
+                  <Field label="Notes" value={edit.notes} onChange={(v)=>setEdit(f=>({...f,notes:v}))} />
+                  {editErr && <div className="text-[12px] px-2 py-1.5 rounded" style={{ background:"#FBEAEA", color:"#A32D2D" }}>{editErr}</div>}
+                </div>
+                <div className="flex justify-between gap-2 px-4 py-3" style={{ borderTop:`1px solid ${C.line}` }}>
+                  <button onClick={()=>setEditFarm(null)} className="text-[13px] px-3 py-1.5 rounded-lg" style={{ border:`1px solid ${C.line}`, color:C.soil, cursor:"pointer" }}>Back to list</button>
+                  <button onClick={submitEdit} disabled={editMut.isPending} className="text-[13px] font-semibold px-3 py-1.5 rounded-lg text-white" style={{ background:C.green, cursor:"pointer", opacity:editMut.isPending?0.6:1 }}>{editMut.isPending?"Saving…":"Save changes"}</button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}
