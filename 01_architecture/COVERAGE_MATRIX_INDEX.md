@@ -15,7 +15,7 @@
 ## The 20 farm pages (exactly the rendered left-nav)
 | # | Nav label | id | Render fn | Lock | Audit status |
 |---|---|---|---|---|---|
-| 1 | Overview | overview | `coreOverviewV801` | — | ☐ todo |
+| 1 | Overview | overview | `coreOverviewV801` | — | ✅ COMPLETE (~55) |
 | 2 | Farm History | history | (history view) | — | ☐ todo |
 | 3 | Tasks | tasks | (tasks view) | — | ☐ todo |
 | 4 | Decision Center | decisions | (decisions view) | 🔒 | ☐ todo |
@@ -51,4 +51,4 @@
 Audit the real pages, prototype-only, to the Labour/Compliance depth bar:
 **Production (#6)** → **Enterprises (#5)** (these two reconcile the cycles/harvest content) → Overview → Tasks → Inventory → Buyers → Assets & Equipment → Locations → Analytics → Reports → Decision Center → Farm History → Weather → Library → Gallery → Partnerships → Settings → then Home/Classroom/TIS/Me.
 
-**Done: 5 / 20 farm pages** (Labor, Cash, Compliance, Production, Enterprises).
+**Done: 6 / 20 farm pages** (Overview, Enterprises, Production, Labor, Cash, Compliance).
