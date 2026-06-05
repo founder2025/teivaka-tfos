@@ -28,7 +28,7 @@
 | 11 | Assets & Equipment | equipment | `coreEquipmentView` | — | ✅ COMPLETE (~55) |
 | 12 | Locations | locations | `coreLocationsView` | — | ✅ COMPLETE (~25) |
 | 13 | Compliance | compliance | `complianceStatusView` | — | ✅ COMPLETE (~75) |
-| 14 | Analytics | analytics | (analytics view) | — | ☐ todo |
+| 14 | Analytics | analytics | `coreAnalyticsView` | — | ✅ COMPLETE (~55) |
 | 15 | Reports | reports | (reports view) | — | ☐ todo |
 | 16 | Weather | weather | (weather view) | 🔒 | ☐ todo |
 | 17 | Library | library | (library view) | — | ☐ todo |
@@ -51,4 +51,4 @@
 Audit the real pages, prototype-only, to the Labour/Compliance depth bar:
 **Production (#6)** → **Enterprises (#5)** (these two reconcile the cycles/harvest content) → Overview → Tasks → Inventory → Buyers → Assets & Equipment → Locations → Analytics → Reports → Decision Center → Farm History → Weather → Library → Gallery → Partnerships → Settings → then Home/Classroom/TIS/Me.
 
-**Done: 11 / 20 farm pages** (+ Locations).
+**Done: 12 / 20 farm pages** (+ Analytics).
