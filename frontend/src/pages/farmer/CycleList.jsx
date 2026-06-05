@@ -23,6 +23,8 @@
  */
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import NurseryRegister from "../../components/farm/NurseryRegister";
+import PerformanceSummary from "../../components/farm/PerformanceSummary";
 
 const C = {
   soil:    "#5C4033",
@@ -109,7 +111,7 @@ function HeaderBar() {
           Crops
         </h1>
         <p className="text-sm mt-1" style={{ color: C.muted }}>
-          Active and past crop runs
+          Nursery, crop runs, and performance
         </p>
       </div>
       <Link
@@ -239,6 +241,7 @@ export default function CycleList() {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const currentFarmId = (typeof localStorage !== "undefined" && localStorage.getItem("tfos_current_farm_id")) || null;
 
   useEffect(() => {
     let cancelled = false;
@@ -277,10 +280,12 @@ export default function CycleList() {
     <div style={{ background: C.cream, minHeight: "100%" }}>
       <div style={{ maxWidth: 1200, margin: "0 auto", padding: 24 }}>
         <HeaderBar />
+            <NurseryRegister farmId={currentFarmId} />
         {loading && <LoadingState />}
         {!loading && error && <ErrorPanel message={error} />}
         {!loading && !error && rows.length === 0 && <EmptyState />}
         {!loading && !error && rows.length > 0 && <CycleTable rows={rows} />}
+            <PerformanceSummary />
       </div>
     </div>
   );

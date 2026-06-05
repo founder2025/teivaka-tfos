@@ -42,7 +42,7 @@ export const PILLAR_SUB_NAV = {
     items: [
       { path: "/farm",              label: "Overview",     icon: Tractor },
       { path: "/farm/tasks",        label: "Tasks",        icon: ListTodo },
-      { path: "/farm/cycles",       label: "Cycles",       icon: Sprout },
+      { path: "/farm/cycles",       label: "Production",       icon: Sprout },
       { path: "/farm/poultry",      label: "Poultry",      icon: Bird },
       { path: "/farm/harvests",     label: "Harvests",     icon: Package },
       { path: "/farm/field-events", label: "Field Events", icon: CloudRain },
