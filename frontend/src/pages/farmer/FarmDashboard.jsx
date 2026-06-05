@@ -30,6 +30,7 @@ import {
 } from "@tanstack/react-query";
 
 import { CurrentFarmProvider, useCurrentFarm } from "../../context/CurrentFarmContext";
+import RecentLoggedStrip from "../../components/farm/RecentLoggedStrip";
 import MetricCard       from "../../components/farm/MetricCard";
 import TopTaskBanner    from "../../components/farm/TopTaskBanner";
 import ActiveCyclesTable from "../../components/farm/ActiveCyclesTable";
@@ -206,7 +207,9 @@ function FarmOverview() {
         <ModeDropdown />
       </div>
 
-      <TopTaskBanner />
+      <RecentLoggedStrip farmId={farmId} />
+
+          <TopTaskBanner />
 
       <div className="grid gap-2 grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-6">
         {liveCards.map((c) => (
