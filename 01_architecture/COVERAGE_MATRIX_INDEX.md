@@ -16,7 +16,7 @@
 | # | Nav label | id | Render fn | Lock | Audit status |
 |---|---|---|---|---|---|
 | 1 | Overview | overview | `coreOverviewV801` | — | ✅ COMPLETE (~55) |
-| 2 | Farm History | history | (history view) | — | ☐ todo |
+| 2 | Farm History | history | `coreHistoryView` | — | ✅ COMPLETE (~15) |
 | 3 | Tasks | tasks | `coreTasksView` | — | ✅ COMPLETE (~35) |
 | 4 | Decision Center | decisions | `coreDecisionView` | 🔒 | ✅ COMPLETE (~20) |
 | 5 | Enterprises | enterprises | `coreEnterprisesView` | 🔒 | ✅ COMPLETE (~45) — absorbs cycle/harvest mgmt |
@@ -51,4 +51,4 @@
 Audit the real pages, prototype-only, to the Labour/Compliance depth bar:
 **Production (#6)** → **Enterprises (#5)** (these two reconcile the cycles/harvest content) → Overview → Tasks → Inventory → Buyers → Assets & Equipment → Locations → Analytics → Reports → Decision Center → Farm History → Weather → Library → Gallery → Partnerships → Settings → then Home/Classroom/TIS/Me.
 
-**Done: 14 / 20 farm pages** (+ Decision Center).
+**Done: 15 / 20 farm pages** (+ Farm History).
