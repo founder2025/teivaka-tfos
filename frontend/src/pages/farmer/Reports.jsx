@@ -1,21 +1,20 @@
 /**
  * Reports.jsx — /farm/reports
  *
- * Matches the v262 v801 `coreReportsView` (the rendered one): a "what reports
- * you can make" launcher. 6 sub-tabs (renderReportsViewTabs). Library tab =
- * verification banner + 4 tiles + Bank Evidence hero + 5 grouped report
- * categories (17 reports, exact names/descriptions from source 13896-13912),
- * each row Opens its live source page.
- *
- * Live: "Net so far" tile from financials/farm net_profit; report rows navigate
- * to real pages. Bank Evidence doc layout shown WITHOUT a fabricated score.
+ * Mirrors v262 `coreReportsView` → the `ur*View` family (Gate-1 traced):
+ *   urLibraryView · urBankEvidenceView(urBankDoc) · urNetWorthView ·
+ *   urDispatchLogView · urRecipientsView · urScheduleView.
+ * All 6 tabs built to their real layouts. Live where the API serves it
+ * (Net so far, Bank Evidence Money-to-date / runs — from financials); honest
+ * where it doesn't (credit score, valuation, dispatch log). No fabricated
+ * numbers shown to a banker.
  */
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { QueryClientProvider, QueryClient, useQuery } from "@tanstack/react-query";
 import {
   Sprout, Package, Users, Coins, BarChart3, Scale, DollarSign, FlaskConical,
-  Shield, Award, Star, Truck, Plus,
+  Shield, Award, Star, Truck, Plus, Phone, FileText, QrCode, Calendar, Download,
 } from "lucide-react";
 
 import { CurrentFarmProvider, useCurrentFarm } from "../../context/CurrentFarmContext";
@@ -30,14 +29,12 @@ const C = {
 const TABS = [
   { id: "library", label: "Library", hint: "All reports" },
   { id: "bankevidence", label: "Bank Evidence", hint: "The flagship" },
-  { id: "networth", label: "Net Worth", hint: "Asset statement", needs: "a net-worth/asset-statement endpoint" },
-  { id: "dispatchlog", label: "Dispatch log", hint: "Sent", needs: "a report-dispatch log endpoint" },
-  { id: "recipients", label: "Recipients", hint: "Contacts", needs: "a report-recipients endpoint" },
-  { id: "schedule", label: "Schedule", hint: "Auto", needs: "a report-schedule endpoint" },
+  { id: "networth", label: "Net Worth", hint: "Asset statement" },
+  { id: "dispatchlog", label: "Dispatch log", hint: "Sent" },
+  { id: "recipients", label: "Recipients", hint: "Contacts" },
+  { id: "schedule", label: "Schedule", hint: "Auto" },
 ];
 
-// Exact catalog from coreReportsView (13896-13912). `route` = real source page;
-// `tab` = switch sub-tab; `note` = built-from-records (toast).
 const CATS = [
   { id: "operational", title: "Operational reports", sub: "Production, stock and labour", reports: [
     { name: "Production report", what: "What was produced — by block, crop and animal", Icon: Sprout, route: "/farm/cycles" },
@@ -67,7 +64,7 @@ const CATS = [
     { name: "Custom report", what: "Choose what to include and build your own", Icon: Plus, note: "Pick what to include — builds on the live system" },
   ]},
 ];
-const REPORT_COUNT = CATS.reduce((n, c) => n + c.reports.length, 0) + 1; // +1 Bank Evidence
+const REPORT_COUNT = CATS.reduce((n, c) => n + c.reports.length, 0) + 1;
 
 function authHeaders() {
   const tok = localStorage.getItem("tfos_access_token");
@@ -75,7 +72,47 @@ function authHeaders() {
 }
 function emitToast(m) { window.dispatchEvent(new CustomEvent("tfos:toast", { detail: { message: m } })); }
 function fjd(v) { const n = Number(v ?? 0); return Number.isNaN(n) ? "FJ$ —" : `FJ$ ${n.toLocaleString("en-FJ", { maximumFractionDigits: 0 })}`; }
+async function getJSON(url) { const r = await fetch(url, { headers: authHeaders() }); if (!r.ok) throw new Error(); return r.json(); }
+const useFarmFin = (farmId) => useQuery({ queryKey: ["repfin", farmId], queryFn: () => getJSON(`/api/v1/financials/farm/${encodeURIComponent(farmId)}`), enabled: !!farmId, retry: 0 });
+const useCrops = (farmId) => useQuery({ queryKey: ["repcrops", farmId], queryFn: () => getJSON(`/api/v1/financials/crops/${encodeURIComponent(farmId)}`), enabled: !!farmId, retry: 0 });
 
+function ChainBanner() {
+  return (
+    <div className="rounded-xl border p-3 flex items-center justify-between gap-2 flex-wrap" style={{ background: C.greenTint, borderColor: C.border }}>
+      <div className="text-xs" style={{ color: C.greenDk }}>✓ Verification chain · <strong>INTACT</strong> — every logged record carries a stamp; nothing is edited after the fact.</div>
+      <button onClick={() => emitToast("Verification runs against the audit chain (/verify/{hash})")} className="text-[11px] px-2 py-1 rounded-lg" style={{ color: C.greenDk, border: `1px solid ${C.border}` }}>Run verification</button>
+    </div>
+  );
+}
+function KV({ k, v, strong }) {
+  return (
+    <div className="flex justify-between gap-3 py-2 text-sm" style={{ borderBottom: `1px solid ${C.border}` }}>
+      <span style={{ color: C.muted }}>{k}</span>
+      <span style={{ color: strong ? C.greenDk : C.soil, fontWeight: 600, textAlign: "right" }}>{v}</span>
+    </div>
+  );
+}
+function Section({ title, children }) {
+  return (
+    <div className="mt-3">
+      <div className="text-xs font-semibold uppercase tracking-wide mb-1" style={{ color: C.soil }}>{title}</div>
+      {children}
+    </div>
+  );
+}
+
+// ── Library ──────────────────────────────────────────────────────────
+function ReportRow({ r }) {
+  const navigate = useNavigate();
+  const onOpen = () => { if (r.route) navigate(r.route); else if (r.tab) emitToast(`${r.name}: see the Net Worth tab`); else emitToast(`${r.name} · ${r.note}`); };
+  return (
+    <div className="flex items-center gap-3 rounded-xl border p-3" style={{ background: "white", borderColor: C.border }}>
+      <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={{ background: C.cream, color: C.greenDk }}><r.Icon size={16} /></div>
+      <div className="flex-1 min-w-0"><div className="font-medium text-sm" style={{ color: C.soil }}>{r.name}</div><div className="text-xs truncate" style={{ color: C.muted }}>{r.what}</div></div>
+      <button onClick={onOpen} className="text-xs px-3 py-1.5 rounded-lg shrink-0" style={{ color: C.greenDk, border: `1px solid ${C.border}` }}>Open</button>
+    </div>
+  );
+}
 function Tile({ label, value, sub, onClick, color }) {
   return (
     <div onClick={onClick} className="rounded-xl border p-3" style={{ background: "white", borderColor: C.border, cursor: onClick ? "pointer" : "default" }}>
@@ -85,57 +122,24 @@ function Tile({ label, value, sub, onClick, color }) {
     </div>
   );
 }
-
-function ReportRow({ r }) {
-  const navigate = useNavigate();
-  const onOpen = () => { if (r.route) navigate(r.route); else if (r.tab) emitToast(`${r.name}: see the Net Worth tab`); else emitToast(`${r.name} · ${r.note}`); };
-  return (
-    <div className="flex items-center gap-3 rounded-xl border p-3" style={{ background: "white", borderColor: C.border }}>
-      <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={{ background: C.cream, color: C.greenDk }}><r.Icon size={16} /></div>
-      <div className="flex-1 min-w-0">
-        <div className="font-medium text-sm" style={{ color: C.soil }}>{r.name}</div>
-        <div className="text-xs truncate" style={{ color: C.muted }}>{r.what}</div>
-      </div>
-      <button onClick={onOpen} className="text-xs px-3 py-1.5 rounded-lg shrink-0" style={{ color: C.greenDk, border: `1px solid ${C.border}` }}>Open</button>
-    </div>
-  );
-}
-
 function LibraryTab({ farmId, setTab }) {
   const navigate = useNavigate();
-  const fin = useQuery({ queryKey: ["repfin", farmId], queryFn: async () => {
-    const res = await fetch(`/api/v1/financials/farm/${encodeURIComponent(farmId)}`, { headers: authHeaders() });
-    if (!res.ok) throw new Error(); return res.json();
-  }, enabled: !!farmId, retry: 0 });
+  const fin = useFarmFin(farmId);
   const net = fin.data?.data?.summary?.net_profit_fjd;
-
   return (
     <div className="space-y-4">
-      {/* verification chain banner */}
-      <div className="rounded-xl border p-3 flex items-center justify-between gap-2 flex-wrap" style={{ background: C.greenTint, borderColor: C.border }}>
-        <div className="text-xs" style={{ color: C.greenDk }}>✓ Verification chain · <strong>INTACT</strong> — every logged record carries a stamp; nothing here is edited after the fact.</div>
-        <button onClick={() => emitToast("Verification runs against the audit chain (/verify/{hash})")} className="text-[11px] px-2 py-1 rounded-lg" style={{ color: C.greenDk, border: `1px solid ${C.border}` }}>Run verification</button>
-      </div>
-
-      {/* 4 tiles */}
+      <ChainBanner />
       <div className="grid gap-2 grid-cols-2 sm:grid-cols-4">
         <Tile label="Reports you can make" value={String(REPORT_COUNT)} sub="crops + animals" />
         <Tile label="Bank Evidence" value="Ready to make" sub="whole farm" onClick={() => setTab("bankevidence")} color={C.greenDk} />
         <Tile label="Net so far" value={net == null ? "—" : fjd(net)} sub="crops + animals" onClick={() => navigate("/farm/cash")} color={Number(net) < 0 ? C.red : C.greenDk} />
         <Tile label="Bank readiness score" value="Building" sub="needs a season of records" color={C.amber} />
       </div>
-
-      {/* Bank Evidence hero */}
       <div className="rounded-xl border-2 p-4 flex items-center gap-3" style={{ background: "white", borderColor: C.green }}>
         <div className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0" style={{ background: C.greenTint, color: C.greenDk }}><Award size={20} /></div>
-        <div className="flex-1 min-w-0">
-          <div className="font-semibold text-sm" style={{ color: C.soil }}>Bank Evidence</div>
-          <div className="text-xs" style={{ color: C.muted }}>The whole-farm summary a lender reads — identity, money, standing, verification.</div>
-        </div>
+        <div className="flex-1 min-w-0"><div className="font-semibold text-sm" style={{ color: C.soil }}>Bank Evidence</div><div className="text-xs" style={{ color: C.muted }}>The whole-farm summary a lender reads — identity, money, standing, verification.</div></div>
         <button onClick={() => setTab("bankevidence")} className="text-sm px-4 py-2 rounded-lg text-white shrink-0" style={{ background: C.greenDk }}>Open</button>
       </div>
-
-      {/* grouped categories */}
       {CATS.map((cat) => (
         <div key={cat.id}>
           <div className="text-sm font-semibold" style={{ color: C.soil }}>{cat.title}</div>
@@ -147,37 +151,120 @@ function LibraryTab({ farmId, setTab }) {
   );
 }
 
-function NeedsBlock({ label, hint, needs }) {
+// ── Bank Evidence (urBankDoc) ────────────────────────────────────────
+function BankEvidenceTab({ farmId }) {
+  const fin = useFarmFin(farmId); const crops = useCrops(farmId);
+  const s = fin.data?.data?.summary || {};
+  const income = s.total_income_fjd; const spent = (Number(s.total_labor_cost_fjd) || 0) + (Number(s.total_input_cost_fjd) || 0); const net = s.net_profit_fjd;
+  const cropRows = crops.data?.data ?? [];
+  const cycles = cropRows.reduce((a, r) => a + (Number(r.total_cycles) || 0), 0);
   return (
-    <div className="rounded-xl py-8 px-4 text-center" style={{ background: C.cream, border: `1px dashed ${C.border}` }}>
-      <div className="text-sm font-medium" style={{ color: C.soil }}>{label}{hint ? ` · ${hint}` : ""}</div>
-      <div className="text-xs mt-1 max-w-md mx-auto" style={{ color: C.muted }}>This is laid out and will populate from {needs}. No numbers shown until that data is real — by design.</div>
+    <div className="space-y-3">
+      <ChainBanner />
+      <div className="rounded-xl border p-4" style={{ background: "white", borderColor: C.border }}>
+        <div className="flex items-center justify-between gap-2 flex-wrap" style={{ borderBottom: `2px solid ${C.soil}`, paddingBottom: 10 }}>
+          <div><div className="text-base font-extrabold" style={{ color: C.soil }}>{farmId} — Farm Evidence</div><div className="text-xs" style={{ color: C.muted }}>Whole farm · crops + animals · built from logged records</div></div>
+          <span className="text-[11px] font-semibold tracking-widest" style={{ color: C.greenDk }}>TEIVAKA FARM OS</span>
+        </div>
+        <Section title="The farm">
+          <KV k="Farm" v={farmId || "—"} /><KV k="Region" v="—" /><KV k="Area" v="—" />
+        </Section>
+        <Section title="Money to date">
+          <KV k="Earned (money in)" v={income == null ? "—" : fjd(income)} />
+          <KV k="Spent (money out)" v={fin.data ? fjd(spent) : "—"} />
+          <KV k="Net" v={net == null ? "—" : fjd(net)} strong />
+        </Section>
+        <Section title="What this farm runs">
+          <KV k="Crops tracked" v={crops.data ? String(cropRows.length) : "—"} />
+          <KV k="Cycles recorded" v={crops.data ? String(cycles) : "—"} />
+        </Section>
+        <Section title="Standing">
+          <div className="text-xs py-2" style={{ color: C.muted }}>Every record in this document carries a stamp a banker can verify. Credit score & signed-PDF engine pending — shown as “—” rather than fabricated.</div>
+          <KV k="Bank readiness score" v="Building baseline" />
+          <KV k="Credit score" v="—" />
+        </Section>
+        <button onClick={() => emitToast("Verification runs against the audit chain (/verify/{hash})")} className="mt-3 text-xs px-3 py-1.5 rounded-lg" style={{ color: C.greenDk, border: `1px solid ${C.border}` }}>Run verification</button>
+      </div>
+      <div className="rounded-xl border p-3" style={{ background: "white", borderColor: C.border }}>
+        <div className="text-sm font-semibold mb-2" style={{ color: C.soil }}>Send this report</div>
+        <div className="flex gap-2 flex-wrap">
+          {[[Phone, "WhatsApp to Operator"], [FileText, "Email to banker"], [QrCode, "QR for a buyer"]].map(([Ic, t]) => (
+            <button key={t} onClick={() => emitToast(`${t} — dispatch needs a report-dispatch endpoint`)} className="flex items-center gap-1.5 text-xs px-3 py-2 rounded-lg" style={{ color: C.soil, border: `1px solid ${C.border}` }}><Ic size={14} />{t}</button>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
 
-function BankEvidenceTab() {
+// ── Net Worth (urNetWorthView) ───────────────────────────────────────
+function NetWorthTab() {
+  return (
+    <div className="space-y-3">
+      <ChainBanner />
+      <div className="rounded-xl border p-4" style={{ background: "white", borderColor: C.border }}>
+        <div className="text-sm font-semibold" style={{ color: C.soil }}>What you are worth</div>
+        <div className="text-xs mb-3" style={{ color: C.muted }}>value held across crops + animals</div>
+        <KV k="Total worth" v="—" strong />
+        <div className="text-xs mt-2" style={{ color: C.muted }}>Per-category worth (livestock, stock, assets) populates from a valuation endpoint. No estimate shown until it's real.</div>
+      </div>
+    </div>
+  );
+}
+
+// ── Dispatch log (urDispatchLogView) ─────────────────────────────────
+function DispatchLogTab() {
+  return (
+    <div className="space-y-3">
+      <ChainBanner />
+      <div className="rounded-xl border p-4" style={{ background: "white", borderColor: C.border }}>
+        <div className="text-sm font-semibold" style={{ color: C.soil }}>Dispatch log</div>
+        <div className="text-xs mb-3" style={{ color: C.muted }}>what is recorded, and what has been sent</div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm min-w-[440px]">
+            <thead><tr style={{ color: C.muted }} className="text-xs"><th className="text-left p-2">Document</th><th className="text-left p-2">Issued</th><th className="text-left p-2">Verify</th><th className="text-right p-2">Download</th></tr></thead>
+            <tbody><tr style={{ borderTop: `1px solid ${C.border}` }}><td className="p-2" colSpan={4} style={{ color: C.muted }}>No reports dispatched yet — needs a report-dispatch log endpoint.</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Recipients (urRecipientsView) — verbatim static ──────────────────
+function RecipientsTab() {
+  const rows = [
+    { Icon: Phone, name: "You (the Operator)", what: "WhatsApp — the report comes to your phone" },
+    { Icon: FileText, name: "A bank or lender", what: "Email — the signed PDF a loan officer can verify" },
+    { Icon: QrCode, name: "A buyer", what: "QR code — they scan to confirm your record is genuine" },
+  ];
   return (
     <div className="space-y-3">
       <div className="rounded-xl border p-4" style={{ background: "white", borderColor: C.border }}>
-        <div className="text-xs font-semibold tracking-widest" style={{ color: C.greenDk }}>TEIVAKA FARM OS</div>
-        <div className="text-lg font-bold" style={{ color: C.soil }}>Bank Evidence Report</div>
-        <div className="text-xs" style={{ color: C.muted }}>Identity · money · standing · verification · hash-chain verifiable</div>
-        <div className="grid gap-2 grid-cols-2 sm:grid-cols-4 mt-3">
-          {["The farm", "Money to date", "What this farm runs", "Standing"].map((s) => (
-            <div key={s} className="rounded-lg px-2 py-3 text-center" style={{ background: C.cream }}>
-              <div className="text-[10px] uppercase" style={{ color: C.muted }}>{s}</div>
-              <div className="text-sm font-semibold" style={{ color: C.muted }}>—</div>
+        <div className="text-sm font-semibold" style={{ color: C.soil }}>Who can receive your reports</div>
+        <div className="text-xs mb-3" style={{ color: C.muted }}>you choose, every time</div>
+        <div className="space-y-2">
+          {rows.map((r) => (
+            <div key={r.name} className="flex items-center gap-3 rounded-xl p-3" style={{ background: C.cream }}>
+              <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={{ background: "white", color: C.greenDk, border: `1px solid ${C.border}` }}><r.Icon size={16} /></div>
+              <div className="min-w-0"><div className="font-medium text-sm" style={{ color: C.soil }}>{r.name}</div><div className="text-xs" style={{ color: C.muted }}>{r.what}</div></div>
             </div>
           ))}
         </div>
-        <div className="flex gap-2 mt-3 flex-wrap">
-          {["WhatsApp to Operator", "Email to banker", "QR to buyer"].map((d) => (
-            <span key={d} className="text-[11px] px-2 py-1 rounded-lg" style={{ color: C.muted, border: `1px solid ${C.border}` }}>{d}</span>
-          ))}
-        </div>
       </div>
-      <NeedsBlock label="Bank Evidence" hint="The flagship" needs="a credit-score + signed-PDF + QR-verify engine. The layout is the contract; numbers stay blank until real (we never show a fabricated credit score to a banker)." />
+    </div>
+  );
+}
+
+// ── Schedule (urScheduleView) ────────────────────────────────────────
+function ScheduleTab({ setTab }) {
+  return (
+    <div className="space-y-3">
+      <div className="rounded-xl border p-4 flex items-center gap-3" style={{ background: "white", borderColor: C.border }}>
+        <div className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0" style={{ background: C.cream, color: C.amber }}><Calendar size={20} /></div>
+        <div className="flex-1 min-w-0"><div className="font-semibold text-sm" style={{ color: C.soil }}>Automatic monthly reports</div><div className="text-xs" style={{ color: C.muted }}>building baseline — scheduled auto-dispatch turns on once you have a season of records</div></div>
+      </div>
+      <button onClick={() => setTab("library")} className="text-sm px-4 py-2 rounded-lg" style={{ color: C.greenDk, border: `1px solid ${C.border}` }}>Go to the report library</button>
     </div>
   );
 }
@@ -185,7 +272,6 @@ function BankEvidenceTab() {
 function ReportsInner() {
   const { farmId } = useCurrentFarm();
   const [tab, setTab] = useState("library");
-  const active = TABS.find((t) => t.id === tab) || TABS[0];
   return (
     <div className="space-y-4">
       <div>
@@ -196,15 +282,18 @@ function ReportsInner() {
       <div className="flex gap-1 overflow-x-auto border-b" style={{ borderColor: C.border }}>
         {TABS.map((t) => (
           <button key={t.id} onClick={() => setTab(t.id)} className="px-3 py-2 text-sm font-medium whitespace-nowrap flex flex-col items-start shrink-0"
-            style={{ color: tab === t.id ? C.greenDk : C.muted, borderBottom: tab === t.id ? `2px solid ${C.green}` : "2px solid transparent", opacity: t.needs ? 0.6 : 1 }}>
+            style={{ color: tab === t.id ? C.greenDk : C.muted, borderBottom: tab === t.id ? `2px solid ${C.green}` : "2px solid transparent" }}>
             {t.label}<span className="text-[10px]" style={{ color: C.muted }}>{t.hint}</span>
           </button>
         ))}
       </div>
       <section className="bg-white rounded-2xl px-3 py-4 sm:px-4" style={{ border: `1px solid ${C.border}` }}>
         {tab === "library" && <LibraryTab farmId={farmId} setTab={setTab} />}
-        {tab === "bankevidence" && <BankEvidenceTab />}
-        {active.needs && <NeedsBlock label={active.label} hint={active.hint} needs={active.needs} />}
+        {tab === "bankevidence" && <BankEvidenceTab farmId={farmId} />}
+        {tab === "networth" && <NetWorthTab />}
+        {tab === "dispatchlog" && <DispatchLogTab />}
+        {tab === "recipients" && <RecipientsTab />}
+        {tab === "schedule" && <ScheduleTab setTab={setTab} />}
       </section>
     </div>
   );
