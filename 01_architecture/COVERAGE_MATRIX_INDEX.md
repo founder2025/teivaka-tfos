@@ -23,7 +23,7 @@
 | 6 | Production | production | `coreProductionView` | — | ✅ COMPLETE (~20) — cycles/harvests rollup |
 | 7 | Inventory | inventory | `coreInventoryView` | — | ✅ COMPLETE (~50) |
 | 8 | Labor | labor | `coreLaborView` | — | ✅ COMPLETE (~130) |
-| 9 | Buyers | buyers | (buyers view) | — | ☐ todo |
+| 9 | Buyers | buyers | `coreBuyersView` | — | ✅ COMPLETE (~55) |
 | 10 | Cash | cash | `cashOverviewView` | — | ✅ COMPLETE (~50) |
 | 11 | Assets & Equipment | equipment | (equipment view) | — | ☐ todo |
 | 12 | Locations | locations | (locations view) | — | ☐ todo |
@@ -51,4 +51,4 @@
 Audit the real pages, prototype-only, to the Labour/Compliance depth bar:
 **Production (#6)** → **Enterprises (#5)** (these two reconcile the cycles/harvest content) → Overview → Tasks → Inventory → Buyers → Assets & Equipment → Locations → Analytics → Reports → Decision Center → Farm History → Weather → Library → Gallery → Partnerships → Settings → then Home/Classroom/TIS/Me.
 
-**Done: 8 / 20 farm pages** (Overview, Tasks, Enterprises, Production, Inventory, Labor, Cash, Compliance).
+**Done: 9 / 20 farm pages** (Overview, Tasks, Enterprises, Production, Inventory, Labor, Buyers, Cash, Compliance).
