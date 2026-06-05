@@ -1,3 +1,9 @@
+> ⚠️ **SCOPE CORRECTION:** "Cycles" is **NOT a top-level page** in V262's
+> rendered nav (`NAV.farm_unified`). This content is a **sub-surface of
+> Production (#6) + Enterprises (#5)**. Retained as a decomposition reference;
+> it will be folded into the Production/Enterprises matrices. See
+> `COVERAGE_MATRIX_INDEX.md` for the canonical 20-page scope.
+
 # Prototype V262 — Coverage Matrix · Module 5: CYCLES (COMPLETE · PROTOTYPE-ONLY)
 
 > **Source: V262 prototype ONLY** (`renderCycle*`, `cycleDetailView`, the 6

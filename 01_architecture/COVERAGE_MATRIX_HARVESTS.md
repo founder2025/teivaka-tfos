@@ -1,3 +1,9 @@
+> ⚠️ **SCOPE CORRECTION:** "Harvests" is **NOT a top-level page** in V262's
+> rendered nav (`NAV.farm_unified`). This content is a **sub-surface of
+> Production (#6) + Enterprises (#5)**. Also: this file predates the
+> prototype-only rule and still references the codebase — superseded. See
+> `COVERAGE_MATRIX_INDEX.md` for the canonical 20-page scope.
+
 # Prototype V262 — Coverage Matrix · Module 2: HARVESTS (forensic, 100%)
 
 > **The monetisation + bank-evidence surface.** Decomposed from prototype source
