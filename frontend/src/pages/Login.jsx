@@ -117,7 +117,7 @@ export default function Login() {
       } else if (data.mode === "SOLO") {
         destination = "/solo";
       } else {
-        destination = "/home";
+        destination = "/farm";
       }
 
       navigate(destination, { replace: true });
