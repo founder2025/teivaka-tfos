@@ -5,9 +5,9 @@
  * Add another farm is FOUNDER-only (backend require_role FOUNDER).
  */
 import { useState, useRef, useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useCurrentFarm } from "../../context/CurrentFarmContext";
-import { Map, ChevronDown, Leaf, Check, Plus, Settings, Repeat } from "lucide-react";
+import { Map, ChevronDown, Leaf, Check, Plus, Settings, Repeat, X } from "lucide-react";
 
 const C = { paper:"#FFFFFF", green:"#6AA84F", greenDk:"#3E7B1F", soil:"#5C4033",
   muted:"#8A7B6F", line:"#E2D8C3", cream:"#F8F3E9" };
@@ -15,6 +15,14 @@ const C = { paper:"#FFFFFF", green:"#6AA84F", greenDk:"#3E7B1F", soil:"#5C4033",
 function authHeaders() {
   const t = localStorage.getItem("tfos_access_token");
   return { "Content-Type":"application/json", ...(t?{Authorization:`Bearer ${t}`}:{}) };
+}
+function jwtRole() {
+  try {
+    const t = localStorage.getItem("tfos_access_token");
+    if (!t) return "";
+    const payload = JSON.parse(atob(t.split(".")[1].replace(/-/g,"+").replace(/_/g,"/")));
+    return (payload.role || "").toString().toUpperCase();
+  } catch { return ""; }
 }
 async function fetchFarms() {
   const res = await fetch("/api/v1/farms", { headers: authHeaders() });
@@ -27,6 +35,12 @@ async function fetchMe() {
   if (!res.ok) return null;
   return res.json();
 }
+async function createFarm(payload) {
+  const res = await fetch("/api/v1/farms", { method:"POST", headers: authHeaders(), body: JSON.stringify(payload) });
+  const body = await res.json().catch(()=>({}));
+  if (!res.ok) throw new Error(body?.detail || `Create failed (${res.status})`);
+  return body;
+}
 function area(ha) {
   if (ha == null) return "—";
   const n = Number(ha);
@@ -37,6 +51,34 @@ export default function FarmSelector() {
   const { farmId, setFarmId } = useCurrentFarm();
   const [open, setOpen] = useState(false);
   const wrapRef = useRef(null);
+  const qc = useQueryClient();
+  const [showAdd, setShowAdd] = useState(false);
+  const [form, setForm] = useState({ farm_id:"", farm_name:"", location_name:"", location_island:"", land_area_ha:"", notes:"" });
+  const [formErr, setFormErr] = useState("");
+  const addMut = useMutation({
+    mutationFn: (p) => createFarm(p),
+    onSuccess: (created) => {
+      qc.invalidateQueries({ queryKey:["farms"] });
+      setShowAdd(false);
+      setForm({ farm_id:"", farm_name:"", location_name:"", location_island:"", land_area_ha:"", notes:"" });
+      setFormErr("");
+      const newId = created?.farm_id || created?.farm?.farm_id;
+      if (newId) setFarmId(newId);
+    },
+    onError: (e) => setFormErr(String(e.message || "Could not create farm")),
+  });
+  function submitAdd() {
+    if (!form.farm_id.trim() || !form.farm_name.trim()) { setFormErr("Farm ID and name are required."); return; }
+    setFormErr("");
+    addMut.mutate({
+      farm_id: form.farm_id.trim(),
+      farm_name: form.farm_name.trim(),
+      location_name: form.location_name.trim() || null,
+      location_island: form.location_island.trim() || null,
+      land_area_ha: form.land_area_ha ? Number(form.land_area_ha) : null,
+      notes: form.notes.trim() || null,
+    });
+  }
 
   const { data: farms = [], isLoading } = useQuery({ queryKey:["farms"], queryFn: fetchFarms });
   const { data: me } = useQuery({ queryKey:["auth-me"], queryFn: fetchMe });
@@ -57,8 +99,9 @@ export default function FarmSelector() {
   const current = farms.find((f)=>f.farm_id===farmId) || farms[0];
   const tenantName = me?.tenant_name || me?.tenant?.name || "Teivaka";
   const tier = (me?.subscription_tier || me?.tier || "").toString().toUpperCase();
-  const role = (me?.role || "OWNER").toString().toUpperCase();
-  const isFounder = role === "FOUNDER";
+  const role = (jwtRole() || me?.role || "OWNER").toString().toUpperCase();
+  const systemRole = jwtRole();
+  const isFounder = systemRole === "FOUNDER";
   const pill = [current.farm_id, current.farm_name, current.location_island].filter(Boolean).join(" · ");
 
   function pickFarm(fid){ setFarmId(fid); setOpen(false); }
@@ -105,7 +148,7 @@ export default function FarmSelector() {
 
           <div className="py-1" style={{ borderTop:`1px solid ${C.line}` }}>
             {isFounder && (
-              <button onClick={()=>window.dispatchEvent(new CustomEvent("tfos:add-farm"))} className="flex items-center gap-2 w-full text-left px-3 py-2 text-[13px]" style={{ color:C.soil, cursor:"pointer" }}
+              <button onClick={()=>{ setOpen(false); setShowAdd(true); }} className="flex items-center gap-2 w-full text-left px-3 py-2 text-[13px]" style={{ color:C.soil, cursor:"pointer" }}
                 onMouseEnter={(e)=>e.currentTarget.style.background=C.cream} onMouseLeave={(e)=>e.currentTarget.style.background="transparent"}>
                 <Plus size={14} style={{ color:C.greenDk }} /> Add another farm
               </button>
@@ -117,6 +160,43 @@ export default function FarmSelector() {
           </div>
         </div>
       )}
-    </div>
+
+      {showAdd && (
+        <div onClick={()=>setShowAdd(false)} style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.35)", zIndex:100, display:"flex", alignItems:"center", justifyContent:"center", padding:16 }}>
+          <div onClick={(e)=>e.stopPropagation()} className="rounded-2xl" style={{ background:C.paper, width:"100%", maxWidth:420, border:`1px solid ${C.line}`, overflow:"hidden" }}>
+            <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom:`1px solid ${C.line}`, background:C.cream }}>
+              <div className="flex items-center gap-2"><Plus size={15} style={{ color:C.greenDk }}/><strong style={{ color:C.soil, fontSize:15 }}>Add another farm</strong></div>
+              <button onClick={()=>setShowAdd(false)} style={{ cursor:"pointer", color:C.muted, background:"none", border:"none" }}><X size={16}/></button>
+            </div>
+            <div className="px-4 py-3 flex flex-col gap-2.5">
+              <Field label="Farm ID *" hint="Short code, e.g. F003" value={form.farm_id} onChange={(v)=>setForm(f=>({...f,farm_id:v}))} />
+              <Field label="Farm name *" value={form.farm_name} onChange={(v)=>setForm(f=>({...f,farm_name:v}))} />
+              <Field label="Location" value={form.location_name} onChange={(v)=>setForm(f=>({...f,location_name:v}))} />
+              <Field label="Island / province" value={form.location_island} onChange={(v)=>setForm(f=>({...f,location_island:v}))} />
+              <Field label="Land area (hectares)" type="number" value={form.land_area_ha} onChange={(v)=>setForm(f=>({...f,land_area_ha:v}))} />
+              <Field label="Notes" value={form.notes} onChange={(v)=>setForm(f=>({...f,notes:v}))} />
+              {formErr && <div className="text-[12px] px-2 py-1.5 rounded" style={{ background:"#FBEAEA", color:"#A32D2D" }}>{formErr}</div>}
+            </div>
+            <div className="flex justify-end gap-2 px-4 py-3" style={{ borderTop:`1px solid ${C.line}` }}>
+              <button onClick={()=>setShowAdd(false)} className="text-[13px] px-3 py-1.5 rounded-lg" style={{ border:`1px solid ${C.line}`, color:C.soil, cursor:"pointer" }}>Cancel</button>
+              <button onClick={submitAdd} disabled={addMut.isPending} className="text-[13px] font-semibold px-3 py-1.5 rounded-lg text-white" style={{ background:C.green, cursor:"pointer", opacity:addMut.isPending?0.6:1 }}>{addMut.isPending?"Creating…":"Create farm"}</button>
+            </div>
+          </div>
+        </div>
+      )}
+        </div>
+  );
+}
+
+
+function Field({ label, hint, value, onChange, type="text" }) {
+  return (
+    <label style={{ display:"block" }}>
+      <span style={{ fontSize:11, fontWeight:600, color:"#8A7B6F" }}>{label}</span>
+      <input type={type} value={value} onChange={(e)=>onChange(e.target.value)}
+        className="w-full rounded-lg px-2.5 py-1.5 mt-0.5"
+        style={{ border:"1px solid #E2D8C3", fontSize:13, color:"#5C4033", outline:"none" }} />
+      {hint && <span style={{ fontSize:10, color:"#8A7B6F" }}>{hint}</span>}
+    </label>
   );
 }
