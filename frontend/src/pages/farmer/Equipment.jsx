@@ -1,26 +1,26 @@
 /**
  * Equipment.jsx — /farm/equipment
  *
- * Replaces the ComingSoon stub. Parity target: prototype v262 Equipment.
- * SCOPE (bounded by live API): register + add + service-due indicator.
- *   GET/POST /api/v1/equipment
- * NOT yet backed (absent, no mock data): usage hours log, maintenance log,
- * cost-per-hour, parts, downtime — need backend endpoints.
- *
- * Conventions mirror CashLedger/Labor/Buyers.
+ * Team design system + v262 Equipment surface, all 6 prototype tabs.
+ *   Live: GET/POST /api/v1/equipment (Fleet register + add + service-due).
+ *   Empty (named backend needed): Maintenance, Usage, Costs, Parts, Analytics.
  */
 import { useState } from "react";
 import {
   QueryClient, QueryClientProvider, useQuery, useQueryClient,
 } from "@tanstack/react-query";
-import { Wrench, Plus, AlertTriangle } from "lucide-react";
+import { Plus, AlertTriangle } from "lucide-react";
 
+import { CurrentFarmProvider, useCurrentFarm } from "../../context/CurrentFarmContext";
+import FarmSelector from "../../components/farm/FarmSelector";
+import ModeDropdown from "../../components/farm/ModeDropdown";
+import MetricCard from "../../components/farm/MetricCard";
 import Modal from "../../components/ui/Modal.jsx";
 import ThemedSelect from "../../components/inputs/ThemedSelect.jsx";
 
 const C = {
-  soil: "#5C4033", cream: "#F8F3E9", bgPage: "#F5EFE0", border: "#E6DED0",
-  muted: "#8A7863", green: "#6AA84F", greenDk: "#3E7B1F", amber: "#BF9000", red: "#D4442E",
+  soil: "#5C4033", cream: "#F8F3E9", border: "#E6DED0", muted: "#8A7863",
+  green: "#6AA84F", greenDk: "#3E7B1F", amber: "#BF9000", red: "#D4442E",
 };
 const EQUIP_TYPES = [
   { value: "TRACTOR", label: "Tractor" },
@@ -29,6 +29,14 @@ const EQUIP_TYPES = [
   { value: "HAND_TOOL", label: "Hand tool" },
   { value: "VEHICLE", label: "Vehicle" },
   { value: "OTHER", label: "Other" },
+];
+const TABS = [
+  { id: "fleet", label: "Fleet", hint: "Assets" },
+  { id: "maintenance", label: "Maintenance", hint: "Service", needs: "a maintenance-log endpoint" },
+  { id: "usage", label: "Usage", hint: "Hours & fuel", needs: "an equipment-usage log" },
+  { id: "costs", label: "Costs", hint: "Per-hour & P&L", needs: "cost-per-hour allocation" },
+  { id: "parts", label: "Parts", hint: "Spares", needs: "a spare-parts inventory" },
+  { id: "analytics", label: "Analytics", hint: "Utilization", needs: "utilization analytics" },
 ];
 
 function authHeaders() {
@@ -42,7 +50,6 @@ function formatFJD(v) {
   return `FJD ${Math.abs(n).toLocaleString("en-FJ", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 function typeLabel(v) { return EQUIP_TYPES.find((t) => t.value === v)?.label || v || "—"; }
-
 function serviceDue(next) {
   if (!next) return null;
   const days = Math.ceil((new Date(String(next).slice(0, 10)) - new Date(new Date().toISOString().slice(0, 10))) / 86400000);
@@ -51,14 +58,9 @@ function serviceDue(next) {
   return { label: `Service in ${days}d`, color: C.green };
 }
 
-async function fetchFarms() {
-  const res = await fetch("/api/v1/farms", { headers: authHeaders() });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const b = await res.json(); return b?.data ?? b?.farms ?? [];
-}
 async function fetchEquipment(farmId) {
-  const qs = farmId ? `?farm_id=${encodeURIComponent(farmId)}` : "";
-  const res = await fetch(`/api/v1/equipment${qs}`, { headers: authHeaders() });
+  if (!farmId) return [];
+  const res = await fetch(`/api/v1/equipment?farm_id=${encodeURIComponent(farmId)}`, { headers: authHeaders() });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const b = await res.json(); return b?.data ?? [];
 }
@@ -71,134 +73,139 @@ function AddEquipmentModal({ farmId, isOpen, onClose, onSaved }) {
   const [value, setValue] = useState("");
   const [nextService, setNextService] = useState("");
   const [busy, setBusy] = useState(false);
-
   async function submit() {
     if (!name.trim()) { emitToast("Equipment name is required"); return; }
     setBusy(true);
     try {
       const res = await fetch("/api/v1/equipment", {
         method: "POST", headers: authHeaders(),
-        body: JSON.stringify({
-          farm_id: farmId, equipment_name: name.trim(), equipment_type: type,
-          make: make.trim() || null, model: model.trim() || null,
-          current_value_fjd: value ? Number(value) : null,
-          next_service_due: nextService || null,
-        }),
+        body: JSON.stringify({ farm_id: farmId, equipment_name: name.trim(), equipment_type: type, make: make.trim() || null, model: model.trim() || null, current_value_fjd: value ? Number(value) : null, next_service_due: nextService || null }),
       });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      if (!res.ok) throw new Error();
       emitToast("Equipment added"); onSaved?.(); onClose?.();
     } catch { emitToast("Could not add equipment"); } finally { setBusy(false); }
   }
-
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Add equipment"
-      footer={
-        <div className="flex justify-end gap-2">
-          <button onClick={onClose} className="px-4 py-2 rounded-lg" style={{ color: C.muted }}>Cancel</button>
-          <button onClick={submit} disabled={busy} className="px-4 py-2 rounded-lg text-white" style={{ background: C.greenDk, opacity: busy ? 0.6 : 1 }}>Add equipment</button>
-        </div>
-      }>
+      footer={<div className="flex justify-end gap-2">
+        <button onClick={onClose} className="px-4 py-2 rounded-lg" style={{ color: C.muted }}>Cancel</button>
+        <button onClick={submit} disabled={busy} className="px-4 py-2 rounded-lg text-white" style={{ background: C.greenDk, opacity: busy ? 0.6 : 1 }}>Add equipment</button>
+      </div>}>
       <div className="space-y-3">
         <label className="block text-sm" style={{ color: C.soil }}>Name
-          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Kubota L3408" className="mt-1 w-full px-3 py-2 rounded-lg border" style={{ borderColor: C.border }} />
-        </label>
+          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Kubota L3408" className="mt-1 w-full px-3 py-2 rounded-lg border" style={{ borderColor: C.border }} /></label>
         <label className="block text-sm" style={{ color: C.soil }}>Type
-          <ThemedSelect value={type} onChange={setType} options={EQUIP_TYPES} />
-        </label>
+          <ThemedSelect value={type} onChange={setType} options={EQUIP_TYPES} /></label>
         <div className="grid grid-cols-2 gap-3">
           <label className="block text-sm" style={{ color: C.soil }}>Make (optional)
-            <input value={make} onChange={(e) => setMake(e.target.value)} className="mt-1 w-full px-3 py-2 rounded-lg border" style={{ borderColor: C.border }} />
-          </label>
+            <input value={make} onChange={(e) => setMake(e.target.value)} className="mt-1 w-full px-3 py-2 rounded-lg border" style={{ borderColor: C.border }} /></label>
           <label className="block text-sm" style={{ color: C.soil }}>Model (optional)
-            <input value={model} onChange={(e) => setModel(e.target.value)} className="mt-1 w-full px-3 py-2 rounded-lg border" style={{ borderColor: C.border }} />
-          </label>
+            <input value={model} onChange={(e) => setModel(e.target.value)} className="mt-1 w-full px-3 py-2 rounded-lg border" style={{ borderColor: C.border }} /></label>
         </div>
         <div className="grid grid-cols-2 gap-3">
           <label className="block text-sm" style={{ color: C.soil }}>Current value (FJD)
-            <input type="number" min="0" value={value} onChange={(e) => setValue(e.target.value)} className="mt-1 w-full px-3 py-2 rounded-lg border" style={{ borderColor: C.border }} />
-          </label>
+            <input type="number" min="0" value={value} onChange={(e) => setValue(e.target.value)} className="mt-1 w-full px-3 py-2 rounded-lg border" style={{ borderColor: C.border }} /></label>
           <label className="block text-sm" style={{ color: C.soil }}>Next service due
-            <input type="date" value={nextService} onChange={(e) => setNextService(e.target.value)} className="mt-1 w-full px-3 py-2 rounded-lg border" style={{ borderColor: C.border }} />
-          </label>
+            <input type="date" value={nextService} onChange={(e) => setNextService(e.target.value)} className="mt-1 w-full px-3 py-2 rounded-lg border" style={{ borderColor: C.border }} /></label>
         </div>
       </div>
     </Modal>
   );
 }
 
-function EquipmentInner() {
-  const qc = useQueryClient();
-  const [farmId, setFarmId] = useState("");
-  const [addOpen, setAddOpen] = useState(false);
-
-  const farmsQuery = useQuery({ queryKey: ["farms"], queryFn: fetchFarms });
-  const farms = farmsQuery.data ?? [];
-  const activeFarm = farmId || farms[0]?.farm_id || "";
-  const equipQuery = useQuery({ queryKey: ["equipment", activeFarm], queryFn: () => fetchEquipment(activeFarm), enabled: !!activeFarm });
-  const items = equipQuery.data ?? [];
-  const dueCount = items.filter((e) => { const s = serviceDue(e.next_service_due); return s && s.color !== C.green; }).length;
-
+function NeedsBlock({ tab }) {
   return (
-    <div className="p-4 md:p-6 max-w-4xl mx-auto" style={{ background: C.bgPage, minHeight: "100%" }}>
-      <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
-        <div className="flex items-center gap-2">
-          <Wrench size={22} color={C.soil} />
-          <h1 className="text-xl font-semibold" style={{ color: C.soil }}>Equipment</h1>
-        </div>
-        <div className="flex items-center gap-2">
-          {farms.length > 1 && (
-            <ThemedSelect value={activeFarm} onChange={setFarmId} options={farms.map((f) => ({ value: f.farm_id, label: f.farm_name || f.farm_id }))} />
-          )}
-          <button onClick={() => setAddOpen(true)} className="flex items-center gap-1 px-3 py-2 rounded-lg text-white text-sm" style={{ background: C.greenDk }}><Plus size={16} /> Add equipment</button>
-        </div>
+    <div className="rounded-xl py-8 px-4 text-center" style={{ background: C.cream, border: `1px dashed ${C.border}` }}>
+      <div className="text-sm font-medium" style={{ color: C.soil }}>{tab.label}</div>
+      <div className="text-xs mt-1 max-w-md mx-auto" style={{ color: C.muted }}>
+        This tab is ready and will populate from {tab.needs}. No numbers shown until that data is real — by design, so nothing here is fabricated.
       </div>
-
-      <div className="grid grid-cols-2 gap-3 mb-4">
-        <div className="rounded-xl p-4 border" style={{ background: "white", borderColor: C.border }}>
-          <div className="text-xs" style={{ color: C.muted }}>Assets</div>
-          <div className="text-2xl font-semibold" style={{ color: C.soil }}>{items.length}</div>
-        </div>
-        <div className="rounded-xl p-4 border" style={{ background: "white", borderColor: C.border }}>
-          <div className="text-xs" style={{ color: C.muted }}>Service due / overdue</div>
-          <div className="text-2xl font-semibold" style={{ color: dueCount ? C.red : C.greenDk }}>{dueCount}</div>
-        </div>
-      </div>
-
-      <div className="space-y-2">
-        {equipQuery.isLoading && <p style={{ color: C.muted }}>Loading equipment…</p>}
-        {!equipQuery.isLoading && items.length === 0 && <p style={{ color: C.muted }}>No equipment yet. Add your first asset.</p>}
-        {items.map((e) => {
-          const due = serviceDue(e.next_service_due);
-          return (
-            <div key={e.equipment_id} className="flex items-center justify-between rounded-xl p-3 border" style={{ background: "white", borderColor: C.border }}>
-              <div>
-                <div className="font-medium" style={{ color: C.soil }}>{e.equipment_name}</div>
-                <div className="text-xs" style={{ color: C.muted }}>
-                  {typeLabel(e.equipment_type)}
-                  {(e.make || e.model) ? ` · ${[e.make, e.model].filter(Boolean).join(" ")}` : ""}
-                  {e.current_value_fjd != null ? ` · ${formatFJD(e.current_value_fjd)}` : ""}
-                </div>
-              </div>
-              {due && (
-                <span className="text-xs font-semibold flex items-center gap-1 rounded-full px-2 py-1" style={{ color: due.color, background: "white", border: `1px solid ${C.border}` }}>
-                  {due.color === C.red && <AlertTriangle size={12} />} {due.label}
-                </span>
-              )}
-            </div>
-          );
-        })}
-      </div>
-
-      <AddEquipmentModal farmId={activeFarm} isOpen={addOpen} onClose={() => setAddOpen(false)} onSaved={() => qc.invalidateQueries({ queryKey: ["equipment", activeFarm] })} />
     </div>
   );
 }
 
-const _client = new QueryClient();
+function EquipmentInner() {
+  const qc = useQueryClient();
+  const { farmId } = useCurrentFarm();
+  const [tab, setTab] = useState("fleet");
+  const [addOpen, setAddOpen] = useState(false);
+
+  const equipQuery = useQuery({ queryKey: ["equipment", farmId], queryFn: () => fetchEquipment(farmId), enabled: !!farmId });
+  const items = equipQuery.data ?? [];
+  const dueCount = items.filter((e) => { const s = serviceDue(e.next_service_due); return s && s.color !== C.green; }).length;
+  const fleetValue = items.reduce((s, e) => s + Number(e.current_value_fjd ?? 0), 0);
+  const activeTab = TABS.find((t) => t.id === tab) || TABS[0];
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <h1 className="text-2xl font-bold" style={{ color: C.soil }}>Equipment</h1>
+        <div className="text-xs mt-0.5" style={{ color: C.muted }}>Asset register · maintenance · utilization</div>
+      </div>
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <FarmSelector />
+        <ModeDropdown />
+      </div>
+      <div className="grid gap-2 grid-cols-2 sm:grid-cols-4">
+        <MetricCard label="Assets" value={String(items.length)} sub="in fleet" loading={equipQuery.isLoading} />
+        <MetricCard label="Service due" value={String(dueCount)} sub="due / overdue" loading={equipQuery.isLoading} />
+        <MetricCard label="Fleet value" value={formatFJD(fleetValue)} sub="current" loading={equipQuery.isLoading} />
+        <MetricCard label="Usage hours" phase="Phase 6.5" />
+      </div>
+      <div className="flex gap-1 overflow-x-auto border-b" style={{ borderColor: C.border }}>
+        {TABS.map((t) => (
+          <button key={t.id} onClick={() => setTab(t.id)} className="px-3 py-2 text-sm font-medium whitespace-nowrap flex flex-col items-start"
+            style={{ color: tab === t.id ? C.greenDk : C.muted, borderBottom: tab === t.id ? `2px solid ${C.green}` : "2px solid transparent", opacity: t.needs ? 0.6 : 1 }}>
+            {t.label}<span className="text-[10px]" style={{ color: C.muted }}>{t.hint}</span>
+          </button>
+        ))}
+      </div>
+      <section className="bg-white rounded-2xl px-4 py-4" style={{ border: `1px solid ${C.border}` }}>
+        <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
+          <div className="text-sm font-semibold uppercase tracking-wider" style={{ color: C.soil }}>{activeTab.label}</div>
+          {tab === "fleet" && <button onClick={() => setAddOpen(true)} className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-white text-sm" style={{ background: C.greenDk }}><Plus size={15} /> Add equipment</button>}
+        </div>
+
+        {tab === "fleet" && (
+          <div className="space-y-2">
+            {equipQuery.isLoading && <p style={{ color: C.muted }}>Loading fleet…</p>}
+            {!equipQuery.isLoading && items.length === 0 && <p style={{ color: C.muted }}>No equipment yet. Add your first asset.</p>}
+            {items.map((e) => {
+              const due = serviceDue(e.next_service_due);
+              return (
+                <div key={e.equipment_id} className="flex items-center justify-between rounded-xl p-2.5" style={{ background: C.cream }}>
+                  <div>
+                    <div className="font-medium text-sm" style={{ color: C.soil }}>{e.equipment_name}</div>
+                    <div className="text-xs" style={{ color: C.muted }}>
+                      {typeLabel(e.equipment_type)}{(e.make || e.model) ? ` · ${[e.make, e.model].filter(Boolean).join(" ")}` : ""}{e.current_value_fjd != null ? ` · ${formatFJD(e.current_value_fjd)}` : ""}
+                    </div>
+                  </div>
+                  {due && (
+                    <span className="text-xs font-semibold flex items-center gap-1 rounded-full px-2 py-1" style={{ color: due.color, background: "white", border: `1px solid ${C.border}` }}>
+                      {due.color === C.red && <AlertTriangle size={12} />} {due.label}
+                    </span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {activeTab.needs && <NeedsBlock tab={activeTab} />}
+      </section>
+
+      <AddEquipmentModal farmId={farmId} isOpen={addOpen} onClose={() => setAddOpen(false)} onSaved={() => qc.invalidateQueries({ queryKey: ["equipment", farmId] })} />
+    </div>
+  );
+}
+
+const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false, staleTime: 60_000 } } });
 export default function Equipment() {
   return (
-    <QueryClientProvider client={_client}>
-      <EquipmentInner />
+    <QueryClientProvider client={queryClient}>
+      <CurrentFarmProvider>
+        <EquipmentInner />
+      </CurrentFarmProvider>
     </QueryClientProvider>
   );
 }
