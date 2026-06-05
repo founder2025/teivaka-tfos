@@ -14,22 +14,27 @@
 ## Page identity
 | Page | Route | Render fn | Sub-pages |
 |---|---|---|---|
-| Analytics | `/farm/analytics` | `coreAnalyticsView` | Signals · Profitability · Productivity · Cash & demand · Flip log · Forecasts · Per-unit · Compare · Findings · Benchmark |
+| Analytics | `/farm/analytics` | `coreAnalyticsView` | Signals · Profitability · Productivity · Cash & demand · Flip log · Forecasts · Per-unit · Compare · Findings · Benchmark · KPI board · Inventory · Labour |
 
-## 1. Chrome + sub-page tabs (10 — `renderAnalyticsViewTabs`, `switchAnalyticsView`)
-| Component / id | Type | Backend Req | API Req |
-|---|---|---|---|
-| `h1` "Analytics" | label | — | — |
-| signals · Signals | tab | yes | `GET decision-engine/signals` |
-| profit · Profitability | tab | yes | `GET analytics/profit` |
-| productivity · Productivity | tab | yes | `GET analytics/productivity` |
-| cashdemand · Cash & demand | tab | yes | `GET analytics/cash-demand` |
-| fliplog · Flip log | tab | yes | `GET decision-engine/flip-log` |
-| forecasts · Forecasts | tab | yes | `GET analytics/forecasts` |
-| perunit · Per-unit | tab | yes | `GET analytics/per-unit` |
-| compare · Compare | tab | yes | `GET analytics/compare` |
-| findings · Findings | tab | yes | `GET analytics/findings` |
-| benchmark · Benchmark | tab | yes | `GET analytics/benchmark` |
+## 1. Chrome + sub-page tabs (13 — `renderAnalyticsViewTabs`, `switchAnalyticsView`) — CORRECTED
+> Earlier draft listed 10 and missed **KPI board / Inventory / Labour** + had wrong hints. Exact set from source below.
+
+| id | Label | Hint | Backend Req | API Req |
+|---|---|---|---|---|
+| signals | Signals | Decision board | yes | `GET /decision-engine/{farm_id}` ✅ live |
+| profit | Profitability | Per-cycle P&L | yes | `GET /financials/crops/{farm_id}` ✅ live |
+| productivity | Productivity | Ratios | yes | productivity-attribution endpoint (empty) |
+| cashdemand | Cash & demand | Runway | yes | cash-runway/forecast endpoint (empty) |
+| fliplog | Flip log | Audit | yes | decision flip-log endpoint (empty) |
+| forecasts | Forecasts | Predictive | yes | forecast engine endpoint (empty) |
+| perunit | Per-unit | Roll-ups | yes | per-unit roll-up endpoint (empty) |
+| compare | Compare | Variety | yes | variety-comparison endpoint (empty) |
+| findings | Findings | Learning | yes | findings/insights endpoint (empty) |
+| benchmark | Benchmark | Network | yes | network-benchmark endpoint (empty) |
+| **kpi** | **KPI board** | Headline numbers | yes | `GET /financials/farm/{farm_id}` ✅ live |
+| **inventory** | **Inventory** | Stock | yes | `GET /inputs?farm_id=` ✅ live |
+| **labour** | **Labour** | People | yes | `GET /workers` + `GET /labor` ✅ live |
+
 
 ## 2. Signals sub-page (`analyticsSignalsView` + `renderSignalTile` + `renderSparkline`)
 | Component | Type | Backend Req | API Req | Workflow | Permission |
