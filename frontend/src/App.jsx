@@ -52,6 +52,7 @@ const CashLedger    = lazy(() => import("./pages/farmer/CashLedger"));
 const Labor         = lazy(() => import("./pages/farmer/Labor"));
 const Buyers        = lazy(() => import("./pages/farmer/Buyers"));
 const Equipment     = lazy(() => import("./pages/farmer/Equipment"));
+const Analytics     = lazy(() => import("./pages/farmer/Analytics"));
 
 // ── Phase 4b Week 1 shell + pages (5-tab FarmerShell) ─────────────────────────
 const FarmerShell   = lazy(() => import("./layouts/FarmerShell"));
@@ -252,7 +253,7 @@ export default function App() {
             <Route path="/farm/buyers"       element={<Buyers />} />
             <Route path="/farm/equipment"    element={<Equipment />} />
             <Route path="/farm/compliance"   element={<PoultryCompliance  />} />
-            <Route path="/farm/analytics"    element={<ComingSoon title="Analytics"    phase="4.2" />} />
+            <Route path="/farm/analytics"    element={<Analytics />} />
             <Route path="/farm/reports"      element={<ComingSoon title="Reports"      phase="6"   />} />
             <Route path="/farm/locations"    element={<ComingSoon title="Locations"    phase="5.5" />} />
 
