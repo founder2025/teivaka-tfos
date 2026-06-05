@@ -39,6 +39,16 @@ import ModeDropdown     from "../../components/farm/ModeDropdown";
 import NewCycleButton   from "../../components/farm/NewCycleButton";
 import NewCycleModal    from "../../components/farm/NewCycleModal";
 import LayerBackfillBanner from "../../components/farm/LayerBackfillBanner";
+import BankabilityPath    from "../../components/farm/BankabilityPath";
+import FarmSummaryCard   from "../../components/farm/FarmSummaryCard";
+import PriorityCards     from "../../components/farm/PriorityCards";
+import WeatherStrip      from "../../components/farm/WeatherStrip";
+import IntelligencePanel from "../../components/farm/IntelligencePanel";
+import CyclePipeline     from "../../components/farm/CyclePipeline";
+import FarmComparison    from "../../components/farm/FarmComparison";
+import DemandPipeline    from "../../components/farm/DemandPipeline";
+import TisSuggestions    from "../../components/farm/TisSuggestions";
+import QuickActions      from "../../components/farm/QuickActions";
 
 const C = {
   soil:   "#5C4033",
@@ -207,7 +217,11 @@ function FarmOverview() {
         <ModeDropdown />
       </div>
 
-      <RecentLoggedStrip farmId={farmId} />
+      <FarmSummaryCard />
+          <RecentLoggedStrip farmId={farmId} />
+          <BankabilityPath />
+          <PriorityCards />
+          <WeatherStrip />
 
           <TopTaskBanner />
 
@@ -254,7 +268,13 @@ function FarmOverview() {
         <ActiveCyclesTable farmId={farmId} />
       </section>
 
-      <NewCycleModal
+      <IntelligencePanel />
+          <CyclePipeline />
+          <FarmComparison />
+          <DemandPipeline />
+          <TisSuggestions />
+          <QuickActions />
+          <NewCycleModal
         isOpen={cycleModalOpen}
         onClose={() => setCycleModalOpen(false)}
         onCreated={() => {
