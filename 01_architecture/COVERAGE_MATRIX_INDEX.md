@@ -32,7 +32,7 @@
 | 15 | Reports | reports | `coreReportsView` | — | ✅ COMPLETE (~50) |
 | 16 | Weather | weather | `coreWeatherView` | 🔒 | ✅ COMPLETE (~20) |
 | 17 | Library | library | `producerLibrary` | — | ✅ COMPLETE (~25) |
-| 18 | Gallery | gallery | (gallery view) | 🔒 | ☐ todo |
+| 18 | Gallery | gallery | `coreGalleryView` | 🔒 | ✅ COMPLETE (~25) |
 | 19 | Partnerships | partnerships | (partnerships view) | 🔒 | ☐ todo |
 | 20 | Settings | settings | (settings view) | 🔒 | ☐ todo |
 
@@ -51,4 +51,4 @@
 Audit the real pages, prototype-only, to the Labour/Compliance depth bar:
 **Production (#6)** → **Enterprises (#5)** (these two reconcile the cycles/harvest content) → Overview → Tasks → Inventory → Buyers → Assets & Equipment → Locations → Analytics → Reports → Decision Center → Farm History → Weather → Library → Gallery → Partnerships → Settings → then Home/Classroom/TIS/Me.
 
-**Done: 17 / 20 farm pages** (+ Library).
+**Done: 18 / 20 farm pages** (+ Gallery).
