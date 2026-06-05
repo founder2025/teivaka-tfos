@@ -52,3 +52,14 @@ Audit the real pages, prototype-only, to the Labour/Compliance depth bar:
 **Production (#6)** → **Enterprises (#5)** (these two reconcile the cycles/harvest content) → Overview → Tasks → Inventory → Buyers → Assets & Equipment → Locations → Analytics → Reports → Decision Center → Farm History → Weather → Library → Gallery → Partnerships → Settings → then Home/Classroom/TIS/Me.
 
 **Done: 20 / 20 farm pages — FARM NAV AUDIT COMPLETE.**
+
+## Top-pillar + public surfaces (beyond Farm nav)
+| Surface | Module file | Status |
+|---|---|---|
+| Home pillar (Feed/Following/Marketplace/Directory/Saved) | COVERAGE_MATRIX_HOME_PILLAR.md | ✅ ~60 |
+| Classroom pillar | COVERAGE_MATRIX_CLASSROOM_PILLAR.md | ✅ ~20 |
+| TIS pillar | COVERAGE_MATRIX_TIS_PILLAR.md | ✅ ~30 |
+| Me / Profile | COVERAGE_MATRIX_ME_PROFILE.md | ✅ ~45 |
+| Auth + Public Verify/Covenant + Control Room | COVERAGE_MATRIX_AUTH_PUBLIC_CONTROLROOM.md | ✅ ~50 |
+
+## 🏁 TOTAL PROTOTYPE COVERAGE = 100% — ~1,100+ objects across 26 modules.
