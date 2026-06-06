@@ -105,3 +105,35 @@ async def log_weather(body: WeatherLogCreate, user: dict = Depends(get_current_u
             "idempotency_key": body.idempotency_key,
         })
     return {"data": {"weather_id": weather_id, "farm_id": body.farm_id}}
+
+
+@router.get("/current/{farm_id}")
+async def get_current_weather(farm_id: str, user: dict = Depends(get_current_user)):
+    """Latest live 'now' conditions for a farm (from cached Open-Meteo fetch)."""
+    async with get_rls_db(str(user["tenant_id"])) as db:
+        row = (await db.execute(text("""
+            SELECT valid_at, temp_c, precip_mm, humidity_pct, wind_kmh, wind_dir,
+                   weather_code, source, fetched_at
+              FROM tenant.weather_forecast
+             WHERE farm_id = :fid AND kind = 'CURRENT'
+             ORDER BY fetched_at DESC LIMIT 1
+        """), {"fid": farm_id})).mappings().first()
+        return {"data": dict(row) if row else None}
+
+
+@router.get("/forecast/{farm_id}")
+async def get_forecast(farm_id: str, range: str = "daily", user: dict = Depends(get_current_user)):
+    """Live forecast: range=hourly (next ~48h) or daily (7-day)."""
+    kind = "HOURLY" if range.lower() == "hourly" else "DAILY"
+    limit = 48 if kind == "HOURLY" else 7
+    async with get_rls_db(str(user["tenant_id"])) as db:
+        rows = (await db.execute(text(f"""
+            SELECT valid_at, temp_c, temp_min_c, temp_max_c, precip_mm, precip_prob_pct,
+                   humidity_pct, wind_kmh, wind_dir, weather_code, source, fetched_at
+              FROM tenant.weather_forecast
+             WHERE farm_id = :fid AND kind = :kind
+               AND valid_at >= (now() - interval '2 hours')
+             ORDER BY valid_at ASC LIMIT {limit}
+        """), {"fid": farm_id, "kind": kind})).mappings().all()
+        fetched_at = rows[0]["fetched_at"] if rows else None
+        return {"data": [dict(r) for r in rows], "meta": {"kind": kind, "source": "open-meteo", "fetched_at": str(fetched_at) if fetched_at else None}}

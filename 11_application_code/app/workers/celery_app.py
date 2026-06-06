@@ -13,6 +13,7 @@ app = Celery(
         "app.workers.notification_worker",
         "app.workers.ai_worker",
         "app.workers.maintenance_worker",
+        "app.workers.weather_worker",
         "app.tasks.health_monitor",
     ]
 )
@@ -53,6 +54,7 @@ app.conf.update(
         "app.workers.notification_worker.*":    {"queue": "notifications"},
         "app.workers.ai_worker.*":              {"queue": "ai"},
         "app.workers.maintenance_worker.*":     {"queue": "maintenance"},
+        "app.workers.weather_worker.*":         {"queue": "maintenance"},
     },
 
     # Beat schedule (all times UTC, Fiji = UTC+12)
@@ -92,6 +94,12 @@ app.conf.update(
             "task": "app.workers.ai_worker.generate_weekly_insights",
             "schedule": crontab(hour=18, minute=0, day_of_week=6),
             "options": {"queue": "ai"},
+        },
+        # Live weather fetch (Open-Meteo) — every 3 h
+        "fetch-weather-3h": {
+            "task": "app.workers.weather_worker.fetch_all_weather",
+            "schedule": crontab(minute=0, hour="*/3"),
+            "options": {"queue": "maintenance"},
         },
         # Infra health monitor — cheap probes every 15 min at :00 :15 :30 :45
         "ops-run-cheap-checks": {
