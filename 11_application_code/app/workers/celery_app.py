@@ -101,6 +101,12 @@ app.conf.update(
             "schedule": crontab(minute=0, hour="*/3"),
             "options": {"queue": "maintenance"},
         },
+        # Cyclone watch (GDACS) — every 3 h, offset 20 min
+        "fetch-cyclones-3h": {
+            "task": "app.workers.weather_worker.fetch_cyclones",
+            "schedule": crontab(minute=20, hour="*/3"),
+            "options": {"queue": "maintenance"},
+        },
         # Infra health monitor — cheap probes every 15 min at :00 :15 :30 :45
         "ops-run-cheap-checks": {
             "task": "ops.run_cheap_checks",

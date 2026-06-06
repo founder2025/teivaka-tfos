@@ -6,9 +6,30 @@ from pydantic import BaseModel
 from decimal import Decimal
 from datetime import datetime
 from typing import Optional
+from math import radians, sin, cos, asin, sqrt
+import json
+import os
 import uuid
 
+import redis.asyncio as aioredis
+
 router = APIRouter()
+
+_redis_client = None
+
+
+async def _get_redis():
+    global _redis_client
+    if _redis_client is None:
+        url = os.environ.get("REDIS_URL", "redis://redis:6379/0")
+        _redis_client = aioredis.from_url(url, decode_responses=True)
+    return _redis_client
+
+
+def _haversine_km(a_lat, a_lon, b_lat, b_lon):
+    la1, lo1, la2, lo2 = map(radians, [a_lat, a_lon, b_lat, b_lon])
+    h = sin((la2 - la1) / 2) ** 2 + cos(la1) * cos(la2) * sin((lo2 - lo1) / 2) ** 2
+    return 6371.0 * 2 * asin(sqrt(h))
 
 class WeatherLogCreate(BaseModel):
     farm_id: str
@@ -142,3 +163,48 @@ async def get_forecast(farm_id: str, range: str = "daily", user: dict = Depends(
         """), {"fid": farm_id, "kind": kind})).mappings().all()
         fetched_at = rows[0]["fetched_at"] if rows else None
         return {"data": [dict(r) for r in rows], "meta": {"kind": kind, "source": "open-meteo", "fetched_at": str(fetched_at) if fetched_at else None}}
+
+
+@router.get("/cyclone/{farm_id}")
+async def get_cyclone(farm_id: str, user: dict = Depends(get_current_user)):
+    """Tropical-cyclone watch for a farm — nearest GDACS system to the farm's
+    coordinates (cached by weather_worker.fetch_cyclones). Honest GREEN default
+    when no system is within 1000 km."""
+    async with get_rls_db(str(user["tenant_id"])) as db:
+        frow = (await db.execute(
+            text("SELECT latitude, longitude FROM tenant.farms WHERE farm_id = :f"),
+            {"f": farm_id},
+        )).mappings().first()
+
+    green = {"active": False, "note": "No active tropical cyclone within 1000 km. Cyclone season: Nov–Apr.", "source": "GDACS / RSMC Nadi"}
+    try:
+        rc = await _get_redis()
+        cached = await rc.get("weather:cyclones")
+    except Exception:  # noqa: BLE001
+        cached = None
+    if not cached:
+        return {"data": {**green, "note": "Cyclone feed updates every 3 hours — no current advisory.", "fetched_at": None}}
+
+    payload = json.loads(cached)
+    cyclones = payload.get("cyclones", [])
+    fetched_at = payload.get("fetched_at")
+    if not cyclones:
+        return {"data": {**green, "fetched_at": fetched_at}}
+
+    # Anchor distance at the farm if it has coords, else the Fiji centroid.
+    a_lat = float(frow["latitude"]) if frow and frow["latitude"] is not None else -17.7
+    a_lon = float(frow["longitude"]) if frow and frow["longitude"] is not None else 178.0
+    scored = sorted(
+        ({**c, "km_away": round(_haversine_km(a_lat, a_lon, c["lat"], c["lon"]))} for c in cyclones),
+        key=lambda c: c["km_away"],
+    )
+    nearest = scored[0]
+    if nearest["km_away"] <= 1000:
+        return {"data": {
+            "active": True, "name": nearest.get("name"), "category": nearest.get("category"),
+            "category_text": nearest.get("category_text"), "alert": nearest.get("alert"),
+            "km_away": nearest["km_away"],
+            "advisory": "Move stock to high ground and secure shelters; check the official RSMC Nadi bulletin.",
+            "source": "GDACS / RSMC Nadi", "fetched_at": fetched_at,
+        }}
+    return {"data": {**green, "nearest_km": nearest["km_away"], "fetched_at": fetched_at}}

@@ -10,10 +10,14 @@ import logging
 import urllib.parse
 import urllib.request
 from datetime import datetime, timezone
+from math import radians, sin, cos, asin, sqrt
+
+import redis as sync_redis
 
 from app.workers.celery_app import app as celery_app
 from app.workers.rls_helpers import with_rls
 from app.workers.decision_engine_worker import get_sync_db
+from app.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -117,3 +121,66 @@ def fetch_all_weather():
                 "locations_fetched": len(fetched), "ran_at": datetime.now(timezone.utc).isoformat()}
     finally:
         conn.close()
+
+
+# ── GDACS tropical-cyclone watch (Redis-cached, no table) ────────────
+GDACS_TC = "https://www.gdacs.org/gdacsapi/api/events/geteventlist/EVENTS4APP?eventtypes=TC"
+FIJI_CENTROID = (-17.7, 178.0)
+CYCLONE_REDIS_KEY = "weather:cyclones"
+
+
+def haversine_km(a_lat, a_lon, b_lat, b_lon):
+    la1, lo1, la2, lo2 = map(radians, [a_lat, a_lon, b_lat, b_lon])
+    h = sin((la2 - la1) / 2) ** 2 + cos(la1) * cos(la2) * sin((lo2 - lo1) / 2) ** 2
+    return 6371.0 * 2 * asin(sqrt(h))
+
+
+def _fetch_cyclones():
+    """Active tropical cyclones from GDACS within ~3000 km of Fiji (South Pacific)."""
+    req = urllib.request.Request(GDACS_TC, headers={"User-Agent": "TFOS/1.0"})
+    with urllib.request.urlopen(req, timeout=20) as r:
+        data = json.loads(r.read())
+    out = []
+    for f in (data.get("features") or []):
+        try:
+            geom = f.get("geometry") or {}
+            coords = geom.get("coordinates") or []
+            if len(coords) < 2:
+                continue
+            lon, lat = float(coords[0]), float(coords[1])
+            dist = haversine_km(FIJI_CENTROID[0], FIJI_CENTROID[1], lat, lon)
+            if dist > 3000:
+                continue
+            p = f.get("properties") or {}
+            sev = p.get("severitydata") or {}
+            out.append({
+                "name": p.get("eventname") or p.get("name") or "Tropical cyclone",
+                "alert": p.get("alertlevel"),
+                "category": sev.get("severity"),
+                "category_text": sev.get("severitytext"),
+                "lat": lat, "lon": lon,
+                "is_current": p.get("iscurrent"),
+            })
+        except Exception:  # noqa: BLE001
+            continue
+    return out
+
+
+@celery_app.task(name="app.workers.weather_worker.fetch_cyclones")
+def fetch_cyclones():
+    """Cache South-Pacific tropical cyclones to Redis (TTL 3h). No DB table."""
+    try:
+        cyclones = _fetch_cyclones()
+    except Exception as e:  # noqa: BLE001
+        logger.warning("GDACS cyclone fetch failed: %s", e)
+        return {"error": str(e)}
+    try:
+        rc = sync_redis.from_url(settings.redis_url)
+        rc.set(CYCLONE_REDIS_KEY,
+               json.dumps({"cyclones": cyclones, "fetched_at": datetime.now(timezone.utc).isoformat()}),
+               ex=10800)
+    except Exception as e:  # noqa: BLE001
+        logger.warning("cyclone cache write failed: %s", e)
+        return {"error": f"redis: {e}", "cyclones": len(cyclones)}
+    logger.info("fetch_cyclones cached %s South-Pacific systems", len(cyclones))
+    return {"cyclones": len(cyclones), "ran_at": datetime.now(timezone.utc).isoformat()}

@@ -43,6 +43,7 @@ const useSummary = (id) => useQuery({ queryKey: ["wx-sum", id], queryFn: () => g
 const useObs = (id) => useQuery({ queryKey: ["wx-obs", id], queryFn: () => getJSON(`/api/v1/weather?farm_id=${encodeURIComponent(id)}&days=60`), enabled: !!id, retry: 0 });
 const useCurrent = (id) => useQuery({ queryKey: ["wx-cur", id], queryFn: () => getJSON(`/api/v1/weather/current/${encodeURIComponent(id)}`), enabled: !!id, retry: 0 });
 const useForecast = (id, range) => useQuery({ queryKey: ["wx-fc", id, range], queryFn: () => getJSON(`/api/v1/weather/forecast/${encodeURIComponent(id)}?range=${range}`), enabled: !!id, retry: 0 });
+const useCyclone = (id) => useQuery({ queryKey: ["wx-cyc", id], queryFn: () => getJSON(`/api/v1/weather/cyclone/${encodeURIComponent(id)}`), enabled: !!id, retry: 0 });
 
 // WMO weather-code → label + icon (Open-Meteo current/forecast weather_code)
 function wmo(code) {
@@ -163,6 +164,7 @@ function WeatherInner() {
   const crops = useCrops(farmId);
   const flocks = useFlocks(farmId);
   const current = useCurrent(farmId);
+  const cyclone = useCyclone(farmId);
   const daily = useForecast(farmId, "daily");
   const hourly = useForecast(farmId, "hourly");
 
@@ -296,10 +298,30 @@ function WeatherInner() {
             )}
           </Section>
 
-          {/* 3. cyclone watch (HONEST feed-pending) */}
-          <Section icon={ShieldAlert} title="Cyclone watch" pending>
-            <div className="text-sm" style={{ color: C.muted }}>Cyclone alerts (NIWA / Fiji Met) activate once the forecast feed is connected. For animals: this is when you'd move stock to high ground and secure shelters.</div>
-          </Section>
+          {/* 3. cyclone watch (LIVE via GDACS, Redis-cached) */}
+          {(() => {
+            const c = cyclone.data?.data;
+            const active = c && c.active;
+            return (
+              <Section icon={ShieldAlert} title="Cyclone watch" meta={c ? "GDACS · RSMC Nadi" : ""}>
+                {cyclone.isLoading ? (
+                  <div className="rounded-xl animate-pulse" style={{ height: 36, background: C.cream }} />
+                ) : active ? (
+                  <div className="rounded-xl p-3" style={{ background: "rgba(212,68,46,0.06)", border: `1px solid ${C.red}` }}>
+                    <div className="text-sm font-bold flex items-center gap-2" style={{ color: C.red }}>
+                      <ShieldAlert size={15} />{c.name}{c.category != null ? ` · Cat ${c.category}` : ""}{c.km_away != null ? ` · ${c.km_away} km away` : ""}
+                    </div>
+                    <div className="text-sm mt-1" style={{ color: C.soil }}>{c.advisory}</div>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2 text-sm" style={{ color: C.greenDk }}>
+                    <ShieldAlert size={15} />
+                    <span><strong>GREEN</strong> — {c?.note || "No active tropical cyclone within 1000 km. Cyclone season: Nov–Apr."}</span>
+                  </div>
+                )}
+              </Section>
+            );
+          })()}
 
           {/* 4. what today's weather means for your businesses (LIVE) */}
           <Section icon={Activity} title="What your latest weather means for your businesses" meta={latest ? `based on ${fmtDate(latest.observation_date)}` : ""}>
