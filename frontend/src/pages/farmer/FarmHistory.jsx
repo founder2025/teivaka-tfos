@@ -15,6 +15,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { QueryClientProvider, QueryClient } from "@tanstack/react-query";
 import { Clock, Camera, Sprout, Package, Coins, Bird, ShieldCheck, FileText, RefreshCw, AlertTriangle, Plus, Download, Printer, Search, Database } from "lucide-react";
 
 import { CurrentFarmProvider, useCurrentFarm } from "../../context/CurrentFarmContext";
@@ -400,10 +401,13 @@ function HistoryInner() {
   );
 }
 
+const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 0, refetchOnWindowFocus: false, staleTime: 60_000 } } });
 export default function FarmHistory() {
   return (
-    <CurrentFarmProvider>
-      <HistoryInner />
-    </CurrentFarmProvider>
+    <QueryClientProvider client={queryClient}>
+      <CurrentFarmProvider>
+        <HistoryInner />
+      </CurrentFarmProvider>
+    </QueryClientProvider>
   );
 }
