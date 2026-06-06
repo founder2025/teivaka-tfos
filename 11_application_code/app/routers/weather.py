@@ -28,83 +28,88 @@ class WeatherLogCreate(BaseModel):
 
 @router.get("")
 async def list_weather(farm_id: str = None, days: int = 30, user: dict = Depends(get_current_user)):
-    """List weather observations for a farm for the last N days."""
+    """List weather observations for a farm for the last N days.
+
+    Reads the live tenant.weather_log schema (log_id / logged_at / temp_min_c /
+    temp_max_c) and aliases to the keys the UI consumes (weather_id /
+    observation_date / temp_avg_c).
+    """
     async with get_rls_db(str(user["tenant_id"])) as db:
         params = {"tid": str(user["tenant_id"]), "days": days}
-        q = """SELECT * FROM tenant.weather_log
-               WHERE tenant_id = :tid
-               AND observation_date >= now() - interval '1 day' * :days"""
+        q = """
+            SELECT log_id AS weather_id,
+                   logged_at AS observation_date,
+                   rainfall_mm,
+                   temp_min_c, temp_max_c,
+                   CASE WHEN temp_min_c IS NOT NULL AND temp_max_c IS NOT NULL
+                        THEN ROUND(((temp_min_c + temp_max_c) / 2)::numeric, 1) END AS temp_avg_c,
+                   humidity_pct, wind_speed_kmh, wind_direction,
+                   weather_condition, source
+              FROM tenant.weather_log
+             WHERE tenant_id = :tid
+               AND logged_at >= now() - interval '1 day' * :days
+        """
         if farm_id:
             q += " AND farm_id = :farm_id"
             params["farm_id"] = farm_id
-        result = await db.execute(text(q + " ORDER BY observation_date DESC LIMIT 200"), params)
+        result = await db.execute(text(q + " ORDER BY logged_at DESC LIMIT 200"), params)
         return {"data": [dict(r) for r in result.mappings().all()]}
 
 @router.get("/summary/{farm_id}")
 async def get_weather_summary(farm_id: str, days: int = 30, user: dict = Depends(get_current_user)):
-    """Aggregated weather summary: total rainfall, avg temp, max temp for the period."""
+    """Aggregated weather summary: total rainfall, avg/max/min temp, humidity."""
     async with get_rls_db(str(user["tenant_id"])) as db:
         result = await db.execute(text("""
             SELECT
                 COUNT(*) AS observations,
                 COALESCE(SUM(rainfall_mm), 0) AS total_rainfall_mm,
-                ROUND(AVG(temp_avg_c)::numeric, 1) AS avg_temp_c,
+                ROUND(AVG((temp_min_c + temp_max_c) / 2)::numeric, 1) AS avg_temp_c,
                 MAX(temp_max_c) AS max_temp_c,
                 MIN(temp_min_c) AS min_temp_c,
                 ROUND(AVG(humidity_pct)::numeric, 1) AS avg_humidity_pct,
-                MIN(observation_date) AS period_start,
-                MAX(observation_date) AS period_end
+                MIN(logged_at) AS period_start,
+                MAX(logged_at) AS period_end
             FROM tenant.weather_log
             WHERE farm_id = :farm_id AND tenant_id = :tid
-              AND observation_date >= now() - interval '1 day' * :days
+              AND logged_at >= now() - interval '1 day' * :days
         """), {"farm_id": farm_id, "tid": str(user["tenant_id"]), "days": days})
         row = result.mappings().first()
-        return {"data": dict(row)}
+        return {"data": dict(row) if row else {}}
+
+# cloud_cover (UI) -> weather_condition CHECK enum on tenant.weather_log
+_CONDITION = {"CLEAR": "SUNNY", "PARTLY_CLOUDY": "PARTLY_CLOUDY", "OVERCAST": "OVERCAST"}
 
 @router.post("")
 async def log_weather(body: WeatherLogCreate, user: dict = Depends(get_current_user)):
+    """Log a daily weather observation into the live tenant.weather_log schema."""
     async with get_rls_db(str(user["tenant_id"])) as db:
-        if body.idempotency_key:
-            result = await db.execute(
-                text("SELECT weather_id FROM tenant.weather_log WHERE idempotency_key = :key LIMIT 1"),
-                {"key": body.idempotency_key}
-            )
-            existing = result.mappings().first()
-            if existing:
-                return {"data": {"weather_id": existing["weather_id"], "duplicate": True}}
-
-        weather_id = f"WTH-{uuid.uuid4().hex[:6].upper()}"
+        log_id = f"WTH-{uuid.uuid4().hex[:8].upper()}"
+        condition = _CONDITION.get((body.cloud_cover or "").upper())
         await db.execute(text("""
             INSERT INTO tenant.weather_log
-                (weather_id, tenant_id, farm_id, observation_date, observation_time,
-                 rainfall_mm, temp_min_c, temp_max_c, temp_avg_c, humidity_pct,
-                 wind_speed_kmh, wind_direction, cloud_cover, weather_event,
-                 notes, created_by, idempotency_key)
+                (log_id, tenant_id, farm_id, logged_at, rainfall_mm, temp_min_c,
+                 temp_max_c, humidity_pct, wind_speed_kmh, wind_direction,
+                 weather_condition, source, notes, created_by)
             VALUES
-                (:weather_id, :tenant_id, :farm_id, :observation_date, :observation_time,
-                 :rainfall_mm, :temp_min_c, :temp_max_c, :temp_avg_c, :humidity_pct,
-                 :wind_speed_kmh, :wind_direction, :cloud_cover, :weather_event,
-                 :notes, :created_by, :idempotency_key)
+                (:log_id, :tenant_id, :farm_id, :logged_at, :rainfall_mm, :temp_min_c,
+                 :temp_max_c, :humidity_pct, :wind_speed_kmh, :wind_direction,
+                 :weather_condition, 'MANUAL', :notes, :created_by)
         """), {
-            "weather_id": weather_id,
+            "log_id": log_id,
             "tenant_id": str(user["tenant_id"]),
             "farm_id": body.farm_id,
-            "observation_date": body.observation_date,
-            "observation_time": body.observation_time,
+            "logged_at": body.observation_date,
             "rainfall_mm": body.rainfall_mm,
             "temp_min_c": body.temp_min_c,
             "temp_max_c": body.temp_max_c,
-            "temp_avg_c": body.temp_avg_c,
             "humidity_pct": body.humidity_pct,
             "wind_speed_kmh": body.wind_speed_kmh,
             "wind_direction": body.wind_direction,
-            "cloud_cover": body.cloud_cover,
-            "weather_event": body.weather_event,
+            "weather_condition": condition,
             "notes": body.notes,
             "created_by": str(user["user_id"]),
-            "idempotency_key": body.idempotency_key,
         })
-    return {"data": {"weather_id": weather_id, "farm_id": body.farm_id}}
+    return {"data": {"weather_id": log_id, "farm_id": body.farm_id}}
 
 
 @router.get("/current/{farm_id}")
