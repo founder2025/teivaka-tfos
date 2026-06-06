@@ -61,6 +61,7 @@ from app.routers import (
     nursery,
     delivery,
     weather,
+    farm_map,
     kb,
     kb_articles,
     community,
@@ -305,6 +306,7 @@ app.include_router(financials.router,         prefix=f"{PREFIX}/financials",    
 app.include_router(nursery.router,            prefix=f"{PREFIX}/nursery",            tags=["Nursery"])
 app.include_router(delivery.router,           prefix=f"{PREFIX}/delivery",           tags=["Delivery Log"])
 app.include_router(weather.router,            prefix=f"{PREFIX}/weather",            tags=["Weather"])
+app.include_router(farm_map.router,           prefix=f"{PREFIX}/farm-map",           tags=["Farm Map"])
 
 # Knowledge Base
 app.include_router(kb.router,                 prefix=f"{PREFIX}/kb",                 tags=["Knowledge Base"])
