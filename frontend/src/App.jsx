@@ -258,7 +258,12 @@ export default function App() {
             <Route path="/farm/analytics"    element={<Analytics />} />
             <Route path="/farm/reports"      element={<Reports />} />
             <Route path="/farm/decisions"    element={<DecisionCenter />} />
-            <Route path="/farm/locations"    element={<ComingSoon title="Locations"    phase="5.5" />} />
+            <Route path="/farm/history"      element={<ComingSoon title="Farm History" />} />
+            <Route path="/farm/enterprises"  element={<ComingSoon title="Enterprises" />} />
+            <Route path="/farm/weather"      element={<ComingSoon title="Weather" />} />
+            <Route path="/farm/gallery"      element={<ComingSoon title="Gallery" />} />
+            <Route path="/farm/partnerships" element={<ComingSoon title="Partnerships" />} />
+            <Route path="/farm/locations"    element={<ComingSoon title="Locations" />} />
 
             <Route path="/tis/history" element={<ComingSoon title="TIS History" phase="4.3" />} />
             <Route path="/tis/voice"   element={<ComingSoon title="TIS Voice"   phase="5"   />} />
