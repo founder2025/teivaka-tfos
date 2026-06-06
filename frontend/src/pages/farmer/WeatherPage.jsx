@@ -15,7 +15,7 @@ import { useMemo, useState } from "react";
 import { QueryClientProvider, QueryClient, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   CloudRain, CloudSun, Wind, Droplets, Thermometer, Plus, ShieldAlert, Sprout, Bird,
-  AlertTriangle, RefreshCw, Activity, CalendarClock,
+  AlertTriangle, RefreshCw, Activity, CalendarClock, Sun, Cloud, CloudLightning, CloudSnow, CloudFog,
 } from "lucide-react";
 
 import { CurrentFarmProvider, useCurrentFarm } from "../../context/CurrentFarmContext";
@@ -41,6 +41,27 @@ function fmtDate(s) { try { const d = new Date(dOf(s) + "T00:00:00"); if (!isNaN
 
 const useSummary = (id) => useQuery({ queryKey: ["wx-sum", id], queryFn: () => getJSON(`/api/v1/weather/summary/${encodeURIComponent(id)}?days=30`), enabled: !!id, retry: 0 });
 const useObs = (id) => useQuery({ queryKey: ["wx-obs", id], queryFn: () => getJSON(`/api/v1/weather?farm_id=${encodeURIComponent(id)}&days=60`), enabled: !!id, retry: 0 });
+const useCurrent = (id) => useQuery({ queryKey: ["wx-cur", id], queryFn: () => getJSON(`/api/v1/weather/current/${encodeURIComponent(id)}`), enabled: !!id, retry: 0 });
+const useForecast = (id, range) => useQuery({ queryKey: ["wx-fc", id, range], queryFn: () => getJSON(`/api/v1/weather/forecast/${encodeURIComponent(id)}?range=${range}`), enabled: !!id, retry: 0 });
+
+// WMO weather-code → label + icon (Open-Meteo current/forecast weather_code)
+function wmo(code) {
+  const c = Number(code);
+  if (c === 0) return { label: "Clear", Icon: Sun };
+  if (c <= 2) return { label: "Partly cloudy", Icon: CloudSun };
+  if (c === 3) return { label: "Overcast", Icon: Cloud };
+  if (c >= 45 && c <= 48) return { label: "Fog", Icon: CloudFog };
+  if (c >= 51 && c <= 57) return { label: "Drizzle", Icon: CloudRain };
+  if (c >= 61 && c <= 67) return { label: "Rain", Icon: CloudRain };
+  if (c >= 71 && c <= 77) return { label: "Snow", Icon: CloudSnow };
+  if (c >= 80 && c <= 82) return { label: "Rain showers", Icon: CloudRain };
+  if (c >= 95) return { label: "Thunderstorm", Icon: CloudLightning };
+  return { label: "—", Icon: Cloud };
+}
+function fmtTime(s) { try { const d = new Date(s); if (!isNaN(d)) return d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }); } catch { /* noop */ } return String(s || "").slice(11, 16); }
+function fmtDay(s) { try { const d = new Date(dOf(s) + "T00:00:00"); if (!isNaN(d)) return d.toLocaleDateString("en-US", { weekday: "short", day: "numeric" }); } catch { /* noop */ } return dOf(s); }
+function fmtAsOf(s) { if (!s) return ""; try { const d = new Date(s); if (!isNaN(d)) return `as of ${d.toLocaleString("en-GB", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}`; } catch { /* noop */ } return ""; }
+const round1 = (v) => (v == null || v === "" ? null : Math.round(Number(v) * 10) / 10);
 const useCrops = (id) => useQuery({ queryKey: ["wx-crops", id], queryFn: () => getJSON(`/api/v1/financials/crops/${encodeURIComponent(id)}`), enabled: !!id, retry: 0 });
 const useFlocks = (id) => useQuery({ queryKey: ["wx-flocks", id], queryFn: () => getJSON(`/api/v1/flocks?farm_id=${encodeURIComponent(id)}&is_active=true`), enabled: !!id, retry: 0 });
 
@@ -141,6 +162,9 @@ function WeatherInner() {
   const obs = useObs(farmId);
   const crops = useCrops(farmId);
   const flocks = useFlocks(farmId);
+  const current = useCurrent(farmId);
+  const daily = useForecast(farmId, "daily");
+  const hourly = useForecast(farmId, "hourly");
 
   const sum = summary.data?.data || null;
   const obsRows = useMemo(() => (obs.data?.data ?? []).slice().sort((a, b) => dOf(b.observation_date).localeCompare(dOf(a.observation_date))), [obs.data]);
@@ -198,14 +222,78 @@ function WeatherInner() {
             )}
           </Section>
 
-          {/* 2. 7-day forecast + now (HONEST feed-pending) */}
-          <Section icon={CloudSun} title="7-day forecast & now" pending>
-            <div className="rounded-xl p-3" style={{ background: C.paper, border: `1px dashed ${C.border}` }}>
-              <div className="text-sm" style={{ color: C.soil }}>The external forecast feed (MetService Fiji) isn't connected yet — so TFOS won't show a 7-day forecast it can't stand behind.</div>
-              {latest ? (
-                <div className="text-xs mt-2" style={{ color: C.muted }}>Last recorded ({fmtDate(latest.observation_date)}): {has(latest.rainfall_mm) ? `${latest.rainfall_mm} mm` : "—"} rain · {has(latest.humidity_pct) ? `${latest.humidity_pct}% humidity` : "—"} · {has(latest.wind_speed_kmh) ? `${latest.wind_speed_kmh} km/h${latest.wind_direction ? ` ${latest.wind_direction}` : ""}` : "—"} wind.</div>
-              ) : <div className="text-xs mt-2" style={{ color: C.muted }}>Log a few days and your recent conditions show here.</div>}
-            </div>
+          {/* 2. NOW — live current conditions (Open-Meteo via our cache) */}
+          {(() => {
+            const cur = current.data?.data || null;
+            const w = cur ? wmo(cur.weather_code) : null;
+            const noFeed = (current.isError || daily.isError) || (!current.isLoading && !cur && (daily.data?.data ?? []).length === 0);
+            return (
+              <Section icon={w ? w.Icon : CloudSun} title="Now" meta={cur ? fmtAsOf(cur.fetched_at) : ""}>
+                {current.isLoading ? (
+                  <div className="rounded-xl animate-pulse" style={{ height: 56, background: C.cream }} />
+                ) : cur ? (
+                  <div className="flex items-center gap-4 flex-wrap">
+                    <div className="flex items-center gap-2.5">
+                      <w.Icon size={32} style={{ color: C.greenDk }} />
+                      <div><div className="text-2xl font-bold" style={{ color: C.soil }}>{has(cur.temp_c) ? `${round1(cur.temp_c)}°C` : "—"}</div><div className="text-xs" style={{ color: C.muted }}>{w.label}</div></div>
+                    </div>
+                    <div className="flex gap-4 flex-wrap text-sm">
+                      <span className="flex items-center gap-1" style={{ color: C.soil }}><Droplets size={14} style={{ color: C.greenDk }} />{has(cur.precip_mm) ? `${round1(cur.precip_mm)} mm` : "—"}</span>
+                      <span className="flex items-center gap-1" style={{ color: C.soil }}><Activity size={14} style={{ color: C.greenDk }} />{has(cur.humidity_pct) ? `${round1(cur.humidity_pct)}%` : "—"}</span>
+                      <span className="flex items-center gap-1" style={{ color: C.soil }}><Wind size={14} style={{ color: C.greenDk }} />{has(cur.wind_kmh) ? `${round1(cur.wind_kmh)} km/h${cur.wind_dir ? ` ${cur.wind_dir}` : ""}` : "—"}</span>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-sm" style={{ color: C.muted }}>{noFeed ? "Live forecast turns on once the weather feed runs for this farm — set the farm's location if it has none, then wait for the next fetch." : "No current reading yet."}</div>
+                )}
+              </Section>
+            );
+          })()}
+
+          {/* 3. NEXT 48 HOURS — live hourly strip */}
+          <Section icon={CalendarClock} title="Next 48 hours" meta={hourly.data?.meta?.fetched_at ? "Open-Meteo" : ""}>
+            {hourly.isLoading ? (
+              <div className="rounded-xl animate-pulse" style={{ height: 84, background: C.cream }} />
+            ) : (hourly.data?.data ?? []).length === 0 ? (
+              <div className="text-sm" style={{ color: C.muted }}>Hourly forecast appears here once the weather feed runs for this farm.</div>
+            ) : (
+              <div className="flex gap-2 overflow-x-auto pb-1">
+                {(hourly.data.data).map((h, i) => {
+                  const w = wmo(h.weather_code);
+                  return (
+                    <div key={i} className="rounded-xl border p-2.5 text-center shrink-0 min-w-[72px]" style={{ background: "white", borderColor: C.border }}>
+                      <div className="text-[11px]" style={{ color: C.muted }}>{fmtTime(h.valid_at)}</div>
+                      <w.Icon size={18} style={{ color: C.greenDk, margin: "4px auto" }} />
+                      <div className="text-sm font-bold" style={{ color: C.soil }}>{has(h.temp_c) ? `${round1(h.temp_c)}°` : "—"}</div>
+                      <div className="text-[10px] flex items-center justify-center gap-0.5" style={{ color: C.muted }}><Droplets size={9} />{has(h.precip_prob_pct) ? `${h.precip_prob_pct}%` : has(h.precip_mm) ? `${round1(h.precip_mm)}mm` : "—"}</div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </Section>
+
+          {/* 4. 7-DAY FORECAST — live daily cards */}
+          <Section icon={CloudSun} title="7-day forecast" meta={daily.data?.meta?.fetched_at ? "Open-Meteo" : ""}>
+            {daily.isLoading ? (
+              <div className="rounded-xl animate-pulse" style={{ height: 84, background: C.cream }} />
+            ) : (daily.data?.data ?? []).length === 0 ? (
+              <div className="text-sm" style={{ color: C.muted }}>The 7-day forecast appears here once the weather feed runs for this farm.</div>
+            ) : (
+              <div className="grid gap-2 grid-cols-3 sm:grid-cols-4 lg:grid-cols-7">
+                {(daily.data.data).map((d, i) => {
+                  const w = wmo(d.weather_code);
+                  return (
+                    <div key={i} className="rounded-xl border p-2.5 text-center" style={{ background: "white", borderColor: C.border }}>
+                      <div className="text-[11px] font-semibold" style={{ color: C.soil }}>{fmtDay(d.valid_at)}</div>
+                      <w.Icon size={20} style={{ color: C.greenDk, margin: "5px auto" }} />
+                      <div className="text-sm font-bold" style={{ color: C.soil }}>{has(d.temp_max_c) ? `${round1(d.temp_max_c)}°` : "—"}<span className="text-xs font-normal" style={{ color: C.muted }}>{has(d.temp_min_c) ? ` / ${round1(d.temp_min_c)}°` : ""}</span></div>
+                      <div className="text-[10px] flex items-center justify-center gap-0.5 mt-0.5" style={{ color: C.muted }}><Droplets size={9} />{has(d.precip_mm) ? `${round1(d.precip_mm)}mm` : "—"}{has(d.precip_prob_pct) ? ` · ${d.precip_prob_pct}%` : ""}</div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </Section>
 
           {/* 3. cyclone watch (HONEST feed-pending) */}
