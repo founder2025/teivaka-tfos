@@ -13,7 +13,7 @@ import {
   BookOpen, TrendingUp, Award,
   Tractor, ListTodo, Sprout, Package, CloudRain, Warehouse,
   Users2, Coins, Truck, Shield, BarChart3, FileText, MapPin,
-  Library, Bird,
+  Library, Bird, Crosshair,
   Sparkles, Clock, Mic, Activity,
   User, Settings, RefreshCw, CreditCard, Gift, Download,
 } from "lucide-react";
@@ -40,8 +40,9 @@ export const PILLAR_SUB_NAV = {
   "/farm": {
     label: "Farm",
     items: [
-      { path: "/farm",              label: "Overview",     icon: Tractor },
-      { path: "/farm/tasks",        label: "Tasks",        icon: ListTodo },
+      { path: "/farm",              label: "Overview",        icon: Tractor },
+      { path: "/farm/tasks",        label: "Tasks",           icon: ListTodo },
+      { path: "/farm/decisions",    label: "Decision Center", icon: Crosshair },
       { path: "/farm/cycles",       label: "Production",       icon: Sprout },
       { path: "/farm/poultry",      label: "Poultry",      icon: Bird },
       { path: "/farm/harvests",     label: "Harvests",     icon: Package },
