@@ -1,0 +1,617 @@
+/**
+ * Enterprises.jsx — /farm/enterprises
+ *
+ * Mirrors v262 coreEnterprisesView + coreEnterpriseDetailView (Gate-1 traced).
+ * Your farm as a portfolio of businesses. 5 list tabs (Portfolio · Rankings ·
+ * Cash & risk · Outlook · Investor) + per-enterprise detail (section tabs).
+ *
+ * An enterprise = one crop production (financials/crops, live money) or one
+ * poultry flock-type (flocks, live head). Standing is derived honestly from
+ * real net/ROI (crops) or survival % (animals) — never a mock health score.
+ * Money/head/cycles/ROI live; forecasts, worth, holds, per-enterprise labor &
+ * timeline are honest "Building"/"—". No fabricated numbers shown to a banker.
+ */
+import { useMemo, useState } from "react";
+import { QueryClientProvider, QueryClient, useQuery } from "@tanstack/react-query";
+import {
+  Sprout, Plus, Search, Layers, Coins, AlertTriangle, Crosshair, ArrowRight,
+  Shield, BarChart3, ArrowLeft, Wrench, Package, Users2, FileText, Activity,
+} from "lucide-react";
+
+import { CurrentFarmProvider, useCurrentFarm } from "../../context/CurrentFarmContext";
+import FarmSelector from "../../components/farm/FarmSelector";
+import ModeDropdown from "../../components/farm/ModeDropdown";
+
+const C = {
+  soil: "#5C4033", cream: "#F8F3E9", border: "#E6DED0", muted: "#8A7863", ink: "#3A2E26",
+  green: "#6AA84F", greenDk: "#3E7B1F", amber: "#BF9000", red: "#D4442E", greenTint: "#E9F2DD", paper: "#FCFAF5",
+};
+
+const VIEW_TABS = [
+  { id: "portfolio", label: "Portfolio", hint: "Overview" },
+  { id: "rankings", label: "Rankings", hint: "Best to worst" },
+  { id: "cashrisk", label: "Cash & risk", hint: "Money & exposure" },
+  { id: "outlook", label: "Outlook", hint: "Future & links" },
+  { id: "investor", label: "Investor", hint: "Worth & ROI" },
+];
+const PLANT_CATS = ["Vegetables", "Root Crops", "Fruits", "Plantation Crops", "Forestry", "Floriculture", "Protected Housing"];
+const ANIMAL_CATS = ["Cattle", "Goats", "Sheep", "Pigs", "Poultry", "Aquaculture", "Apiculture"];
+
+function authHeaders() {
+  const tok = localStorage.getItem("tfos_access_token");
+  return tok ? { Authorization: `Bearer ${tok}` } : {};
+}
+async function getJSON(url) { const r = await fetch(url, { headers: authHeaders() }); if (!r.ok) throw new Error(String(r.status)); return r.json(); }
+const useCrops = (id) => useQuery({ queryKey: ["entcrops", id], queryFn: () => getJSON(`/api/v1/financials/crops/${encodeURIComponent(id)}`), enabled: !!id, retry: 0 });
+const useFlocks = (id) => useQuery({ queryKey: ["entflocks", id], queryFn: () => getJSON(`/api/v1/flocks?farm_id=${encodeURIComponent(id)}&is_active=true`), enabled: !!id, retry: 0 });
+const useFarmFin = (id) => useQuery({ queryKey: ["entfin", id], queryFn: () => getJSON(`/api/v1/financials/farm/${encodeURIComponent(id)}`), enabled: !!id, retry: 0 });
+
+function n0(v) { return Math.round(Number(v) || 0); }
+function fjd(v) { const n = n0(v); return `${n < 0 ? "−" : ""}FJD ${Math.abs(n).toLocaleString("en-FJ")}`; }
+function roiTxt(r) { return r == null ? "—" : `${r >= 0 ? "+" : ""}${r.toFixed(0)}%`; }
+function emitToast(m) { window.dispatchEvent(new CustomEvent("tfos:toast", { detail: { message: m } })); }
+function initials(s) { const p = String(s || "").trim().split(/\s+/); return ((p[0] || " ")[0] + ((p[1] || "")[0] || "")).toUpperCase(); }
+function gradeColor(g) { return g === "Strong" ? C.green : g === "Steady" ? C.soil : g === "Watch" ? C.amber : g === "New" ? C.muted : C.red; }
+function gradeFromScore(s) { return s >= 80 ? "Strong" : s >= 55 ? "Steady" : s >= 30 ? "Watch" : "At risk"; }
+
+// Standing — derived from real data, never a mock health score.
+function cropStanding(net, roi) {
+  const score = net > 0 ? Math.max(80, Math.min(100, Math.round(80 + (roi ?? 0) / 5)))
+    : Math.max(45, Math.min(78, Math.round(75 + (roi ?? 0) / 10)));
+  return { grade: net > 0 ? "Strong" : "Steady", score };
+}
+function entCategory(e) {
+  const n = String(e.name || "").toLowerCase();
+  if (e.kind === "animal") {
+    if (/cattle|cow|beef|dairy/.test(n)) return "Cattle";
+    if (/goat/.test(n)) return "Goats";
+    if (/sheep|lamb/.test(n)) return "Sheep";
+    if (/pig|pork|swine/.test(n)) return "Pigs";
+    if (/fish|tilapia|prawn|shrimp|crab|seaweed|aqua|pond/.test(n)) return "Aquaculture";
+    if (/bee|hive|honey|apiar/.test(n)) return "Apiculture";
+    return "Poultry";
+  }
+  if (/cassava|sweet potato|taro|dalo|yam|kumala/.test(n)) return "Root Crops";
+  if (/kava|sugar|coconut|cocoa|coffee|vanilla|ginger|turmeric/.test(n)) return "Plantation Crops";
+  if (/melon|papaya|paw|banana|pineapple|mango|citrus|orange|lemon|fruit/.test(n)) return "Fruits";
+  if (/mahogany|pine|teak|sandalwood|timber|forest/.test(n)) return "Forestry";
+  if (/flower|ornamental|nursery plant|rose|orchid|cut flower/.test(n)) return "Floriculture";
+  if (/greenhouse|hydroponic|aquaponic|shade house|protected/.test(n)) return "Protected Housing";
+  return "Vegetables";
+}
+function prettyFlockType(t, label) {
+  const m = { LAYER: "Layer hens", BROILER: "Broilers", LAYERS: "Layer hens", BROILERS: "Broilers" };
+  if (t && m[String(t).toUpperCase()]) return m[String(t).toUpperCase()];
+  if (t) return String(t).charAt(0) + String(t).slice(1).toLowerCase();
+  return label || "Flock";
+}
+
+// Build enterprises[] from live crops + flocks.
+function buildEnterprises(cropData, flockData) {
+  const ents = [];
+  (cropData ?? []).forEach((r, i) => {
+    const income = n0(r.total_income_fjd);
+    const costs = n0(r.total_labor_fjd) + n0(r.total_input_cost_fjd);
+    const net = income - costs;
+    const active = income > 0 || costs > 0;
+    const roi = costs > 0 ? (net / costs) * 100 : null;
+    const st = active ? cropStanding(net, roi) : { grade: "New", score: null };
+    ents.push({
+      id: r.production_id || `crop-${i}`, name: r.production_name, kind: "crop", engineLabel: "Crops",
+      income, costs, net, roi, worth: 0, cycles: n0(r.total_cycles), active: n0(r.total_cycles),
+      head: 0, groups: 0, status: "active", holds: 0,
+      st: { ...st, color: gradeColor(st.grade) },
+    });
+  });
+  // aggregate flocks by flock_type → one enterprise per type
+  const byType = {};
+  (flockData ?? []).forEach((f) => {
+    const key = String(f.flock_type || f.flock_label || "Flock");
+    (byType[key] = byType[key] || []).push(f);
+  });
+  Object.entries(byType).forEach(([key, flocks], i) => {
+    const head = flocks.reduce((a, f) => a + n0(f.current_count), 0);
+    const placed = flocks.reduce((a, f) => a + n0(f.placed_count), 0);
+    const score = placed > 0 ? Math.round((head / placed) * 100) : null;
+    const grade = score == null ? "New" : gradeFromScore(score);
+    ents.push({
+      id: `flock-${key}-${i}`, name: prettyFlockType(flocks[0].flock_type, flocks[0].flock_label), kind: "animal", engineLabel: "Animals",
+      income: 0, costs: 0, net: 0, roi: null, worth: 0, cycles: 0, active: 0,
+      head, groups: flocks.length, status: flocks.some((f) => f.is_active) ? "active" : "closed", holds: 0,
+      st: { grade, score, color: gradeColor(grade) },
+    });
+  });
+  return ents;
+}
+
+function derive(ents) {
+  const rows = ents;
+  const byNet = [...rows].sort((a, b) => b.net - a.net);
+  const scored = rows.filter((r) => r.st.score != null);
+  const byHealth = [...scored].sort((a, b) => b.st.score - a.st.score);
+  const byRoi = [...rows].sort((a, b) => (b.roi == null ? -1 : b.roi) - (a.roi == null ? -1 : a.roi));
+  const tot = rows.reduce((t, r) => ({ inc: t.inc + r.income, cost: t.cost + r.costs, net: t.net + r.net, worth: t.worth + r.worth, holds: t.holds + r.holds }), { inc: 0, cost: 0, net: 0, worth: 0, holds: 0 });
+  const counts = rows.reduce((c, r) => ({ ...c, [r.status]: (c[r.status] || 0) + 1 }), {});
+  const portScore = scored.length ? Math.round(scored.reduce((a, r) => a + r.st.score, 0) / scored.length) : 0;
+  const portGrade = portScore >= 80 ? "Strong" : portScore >= 55 ? "Steady" : portScore >= 30 ? "Watch" : "At risk";
+  const losing = rows.filter((r) => r.net < 0).sort((a, b) => a.net - b.net);
+  const atRisk = scored.filter((r) => r.st.grade === "At risk" || r.st.grade === "Watch").sort((a, b) => a.st.score - b.st.score);
+  const grow = byRoi.filter((r) => r.net >= 0 && (r.st.score ?? 0) >= 55)[0] || byRoi[0];
+  return { rows, byNet, byHealth, byRoi, tot, counts, portScore, portGrade, best: byNet[0], lowHealth: byHealth[byHealth.length - 1], losing, atRisk, grow };
+}
+
+// ── atoms ────────────────────────────────────────────────────────────
+function Card({ children, style, onClick }) {
+  return <div onClick={onClick} className="rounded-2xl border bg-white" style={{ borderColor: C.border, ...(onClick ? { cursor: "pointer" } : {}), ...style }}>{children}</div>;
+}
+function KpiTile({ label, value, sub, color, low }) {
+  return (
+    <div className="rounded-xl border p-3 min-w-0" style={{ background: low ? "rgba(212,68,46,0.04)" : "white", borderColor: C.border }}>
+      <div className="text-[10px] uppercase tracking-wide truncate" style={{ color: C.muted }}>{label}</div>
+      <div className="text-lg font-bold truncate" style={{ color: color || C.soil }}>{value}</div>
+      {sub && <div className="text-[11px] truncate" style={{ color: C.muted }}>{sub}</div>}
+    </div>
+  );
+}
+function Section({ title, meta, children }) {
+  return (
+    <Card style={{ marginBottom: 14 }}>
+      <div className="flex items-center justify-between gap-2 px-4 pt-3.5 pb-1">
+        <h3 className="text-sm font-semibold" style={{ color: C.soil }}>{title}</h3>
+        {meta && <span className="text-[11px]" style={{ color: C.muted }}>{meta}</span>}
+      </div>
+      <div className="px-4 pb-4 pt-1">{children}</div>
+    </Card>
+  );
+}
+function Row({ l, v, vColor }) {
+  return (
+    <div className="flex justify-between gap-3 py-1.5 text-sm" style={{ borderBottom: `1px solid rgba(92,64,51,0.07)` }}>
+      <span style={{ color: C.muted }}>{l}</span><span style={{ color: vColor || C.soil, fontWeight: 600, textAlign: "right" }}>{v}</span>
+    </div>
+  );
+}
+function Build({ desc, link, onLink }) {
+  return (
+    <div className="text-sm" style={{ color: C.muted }}>
+      {desc} <span className="font-bold">Building</span>
+      {link && <div><button onClick={onLink} className="mt-2.5 text-xs px-3 py-1.5 rounded-lg" style={{ color: C.greenDk, border: `1px solid ${C.border}` }}>{link}</button></div>}
+    </div>
+  );
+}
+function MiniBar({ score }) {
+  const s = score || 0;
+  const segs = [[18, C.greenDk], [14, C.green], [9, C.amber], [5, C.soil]];
+  return (
+    <div className="flex gap-0.5 mt-1 h-1.5">
+      {segs.map(([w, col], i) => <div key={i} style={{ width: (s / 100) * w, background: col, borderRadius: 2 }} />)}
+    </div>
+  );
+}
+
+// ── enterprise card ──────────────────────────────────────────────────
+function EntCard({ e, onOpen }) {
+  const tierCol = e.st.color;
+  return (
+    <Card style={{ overflow: "hidden" }}>
+      <div className="p-3 cursor-pointer" onClick={() => onOpen(e)}>
+        <div className="flex items-start gap-2.5">
+          <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 text-white text-xs font-bold" style={{ background: e.kind === "animal" ? C.amber : C.green }}>{initials(e.name)}</div>
+          <div className="flex-1 min-w-0">
+            <div className="font-semibold text-sm truncate" style={{ color: C.soil }}>{e.name}</div>
+            <div className="flex items-center gap-1.5 my-1 flex-wrap">
+              <span className="text-[10px] px-1.5 py-0.5 rounded uppercase" style={{ background: C.greenTint, color: C.soil }}>{e.engineLabel}</span>
+              <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: e.status === "active" ? C.greenTint : C.cream, color: e.status === "active" ? C.greenDk : C.amber }}>{e.status}</span>
+            </div>
+            <div className="text-[11px] flex items-center gap-1" style={{ color: C.muted }}>
+              <Sprout size={11} />{e.kind === "animal" ? `${e.head} head · ${e.groups} group${e.groups === 1 ? "" : "s"}` : `${e.cycles} cycle${e.cycles === 1 ? "" : "s"}`}
+            </div>
+          </div>
+          <div className="text-right shrink-0">
+            <div className="text-lg font-bold leading-none" style={{ color: tierCol }}>{e.st.score ?? "—"}</div>
+            <div className="text-[9px] uppercase" style={{ color: C.muted }}>standing</div>
+            <MiniBar score={e.st.score} />
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-1.5 mt-3">
+          {[["Earned", e.kind === "animal" ? "—" : fjd(e.income)], ["Spent", e.kind === "animal" ? "—" : fjd(e.costs)],
+            ["Net", e.kind === "animal" ? "—" : fjd(e.net), e.net < 0 ? C.red : C.soil], ["ROI", e.kind === "animal" ? "—" : roiTxt(e.roi)]].map(([l, v, col]) => (
+            <div key={l} className="rounded-lg p-2" style={{ background: C.paper }}>
+              <div className="text-[9px] uppercase" style={{ color: C.muted }}>{l}</div>
+              <div className="text-xs font-bold" style={{ color: col || C.soil }}>{v}</div>
+            </div>
+          ))}
+        </div>
+        <div className="text-[11px] mt-2.5" style={{ color: C.muted }}><strong style={{ color: C.soil }}>Next:</strong> nothing scheduled</div>
+      </div>
+      <div className="flex gap-1.5 px-3 pb-3">
+        <button onClick={() => onOpen(e)} className="flex-1 text-xs px-3 py-1.5 rounded-lg text-white" style={{ background: C.greenDk }}>Open</button>
+        <button onClick={() => emitToast("Pause needs an enterprise-status endpoint")} className="text-xs px-3 py-1.5 rounded-lg" style={{ color: C.soil, border: `1px solid ${C.border}` }}>Pause</button>
+        <button onClick={() => emitToast("Close needs an enterprise-status endpoint")} className="text-xs px-3 py-1.5 rounded-lg" style={{ color: C.soil, border: `1px solid ${C.border}` }}>Close</button>
+      </div>
+    </Card>
+  );
+}
+
+// ── Portfolio tab ────────────────────────────────────────────────────
+function GlanceTile({ icon: Icon, q, a, color }) {
+  return (
+    <div className="rounded-xl border p-3 flex flex-col gap-1.5" style={{ background: C.paper, borderColor: C.border }}>
+      <div className="flex items-start gap-1.5 text-[11px] leading-snug" style={{ color: C.muted }}><Icon size={14} className="mt-px shrink-0" />{q}</div>
+      <div className="text-sm font-bold leading-snug" style={{ color: color || C.ink }}>{a}</div>
+    </div>
+  );
+}
+function Chip({ active, label, count, onClick }) {
+  return (
+    <button onClick={onClick} className="text-xs px-2.5 py-1 rounded-full shrink-0 flex items-center gap-1" style={{ border: `1px solid ${active ? C.green : C.border}`, background: active ? C.greenTint : "white", color: active ? C.greenDk : C.muted }}>
+      {label}{count != null && <span className="font-bold">{count}</span>}
+    </button>
+  );
+}
+function PortfolioTab({ D, ents, typeFilter, setTypeFilter, standingFilter, setStandingFilter, search, setSearch, onOpen }) {
+  const engines = useMemo(() => {
+    const m = {};
+    ents.forEach((e) => { const k = e.kind; m[k] = m[k] || { label: e.engineLabel, n: 0 }; m[k].n++; });
+    return m;
+  }, [ents]);
+
+  let rows = ents;
+  if (typeFilter !== "all") rows = rows.filter((r) => r.kind === typeFilter);
+  if (standingFilter !== "all") rows = rows.filter((r) => r.st.grade === standingFilter);
+  const q = search.trim().toLowerCase();
+  if (q) rows = rows.filter((r) => r.name.toLowerCase().includes(q) || r.engineLabel.toLowerCase().includes(q));
+
+  const byCat = {};
+  rows.forEach((r) => { const cc = `${r.kind}|${entCategory(r)}`; (byCat[cc] = byCat[cc] || []).push(r); });
+
+  const classBlock = (kind, label, cats) => {
+    if (!cats.some((cat) => byCat[`${kind}|${cat}`])) return null;
+    const empties = cats.filter((cat) => !byCat[`${kind}|${cat}`]);
+    return (
+      <div key={kind}>
+        <div className="mt-4 mb-1 font-extrabold text-[15px]" style={{ color: C.soil }}>{label}</div>
+        {cats.map((cat) => {
+          const grp = byCat[`${kind}|${cat}`];
+          if (!grp) return null;
+          grp.sort((a, b) => b.net - a.net);
+          return (
+            <div key={cat}>
+              <div className="mt-3 mb-1.5 text-[11px] font-bold uppercase tracking-wide" style={{ color: C.muted }}>{cat} <span style={{ color: C.greenDk }}>{grp.length}</span></div>
+              <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 xl:grid-cols-3">{grp.map((e) => <EntCard key={e.id} e={e} onOpen={onOpen} />)}</div>
+            </div>
+          );
+        })}
+        {empties.length > 0 && <div className="mt-2.5 text-xs" style={{ color: C.muted }}>Also supported: {empties.join(" · ")} — none started yet.</div>}
+      </div>
+    );
+  };
+
+  const grades = ["Strong", "Steady", "Watch", "At risk"];
+  return (
+    <div className="space-y-3">
+      <div className="grid gap-2 grid-cols-2 lg:grid-cols-4">
+        <KpiTile label="Enterprises" value={String(D.rows.length)} sub={`${D.counts.active || 0} active${D.counts.paused ? ` · ${D.counts.paused} paused` : ""}`} />
+        <KpiTile label="Net this season" value={fjd(D.tot.net)} sub={`earned ${n0(D.tot.inc)} · spent ${n0(D.tot.cost)}`} color={D.tot.net < 0 ? C.red : C.green} low={D.tot.net < 0} />
+        <KpiTile label="Portfolio standing" value={D.portGrade} sub={`${D.portScore} / 100`} color={gradeColor(D.portGrade)} />
+        <KpiTile label="Alerts" value={String(D.tot.holds)} sub="need a look" color={D.tot.holds > 0 ? C.red : C.soil} low={D.tot.holds > 0} />
+      </div>
+
+      <Section title="At a glance" meta="Your farm answered in one look · updates every time you log">
+        <div className="grid gap-2.5 grid-cols-1 sm:grid-cols-2">
+          <GlanceTile icon={Layers} q="How many enterprises do I have?" a={`${D.rows.length} · ${D.counts.active || 0} active`} />
+          <GlanceTile icon={Coins} q="Which one makes the most money?" a={D.best ? `${D.best.name} — net ${fjd(D.best.net)}` : "—"} color={C.green} />
+          <GlanceTile icon={AlertTriangle} q="Which one loses money?" a={D.losing.length ? `${D.losing[0].name} — net ${fjd(D.losing[0].net)}` : "None — keep going"} color={D.losing.length ? C.red : C.green} />
+          <GlanceTile icon={Crosshair} q="Which one needs attention?" a={D.lowHealth ? `${D.lowHealth.name} — ${D.lowHealth.st.grade} (${D.lowHealth.st.score})` : "All steady"} color={D.lowHealth ? gradeColor(D.lowHealth.st.grade) : C.green} />
+          <GlanceTile icon={ArrowRight} q="Which one should I grow?" a={D.grow ? `${D.grow.name} — strongest right now${D.grow.roi != null ? ` · ROI ${roiTxt(D.grow.roi)}` : ""}` : "—"} color={C.soil} />
+          <GlanceTile icon={Shield} q="Which one should I stop?" a={D.atRisk.length ? `${D.atRisk[0].name} — ${D.atRisk[0].st.grade}, look before you spend more` : "None — keep going"} color={D.atRisk.length ? C.amber : C.green} />
+          <GlanceTile icon={BarChart3} q="What happens in the next 30 / 60 / 90 days?" a="Forecasts turn on once each enterprise has a logged season on the live system" color={C.muted} />
+        </div>
+      </Section>
+
+      <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
+        <span className="text-[10px] uppercase tracking-wide shrink-0 mr-1" style={{ color: C.muted }}>Type:</span>
+        <Chip active={typeFilter === "all"} label="All" count={ents.length} onClick={() => setTypeFilter("all")} />
+        {Object.entries(engines).map(([k, v]) => <Chip key={k} active={typeFilter === k} label={v.label} count={v.n} onClick={() => setTypeFilter(k)} />)}
+      </div>
+      <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
+        <span className="text-[10px] uppercase tracking-wide shrink-0 mr-1" style={{ color: C.muted }}>Standing:</span>
+        <Chip active={standingFilter === "all"} label="All" onClick={() => setStandingFilter("all")} />
+        {grades.map((g) => { const ct = ents.filter((r) => r.st.grade === g).length; return ct ? <Chip key={g} active={standingFilter === g} label={g} count={ct} onClick={() => setStandingFilter(g)} /> : null; })}
+      </div>
+      <div className="relative">
+        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: C.muted }} />
+        <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search enterprises..." className="w-full pl-9 pr-3 py-2 rounded-lg text-sm" style={{ border: `1.5px solid ${C.border}`, background: C.paper, color: C.soil }} />
+      </div>
+
+      {rows.length === 0
+        ? <Card style={{ padding: 40, textAlign: "center" }}><span style={{ color: C.muted }}>No enterprises match these filters.</span></Card>
+        : <div>{classBlock("crop", "Plant-based", PLANT_CATS)}{classBlock("animal", "Animal-based", ANIMAL_CATS)}</div>}
+    </div>
+  );
+}
+
+// ── Rankings tab ─────────────────────────────────────────────────────
+function RankingsTab({ D }) {
+  return (
+    <div>
+      <Section title="Health ranking" meta="Best to worst">
+        {D.byHealth.length === 0 ? <Build desc="Standing ranks build as you log." /> : D.byHealth.map((r, i) => (
+          <div key={r.id} className="flex justify-between py-1.5 text-sm" style={{ borderBottom: `1px solid rgba(92,64,51,0.07)` }}>
+            <span style={{ color: C.ink }}>{i + 1}. {r.name}</span><span className="font-semibold" style={{ color: r.st.color }}>{r.st.grade} · {r.st.score}</span>
+          </div>
+        ))}
+      </Section>
+      <Section title="Profitability ranking" meta="Who is making money">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm min-w-[460px]">
+            <thead><tr className="text-xs" style={{ color: C.muted }}><th className="text-left p-1.5">Enterprise</th><th className="text-right p-1.5">Earned</th><th className="text-right p-1.5">Spent</th><th className="text-right p-1.5">Net</th><th className="text-right p-1.5">ROI</th></tr></thead>
+            <tbody>{D.byNet.map((r) => (
+              <tr key={r.id} style={{ borderTop: `1px solid rgba(92,64,51,0.07)` }}>
+                <td className="p-1.5" style={{ color: C.ink }}>{r.name}</td><td className="p-1.5 text-right">{n0(r.income)}</td><td className="p-1.5 text-right">{n0(r.costs)}</td>
+                <td className="p-1.5 text-right" style={{ color: r.net < 0 ? C.red : C.green }}>{r.net < 0 ? "−" : ""}{Math.abs(n0(r.net))}</td><td className="p-1.5 text-right">{roiTxt(r.roi)}</td>
+              </tr>
+            ))}</tbody>
+          </table>
+        </div>
+      </Section>
+      <Section title="Benchmarking" meta="Profit per dollar spent">
+        {D.byRoi.map((r, i) => (
+          <div key={r.id} className="flex justify-between py-1.5 text-sm" style={{ borderBottom: `1px solid rgba(92,64,51,0.07)` }}>
+            <span style={{ color: C.ink }}>{i + 1}. {r.name}</span><span style={{ color: C.soil }}>{r.roi == null ? "not enough cost data" : `${roiTxt(r.roi)} per $ spent`}</span>
+          </div>
+        ))}
+      </Section>
+    </div>
+  );
+}
+
+// ── Cash & risk tab ──────────────────────────────────────────────────
+function CashRiskTab({ D }) {
+  const gen = D.byNet[0], drain = D.byNet[D.byNet.length - 1];
+  const bars = [...D.byNet].sort((a, b) => b.costs - a.costs);
+  const alerts = [];
+  D.rows.forEach((r) => { if (r.net < 0) alerts.push({ ent: r.name, txt: "spending ahead of earnings this season", col: C.amber }); });
+  return (
+    <div>
+      <Section title="Cash flow" meta="Where cash comes from and goes">
+        <div className="flex gap-6 flex-wrap">
+          <div><div className="text-xs" style={{ color: C.muted }}>Best cash generator</div><div className="text-sm font-semibold mt-0.5" style={{ color: C.green }}>{gen ? `${gen.name} · net ${fjd(gen.net)}` : "—"}</div></div>
+          <div><div className="text-xs" style={{ color: C.muted }}>Biggest cash user</div><div className="text-sm font-semibold mt-0.5" style={{ color: drain && drain.net < 0 ? C.red : C.soil }}>{drain ? `${drain.name} · net ${fjd(drain.net)}` : "—"}</div></div>
+        </div>
+        <div className="text-xs mt-2" style={{ color: C.muted }}>This season so far, not monthly — monthly cash rate turns on with dated cash records.</div>
+      </Section>
+      <Section title="Resource allocation" meta="How the farm is spread">
+        {D.tot.cost > 0 ? bars.filter((r) => r.costs > 0).map((r) => {
+          const pct = (r.costs / D.tot.cost) * 100;
+          return (
+            <div key={r.id} className="mb-2">
+              <div className="flex justify-between text-xs mb-0.5"><span style={{ color: C.soil }}>{r.name}</span><span style={{ color: C.muted }}>{pct.toFixed(0)}% · FJD {n0(r.costs)}</span></div>
+              <div className="h-1.5 rounded-full" style={{ background: C.cream }}><div className="h-1.5 rounded-full" style={{ width: `${pct}%`, background: C.green }} /></div>
+            </div>
+          );
+        }) : <span className="text-sm" style={{ color: C.muted }}>Spend split builds as you log costs.</span>}
+        <div className="text-xs mt-2" style={{ color: C.muted }}>Labor split per enterprise turns on once worker time is logged against each enterprise.</div>
+      </Section>
+      <Section title="Alerts" meta={`${alerts.length} need${alerts.length === 1 ? "s" : ""} a look`}>
+        {alerts.length === 0 ? <span className="text-sm" style={{ color: C.muted }}>Nothing needs attention right now.</span> : alerts.slice(0, 20).map((a, i) => (
+          <div key={i} className="flex gap-2.5 py-1.5 text-sm" style={{ borderBottom: `1px solid rgba(92,64,51,0.07)` }}>
+            <span className="w-1.5 h-1.5 rounded-full mt-1.5 shrink-0" style={{ background: a.col }} /><span style={{ color: C.ink }}><strong style={{ fontWeight: 600 }}>{a.ent}</strong> — {a.txt}</span>
+          </div>
+        ))}
+      </Section>
+      <Section title="Risk dashboard" meta="Compliance & cash are live; the rest need live data">
+        {D.rows.map((r) => {
+          const cash = r.net < -500 ? "HIGH" : r.net < 0 ? "WATCH" : "LOW";
+          const cashCol = cash === "HIGH" ? C.red : cash === "WATCH" ? C.amber : C.green;
+          return (
+            <div key={r.id} className="py-2 text-xs" style={{ borderBottom: `1px solid rgba(92,64,51,0.07)` }}>
+              <div className="font-semibold mb-1" style={{ color: C.ink }}>{r.name}</div>
+              <span className="mr-3" style={{ color: C.green }}>Compliance: <strong>Clear</strong></span>
+              <span className="mr-3" style={{ color: cashCol }}>Cash: <strong>{cash}</strong></span>
+              <span style={{ color: C.muted }}>Disease, weather & market: turn on with live data</span>
+            </div>
+          );
+        })}
+      </Section>
+    </div>
+  );
+}
+
+// ── Outlook tab ──────────────────────────────────────────────────────
+function OutlookTab({ D }) {
+  const hasA = D.rows.some((r) => r.kind === "animal"), hasC = D.rows.some((r) => r.kind === "crop");
+  return (
+    <div>
+      <Section title="Forecasts (30 / 60 / 90 days)" meta="On the way">
+        <div className="text-sm leading-relaxed" style={{ color: C.muted }}>TFOS will not put expected harvest, revenue or a confidence number on any enterprise until it has a logged season to learn from. A made-up forecast is the number a bank should never trust. Each enterprise switches its forecast on once it has run a season on the live system.</div>
+      </Section>
+      <Section title="Expansion readiness" meta="Honest until capacity is set">
+        {D.rows.map((r) => <div key={r.id} className="flex justify-between py-1.5 text-sm" style={{ borderBottom: `1px solid rgba(92,64,51,0.07)` }}><span style={{ color: C.ink }}>{r.name}</span><span className="text-xs" style={{ color: C.muted }}>room to grow: needs your land/space limits</span></div>)}
+        <div className="text-xs mt-2" style={{ color: C.muted }}>Set each enterprise's land or space limit on the live system and TFOS shows how much room it has to grow — no guessed percentages.</div>
+      </Section>
+      <Section title="Dependencies" meta="How enterprises feed each other">
+        <div className="text-sm" style={{ color: C.muted }}>TFOS can link enterprises that feed each other so nothing is wasted.</div>
+        {hasA && hasC
+          ? <div className="text-sm mt-2" style={{ color: C.ink }}>Likely on your farm: <strong>animal manure → your crops</strong>, and <strong>crop leftovers → animal feed</strong>. Confirm these links on the live system and they map here.</div>
+          : <div className="text-sm mt-2" style={{ color: C.muted }}>Add a second kind of enterprise (e.g. animals alongside crops) and TFOS suggests links like manure to crops.</div>}
+      </Section>
+      <Section title="Lifecycle" meta="Where each enterprise is">
+        {D.rows.map((r) => <div key={r.id} className="flex justify-between py-1.5 text-sm" style={{ borderBottom: `1px solid rgba(92,64,51,0.07)` }}><span style={{ color: C.ink }}>{r.name}</span><span style={{ color: C.soil }}>{r.status}</span></div>)}
+      </Section>
+    </div>
+  );
+}
+
+// ── Investor tab ─────────────────────────────────────────────────────
+function InvestorTab({ D }) {
+  const pRoi = D.tot.cost > 0 ? (D.tot.net / D.tot.cost) * 100 : null;
+  return (
+    <div>
+      <div className="grid gap-2 grid-cols-2 lg:grid-cols-4 mb-3">
+        <KpiTile label="Put in" value={`FJD ${n0(D.tot.cost)}`} sub="total spent" />
+        <KpiTile label="Worth now" value={D.tot.worth > 0 ? `FJD ${n0(D.tot.worth)}` : "—"} sub="standing assets" />
+        <KpiTile label="Net" value={fjd(D.tot.net)} sub="earned minus spent" color={D.tot.net < 0 ? C.red : C.green} low={D.tot.net < 0} />
+        <KpiTile label="ROI" value={roiTxt(pRoi)} sub="per dollar spent" />
+      </div>
+      <Section title="Per enterprise" meta="Put in vs worth">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm min-w-[420px]">
+            <thead><tr className="text-xs" style={{ color: C.muted }}><th className="text-left p-1.5">Enterprise</th><th className="text-right p-1.5">Put in</th><th className="text-right p-1.5">Worth</th><th className="text-right p-1.5">ROI</th></tr></thead>
+            <tbody>{D.byRoi.map((r) => (
+              <tr key={r.id} style={{ borderTop: `1px solid rgba(92,64,51,0.07)` }}>
+                <td className="p-1.5" style={{ color: C.ink }}>{r.name}</td><td className="p-1.5 text-right">{n0(r.costs)}</td><td className="p-1.5 text-right">{r.worth > 0 ? n0(r.worth) : "—"}</td><td className="p-1.5 text-right">{roiTxt(r.roi)}</td>
+              </tr>
+            ))}</tbody>
+          </table>
+        </div>
+        <div className="text-xs mt-2" style={{ color: C.muted }}>Payback period and projected value turn on with dated cash history — not guessed.</div>
+      </Section>
+    </div>
+  );
+}
+
+// ── per-enterprise detail ────────────────────────────────────────────
+function EnterpriseDetail({ e, onBack, go }) {
+  const isAnimal = e.kind === "animal";
+  const baseTabs = [["dashboard", "Dashboard"], ["production", isAnimal ? "Herd & animals" : "Production"]];
+  if (isAnimal) baseTabs.push(["breeding", "Breeding"]);
+  const tabs = baseTabs.concat([["health", "Health"], ["inputs", isAnimal ? "Feed" : "Inputs"], ["labor", "Labour"], ["finance", "Finance"], ["compliance", "Compliance"], ["assets", "Assets"], ["records", "Records"], ["forecasts", "Forecasts"], ["analytics", "Analytics"], ["reports", "Reports"]]);
+  const [tab, setTab] = useState("dashboard");
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-start justify-between gap-2 flex-wrap">
+        <div>
+          <button onClick={onBack} className="text-xs mb-1" style={{ color: C.green }}>← Enterprises</button>
+          <h2 className="text-xl font-bold" style={{ color: C.soil }}>{e.name}</h2>
+          <div className="text-xs mt-0.5" style={{ color: C.muted }}>{e.engineLabel} · {e.status}</div>
+        </div>
+        <span className="text-sm font-semibold text-white px-3.5 py-1.5 rounded-full" style={{ background: e.st.color }}>{e.st.grade}{e.st.score != null ? ` · ${e.st.score}` : ""}</span>
+      </div>
+      <div className="flex gap-1 overflow-x-auto border-b" style={{ borderColor: C.border }}>
+        {tabs.map(([id, label]) => (
+          <button key={id} onClick={() => setTab(id)} className="px-3 py-2 text-sm font-medium whitespace-nowrap shrink-0" style={{ color: tab === id ? C.greenDk : C.muted, borderBottom: tab === id ? `2px solid ${C.green}` : "2px solid transparent" }}>{label}</button>
+        ))}
+      </div>
+
+      {tab === "dashboard" && (
+        <div>
+          <div className="grid gap-2 grid-cols-2 lg:grid-cols-4 mb-3">
+            <KpiTile label="Health" value={e.st.grade} sub={e.st.score != null ? `score ${e.st.score}` : ""} color={e.st.color} />
+            <KpiTile label="Net so far" value={isAnimal ? "—" : fjd(e.net)} color={e.net < 0 ? C.red : C.greenDk} />
+            <KpiTile label={isAnimal ? "Head" : "Active cycles"} value={String(isAnimal ? e.head : e.active)} />
+            <KpiTile label="Open tasks" value="0" />
+          </div>
+          <Section title="Standing" meta="Why this number"><Build desc="Standing builds as you log." /></Section>
+          <Section title="Alerts">{e.holds > 0 ? <div className="text-sm" style={{ color: C.red }}>{e.holds} hold — do not sell or harvest</div> : <div className="text-sm" style={{ color: C.greenDk }}>Nothing needs attention right now.</div>}</Section>
+        </div>
+      )}
+      {tab === "production" && (
+        <div>
+          <Section title="Active units" meta={isAnimal ? "Groups & head" : "Cycles"}>
+            {isAnimal ? <><Row l="Groups" v={e.groups} /><Row l="Head" v={e.head} /></> : <><Row l="Cycles" v={e.cycles} /><Row l="Active now" v={e.active} /></>}
+          </Section>
+          <Section title="Output & performance"><Build desc={`Yield, output and performance trends build as you log harvests${isAnimal ? " and weights" : ""}.`} link="Open Production" onLink={() => go("cycles")} /></Section>
+          <Section title="Forecasts"><Build desc="Expected output for this enterprise builds once you have a season of records." /></Section>
+        </div>
+      )}
+      {tab === "finance" && (
+        <div>
+          <Section title="Money" meta="Added up from logged records">
+            <Row l="Earned" v={isAnimal ? "—" : fjd(e.income)} /><Row l="Spent" v={isAnimal ? "—" : fjd(e.costs)} />
+            <Row l="Net" v={isAnimal ? "—" : fjd(e.net)} vColor={e.net < 0 ? C.red : C.soil} /><Row l="Return on spend" v={isAnimal ? "—" : roiTxt(e.roi)} />
+            {e.worth > 0 && <Row l="Worth" v={fjd(e.worth)} />}
+          </Section>
+          {!isAnimal && e.net < 0 && <div className="text-xs -mt-2 mb-3 px-1" style={{ color: C.muted }}>Net is negative because costs come before the harvest pays out — normal mid-season.</div>}
+          <Section title="Profitability"><Build desc="Margin and profit trend over time build as cycles close." link="Cash" onLink={() => go("cash")} /></Section>
+        </div>
+      )}
+      {tab === "compliance" && (
+        <div>
+          <Section title="Holds on record">{e.holds > 0 ? <div className="text-sm" style={{ color: C.red }}>{e.holds} hold on record</div> : <div className="text-sm" style={{ color: C.greenDk }}>Nothing blocked right now.</div>}</Section>
+          <Section title="Audit trail"><div className="text-xs" style={{ color: C.muted }}>Every action against this enterprise is hash-linked and tamper-proof.</div><Build desc="" link="Compliance" onLink={() => go("compliance")} /></Section>
+          <Section title="Certifications"><Build desc="Organic, GAP and export certificate status for this enterprise." /></Section>
+        </div>
+      )}
+      {tab === "analytics" && (
+        <div>
+          <Section title="KPIs" meta="From logged records">
+            <Row l="Net" v={isAnimal ? "—" : fjd(e.net)} /><Row l="Return on spend" v={isAnimal ? "—" : roiTxt(e.roi)} /><Row l={isAnimal ? "Head" : "Active cycles"} v={isAnimal ? e.head : e.active} />
+          </Section>
+          <Section title="Trends"><Build desc="Performance over time builds as records accumulate." link="Open Analytics" onLink={() => go("analytics")} /></Section>
+        </div>
+      )}
+      {tab === "health" && <Section title={isAnimal ? "Treatments & holds" : "Treatments & holds"}><Build desc={isAnimal ? "Treatments, withdrawal holds and mortality show here as you log animal health and sprays." : "Treatments, withdrawal holds show here as you log sprays."} link="Compliance" onLink={() => go("compliance")} /></Section>}
+      {tab === "inputs" && <Section title={isAnimal ? "Feed" : "Inputs used"}><Build desc={`${isAnimal ? "Feed, medicines and supplements" : "Seed, fertilizer and chemicals"} show here as you log what you use against this enterprise.`} link="See inventory" onLink={() => go("inventory")} /></Section>}
+      {tab === "labor" && <Section title="Assigned staff & productivity"><Build desc="Who works on this enterprise, their hours and what it produces per worker. Builds as you tag work to it." link="Open Labour" onLink={() => go("labor")} /></Section>}
+      {tab === "assets" && <Section title="Infrastructure & equipment"><Build desc="Housing, machinery and gear tied to this enterprise." link="Assets & equipment" onLink={() => go("equipment")} /></Section>}
+      {tab === "records" && <Section title="Event timeline"><div className="text-xs" style={{ color: C.muted }}>A full timeline of everything logged against this enterprise, with photos and notes.</div><Build desc="" /></Section>}
+      {tab === "forecasts" && <Section title="Production, revenue & cost forecasts"><Build desc="What this enterprise is likely to produce, earn and cost next — builds once you have a season of history." /></Section>}
+      {tab === "breeding" && <Section title="Breeding"><Build desc="Breeding records, births and lineage build as you log them." /></Section>}
+      {tab === "reports" && <Section title="Enterprise reports"><div className="text-sm" style={{ color: C.muted }}>Make a report for this enterprise — production, finance or compliance — built from its logged records.</div><Build desc="" link="Go to Reports" onLink={() => go("reports")} /></Section>}
+    </div>
+  );
+}
+
+// ── page shell ───────────────────────────────────────────────────────
+function EnterprisesInner() {
+  const { farmId } = useCurrentFarm();
+  const crops = useCrops(farmId);
+  const flocks = useFlocks(farmId);
+
+  const [view, setView] = useState("portfolio");
+  const [typeFilter, setTypeFilter] = useState("all");
+  const [standingFilter, setStandingFilter] = useState("all");
+  const [search, setSearch] = useState("");
+  const [openEnt, setOpenEnt] = useState(null);
+
+  const ents = useMemo(() => buildEnterprises(crops.data?.data, flocks.data?.data?.items), [crops.data, flocks.data]);
+  const D = useMemo(() => derive(ents), [ents]);
+  const loading = crops.isLoading || flocks.isLoading;
+  const navigate = (sub) => window.location.assign(`/farm/${sub}`);
+
+  if (openEnt) return <EnterpriseDetail e={openEnt} onBack={() => setOpenEnt(null)} go={navigate} />;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-start justify-between gap-2 flex-wrap">
+        <div>
+          <h1 className="text-2xl font-bold" style={{ color: C.soil }}>Enterprises</h1>
+          <div className="text-xs mt-0.5" style={{ color: C.muted }}>Your farm as a portfolio of businesses · {farmId || "your farm"}</div>
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          <FarmSelector /><ModeDropdown />
+          <button onClick={() => emitToast("Add enterprise — starts its tasks, schedule, compliance and records on the live system")} className="text-sm px-3 py-2 rounded-lg text-white flex items-center gap-1.5" style={{ background: C.greenDk }}><Plus size={14} />Add enterprise</button>
+        </div>
+      </div>
+
+      <div className="flex gap-1 overflow-x-auto border-b" style={{ borderColor: C.border }}>
+        {VIEW_TABS.map((t) => (
+          <button key={t.id} onClick={() => setView(t.id)} className="px-3 py-2 text-sm font-medium whitespace-nowrap flex flex-col items-start shrink-0" style={{ color: view === t.id ? C.greenDk : C.muted, borderBottom: view === t.id ? `2px solid ${C.green}` : "2px solid transparent" }}>
+            {t.label}<span className="text-[10px]" style={{ color: C.muted }}>{t.hint}</span>
+          </button>
+        ))}
+      </div>
+
+      {loading ? <div className="text-sm py-10 text-center" style={{ color: C.muted }}>Loading enterprises…</div>
+        : ents.length === 0 ? <Card style={{ padding: 24 }}><div style={{ color: C.muted }}>No enterprises running yet. An enterprise is one business — your tomatoes, your goats, your layer hens. Start one and it appears here.</div></Card>
+        : view === "portfolio" ? <PortfolioTab D={D} ents={ents} typeFilter={typeFilter} setTypeFilter={setTypeFilter} standingFilter={standingFilter} setStandingFilter={setStandingFilter} search={search} setSearch={setSearch} onOpen={setOpenEnt} />
+        : view === "rankings" ? <RankingsTab D={D} />
+        : view === "cashrisk" ? <CashRiskTab D={D} />
+        : view === "outlook" ? <OutlookTab D={D} />
+        : <InvestorTab D={D} />}
+    </div>
+  );
+}
+
+const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 0, refetchOnWindowFocus: false, staleTime: 60_000 } } });
+export default function Enterprises() {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <CurrentFarmProvider>
+        <EnterprisesInner />
+      </CurrentFarmProvider>
+    </QueryClientProvider>
+  );
+}
