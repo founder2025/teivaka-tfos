@@ -87,7 +87,7 @@ Read before any group-related sprint planning or build work:
 - Verification status enum surfaces caveat: SEED_FAO_UNVERIFIED → EXTENSION_REVIEWED → FIELD_VALIDATED
 - TIS chat restored end-to-end for all users (latent break since deployment, masked by upstream Anthropic 401)
 
-**Strikes filed: 1-122** (67 process upgrades across Sprint 6 + 7; #117-#120 filed-deferred per backlog)
+**Strikes filed: 1-123** (67 process upgrades across Sprint 6 + 7; #117-#120 filed-deferred per backlog; #123 alembic-owner-mismatch filed 2026-06-06)
 
 Recent strikes (added in Sprint 7):
 - #61: every Phase commit updates Section 14 (operational hygiene)
