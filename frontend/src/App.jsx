@@ -57,6 +57,7 @@ const Reports       = lazy(() => import("./pages/farmer/Reports"));
 const DecisionCenter = lazy(() => import("./pages/farmer/DecisionCenter"));
 const Enterprises   = lazy(() => import("./pages/farmer/Enterprises"));
 const FarmHistory   = lazy(() => import("./pages/farmer/FarmHistory"));
+const WeatherPage   = lazy(() => import("./pages/farmer/WeatherPage"));
 
 // ── Phase 4b Week 1 shell + pages (5-tab FarmerShell) ─────────────────────────
 const FarmerShell   = lazy(() => import("./layouts/FarmerShell"));
@@ -262,7 +263,7 @@ export default function App() {
             <Route path="/farm/decisions"    element={<DecisionCenter />} />
             <Route path="/farm/history"      element={<FarmHistory />} />
             <Route path="/farm/enterprises"  element={<Enterprises />} />
-            <Route path="/farm/weather"      element={<ComingSoon title="Weather" />} />
+            <Route path="/farm/weather"      element={<WeatherPage />} />
             <Route path="/farm/gallery"      element={<ComingSoon title="Gallery" />} />
             <Route path="/farm/partnerships" element={<ComingSoon title="Partnerships" />} />
             <Route path="/farm/locations"    element={<ComingSoon title="Locations" />} />
