@@ -54,6 +54,7 @@ const Buyers        = lazy(() => import("./pages/farmer/Buyers"));
 const Equipment     = lazy(() => import("./pages/farmer/Equipment"));
 const Analytics     = lazy(() => import("./pages/farmer/Analytics"));
 const Reports       = lazy(() => import("./pages/farmer/Reports"));
+const DecisionCenter = lazy(() => import("./pages/farmer/DecisionCenter"));
 
 // ── Phase 4b Week 1 shell + pages (5-tab FarmerShell) ─────────────────────────
 const FarmerShell   = lazy(() => import("./layouts/FarmerShell"));
@@ -256,6 +257,7 @@ export default function App() {
             <Route path="/farm/compliance"   element={<PoultryCompliance  />} />
             <Route path="/farm/analytics"    element={<Analytics />} />
             <Route path="/farm/reports"      element={<Reports />} />
+            <Route path="/farm/decisions"    element={<DecisionCenter />} />
             <Route path="/farm/locations"    element={<ComingSoon title="Locations"    phase="5.5" />} />
 
             <Route path="/tis/history" element={<ComingSoon title="TIS History" phase="4.3" />} />
