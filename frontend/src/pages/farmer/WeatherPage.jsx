@@ -358,10 +358,68 @@ function WeatherInner() {
             )}
           </Section>
 
-          {/* 6. disease pressure + crop windows (HONEST feed-pending) */}
-          <Section icon={ShieldAlert} title="Disease pressure & crop windows" pending>
-            <div className="text-sm" style={{ color: C.muted }}>Disease-pressure forecasts and spray/harvest/plant windows need the external forecast feed plus each crop's growth model. They turn on once the feed is connected — TFOS won't guess them.</div>
-          </Section>
+          {/* 6a. disease-pressure signal (LIVE, forecast-derived; weather signal only) */}
+          {(() => {
+            const dailyRows = daily.data?.data ?? [];
+            if (dailyRows.length === 0) {
+              return (
+                <Section icon={ShieldAlert} title="Disease-pressure signal" pending>
+                  <div className="text-sm" style={{ color: C.muted }}>Turns on once the forecast feed runs for this farm.</div>
+                </Section>
+              );
+            }
+            const wetDays = dailyRows.filter((d) => (Number(d.precip_mm) || 0) >= 5 || (Number(d.precip_prob_pct) || 0) >= 60).length;
+            const hrs = hourly.data?.data ?? [];
+            const humidNow = Number(current.data?.data?.humidity_pct)
+              || (hrs.length ? hrs.reduce((a, h) => a + (Number(h.humidity_pct) || 0), 0) / hrs.length : 0);
+            const humid = humidNow >= 80;
+            const level = (wetDays >= 4 && humid) ? "HIGH" : (wetDays >= 2 || humid) ? "ELEVATED" : "LOW";
+            const col = level === "HIGH" ? C.red : level === "ELEVATED" ? C.amber : C.greenDk;
+            return (
+              <Section icon={ShieldAlert} title="Disease-pressure signal" meta="Open-Meteo forecast">
+                <div className="text-sm font-bold" style={{ color: col }}>Fungal-disease conditions: {level}</div>
+                <div className="text-sm mt-1" style={{ color: C.soil }}>{wetDays} of the next 7 days are wet{humid ? " & humid" : ""} — scout your crops, and avoid working wet foliage.</div>
+                {cropRows.length > 0 && <div className="text-xs mt-2" style={{ color: C.muted }}>Crops to scout: {cropRows.map((c) => c.production_name).join(", ")}</div>}
+                <div className="text-[11px] mt-2" style={{ color: C.muted }}>Weather-derived signal, not a crop diagnosis — ask TIS for treatment guidance.</div>
+              </Section>
+            );
+          })()}
+
+          {/* 6b. spray / harvest / plant windows (LIVE, forecast-derived; weather-operational) */}
+          {(() => {
+            const dailyRows = daily.data?.data ?? [];
+            if (dailyRows.length === 0) {
+              return (
+                <Section icon={CalendarClock} title="Spray / harvest / plant windows" pending>
+                  <div className="text-sm" style={{ color: C.muted }}>Turns on once the forecast feed runs for this farm.</div>
+                </Section>
+              );
+            }
+            const chip = (label, c) => <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full inline-block" style={{ color: c, border: `1px solid ${C.border}` }}>{label}</span>;
+            return (
+              <Section icon={CalendarClock} title="Spray / harvest / plant windows" meta="Open-Meteo forecast">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm min-w-[420px]">
+                    <thead><tr className="text-xs" style={{ color: C.muted }}><th className="text-left p-1.5">Day</th><th className="text-left p-1.5">Spray</th><th className="text-left p-1.5">Harvest</th><th className="text-left p-1.5">Plant</th></tr></thead>
+                    <tbody>
+                      {dailyRows.map((d, i) => {
+                        const p = Number(d.precip_mm) || 0, pr = Number(d.precip_prob_pct) || 0;
+                        return (
+                          <tr key={i} style={{ borderTop: `1px solid rgba(92,64,51,0.07)` }}>
+                            <td className="p-1.5" style={{ color: C.soil }}>{fmtDay(d.valid_at)}</td>
+                            <td className="p-1.5">{(p >= 2 || pr >= 50) ? chip("HOLD", C.amber) : chip("OK", C.greenDk)}</td>
+                            <td className="p-1.5">{p >= 5 ? chip("HOLD", C.amber) : chip("OK", C.greenDk)}</td>
+                            <td className="p-1.5">{p >= 15 ? chip("WAIT", C.muted) : chip("GO", C.greenDk)}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="text-[11px] mt-2" style={{ color: C.muted }}>Weather-operational guidance from the rain forecast — hold spraying/harvest on wet days. Not crop-specific agronomy.</div>
+              </Section>
+            );
+          })()}
 
           {/* 7. year over year (HONEST) */}
           <Section icon={CalendarClock} title="Last year vs this year">
