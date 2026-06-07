@@ -226,6 +226,95 @@ async def block_advice(pu_id: str, user: dict = Depends(get_current_user)):
     }
 
 
+@router.get("/{pu_id}/whats-due")
+async def whats_due(pu_id: str, user: dict = Depends(get_current_user)):
+    """Per-block 'what's due now': harvest readiness (from the cycle's planner
+    date, else planting_date + seeded rotation_registry cycle days — flagged as an
+    estimate) + the block's real open tasks (rotation, transplant-prep, automation,
+    farmer tasks). No invented schedule — only planner dates, the seeded cycle-day
+    KB, and tasks that actually exist."""
+    tid = str(user["tenant_id"])
+    today = date.today()
+    async with get_rls_db(tid) as db:
+        r = (await db.execute(
+            text("""
+                SELECT pu.pu_id, pu.pu_name,
+                       c.cycle_id, c.cycle_status, c.planting_date, c.expected_harvest_date,
+                       c.production_id, p.production_name,
+                       rr.min_cycle_days, rr.max_cycle_days
+                  FROM tenant.production_units pu
+                  LEFT JOIN LATERAL (
+                       SELECT pc.* FROM tenant.production_cycles pc
+                        WHERE pc.pu_id = pu.pu_id
+                          AND pc.cycle_status IN ('PLANNED','ACTIVE','HARVESTING','CLOSING')
+                        ORDER BY pc.planting_date DESC NULLS LAST, pc.created_at DESC LIMIT 1
+                  ) c ON TRUE
+                  LEFT JOIN shared.productions p ON p.production_id = c.production_id
+                  LEFT JOIN shared.rotation_registry rr ON rr.production_id = c.production_id
+                 WHERE pu.pu_id = :pid AND pu.tenant_id = :tid
+            """),
+            {"pid": pu_id, "tid": tid},
+        )).mappings().first()
+        if not r:
+            raise HTTPException(status_code=404, detail="Production unit not found")
+
+        tasks_rows = (await db.execute(
+            text("""SELECT task_id, title, description, priority, status, task_type, due_date
+                      FROM tenant.task_queue
+                     WHERE tenant_id = :tid AND pu_id = :pid AND status IN ('OPEN','IN_PROGRESS')
+                     ORDER BY (due_date IS NULL), due_date,
+                              CASE priority WHEN 'CRITICAL' THEN 0 WHEN 'HIGH' THEN 1 WHEN 'MEDIUM' THEN 2 ELSE 3 END"""),
+            {"tid": tid, "pid": pu_id},
+        )).mappings().all()
+
+    # harvest readiness (only for an occupied block)
+    harvest = None
+    if r["cycle_id"]:
+        st = r["cycle_status"]
+        if st in ("HARVESTING", "CLOSING"):
+            harvest = {"state": "HARVESTING", "crop": r["production_name"], "target": None, "estimate": False}
+        elif st in ("PLANNED", "ACTIVE"):
+            planting = r["planting_date"]
+            target, estimate = r["expected_harvest_date"], False
+            if not target and planting and r["min_cycle_days"]:
+                from datetime import timedelta
+                target, estimate = planting + timedelta(days=int(r["min_cycle_days"])), True
+            window_end = None
+            if planting and r["max_cycle_days"]:
+                from datetime import timedelta
+                window_end = planting + timedelta(days=int(r["max_cycle_days"]))
+            days_until = (target - today).days if target else None
+            if days_until is not None and days_until <= 0:
+                state = "DUE"
+            elif days_until is not None and days_until <= 7:
+                state = "SOON"
+            else:
+                state = "GROWING"
+            harvest = {
+                "state": state, "crop": r["production_name"],
+                "target": target.isoformat() if target else None,
+                "window_end": window_end.isoformat() if window_end else None,
+                "days_until": days_until, "estimate": estimate,
+            }
+
+    def _due(t):
+        return t["due_date"] is None or t["due_date"] <= today
+    tasks = [{
+        "task_id": t["task_id"], "title": t["title"], "priority": t["priority"],
+        "task_type": t["task_type"], "status": t["status"],
+        "due_date": t["due_date"].isoformat() if t["due_date"] else None,
+        "due": _due(t),
+    } for t in tasks_rows]
+
+    return {
+        "pu_id": r["pu_id"], "pu_name": r["pu_name"],
+        "cycle_id": r["cycle_id"], "cycle_status": r["cycle_status"],
+        "harvest": harvest,
+        "tasks": tasks,
+        "due_count": sum(1 for t in tasks if t["due"]) + (1 if (harvest and harvest["state"] in ("DUE", "HARVESTING")) else 0),
+    }
+
+
 @router.post("/{pu_id}/rotation-task")
 async def create_rotation_task(pu_id: str, user: dict = Depends(get_current_user)):
     """Surface the rotation/idle advice as a real task_queue row (idempotent:

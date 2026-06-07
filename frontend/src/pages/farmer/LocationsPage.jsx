@@ -94,6 +94,8 @@ function LocationsInner() {
     qc.invalidateQueries({ queryKey: ["loc-zones", farmId] });
     qc.invalidateQueries({ queryKey: ["loc-map", farmId] });
     qc.invalidateQueries({ queryKey: ["loc-status", farmId] });
+    qc.invalidateQueries({ queryKey: ["loc-due"] });
+    qc.invalidateQueries({ queryKey: ["loc-advice"] });
   };
 
   const zones = useZones(farmId);
@@ -125,10 +127,11 @@ function LocationsInner() {
     setRenameVal(null);
   }
   const advice = useQuery({ queryKey: ["loc-advice", selected], queryFn: () => getJSON(`/api/v1/production-units/${encodeURIComponent(selected)}/advice`), enabled: !!selected, retry: 0 });
+  const whatsDue = useQuery({ queryKey: ["loc-due", selected], queryFn: () => getJSON(`/api/v1/production-units/${encodeURIComponent(selected)}/whats-due`), enabled: !!selected, retry: 0 });
   async function addRotationTask() {
     try {
       const r = await fetch(`/api/v1/production-units/${encodeURIComponent(selected)}/rotation-task`, { method: "POST", headers: authHeaders() });
-      if (r.ok) { const d = await r.json(); emitToast(d.existing ? "Rotation task already in your list" : "Rotation task added"); }
+      if (r.ok) { const d = await r.json(); emitToast(d.existing ? "Rotation task already in your list" : "Rotation task added"); qc.invalidateQueries({ queryKey: ["loc-due", selected] }); }
     } catch { emitToast("Couldn't add task"); }
   }
 
@@ -283,6 +286,44 @@ function LocationsInner() {
                   );
                 })}
               </div>
+              {(() => {
+                const d = whatsDue.data;
+                if (!d || (!d.harvest && d.tasks.length === 0)) return null;
+                const h = d.harvest;
+                const hSty = h && (h.state === "DUE" || h.state === "HARVESTING") ? STATE_STYLE.HARVESTING
+                  : h && h.state === "SOON" ? STATE_STYLE.PREPARING : null;
+                return (
+                  <div className="mt-3 rounded-xl p-3" style={{ background: C.paper, border: `1px solid ${C.border}` }}>
+                    <div className="text-xs font-bold uppercase tracking-wide mb-1.5" style={{ color: C.soil }}>What's due now</div>
+                    {h && (
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className="text-xs px-2 py-1 rounded-lg font-semibold" style={hSty ? { background: hSty.bg, color: hSty.fg } : { background: C.cream, color: C.muted }}>
+                          {h.state === "HARVESTING" ? `Harvesting ${h.crop || ""}`
+                            : h.state === "DUE" ? `Harvest ready — ${h.crop || ""}`
+                            : h.state === "SOON" ? `Harvest in ${h.days_until}d`
+                            : `Harvest ~${h.target || "—"}`}
+                          {h.estimate && h.state !== "HARVESTING" ? " (est.)" : ""}
+                        </span>
+                        {(h.state === "DUE" || h.state === "HARVESTING") && <button onClick={() => go("harvests")} className={`text-[11px] ${FOCUS}`} style={{ color: C.greenDk }}>Log harvest →</button>}
+                      </div>
+                    )}
+                    {d.tasks.length === 0 ? (
+                      <div className="text-[11px]" style={{ color: C.muted }}>No open tasks for this block.</div>
+                    ) : (
+                      <div className="space-y-1">
+                        {d.tasks.slice(0, 6).map((t) => (
+                          <div key={t.task_id} className="flex items-center gap-2">
+                            <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: t.due ? C.red : C.muted }} />
+                            <span className="text-xs flex-1 min-w-0 truncate" style={{ color: C.soil }}>{t.title}</span>
+                            <span className="text-[10px] px-1.5 py-0.5 rounded-full shrink-0" style={{ color: t.due ? C.red : C.muted, border: `1px solid ${C.border}` }}>{t.due ? "due" : (t.due_date || "scheduled")}</span>
+                          </div>
+                        ))}
+                        {d.tasks.length > 6 && <button onClick={() => go("tasks")} className={`text-[11px] ${FOCUS}`} style={{ color: C.greenDk }}>+{d.tasks.length - 6} more in Tasks →</button>}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
               {(() => {
                 const a = advice.data;
                 if (!a || !["REST", "READY"].includes(a.rotation_status)) return null;
