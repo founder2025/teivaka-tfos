@@ -562,9 +562,53 @@ async def task_engine_health(
         "overdue": int(r["overdue"]), "completed": int(r["completed"]),
         "last_created": iso(r["last_created"]), "last_completed": iso(r["last_completed"]),
     } for r in by_source]
+
+    # External task-alert delivery log (P3b). Defensive: returns disabled state
+    # if the table isn't present yet (migration 086 not applied in this env).
+    # receipt_confirmed surfaces PR.2 — a SENT row is not a delivered row until
+    # an Operator confirms and sets receipt_confirmed_at.
+    notifications = {"enabled": False, "by_channel": [], "totals": {},
+                     "last_sent": None, "last_test": None, "last_receipt_confirmed": None}
+    try:
+        nch = (await db.execute(text("""
+            SELECT channel,
+                   COUNT(*)                                          AS total,
+                   COUNT(*) FILTER (WHERE status='SENT')             AS sent,
+                   COUNT(*) FILTER (WHERE status='MOCK')             AS mock,
+                   COUNT(*) FILTER (WHERE status='FAILED')           AS failed,
+                   COUNT(*) FILTER (WHERE receipt_confirmed_at IS NOT NULL) AS receipt_confirmed,
+                   MAX(sent_at)                                      AS last_sent
+              FROM tenant.task_notifications
+             GROUP BY channel ORDER BY channel
+        """))).mappings().all()
+        nt = (await db.execute(text("""
+            SELECT COUNT(*) AS total,
+                   MAX(sent_at)                                      AS last_sent,
+                   MAX(sent_at) FILTER (WHERE is_test)               AS last_test,
+                   MAX(receipt_confirmed_at)                         AS last_receipt
+              FROM tenant.task_notifications
+        """))).mappings().first()
+        notifications = {
+            "enabled": True,
+            "by_channel": [{
+                "channel": r["channel"], "total": int(r["total"]),
+                "sent": int(r["sent"]), "mock": int(r["mock"]), "failed": int(r["failed"]),
+                "receipt_confirmed": int(r["receipt_confirmed"]),
+                "last_sent": iso(r["last_sent"]),
+            } for r in nch],
+            "totals": {"total": int(nt["total"] or 0)},
+            "last_sent": iso(nt["last_sent"]),
+            "last_test": iso(nt["last_test"]),
+            "last_receipt_confirmed": iso(nt["last_receipt"]),
+        }
+    except Exception:
+        # Table absent or unreadable — leave the disabled default.
+        pass
+
     return {
         "by_source": rows,
         "invalid_rows": int(invalid or 0),
         "totals": {k: int(totals[k]) for k in ("open", "overdue", "completed", "skipped", "expired", "total")},
+        "notifications": notifications,
         "generated_at": __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat(),
     }

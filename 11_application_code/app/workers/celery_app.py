@@ -95,6 +95,15 @@ app.conf.update(
             "schedule": crontab(minute=30),
             "options": {"queue": "maintenance"},
         },
+        # External task alerts (overdue OPEN tasks → WhatsApp/email): 07:30 Fiji
+        # = 19:30 UTC, after automation (18:00) + decision (18:05) populate tasks.
+        # No-op until settings.task_alerts_enabled is flipped True post receipt
+        # verification (PR.2) — the worker itself guards this.
+        "notify-due-tasks": {
+            "task": "app.workers.notification_worker.notify_due_tasks",
+            "schedule": crontab(hour=19, minute=30),
+            "options": {"queue": "notifications"},
+        },
         # AI insights weekly: Sunday 06:00 Fiji = Saturday 18:00 UTC
         "ai-insights-weekly": {
             "task": "app.workers.ai_worker.generate_weekly_insights",

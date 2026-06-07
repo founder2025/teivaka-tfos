@@ -191,6 +191,112 @@ def send_password_reset_email(to_email: str, token: str, name: str) -> bool:
         return False
 
 
+def send_task_digest_email(
+    to_email: str,
+    name: str,
+    farm_label: str,
+    lines: list[str],
+) -> tuple[bool, str | None]:
+    """Send an overdue-task digest email via Resend's HTTPS REST API.
+
+    Returns (ok, provider_message_id). Never raises. provider_message_id is
+    Resend's message id when available — recorded in tenant.task_notifications
+    so the send is auditable and (per PR.2) receipt-verifiable.
+    """
+    if not _smtp_configured() or not _is_resend():
+        logger.warning("Task digest email skipped for %s — Resend not configured", to_email)
+        return (False, None)
+
+    api_key = settings.smtp_password.strip()
+    tasks_url = f"{settings.frontend_url.rstrip('/')}/farm/tasks"
+    bullet_text = "\n".join(f"  • {ln}" for ln in lines)
+    bullet_html = "".join(
+        f'<li style="margin:0 0 8px 0;font-size:15px;line-height:1.5;color:#1A1410;">{ln}</li>'
+        for ln in lines
+    )
+    payload = {
+        "from": settings.smtp_from,
+        "to": [to_email],
+        "subject": f"{len(lines)} task{'s' if len(lines) != 1 else ''} need attention — {farm_label}",
+        "text": (
+            f"Hello {name},\n\n"
+            f"These tasks are due or overdue at {farm_label}:\n\n"
+            f"{bullet_text}\n\n"
+            f"Open your task list: {tasks_url}\n\n"
+            "— Teivaka TFOS\n"
+        ),
+        "html": _task_digest_html(name, farm_label, bullet_html, tasks_url),
+    }
+    try:
+        resp = httpx.post(
+            "https://api.resend.com/emails",
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            content=json.dumps(payload),
+            timeout=15.0,
+        )
+        if resp.status_code >= 400:
+            logger.error(
+                "Resend rejected task digest for %s: HTTP %d %s",
+                to_email, resp.status_code, resp.text[:400],
+            )
+            return (False, None)
+        msg_id = None
+        try:
+            msg_id = resp.json().get("id")
+        except Exception:
+            pass
+        logger.info("Task digest dispatched via Resend to %s (id=%s)", to_email, msg_id)
+        return (True, msg_id)
+    except Exception as exc:
+        logger.exception("Resend REST call failed for task digest %s: %s", to_email, exc)
+        return (False, None)
+
+
+def _task_digest_html(name: str, farm_label: str, bullet_html: str, tasks_url: str) -> str:
+    return f"""\
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="utf-8"></head>
+<body style="margin:0;padding:0;background:#F5EFE0;font-family:Georgia,'Times New Roman',serif;color:#1A1410;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#F5EFE0;padding:40px 16px;">
+    <tr><td align="center">
+      <table role="presentation" width="560" cellpadding="0" cellspacing="0"
+             style="max-width:560px;background:#ffffff;border:1px solid #E0D5C0;border-radius:12px;overflow:hidden;">
+        <tr><td style="background:#2C1A0E;padding:28px 40px;">
+          <div style="font-family:'Playfair Display',Georgia,serif;font-size:26px;color:#F5EFE0;letter-spacing:-0.5px;">
+            Teivaka<span style="color:#3D8C40;">.</span>
+          </div>
+        </td></tr>
+        <tr><td style="padding:40px;">
+          <h1 style="font-family:'Playfair Display',Georgia,serif;font-size:26px;color:#2C1A0E;margin:0 0 18px 0;line-height:1.25;">
+            Tasks need attention
+          </h1>
+          <p style="font-size:16px;line-height:1.6;color:#1A1410;margin:0 0 18px 0;">Hello {name},</p>
+          <p style="font-size:16px;line-height:1.6;color:#1A1410;margin:0 0 16px 0;">
+            These tasks are due or overdue at <strong>{farm_label}</strong>:
+          </p>
+          <ul style="margin:0 0 28px 0;padding:0 0 0 20px;">{bullet_html}</ul>
+          <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 0 8px 0;">
+            <tr><td style="background:#3D8C40;border-radius:8px;">
+              <a href="{tasks_url}" style="display:inline-block;padding:14px 28px;color:#ffffff;text-decoration:none;font-weight:600;font-size:15px;font-family:Georgia,serif;">
+                Open task list
+              </a>
+            </td></tr>
+          </table>
+        </td></tr>
+        <tr><td style="background:#F5EFE0;padding:20px 40px;border-top:1px solid #E0D5C0;">
+          <p style="font-size:12px;color:#6b6156;margin:0;font-style:italic;">
+            Built in Fiji, for the Pacific. Teivaka PTE LTD, Suva, Fiji.
+          </p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>
+"""
+
+
 def _password_reset_html(name: str, reset_url: str) -> str:
     return f"""\
 <!DOCTYPE html>

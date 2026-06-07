@@ -125,6 +125,16 @@ class Settings(BaseSettings):
     decision_signal_mv_refresh_interval_minutes: int = 15
     alert_auto_resolve_days: int = 30
 
+    # ── Task alerts (external WhatsApp/email for overdue tasks) ────────────────
+    # OFF by default. Per Inviolable PR.2 (Alert Path Receipt Verification) the
+    # scheduled notify_due_tasks sweep stays a no-op until an Operator has
+    # receipt-verified the channel end-to-end (test message confirmed in the
+    # real inbox/WhatsApp) and flipped this flag. The manual test-send path
+    # (send_task_alert_test) ignores this flag — it IS the verification step.
+    task_alerts_enabled: bool = False
+    task_alert_lookback_days: int = 3          # dedupe window — don't re-ping same task
+    task_alert_max_rank: int = 299             # only HIGH/CRITICAL tasks alert externally
+
     # ── Computed fields ───────────────────────────────────────────────────────
 
     @computed_field

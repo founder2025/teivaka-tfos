@@ -181,8 +181,79 @@ export default function AdminTaskEngine() {
             "Last produced" is a liveness proxy for each feeder — a feeder that should run daily but shows days ago is a silent-failure signal.
             Counts are platform-wide across every tenant.
           </p>
+
+          {/* External alert delivery log (P3b) */}
+          <NotificationsCard n={data?.notifications} />
         </>
       )}
     </AdminLayout>
+  );
+}
+
+function NotificationsCard({ n }) {
+  const channels = n?.by_channel || [];
+  const everSent = (n?.totals?.total || 0) > 0;
+  return (
+    <div className="mt-6">
+      <h2 className="text-base font-semibold text-white mb-2">External alert delivery (WhatsApp / email)</h2>
+
+      {!n?.enabled ? (
+        <div className="rounded-xl border border-gray-700 bg-gray-800/40 px-4 py-3 text-sm text-gray-400">
+          Delivery log table not present in this environment yet (migration 086 not applied).
+        </div>
+      ) : (
+        <>
+          {/* PR.2 banner */}
+          {!everSent ? (
+            <div className="rounded-xl border border-gray-700 bg-gray-800/40 px-4 py-3 mb-3 text-sm text-gray-300">
+              No alerts dispatched yet. Per <strong>PR.2</strong> the scheduled sweep stays off until a test alert is
+              receipt-verified — fire <code className="text-emerald-400">send_task_alert_test</code> and confirm receipt in the real inbox/WhatsApp.
+            </div>
+          ) : !n?.last_receipt_confirmed ? (
+            <div className="rounded-xl border border-amber-700 bg-amber-950/40 px-4 py-3 mb-3 text-sm text-amber-200">
+              Alerts have been sent, but <strong>no receipt has been confirmed</strong> (PR.2). Sender-side success is not delivery —
+              confirm the message landed in a real inbox and set <code>receipt_confirmed_at</code> before trusting this path.
+            </div>
+          ) : (
+            <div className="rounded-xl border border-emerald-800 bg-emerald-950/30 px-4 py-2.5 mb-3 text-sm text-emerald-300">
+              ✓ Receipt confirmed {ago(n.last_receipt_confirmed)} — alert path is receipt-verified (PR.2).
+            </div>
+          )}
+
+          <div className="rounded-xl overflow-hidden border border-gray-700">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-gray-800 text-gray-400 text-xs uppercase tracking-wide">
+                  <th className="text-left px-4 py-2.5 font-medium">Channel</th>
+                  <th className="text-right px-3 py-2.5 font-medium">Sent</th>
+                  <th className="text-right px-3 py-2.5 font-medium">Mock</th>
+                  <th className="text-right px-3 py-2.5 font-medium">Failed</th>
+                  <th className="text-right px-3 py-2.5 font-medium">Receipt ✓</th>
+                  <th className="text-left px-4 py-2.5 font-medium">Last sent</th>
+                </tr>
+              </thead>
+              <tbody>
+                {channels.length === 0 ? (
+                  <tr><td colSpan={6} className="px-4 py-3 text-gray-500 text-center">No deliveries logged.</td></tr>
+                ) : channels.map((c) => (
+                  <tr key={c.channel} className="border-t border-gray-800 text-gray-200">
+                    <td className="px-4 py-2.5 font-medium">{c.channel}</td>
+                    <td className="px-3 py-2.5 text-right">{c.sent}</td>
+                    <td className="px-3 py-2.5 text-right text-gray-400">{c.mock}</td>
+                    <td className={`px-3 py-2.5 text-right ${c.failed > 0 ? "text-red-400 font-semibold" : ""}`}>{c.failed}</td>
+                    <td className={`px-3 py-2.5 text-right ${c.receipt_confirmed > 0 ? "text-emerald-400" : "text-gray-500"}`}>{c.receipt_confirmed}</td>
+                    <td className="px-4 py-2.5 text-gray-400">{c.last_sent ? ago(c.last_sent) : <span className="text-gray-600">—</span>}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="text-xs text-gray-500 mt-2">
+            "Sent" = provider accepted the request (HTTP 200 / message id). It is <strong>not</strong> proof of delivery — only a confirmed
+            receipt counts (PR.2). Last test fired: {n?.last_test ? ago(n.last_test) : "never"}.
+          </p>
+        </>
+      )}
+    </div>
   );
 }

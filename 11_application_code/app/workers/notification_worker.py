@@ -12,9 +12,11 @@ Falls back to console mock when META_WHATSAPP_TOKEN is empty (dev/test mode).
 import psycopg2
 import psycopg2.extras
 import httpx
+from datetime import date, datetime, timezone
 from app.workers.celery_app import app as celery_app
 from app.workers.rls_helpers import with_rls
 from app.config import settings
+from app.utils.email import send_task_digest_email
 import logging
 
 logger = logging.getLogger(__name__)
@@ -316,3 +318,230 @@ def send_batched_low_alerts():
         return {"batches_sent": batches_sent, "farms_checked": farms_checked}
     finally:
         conn.close()
+
+
+# ─── P3b: external task alerts (overdue OPEN tasks → WhatsApp/email) ─────────────
+#
+# Per Inviolable PR.2 (Alert Path Receipt Verification): the scheduled sweep
+# below is a no-op until settings.task_alerts_enabled is flipped True — which an
+# Operator does ONLY after receipt-verifying the channel end-to-end via
+# send_task_alert_test and recording the receipt in the strike archive. Every
+# dispatch is logged to tenant.task_notifications (provider message id + status),
+# and SENT is never conflated with "delivered" — only an Operator receipt sets
+# receipt_confirmed_at on those rows.
+
+TASK_ALERT_ROLES = ["FOUNDER", "MANAGER"]
+
+
+def _due_phrase(due) -> str:
+    """Human due/overdue phrase from a date (psycopg2 returns datetime.date)."""
+    if due is None:
+        return "due"
+    today = date.today()
+    if due < today:
+        return f"overdue {(today - due).days}d"
+    if due == today:
+        return "due today"
+    return f"due {due.isoformat()}"
+
+
+def _record_task_notification(cur, tenant_id, farm_id, task_id, channel,
+                              recipient, status, provider_message_id, error,
+                              is_test=False):
+    """Append one row to the delivery log (under the caller's RLS cursor)."""
+    cur.execute(
+        """
+        INSERT INTO tenant.task_notifications
+            (tenant_id, farm_id, task_id, channel, recipient,
+             status, provider_message_id, error, is_test)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+        """,
+        (tenant_id, farm_id, task_id, channel, recipient,
+         status, provider_message_id, error, is_test),
+    )
+
+
+def _dispatch_farm_task_digest(cur, tenant_id, farm_id, items) -> dict:
+    """Send one overdue-task digest for a farm. WhatsApp primary, email fallback.
+
+    `items` = list of dicts {task_id, imperative, due_date}. Records one
+    task_notifications row per task on the channel actually used. Returns a
+    small summary dict. Caller's cursor already has RLS context set.
+    """
+    # Recipients for this farm's tenant (FOUNDER/MANAGER).
+    cur.execute(
+        """
+        SELECT full_name, whatsapp_number, email
+        FROM tenant.users
+        WHERE tenant_id = %s
+          AND role = ANY(%s)
+          AND is_active = true
+        """,
+        (tenant_id, TASK_ALERT_ROLES),
+    )
+    recipients = cur.fetchall()
+    wa = [r for r in recipients if r.get("whatsapp_number")]
+    em = [r for r in recipients if r.get("email")]
+
+    lines = [f"{it['imperative']} ({_due_phrase(it['due_date'])})" for it in items]
+
+    # ---- WhatsApp (primary) -------------------------------------------------
+    if wa:
+        body = (
+            f"You have {len(items)} task(s) due or overdue for {farm_id}:\n\n• "
+            + "\n• ".join(lines)
+        )
+        primary = wa[0]["whatsapp_number"]
+        first_status, first_id, first_err = "FAILED", None, None
+        for r in wa:
+            res = _send_whatsapp_sync(r["whatsapp_number"], body, "HIGH")
+            st = {"sent": "SENT", "mock_sent": "MOCK", "failed": "FAILED"}.get(res["status"], "FAILED")
+            if r["whatsapp_number"] == primary:
+                first_status, first_id, first_err = st, res.get("message_id"), res.get("error")
+        for it in items:
+            _record_task_notification(
+                cur, tenant_id, farm_id, it["task_id"], "whatsapp",
+                primary, first_status, first_id, first_err,
+            )
+        return {"channel": "whatsapp", "recipients": len(wa), "tasks": len(items), "status": first_status}
+
+    # ---- Email (fallback) ---------------------------------------------------
+    if em:
+        primary = em[0]["email"]
+        ok, msg_id = send_task_digest_email(
+            primary, em[0].get("full_name") or "there", farm_id, lines,
+        )
+        st = "SENT" if ok else "FAILED"
+        for it in items:
+            _record_task_notification(
+                cur, tenant_id, farm_id, it["task_id"], "email",
+                primary, st, msg_id, None if ok else "resend send failed",
+            )
+        return {"channel": "email", "recipients": len(em), "tasks": len(items), "status": st}
+
+    return {"channel": "none", "recipients": 0, "tasks": len(items), "status": "SKIPPED"}
+
+
+@celery_app.task(
+    name="app.workers.notification_worker.notify_due_tasks",
+    queue="notifications",
+)
+def notify_due_tasks():
+    """Sweep overdue/due-today HIGH+CRITICAL OPEN tasks and alert externally.
+
+    No-op unless settings.task_alerts_enabled (PR.2). Dedupes against
+    tenant.task_notifications so a task is not re-pinged within the lookback
+    window. Cross-tenant scan is STRUCTURAL (enumerate tenants, then per-tenant
+    with_rls) per the worker doctrine.
+    """
+    if not settings.task_alerts_enabled:
+        logger.info("notify_due_tasks: disabled (task_alerts_enabled=False) — "
+                    "PR.2 receipt verification pending")
+        return {"skipped": "disabled", "reason": "PR.2 receipt verification pending"}
+
+    conn = get_sync_db()
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT tenant_id::TEXT AS tenant_id
+            FROM tenant.tenants
+            WHERE subscription_status = 'ACTIVE'
+        """)
+        tenants = cur.fetchall()
+        cur.close()
+        conn.commit()
+
+        farms_alerted = 0
+        tasks_alerted = 0
+
+        for tenant in tenants:
+            tenant_id = tenant["tenant_id"]
+            with with_rls(conn, tenant_id) as cur:
+                cur.execute(
+                    """
+                    SELECT t.task_id, t.farm_id, t.imperative, t.due_date
+                    FROM tenant.task_queue t
+                    WHERE t.status = 'OPEN'
+                      AND t.task_rank <= %s
+                      AND t.due_date IS NOT NULL
+                      AND t.due_date <= CURRENT_DATE
+                      AND NOT EXISTS (
+                          SELECT 1 FROM tenant.task_notifications n
+                          WHERE n.task_id = t.task_id
+                            AND n.status IN ('SENT','MOCK')
+                            AND n.sent_at > NOW() - make_interval(days => %s)
+                      )
+                    ORDER BY t.farm_id, t.task_rank
+                    """,
+                    (settings.task_alert_max_rank, settings.task_alert_lookback_days),
+                )
+                rows = cur.fetchall()
+
+                by_farm: dict = {}
+                for r in rows:
+                    by_farm.setdefault(r["farm_id"], []).append({
+                        "task_id": r["task_id"],
+                        "imperative": r["imperative"],
+                        "due_date": r["due_date"],
+                    })
+
+                for farm_id, items in by_farm.items():
+                    res = _dispatch_farm_task_digest(cur, tenant_id, farm_id, items)
+                    if res["status"] in ("SENT", "MOCK"):
+                        farms_alerted += 1
+                        tasks_alerted += len(items)
+            conn.commit()
+
+        return {"farms_alerted": farms_alerted, "tasks_alerted": tasks_alerted,
+                "tenants_scanned": len(tenants)}
+    finally:
+        conn.close()
+
+
+@celery_app.task(
+    name="app.workers.notification_worker.send_task_alert_test",
+    queue="notifications",
+)
+def send_task_alert_test(channel: str, recipient: str,
+                         tenant_id: str = None, farm_id: str = None):
+    """PR.2 receipt-verification path — fire ONE test alert and return the
+    delivery id + send timestamp for the strike archive.
+
+    Ignores task_alerts_enabled by design: this is how an Operator proves the
+    channel reaches a real inbox BEFORE enabling the scheduled sweep. If both
+    tenant_id and farm_id are given the send is also logged to
+    tenant.task_notifications with is_test=true.
+    """
+    msg = ("TFOS test alert — if you can read this, the alert path works. "
+           "Please reply to confirm receipt (PR.2 receipt verification).")
+    if channel == "whatsapp":
+        res = _send_whatsapp_sync(recipient, msg, "INFO")
+        status = {"sent": "SENT", "mock_sent": "MOCK", "failed": "FAILED"}.get(res["status"], "FAILED")
+        provider_id, error = res.get("message_id"), res.get("error")
+    elif channel == "email":
+        ok, provider_id = send_task_digest_email(
+            recipient, "Operator", "RECEIPT TEST",
+            ["This is a PR.2 receipt-verification test alert. Reply to confirm."],
+        )
+        status, error = ("SENT", None) if ok else ("FAILED", "resend send failed")
+    else:
+        return {"error": f"unknown channel: {channel}"}
+
+    sent_at = datetime.now(timezone.utc).isoformat()
+
+    if tenant_id and farm_id:
+        conn = get_sync_db()
+        try:
+            with with_rls(conn, tenant_id) as cur:
+                _record_task_notification(
+                    cur, tenant_id, farm_id, None, channel,
+                    recipient, status, provider_id, error, is_test=True,
+                )
+            conn.commit()
+        finally:
+            conn.close()
+
+    return {
+        "channel": channel, "recipient": recipient, "status": status,
+        "provider_message_id": provider_id, "error": error, "sent_at": sent_at,
+    }
