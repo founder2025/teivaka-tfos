@@ -35,6 +35,11 @@ const FOUNDER_OPTIONS = [
 ];
 
 export default function ModeDropdown() {
+  // Removed from farm pages per operator: the FOUNDER "View as / Reset to derived"
+  // debug control (and the mode badge) no longer render. Logic kept for easy
+  // re-enable; the component is a no-op for now.
+  return null;
+  // eslint-disable-next-line no-unreachable
   const { real, override, setOverride, isFounder } = useEffectiveMode();
 
   // Non-FOUNDER: informational badge, no dropdown. Render nothing if we
