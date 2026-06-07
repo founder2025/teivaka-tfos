@@ -15,7 +15,12 @@ const LeftRailContext = createContext(null);
  * Drag-to-resize is deferred to Day 3c; width is a constant here for now.
  */
 export function LeftRailProvider({ children }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(() => {
+    // Nav v2.2-rev: rail docked-open by default on desktop (matches prototype);
+    // closed on mobile where it acts as a dismissible overlay.
+    if (typeof window === "undefined") return false;
+    return !window.matchMedia("(max-width: 900px)").matches;
+  });
   const { pathname } = useLocation();
 
   useEffect(() => {
