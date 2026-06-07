@@ -431,11 +431,25 @@ export default function FarmMap({ farmId, onCountsChange, openRequest, onSaved }
     measurePtsRef.current = []; setMeasureDist(0); measureLayerRef.current?.clearLayers(); setMeasuring(false);
   }
 
-  // Empty-state CTA: open fullscreen straight into boundary-draw for an unmapped farm.
+  // Empty-state CTA: open fullscreen straight into boundary-draw for an unmapped
+  // farm, centred on the farmer's GPS (they're standing on the new farm).
   function mapThisFarm() {
     setDrawKind("BOUNDARY"); drawKindRef.current = "BOUNDARY";
     pendingDrawRef.current = "Polygon";
     setFullscreen(true);
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const m = mapRef.current; if (!m) return;
+          const ll = [pos.coords.latitude, pos.coords.longitude];
+          m.setView(ll, 18);
+          if (meRef.current) meRef.current.setLatLng(ll);
+          else meRef.current = L.circleMarker(ll, { radius: 6, color: "#fff", weight: 2, fillColor: C.green, fillOpacity: 1 }).addTo(m).bindTooltip("You are here");
+        },
+        () => { /* GPS denied — leave default view */ },
+        { enableHighAccuracy: true, timeout: 8000 }
+      );
+    }
   }
 
   function locateMe() {
