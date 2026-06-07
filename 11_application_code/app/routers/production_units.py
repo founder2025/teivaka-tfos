@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from typing import Optional
 from datetime import date, datetime
+from uuid import uuid4
 from sqlalchemy import text
 from app.db.session import get_rls_db
 from app.middleware.rls import get_current_user
@@ -129,3 +130,134 @@ async def rename_production_unit(pu_id: str, body: PURename, user: dict = Depend
         if not row:
             raise HTTPException(status_code=404, detail="Production unit not found")
         return {"data": dict(row)}
+
+
+@router.get("/{pu_id}/advice")
+async def block_advice(pu_id: str, user: dict = Depends(get_current_user)):
+    """Rotation + rest advice for a block, sourced ONLY from shared.family_policies
+    + shared.productions (no invented agronomy — Inviolable #1). Tells the farmer:
+    how long to rest before replanting the same family, what to avoid now, and
+    which crops are good to plant next (legumes first, per the seeded KB note)."""
+    tid = str(user["tenant_id"])
+    async with get_rls_db(tid) as db:
+        r = await db.execute(
+            text("""
+                SELECT pu.pu_id, pu.pu_name,
+                       c.cycle_id, c.cycle_status, c.planting_date,
+                       c.actual_harvest_end, c.closed_at, c.expected_harvest_date,
+                       p.production_name, p.plant_family
+                  FROM tenant.production_units pu
+                  LEFT JOIN LATERAL (
+                       SELECT pc.* FROM tenant.production_cycles pc
+                        WHERE pc.pu_id = pu.pu_id
+                        ORDER BY pc.planting_date DESC NULLS LAST, pc.created_at DESC LIMIT 1
+                  ) c ON TRUE
+                  LEFT JOIN shared.productions p ON p.production_id = c.production_id
+                 WHERE pu.pu_id = :pid AND pu.tenant_id = :tid
+            """),
+            {"pid": pu_id, "tid": tid},
+        )
+        row = r.mappings().first()
+        if not row:
+            raise HTTPException(status_code=404, detail="Production unit not found")
+        state = _derive_state(dict(row))
+        fam = row["plant_family"]
+        days_idle = state.get("days_idle")
+
+        policy = None
+        if fam:
+            pr = await db.execute(
+                text("""SELECT family_name, min_rest_days, enforce_level, disease_risk,
+                               rotation_benefit, notes
+                          FROM shared.family_policies WHERE family_name = :fam"""),
+                {"fam": fam},
+            )
+            p = pr.mappings().first()
+            policy = dict(p) if p else None
+
+        rest_required = policy["min_rest_days"] if policy else None
+        rest_remaining = None
+        if rest_required is not None and days_idle is not None:
+            rest_remaining = max(0, rest_required - days_idle)
+
+        # Good next crops: active annual crops NOT in the last family; legumes first
+        # (family_policies marks Fabaceae 'PREFERRED after heavy feeders').
+        sug = await db.execute(
+            text("""
+                SELECT production_id, production_name, plant_family
+                  FROM shared.productions
+                 WHERE is_active_in_system = true AND is_perennial = false
+                   AND is_livestock = false AND is_forestry = false AND is_aquaculture = false
+                   AND (:fam IS NULL OR plant_family IS DISTINCT FROM :fam)
+                 ORDER BY (plant_family = 'Fabaceae') DESC, production_name
+                 LIMIT 8
+            """),
+            {"fam": fam},
+        )
+        suggested = [dict(x) for x in sug.mappings().all()]
+
+        avoid = []
+        if fam:
+            av = await db.execute(
+                text("""SELECT production_id, production_name FROM shared.productions
+                         WHERE plant_family = :fam AND is_active_in_system = true"""),
+                {"fam": fam},
+            )
+            avoid = [dict(x) for x in av.mappings().all()]
+
+    rotation_status = "NA"
+    if policy and policy["enforce_level"] in ("OVERLAY", "NA"):
+        rotation_status = "NA"           # perennial / livestock / forestry
+    elif state["state"] in ("EMPTY", "RESTING", "IDLE") and fam:
+        rotation_status = "READY" if (rest_remaining == 0) else "REST"
+
+    return {
+        "pu_id": row["pu_id"], "pu_name": row["pu_name"],
+        **state,
+        "last_crop": row["production_name"], "last_family": fam,
+        "rotation_status": rotation_status,
+        "rest_required_days": rest_required, "rest_remaining_days": rest_remaining,
+        "disease_risk": policy["disease_risk"] if policy else None,
+        "rotation_benefit": policy["rotation_benefit"] if policy else None,
+        "policy_note": policy["notes"] if policy else None,
+        "enforce_level": policy["enforce_level"] if policy else None,
+        "avoid_next": avoid,
+        "suggested_next": suggested,
+    }
+
+
+@router.post("/{pu_id}/rotation-task")
+async def create_rotation_task(pu_id: str, user: dict = Depends(get_current_user)):
+    """Surface the rotation/idle advice as a real task_queue row (idempotent:
+    one OPEN rotation task per block)."""
+    tid = str(user["tenant_id"])
+    uid = str(user.get("user_id")) if user.get("user_id") else None
+    async with get_rls_db(tid) as db:
+        pr = await db.execute(
+            text("SELECT pu_name, farm_id FROM tenant.production_units WHERE pu_id = :pid AND tenant_id = :tid"),
+            {"pid": pu_id, "tid": tid},
+        )
+        pu = pr.mappings().first()
+        if not pu:
+            raise HTTPException(status_code=404, detail="Production unit not found")
+        ex = await db.execute(
+            text("""SELECT task_id FROM tenant.task_queue
+                     WHERE tenant_id = :tid AND pu_id = :pid
+                       AND status IN ('OPEN','IN_PROGRESS') AND title ILIKE 'Plan rotation%'"""),
+            {"tid": tid, "pid": pu_id},
+        )
+        existing = ex.first()
+        if existing:
+            return {"ok": True, "existing": True, "task_id": existing[0]}
+        task_id = f"TSK-{pu['farm_id']}-{uuid4().hex[:8].upper()}"
+        await db.execute(
+            text("""INSERT INTO tenant.task_queue
+                        (task_id, tenant_id, farm_id, task_type, title, description,
+                         priority, status, pu_id)
+                    VALUES (:task, :tid, :farm, 'FIELD_TASK', :title, :desc, 'MEDIUM', 'OPEN', :pid)"""),
+            {"task": task_id, "tid": tid, "farm": pu["farm_id"],
+             "title": f"Plan rotation — {pu['pu_name']}",
+             "desc": "Block is resting/idle. Pick the next crop (legumes preferred after heavy feeders) and prepare the bed. See block advice in Locations.",
+             "pid": pu_id},
+        )
+    return {"ok": True, "existing": False, "task_id": task_id}

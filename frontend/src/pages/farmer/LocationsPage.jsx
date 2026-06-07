@@ -124,6 +124,13 @@ function LocationsInner() {
     } catch { /* non-fatal */ }
     setRenameVal(null);
   }
+  const advice = useQuery({ queryKey: ["loc-advice", selected], queryFn: () => getJSON(`/api/v1/production-units/${encodeURIComponent(selected)}/advice`), enabled: !!selected, retry: 0 });
+  async function addRotationTask() {
+    try {
+      const r = await fetch(`/api/v1/production-units/${encodeURIComponent(selected)}/rotation-task`, { method: "POST", headers: authHeaders() });
+      if (r.ok) { const d = await r.json(); emitToast(d.existing ? "Rotation task already in your list" : "Rotation task added"); }
+    } catch { emitToast("Couldn't add task"); }
+  }
 
   const mapShapes = (mapFeat.data?.features ?? [])
     .map((f) => ({ id: f.properties?.feature_id, label: f.properties?.label || f.properties?.kind, kind: f.properties?.kind, area_ha: f.properties?.area_ha }))
@@ -276,11 +283,38 @@ function LocationsInner() {
                   );
                 })}
               </div>
-              {statusByPu[sel.pu_id]?.state === "IDLE" && (
-                <div className="mt-2 text-[11px] rounded-lg px-2.5 py-1.5" style={{ background: STATE_STYLE.IDLE.bg, color: STATE_STYLE.IDLE.fg }}>
-                  This block has been idle {statusByPu[sel.pu_id].days_idle} days. Rotation suggestions arrive in Phase 3.
-                </div>
-              )}
+              {(() => {
+                const a = advice.data;
+                if (!a || !["REST", "READY"].includes(a.rotation_status)) return null;
+                const ready = a.rotation_status === "READY";
+                return (
+                  <div className="mt-3 rounded-xl p-3" style={{ background: C.paper, border: `1px solid ${C.border}` }}>
+                    <div className="flex items-center justify-between gap-2 mb-1.5 flex-wrap">
+                      <div className="text-xs font-bold uppercase tracking-wide" style={{ color: C.soil }}>Rotation & rest</div>
+                      <button onClick={addRotationTask} className={`text-[11px] px-2.5 py-1 rounded-lg text-white font-semibold hover:brightness-95 ${FOCUS}`} style={{ background: C.greenDk }}>+ Add rotation task</button>
+                    </div>
+                    <div className="text-xs rounded-lg px-2.5 py-1.5 mb-2" style={{ background: ready ? STATE_STYLE.ACTIVE.bg : STATE_STYLE.IDLE.bg, color: ready ? STATE_STYLE.ACTIVE.fg : STATE_STYLE.IDLE.fg }}>
+                      {ready
+                        ? `Rest period met${a.last_family ? ` for ${a.last_family}` : ""} — ready to replant.`
+                        : `Rest ${a.rest_remaining_days} more day${a.rest_remaining_days === 1 ? "" : "s"} before replanting ${a.last_family || "the same family"} (was ${a.last_crop || "—"}).`}
+                    </div>
+                    {a.disease_risk && <div className="text-[11px] mb-2" style={{ color: C.muted }}><strong>Why:</strong> {a.disease_risk}.</div>}
+                    {a.avoid_next?.length > 0 && (
+                      <div className="mb-2">
+                        <div className="text-[10px] uppercase font-bold mb-1" style={{ color: STATE_STYLE.IDLE.fg }}>Avoid now</div>
+                        <div className="flex flex-wrap gap-1">{a.avoid_next.slice(0, 6).map((c) => <span key={c.production_id} className="text-[10px] px-1.5 py-0.5 rounded-full" style={{ background: STATE_STYLE.IDLE.bg, color: STATE_STYLE.IDLE.fg }}>{c.production_name}</span>)}</div>
+                      </div>
+                    )}
+                    {a.suggested_next?.length > 0 && (
+                      <div>
+                        <div className="text-[10px] uppercase font-bold mb-1" style={{ color: C.greenDk }}>Good to plant next</div>
+                        <div className="flex flex-wrap gap-1">{a.suggested_next.slice(0, 6).map((c) => <span key={c.production_id} className="text-[10px] px-1.5 py-0.5 rounded-full" style={{ background: STATE_STYLE.ACTIVE.bg, color: STATE_STYLE.ACTIVE.fg }}>{c.production_name}</span>)}</div>
+                      </div>
+                    )}
+                    <div className="text-[10px] mt-2" style={{ color: C.muted }}>Guidance from the crop-family rotation policies — not invented.</div>
+                  </div>
+                );
+              })()}
               <button onClick={() => go("cycles")} className={`mt-3 text-xs px-3 py-1.5 rounded-lg hover:brightness-95 ${FOCUS}`} style={{ color: C.greenDk, border: `1px solid ${C.border}` }}>Open production →</button>
             </Card>
           )}
