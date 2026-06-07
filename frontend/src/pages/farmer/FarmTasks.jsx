@@ -184,71 +184,91 @@ function Board({ farmId, navigate }) {
   }
 
   const Pill = ({ active, onClick, children }) => (
-    <button onClick={onClick} className="text-xs px-2.5 py-1 rounded-full font-semibold" style={active ? { background: C.greenDk, color: "white" } : { color: C.soil, border: `1px solid ${C.border}` }}>{children}</button>
+    <button onClick={onClick} className={`text-xs px-3 py-1.5 rounded-full font-semibold shrink-0 whitespace-nowrap ${FOCUS}`} style={active ? { background: C.greenDk, color: "white" } : { color: C.soil, background: "white", border: `1px solid ${C.border}` }}>{children}</button>
   );
 
   return (
     <div className="space-y-3">
-      {/* tabs + enterprise + when */}
-      <div className="flex items-center gap-2 flex-wrap">
-        {[["OPEN", `Pending ${openTasks.length}`], ["COMPLETED", `Completed ${doneTasks.length}`]].map(([k, l]) => (
-          <button key={k} onClick={() => setTab(k)} className="text-sm font-semibold pb-1" style={{ color: tab === k ? C.greenDk : C.muted, borderBottom: tab === k ? `2px solid ${C.green}` : "2px solid transparent" }}>{l}</button>
-        ))}
-        <span className="mx-1" />
-        <Pill active={ent === "all"} onClick={() => setEnt("all")}>All</Pill>
-        <Pill active={ent === "crops"} onClick={() => setEnt("crops")}>Crops</Pill>
-        <Pill active={ent === "animals"} onClick={() => setEnt("animals")}>Animals</Pill>
-        <span className="flex-1" />
-        {WHENS.map((w) => <Pill key={w} active={whenF === w} onClick={() => setWhenF(whenF === w ? null : w)}>{w}</Pill>)}
-      </div>
-      {/* type */}
-      <div className="flex items-center gap-2 flex-wrap">
-        <span className="text-[11px] font-bold uppercase" style={{ color: C.muted }}>Type</span>
-        <Pill active={!typeF} onClick={() => setTypeF(null)}>All</Pill>
-        {TYPES.map((ty) => <Pill key={ty} active={typeF === ty} onClick={() => setTypeF(typeF === ty ? null : ty)}>{ty}</Pill>)}
-      </div>
-      {/* stat cards */}
+      {/* summary strip */}
       <div className="grid gap-2 grid-cols-2 sm:grid-cols-4">
-        {[["To do today", stats.today, "due in the next day"], ["This week", stats.week, "next 7 days"], ["Urgent", stats.urgent, "do these first"], ["Done", stats.done, "this session"]].map(([l, v, s]) => (
+        {[["To do today", stats.today, "due in the next day", C.red], ["This week", stats.week, "next 7 days", C.greenDk], ["Urgent", stats.urgent, "do these first", C.amber], ["Done", stats.done, "this session", C.green]].map(([l, v, s, col]) => (
           <div key={l} className="rounded-xl border p-3" style={{ borderColor: C.border, background: "white" }}>
-            <div className="text-[10px] uppercase" style={{ color: C.muted }}>{l}</div>
-            <div className="text-xl font-bold" style={{ color: C.greenDk }}>{v}</div>
+            <div className="text-[10px] uppercase tracking-wide" style={{ color: C.muted }}>{l}</div>
+            <div className="text-2xl font-bold leading-tight" style={{ color: col }}>{v}</div>
             <div className="text-[10px]" style={{ color: C.muted }}>{s}</div>
           </div>
         ))}
       </div>
 
-      {/* table */}
+      {/* one board card: tabs · filters · list */}
       <div className="rounded-2xl border bg-white overflow-hidden" style={{ borderColor: C.border }}>
-        <div className="grid items-center px-3 py-2 text-[10px] font-bold uppercase" style={{ color: C.muted, gridTemplateColumns: "1fr 90px 90px 80px 70px 120px", borderBottom: `1px solid ${C.border}` }}>
+        {/* tabs */}
+        <div className="flex items-center gap-5 px-4 pt-3" style={{ borderBottom: `1px solid ${C.border}` }}>
+          {[["OPEN", "Pending", openTasks.length], ["COMPLETED", "Completed", doneTasks.length]].map(([k, l, n]) => (
+            <button key={k} onClick={() => setTab(k)} className="text-sm font-semibold pb-2.5 flex items-center gap-1.5" style={{ color: tab === k ? C.greenDk : C.muted, borderBottom: tab === k ? `2px solid ${C.green}` : "2px solid transparent", marginBottom: -1 }}>
+              {l}<span className="text-[10px] px-1.5 py-0.5 rounded-full" style={{ background: tab === k ? C.greenTint : C.cream, color: tab === k ? C.greenDk : C.muted }}>{n}</span>
+            </button>
+          ))}
+        </div>
+
+        {/* filters — each group is one tidy, horizontally scrollable line */}
+        <div className="px-3 py-2.5 space-y-2" style={{ borderBottom: `1px solid ${C.border}`, background: C.paper }}>
+          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+            <Pill active={ent === "all"} onClick={() => setEnt("all")}>All</Pill>
+            <Pill active={ent === "crops"} onClick={() => setEnt("crops")}>Crops</Pill>
+            <Pill active={ent === "animals"} onClick={() => setEnt("animals")}>Animals</Pill>
+            <span className="mx-1 shrink-0 self-stretch w-px" style={{ background: C.border }} />
+            {WHENS.map((w) => <Pill key={w} active={whenF === w} onClick={() => setWhenF(whenF === w ? null : w)}>{w}</Pill>)}
+          </div>
+          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+            <span className="text-[10px] font-bold uppercase shrink-0 pr-0.5" style={{ color: C.muted }}>Type</span>
+            <Pill active={!typeF} onClick={() => setTypeF(null)}>All</Pill>
+            {TYPES.map((ty) => <Pill key={ty} active={typeF === ty} onClick={() => setTypeF(typeF === ty ? null : ty)}>{ty}</Pill>)}
+          </div>
+        </div>
+
+        {/* column header — desktop only */}
+        <div className="hidden md:grid items-center px-4 py-2 text-[10px] font-bold uppercase" style={{ color: C.muted, gridTemplateColumns: "1fr 120px 96px 96px 76px 156px", borderBottom: `1px solid ${C.border}` }}>
           <span>Task</span><span>Enterprise</span><span>When</span><span>Type</span><span>Sev</span><span className="text-right">Action</span>
         </div>
+
+        {/* rows — stacked cards on mobile, grid on desktop */}
         {rows.length === 0 ? (
-          <div className="px-4 py-10 text-center">
-            <ListChecks size={24} style={{ color: C.green, margin: "0 auto" }} />
-            <div className="text-sm font-semibold mt-2" style={{ color: C.soil }}>{tab === "OPEN" ? "Nothing matches — you're on top of it" : "No completed tasks"}</div>
+          <div className="px-4 py-12 text-center">
+            <ListChecks size={26} style={{ color: C.green, margin: "0 auto" }} />
+            <div className="text-sm font-semibold mt-2" style={{ color: C.soil }}>{tab === "OPEN" ? "Nothing matches — you're on top of it" : "No completed tasks yet"}</div>
+            <div className="text-xs mt-1" style={{ color: C.muted }}>{tab === "OPEN" ? "New tasks appear as cycles, compliance and rotations need action." : "Completed tasks will show up here."}</div>
           </div>
         ) : rows.map((t) => {
-          const sv = sev(t.task_rank); const du = fmtDue(t.due_date);
+          const sv = sev(t.task_rank); const du = fmtDue(t.due_date); const ents = enterprise(t);
+          const tgt = tab === "OPEN" ? taskTarget(t) : null;
           return (
-            <div key={t.task_id} className="grid items-center px-3 py-2.5 text-sm" style={{ gridTemplateColumns: "1fr 90px 90px 80px 70px 120px", borderTop: `1px solid rgba(92,64,51,0.06)` }}>
-              <span className="min-w-0 truncate pr-2" style={{ color: C.soil }}>{t.imperative}</span>
-              <span className="text-[11px] truncate pr-1" style={{ color: C.muted }}>{enterprise(t)}</span>
-              <span className="text-[11px]" style={{ color: du.over ? C.red : C.muted }}>{du.w}</span>
-              <span className="text-[11px]" style={{ color: C.muted }}>{typeOf(t)}</span>
-              <span><span className="text-[9px] font-bold px-1.5 py-0.5 rounded" style={{ background: sv.bg, color: sv.c }}>{sv.k}</span></span>
-              <span className="flex items-center justify-end gap-1.5">
-                {tab === "OPEN" ? (() => {
-                  const tgt = taskTarget(t);
-                  return (
-                    <>
-                      {tgt
-                        ? <button onClick={() => navigate(tgt.route)} className={`text-[11px] px-2.5 py-1 rounded-lg text-white font-semibold flex items-center gap-1 ${FOCUS}`} style={{ background: C.greenDk }} title="Log the real record and complete">{tgt.label}</button>
-                        : <button onClick={() => act(t, "done")} disabled={busy === t.task_id} className={`text-[11px] px-2.5 py-1 rounded-lg text-white font-semibold flex items-center gap-1 ${FOCUS}`} style={{ background: C.greenDk }}><CheckCircle2 size={12} />Done</button>}
-                      <button onClick={() => act(t, "skip")} disabled={busy === t.task_id} className={`text-[11px] px-2 py-1 rounded-lg font-semibold ${FOCUS}`} style={{ color: C.muted, border: `1px solid ${C.border}` }}>Skip</button>
-                    </>
-                  );
-                })() : <span className="text-[11px]" style={{ color: C.green }}>✓ done</span>}
+            <div key={t.task_id} className="flex md:grid md:items-center gap-3 px-4 py-3" style={{ gridTemplateColumns: "1fr 120px 96px 96px 76px 156px", borderTop: `1px solid rgba(92,64,51,0.06)`, borderLeft: `3px solid ${sv.k === "NORMAL" ? "transparent" : sv.bg}` }}>
+              {/* task + mobile meta line */}
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-medium md:truncate md:pr-2" style={{ color: C.soil }}>{t.imperative}</div>
+                <div className="md:hidden flex items-center gap-2 mt-1 flex-wrap text-[11px]" style={{ color: C.muted }}>
+                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded" style={{ background: sv.bg, color: sv.c }}>{sv.k}</span>
+                  <span className="font-semibold" style={{ color: du.over ? C.red : C.muted }}>{du.w}</span>
+                  <span>· {typeOf(t)}</span>
+                  {ents !== "—" && <span>· {ents}</span>}
+                </div>
+              </div>
+              {/* desktop cells */}
+              <span className="hidden md:block text-[11px] truncate pr-1" style={{ color: C.muted }}>{ents}</span>
+              <span className="hidden md:block text-[11px]" style={{ color: du.over ? C.red : C.muted }}>{du.w}</span>
+              <span className="hidden md:block text-[11px]" style={{ color: C.muted }}>{typeOf(t)}</span>
+              <span className="hidden md:block"><span className="text-[9px] font-bold px-1.5 py-0.5 rounded" style={{ background: sv.bg, color: sv.c }}>{sv.k}</span></span>
+              {/* actions */}
+              <span className="flex items-center justify-end gap-1.5 shrink-0">
+                {tab === "OPEN" ? (
+                  <>
+                    {tgt
+                      ? <button onClick={() => navigate(tgt.route)} className={`text-[11px] px-2.5 py-1.5 rounded-lg text-white font-semibold flex items-center gap-1 ${FOCUS}`} style={{ background: C.greenDk }} title="Log the real record and complete">{tgt.label}</button>
+                      : <button onClick={() => act(t, "done")} disabled={busy === t.task_id} className={`text-[11px] px-2.5 py-1.5 rounded-lg text-white font-semibold flex items-center gap-1 ${FOCUS}`} style={{ background: C.greenDk }}><CheckCircle2 size={12} />Done</button>}
+                    <button onClick={() => act(t, "skip")} disabled={busy === t.task_id} className={`text-[11px] px-2.5 py-1.5 rounded-lg font-semibold ${FOCUS}`} style={{ color: C.muted, border: `1px solid ${C.border}` }}>Skip</button>
+                  </>
+                ) : <span className="text-[11px] font-semibold flex items-center gap-1" style={{ color: C.green }}><CheckCircle2 size={12} />Done</span>}
               </span>
             </div>
           );

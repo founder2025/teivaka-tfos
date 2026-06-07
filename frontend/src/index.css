@@ -24,6 +24,15 @@
   padding: 0;
 }
 
+/* Horizontal scroll rows (filter chips) without a visible scrollbar. */
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
 html {
   scroll-behavior: smooth;
 }
