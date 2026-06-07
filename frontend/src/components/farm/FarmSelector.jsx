@@ -69,7 +69,12 @@ export default function FarmSelector() {
         body: JSON.stringify({ farm_name: name.trim(), location_island: island.trim() || null }),
       });
       if (res.status === 403) { emitToast("Only the farm owner can add farms"); return; }
-      if (!res.ok) throw new Error();
+      if (!res.ok) {
+        let detail = "";
+        try { const e = await res.json(); detail = typeof e.detail === "string" ? e.detail : JSON.stringify(e.detail); } catch { /* ignore */ }
+        emitToast(`Couldn't create farm (${res.status})${detail ? `: ${detail}` : ""}`);
+        return;
+      }
       const row = await res.json();
       await qc.invalidateQueries({ queryKey: ["farms"] });
       setFarmId(row.farm_id);

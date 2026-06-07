@@ -104,6 +104,7 @@ export default function FarmMap({ farmId, onCountsChange, openRequest, onSaved }
   const lastAreaRef = useRef(null);  // area (ha) of the most recently created shape
   const pendingDrawRef = useRef(null);        // 'Marker'|'Polygon' to auto-start on fullscreen open
   const pendingFacilityTypeRef = useRef(null); // default facility type for an externally-triggered pin
+  const mapCenterRef = useRef(null);          // {lat,lng,zoom} farm pin or island centroid
   const [drawKind, setDrawKind] = useState("ZONE");
   const drawKindRef = useRef("ZONE");
   const [status, setStatus] = useState("loading"); // loading|ready
@@ -136,7 +137,9 @@ export default function FarmMap({ farmId, onCountsChange, openRequest, onSaved }
     cleanupWalk(); stopMeasure(); setCalcOpen(false); setFullscreen(false);
     fg.clearLayers();
     setTotal({ zones: 0, blocks: 0, ha: 0 });
+    setHasMapped(null);
     loadFeatures(map, fg);
+    loadMapCenter();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [farmId]);
   useEffect(() => { areaUnitRef.current = areaUnit; localStorage.setItem("tfos_area_unit", areaUnit);
@@ -265,6 +268,7 @@ export default function FarmMap({ farmId, onCountsChange, openRequest, onSaved }
     setTimeout(() => map.invalidateSize(), 120);
     setTimeout(() => map.invalidateSize(), 450);
     loadFeatures(map, fg);
+    loadMapCenter();
     const onResize = () => map.invalidateSize();
     window.addEventListener("resize", onResize);
     return () => {
@@ -303,6 +307,22 @@ export default function FarmMap({ farmId, onCountsChange, openRequest, onSaved }
       // Saved features couldn't load (API/migration not live) — map still works.
       setLoadWarn(true);
     }
+  }
+
+  // Where to open an unmapped farm: its pin if any, else the island centroid —
+  // so a farm mapped from home still opens on the right island, not mid-Fiji.
+  async function loadMapCenter() {
+    mapCenterRef.current = null;
+    try {
+      const r = await fetch(`/api/v1/farms/${encodeURIComponent(farmId)}/map-center`, { headers: authHeaders() });
+      if (!r.ok) return;
+      const d = await r.json();
+      if (d && d.lat != null) {
+        mapCenterRef.current = d;
+        const m = mapRef.current, fg = fgRef.current;
+        if (m && fg && fg.getLayers().length === 0) m.setView([d.lat, d.lng], d.zoom || 12);
+      }
+    } catch { /* keep default view */ }
   }
 
   // themed name modal (replaces window.prompt)
@@ -446,9 +466,15 @@ export default function FarmMap({ farmId, onCountsChange, openRequest, onSaved }
           if (meRef.current) meRef.current.setLatLng(ll);
           else meRef.current = L.circleMarker(ll, { radius: 6, color: "#fff", weight: 2, fillColor: C.green, fillOpacity: 1 }).addTo(m).bindTooltip("You are here");
         },
-        () => { /* GPS denied — leave default view */ },
+        () => {  // GPS denied/failed (e.g. mapping from home) — fall back to island centroid
+          const m = mapRef.current, c = mapCenterRef.current;
+          if (m && c && c.lat != null) m.setView([c.lat, c.lng], Math.max(c.zoom || 12, 13));
+        },
         { enableHighAccuracy: true, timeout: 8000 }
       );
+    } else {
+      const m = mapRef.current, c = mapCenterRef.current;
+      if (m && c && c.lat != null) m.setView([c.lat, c.lng], Math.max(c.zoom || 12, 13));
     }
   }
 

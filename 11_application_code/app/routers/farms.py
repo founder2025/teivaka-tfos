@@ -154,6 +154,39 @@ async def create_farm(
     return dict(row)
 
 
+@router.get("/{farm_id}/map-center", summary="Where to center the map for this farm")
+async def farm_map_center(
+    farm_id: str,
+    user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_tenant_db),
+):
+    """Best map center for a farm: its own pin if mapped, else the centroid of the
+    island/area on the farm record (shared.island_centroids) so an unmapped farm
+    mapped from home still opens on the right island. Null if neither is known."""
+    row = (await db.execute(
+        text("""
+            SELECT f.gps_lat, f.gps_lng, f.location_island,
+                   c.latitude AS isl_lat, c.longitude AS isl_lng
+              FROM tenant.farms f
+              LEFT JOIN LATERAL (
+                   SELECT ic.latitude, ic.longitude
+                     FROM shared.island_centroids ic
+                    WHERE f.location_island ILIKE ('%' || ic.name || '%')
+                    ORDER BY length(ic.name) DESC LIMIT 1
+              ) c ON TRUE
+             WHERE f.farm_id = :fid AND f.tenant_id = :tid
+        """),
+        {"fid": farm_id, "tid": str(user["tenant_id"])},
+    )).mappings().first()
+    if not row:
+        raise HTTPException(status_code=404, detail="Farm not found")
+    if row["gps_lat"] is not None and row["gps_lng"] is not None:
+        return {"lat": float(row["gps_lat"]), "lng": float(row["gps_lng"]), "zoom": 16, "source": "farm"}
+    if row["isl_lat"] is not None:
+        return {"lat": float(row["isl_lat"]), "lng": float(row["isl_lng"]), "zoom": 11, "source": "island"}
+    return {"lat": None, "lng": None, "zoom": None, "source": None}
+
+
 @router.get("/{farm_id}", summary="Farm detail")
 async def get_farm(
     farm_id: str,
