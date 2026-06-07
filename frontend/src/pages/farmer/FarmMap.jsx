@@ -31,6 +31,7 @@ const KIND_STYLE = {
 };
 const POLY_KINDS = ["ZONE", "BLOCK", "BOUNDARY"];
 const SWATCHES = ["#6AA84F", "#BF9000", "#D4442E", "#3E7B1F", "#2D6CDF", "#8E44AD", "#E67E22", "#5C4033"];
+const FACILITY_TYPES = ["Barn / shed", "Greenhouse", "Paddock", "Poultry house", "Pond / tank", "Storage / cold room", "Water point", "Gate", "Office", "Other"];
 
 // Base layers — all on Esri's arcgisonline host (already CSP-allowed; no Caddy change).
 const BASE_LAYERS = {
@@ -109,7 +110,7 @@ export default function FarmMap({ farmId, onCountsChange }) {
   const [dirty, setDirty] = useState(false);
   const [total, setTotal] = useState({ zones: 0, blocks: 0, ha: 0 });
   const [fullscreen, setFullscreen] = useState(false);
-  const [nameModal, setNameModal] = useState({ open: false, kind: "ZONE", value: "", color: "" });
+  const [nameModal, setNameModal] = useState({ open: false, kind: "ZONE", value: "", color: "", facilityType: "" });
   const [walking, setWalking] = useState(false);     // GPS walk-the-boundary mode
   const [walkPts, setWalkPts] = useState([]);        // captured corners [{lat,lng,acc}]
   const [liveAcc, setLiveAcc] = useState(null);      // current GPS accuracy (m)
@@ -160,6 +161,7 @@ export default function FarmMap({ farmId, onCountsChange }) {
     layer._ref_id = props.ref_id ?? null;
     layer._label = props.label ?? "";
     layer._color = props.color || null;
+    layer._facility_type = props.facility_type || null;
     if (layer.setStyle && KIND_STYLE[kind]) layer.setStyle(styleFor(kind, layer._color));
     refreshLayer(layer);
     layer.on("pm:edit", () => { refreshLayer(layer); markDirty(); });
@@ -215,7 +217,7 @@ export default function FarmMap({ farmId, onCountsChange }) {
       layer._kind = kind;
       if (layer.setStyle && KIND_STYLE[kind]) layer.setStyle(styleFor(kind)); // colour immediately
       pendingRef.current = layer;                       // park it; themed modal names it
-      setNameModal({ open: true, kind, value: "", color: "" });
+      setNameModal({ open: true, kind, value: "", color: "", facilityType: "" });
     });
     map.on("pm:remove", () => { setDirty(true); recount(); });
 
@@ -253,7 +255,7 @@ export default function FarmMap({ farmId, onCountsChange }) {
         }
         if (!layer) return;
         fg.addLayer(layer);
-        decorate(layer, { kind: p.kind, ref_id: p.ref_id, label: p.label, color: p.color });
+        decorate(layer, { kind: p.kind, ref_id: p.ref_id, label: p.label, color: p.color, facility_type: p.facility_type });
       });
       if (fg.getLayers().length) map.fitBounds(fg.getBounds().pad(0.15));
       recount();
@@ -268,19 +270,19 @@ export default function FarmMap({ farmId, onCountsChange }) {
   function confirmName() {
     const layer = pendingRef.current;
     if (layer) {
-      decorate(layer, { kind: layer._kind, label: nameModal.value.trim(), color: nameModal.color || null });
+      decorate(layer, { kind: layer._kind, label: nameModal.value.trim(), color: nameModal.color || null, facility_type: nameModal.facilityType || null });
       layer.on("pm:remove", () => { setDirty(true); recount(); });
       lastAreaRef.current = layer._area_ha ?? lastAreaRef.current;
       markDirty();
     }
     pendingRef.current = null;
-    setNameModal({ open: false, kind: "ZONE", value: "", color: "" });
+    setNameModal({ open: false, kind: "ZONE", value: "", color: "", facilityType: "" });
   }
   function cancelName() {
     const layer = pendingRef.current;
     if (layer && fgRef.current) fgRef.current.removeLayer(layer); // discard the shape
     pendingRef.current = null;
-    setNameModal({ open: false, kind: "ZONE", value: "", color: "" });
+    setNameModal({ open: false, kind: "ZONE", value: "", color: "", facilityType: "" });
     recount();
   }
 
@@ -347,7 +349,7 @@ export default function FarmMap({ farmId, onCountsChange }) {
     layer._area_ha = layerAreaHa(layer);
     pendingRef.current = layer;
     cleanupWalk();
-    setNameModal({ open: true, kind, value: "", color: "" }); // themed name modal, then it's saved on the map
+    setNameModal({ open: true, kind, value: "", color: "", facilityType: "" }); // themed name modal, then it's saved on the map
   }
   function cancelWalk() { cleanupWalk(); }
   function cleanupWalk() {
@@ -412,7 +414,7 @@ export default function FarmMap({ farmId, onCountsChange }) {
     const features = [];
     fg.eachLayer((l) => {
       const gj = l.toGeoJSON();
-      gj.properties = { kind: l._kind || "BLOCK", ref_id: l._ref_id ?? null, label: l._label || "", color: l._color || null, area_ha: l._area_ha ?? null };
+      gj.properties = { kind: l._kind || "BLOCK", ref_id: l._ref_id ?? null, label: l._label || "", color: l._color || null, facility_type: l._facility_type || null, area_ha: l._area_ha ?? null };
       features.push(gj);
     });
     try {
@@ -609,6 +611,17 @@ export default function FarmMap({ farmId, onCountsChange }) {
               placeholder={`${nameModal.kind.charAt(0) + nameModal.kind.slice(1).toLowerCase()} name`}
               className="w-full px-3 py-2.5 rounded-lg text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-[#6AA84F]"
               style={{ border: `1.5px solid ${C.border}`, background: C.cream, color: C.soil }} />
+            {nameModal.kind === "FACILITY" && (
+              <div className="mt-3">
+                <span className="text-[11px] block mb-1.5" style={{ color: C.muted }}>Facility type</span>
+                <select value={nameModal.facilityType} onChange={(e) => setNameModal((m) => ({ ...m, facilityType: e.target.value }))}
+                  className="w-full px-3 py-2 rounded-lg text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-[#6AA84F]"
+                  style={{ border: `1.5px solid ${C.border}`, background: C.cream, color: C.soil }}>
+                  <option value="">Choose a type…</option>
+                  {FACILITY_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+                </select>
+              </div>
+            )}
             <div className="mt-3">
               <span className="text-[11px] block mb-1.5" style={{ color: C.muted }}>Colour</span>
               <div className="flex items-center gap-1.5 flex-wrap">

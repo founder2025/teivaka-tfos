@@ -24,6 +24,7 @@ import ModeDropdown from "../../components/farm/ModeDropdown";
 
 const FarmMap = lazy(() => import("./FarmMap"));
 import CapacityCalc from "../../components/farm/CapacityCalc";
+import AttendanceCard from "../../components/farm/AttendanceCard";
 
 const AREA_UNITS = { acres: "acres", ha: "ha", m2: "m²" };
 const useFarmMapFeatures = (id) => useQuery({ queryKey: ["loc-map", id], queryFn: () => getJSON(`/api/v1/farm-map/${encodeURIComponent(id)}`), enabled: !!id, retry: 0 });
@@ -275,6 +276,12 @@ function LocationsInner() {
                 </div>
               </div>
             )}
+          </Card>
+
+          {/* geo-locked attendance */}
+          <Card style={{ padding: 16 }}>
+            <ColHead extra={<span className="text-[11px]" style={{ color: C.muted }}>GPS checked against your boundary</span>}>Worker attendance</ColHead>
+            <AttendanceCard farmId={farmId} />
           </Card>
 
           {/* facilities */}
