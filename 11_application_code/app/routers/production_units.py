@@ -366,7 +366,7 @@ async def create_rotation_task(pu_id: str, user: dict = Depends(get_current_user
         existing = ex.first()
         if existing:
             return {"ok": True, "existing": True, "task_id": existing[0]}
-        task_id = f"TSK-{pu['farm_id']}-{uuid4().hex[:8].upper()}"
+        task_id = str(uuid4())  # UUID so the tasks API (task_id: UUID) can complete it
         await db.execute(
             text("""INSERT INTO tenant.task_queue
                         (task_id, tenant_id, farm_id, task_type, title, description,

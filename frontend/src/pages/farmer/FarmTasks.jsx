@@ -1,158 +1,300 @@
 /**
- * FarmTasks.jsx — /farm/tasks
+ * FarmTasks.jsx — /farm/tasks  (prototype-parity)
  *
- * The worklist for Growth/Commercial mode: every open task in the tenant's
- * task_queue — rotation & transplant suggestions (Locations), automation,
- * compliance, decision-engine, weather, manual. Complete / Skip wire to the
- * existing tasks API (GET /tasks, POST /{id}/complete, /{id}/skip). Tasks are
- * tenant-wide (the API isn't farm-scoped), so this shows all of them.
+ * Two surfaces:
+ *  1. Next steps from your crop plan — per active cycle: block · crop · day N ·
+ *     an operational milestone (prepare bed / growing / harvest soon / ready).
+ *     Honest only — crop-specific agronomy (spacing, side-dress timing, pruning)
+ *     needs a seeded growth-plan KB (Inviolable #1), so it's NOT invented here.
+ *  2. Task board — the real task_queue: Pending/Completed, enterprise + when +
+ *     type filters, stat cards, table, Done/Skip, Manual task. Wires to the
+ *     existing tasks API.
  */
-import { useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { QueryClientProvider, QueryClient, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import { CheckCircle2, SkipForward, MapPin, Sprout, ShieldCheck, CloudSun, Cpu, Coins, Hand, ListChecks } from "lucide-react";
+import { CheckCircle2, SkipForward, Plus, Sprout, ListChecks } from "lucide-react";
+
+import { CurrentFarmProvider, useCurrentFarm } from "../../context/CurrentFarmContext";
+import FarmSelector from "../../components/farm/FarmSelector";
+import Modal from "../../components/ui/Modal.jsx";
 
 const C = { soil: "#5C4033", cream: "#F8F3E9", border: "#E6DED0", muted: "#8A7863", green: "#6AA84F", greenDk: "#3E7B1F", amber: "#BF9000", red: "#D4442E", paper: "#FCFAF5", greenTint: "#E9F2DD" };
 const FOCUS = "focus:outline-none focus-visible:ring-2 focus-visible:ring-[#6AA84F]";
 
 function authHeaders() { const t = localStorage.getItem("tfos_access_token"); return t ? { "Content-Type": "application/json", Authorization: `Bearer ${t}` } : { "Content-Type": "application/json" }; }
 function emitToast(m) { window.dispatchEvent(new CustomEvent("tfos:toast", { detail: { message: m } })); }
-
-const SRC = {
-  rotation:   { label: "Rotation",   Icon: Sprout,      c: C.greenDk },
-  automation: { label: "Automation", Icon: Cpu,         c: C.soil },
-  compliance: { label: "Compliance", Icon: ShieldCheck, c: C.amber },
-  weather:    { label: "Weather",    Icon: CloudSun,    c: "#2D6CDF" },
-  decision:   { label: "Decision",   Icon: Cpu,         c: C.soil },
-  cash:       { label: "Cash",       Icon: Coins,       c: C.greenDk },
-  market:     { label: "Market",     Icon: Coins,       c: C.amber },
-  tis:        { label: "TIS",        Icon: Cpu,         c: C.greenDk },
-  manual:     { label: "Manual",     Icon: Hand,        c: C.muted },
-};
-function band(rank) {
-  if (rank == null) return { label: "", c: C.muted };
-  if (rank < 100) return { label: "Critical", c: C.red };
-  if (rank < 300) return { label: "High", c: C.amber };
-  if (rank < 600) return { label: "Medium", c: C.soil };
-  if (rank < 900) return { label: "Low", c: C.muted };
-  return { label: "", c: C.muted };
-}
+async function getJSON(url) { const r = await fetch(url, { headers: authHeaders() }); if (!r.ok) throw new Error(String(r.status)); return r.json(); }
 const todayISO = () => new Date().toISOString().slice(0, 10);
-function fmtDue(d) {
-  if (!d) return null;
-  const over = d < todayISO();
-  try { return { text: new Date(d).toLocaleDateString(undefined, { day: "numeric", month: "short" }), over }; }
-  catch { return { text: d, over }; }
+const dayN = (planting) => { if (!planting) return null; const d = Math.floor((Date.now() - new Date(planting).getTime()) / 86400000); return d >= 0 ? d : 0; };
+
+// task_rank -> severity
+function sev(rank) {
+  if (rank == null) return { k: "NORMAL", c: C.muted, bg: C.cream };
+  if (rank < 100) return { k: "CRITICAL", c: "#fff", bg: C.red };
+  if (rank < 300) return { k: "HIGH", c: "#fff", bg: C.amber };
+  if (rank < 600) return { k: "MED", c: C.greenDk, bg: C.greenTint };
+  return { k: "NORMAL", c: C.muted, bg: C.cream };
+}
+// source_module -> coarse Type
+function typeOf(t) {
+  const s = t.source_module;
+  if (s === "compliance") return "Compliance";
+  if (s === "cash" || s === "market") return "Financial";
+  if (s === "weather") return "Production";
+  return "Production";
+}
+// when bucket from due_date
+function whenOf(due) {
+  if (!due) return "Upcoming";
+  const t = todayISO();
+  if (due < t) return "Overdue";
+  if (due === t) return "Today";
+  const tmr = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+  if (due === tmr) return "Tomorrow";
+  const wk = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
+  if (due <= wk) return "This week";
+  return "Upcoming";
+}
+function fmtDue(due) {
+  const w = whenOf(due);
+  if (!due) return { text: "—", w, over: false };
+  try { return { text: new Date(due).toLocaleDateString(undefined, { day: "numeric", month: "short" }), w, over: w === "Overdue" }; }
+  catch { return { text: due, w, over: w === "Overdue" }; }
 }
 
-async function fetchTasks(status) {
-  const r = await fetch(`/api/v1/tasks?status=${status}&limit=200`, { headers: authHeaders() });
-  if (!r.ok) throw new Error(String(r.status));
-  const b = await r.json();
-  return b?.data?.tasks ?? [];
+const WHENS = ["Overdue", "Today", "Tomorrow", "This week", "Upcoming"];
+const TYPES = ["Production", "Feeding", "Health", "Harvest", "Maintenance", "Compliance", "Financial"];
+
+// ── Section 1: crop-plan next steps (honest, from real cycles) ──────────
+function cropStep(c) {
+  const st = c.cycle_status, d = dayN(c.planting_date), eh = c.expected_harvest_date, t = todayISO();
+  if (st === "PLANNED") return { now: true, text: "Prepare the bed for planting", when: "to start" };
+  if (st === "HARVESTING" || st === "CLOSING") return { now: true, text: "Harvesting — log your picks", when: `day ${d ?? "—"}` };
+  if (eh && eh <= t) return { now: true, text: "Ready to harvest — log when you pick", when: `day ${d ?? "—"}` };
+  if (eh) {
+    const days = Math.ceil((new Date(eh) - Date.now()) / 86400000);
+    if (days <= 14) return { now: false, text: `Harvest in ~${days} day${days === 1 ? "" : "s"}`, when: `day ${d ?? "—"}` };
+  }
+  return { now: false, text: "Growing — log field activity (water, spray, scout)", when: `day ${d ?? "—"}` };
 }
 
-function TaskRow({ t, onChanged }) {
-  const [val, setVal] = useState("");
-  const [busy, setBusy] = useState(false);
-  const src = SRC[t.source_module] || SRC.manual;
-  const b = band(t.task_rank);
-  const due = fmtDue(t.due_date);
-  const hint = t.input_hint || "none";
-  const needsInput = hint === "numeric_kg" || hint === "numeric_fjd" || hint === "text_short" || hint === "photo";
-
-  function inputValueForHint() {
-    if (hint === "none") return null;
-    if (hint === "confirm_yn") return true;
-    if (hint === "checklist") return [];
-    return val; // numeric/text/photo → string
-  }
-  async function complete() {
-    if (needsInput && !val.trim()) { emitToast("Enter a value to complete"); return; }
-    setBusy(true);
-    try {
-      const r = await fetch(`/api/v1/tasks/${t.task_id}/complete`, { method: "POST", headers: authHeaders(), body: JSON.stringify({ input_value: inputValueForHint() }) });
-      if (!r.ok) throw new Error();
-      emitToast("Task completed"); onChanged?.();
-    } catch { emitToast("Couldn't complete the task"); } finally { setBusy(false); }
-  }
-  async function skip() {
-    setBusy(true);
-    try {
-      const r = await fetch(`/api/v1/tasks/${t.task_id}/skip`, { method: "POST", headers: authHeaders(), body: JSON.stringify({ reason: "will_do_later" }) });
-      if (!r.ok) throw new Error();
-      emitToast("Task skipped"); onChanged?.();
-    } catch { emitToast("Couldn't skip"); } finally { setBusy(false); }
-  }
-
+function CropPlan({ farmId, navigate }) {
+  const { data } = useQuery({ queryKey: ["tasks-cycles", farmId], queryFn: () => getJSON(`/api/v1/cycles?farm_id=${encodeURIComponent(farmId)}`), enabled: !!farmId, retry: 0 });
+  const cycles = (data?.data ?? data?.cycles ?? []).filter((c) => ["PLANNED", "ACTIVE", "HARVESTING", "CLOSING"].includes(c.cycle_status));
+  if (!cycles.length) return null;
   return (
-    <div className="rounded-2xl border p-3.5 flex items-start gap-3" style={{ borderColor: C.border, background: "white" }}>
-      <span className="w-9 h-9 rounded-full flex items-center justify-center shrink-0" style={{ background: C.cream }}>
-        <src.Icon size={17} style={{ color: src.c }} />
-      </span>
-      <div className="flex-1 min-w-0">
-        <div className="text-sm font-semibold" style={{ color: C.soil }}>{t.imperative}</div>
-        <div className="flex items-center gap-2 mt-1 flex-wrap">
-          <span className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold" style={{ background: C.cream, color: src.c }}>{src.label}</span>
-          {b.label && <span className="text-[10px] px-1.5 py-0.5 rounded-full" style={{ color: b.c, border: `1px solid ${C.border}` }}>{b.label}</span>}
-          {t.entity_type === "production_unit" && t.entity_id && <span className="text-[10px] flex items-center gap-0.5" style={{ color: C.muted }}><MapPin size={10} />{t.entity_id}</span>}
-          {due && <span className="text-[10px] px-1.5 py-0.5 rounded-full" style={{ color: due.over ? C.red : C.muted, border: `1px solid ${C.border}` }}>{due.over ? "overdue " : "due "}{due.text}</span>}
-        </div>
-        {needsInput && (
-          <input value={val} onChange={(e) => setVal(e.target.value)} placeholder={hint === "photo" ? "Photo URL" : hint === "text_short" ? "Note" : "Value"}
-            type={hint.startsWith("numeric") ? "number" : "text"}
-            className={`mt-2 w-full max-w-xs px-2.5 py-1.5 rounded-lg text-sm ${FOCUS}`} style={{ border: `1.5px solid ${C.border}`, background: C.paper, color: C.soil }} />
-        )}
+    <div className="rounded-2xl border bg-white" style={{ borderColor: C.border }}>
+      <div className="flex items-center justify-between gap-2 px-4 py-3 flex-wrap" style={{ borderBottom: `1px solid ${C.border}` }}>
+        <div className="flex items-center gap-2"><Sprout size={15} style={{ color: C.greenDk }} /><span className="text-sm font-bold uppercase tracking-wide" style={{ color: C.soil }}>Next steps from your crop plan</span></div>
+        <span className="text-[11px]" style={{ color: C.muted }}>Worked out from each crop's stage + days in the ground. Tap to log.</span>
       </div>
-      <div className="flex flex-col gap-1.5 shrink-0">
-        <button onClick={complete} disabled={busy} className={`text-xs px-3 py-1.5 rounded-lg text-white font-semibold flex items-center gap-1.5 hover:brightness-95 disabled:opacity-60 ${FOCUS}`} style={{ background: C.greenDk }}>
-          <CheckCircle2 size={14} />Done
-        </button>
-        <button onClick={skip} disabled={busy} className={`text-xs px-3 py-1.5 rounded-lg font-semibold flex items-center gap-1.5 hover:brightness-95 ${FOCUS}`} style={{ color: C.muted, border: `1px solid ${C.border}` }}>
-          <SkipForward size={14} />Skip
-        </button>
+      <div>
+        {cycles.map((c) => {
+          const s = cropStep(c);
+          const label = c.production_name || c.production_id || "Crop";
+          const block = c.pu_farmer_label || c.pu_name || c.pu_id || "";
+          return (
+            <div key={c.cycle_id} className="flex items-center gap-3 px-4 py-2.5" style={{ borderTop: `1px solid rgba(92,64,51,0.06)` }}>
+              <div className="flex-1 min-w-0">
+                <div className="text-sm" style={{ color: C.soil }}><span className="font-semibold">{block}</span>{block ? " · " : ""}{label}</div>
+                <div className="flex items-center gap-2 mt-0.5">
+                  <span className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold" style={s.now ? { background: C.greenTint, color: C.greenDk } : { color: C.muted, border: `1px solid ${C.border}` }}>{s.now ? "Do now" : s.when}</span>
+                  <span className="text-xs" style={{ color: s.now ? C.soil : C.muted }}>{s.text}</span>
+                </div>
+              </div>
+              <span className="text-[11px] shrink-0" style={{ color: C.muted }}>{s.when}</span>
+              <button onClick={() => navigate(s.text.startsWith("Ready") || s.text.startsWith("Harvest") ? "/farm/harvest/new" : "/farm/cycles")} className={`text-[11px] px-2.5 py-1 rounded-lg font-semibold shrink-0 ${FOCUS}`} style={{ color: C.greenDk, border: `1px solid ${C.border}` }}>+ Log</button>
+            </div>
+          );
+        })}
       </div>
+      <div className="px-4 py-2 text-[10px]" style={{ color: C.muted }}>Stage milestones from your cycle dates. Crop-specific steps (spacing, side-dress timing) arrive with the seeded growth-plan library.</div>
     </div>
   );
 }
 
-function TasksInner() {
+// ── Section 2: the task board ───────────────────────────────────────────
+function Board({ farmId, navigate }) {
   const qc = useQueryClient();
-  const navigate = useNavigate();
   const [tab, setTab] = useState("OPEN");
-  const { data: tasks = [], isLoading, isError } = useQuery({ queryKey: ["farm-tasks", tab], queryFn: () => fetchTasks(tab), retry: 0 });
-  const refresh = () => qc.invalidateQueries({ queryKey: ["farm-tasks"] });
+  const [whenF, setWhenF] = useState(null);
+  const [typeF, setTypeF] = useState(null);
+  const [ent, setEnt] = useState("all"); // all|crops|animals
+  const [busy, setBusy] = useState(null);
+  const [addOpen, setAddOpen] = useState(false);
+  const [mImp, setMImp] = useState(""); const [mDue, setMDue] = useState("");
+
+  const open = useQuery({ queryKey: ["tasks", "OPEN", farmId], queryFn: () => getJSON(`/api/v1/tasks?status=OPEN&limit=200`), retry: 0 });
+  const done = useQuery({ queryKey: ["tasks", "COMPLETED", farmId], queryFn: () => getJSON(`/api/v1/tasks?status=COMPLETED&limit=200`), retry: 0 });
+  const puStatus = useQuery({ queryKey: ["tasks-pus", farmId], queryFn: () => getJSON(`/api/v1/production-units/status?farm_id=${encodeURIComponent(farmId)}`), enabled: !!farmId, retry: 0 });
+  const puMap = useMemo(() => Object.fromEntries((puStatus.data?.data ?? []).map((s) => [s.pu_id, s])), [puStatus.data]);
+
+  const openTasks = open.data?.data?.tasks ?? [];
+  const doneTasks = done.data?.data?.tasks ?? [];
+  const refresh = () => { qc.invalidateQueries({ queryKey: ["tasks"] }); };
+
+  function enterprise(t) {
+    if (t.entity_type === "production_unit" && t.entity_id) return puMap[t.entity_id]?.crop || puMap[t.entity_id]?.last_crop || t.entity_id;
+    const s = (t.imperative || "").toLowerCase();
+    if (/hen|broiler|layer|chick|poultry|goat|cattle|cow|pig|flock/.test(s)) return "Animals";
+    return "—";
+  }
+  function entGroup(t) {
+    if (t.entity_type === "production_unit") return "crops";
+    const s = (t.imperative || "").toLowerCase();
+    if (/hen|broiler|layer|chick|poultry|goat|cattle|cow|pig|flock/.test(s)) return "animals";
+    return "other";
+  }
+
+  const base = tab === "OPEN" ? openTasks : doneTasks;
+  const rows = base.filter((t) => {
+    if (ent !== "all" && entGroup(t) !== ent) return false;
+    if (whenF && whenOf(t.due_date) !== whenF) return false;
+    if (typeF && typeOf(t) !== typeF) return false;
+    return true;
+  });
+
+  // stats from OPEN
+  const stats = useMemo(() => {
+    const today = openTasks.filter((t) => ["Overdue", "Today"].includes(whenOf(t.due_date))).length;
+    const week = openTasks.filter((t) => whenOf(t.due_date) !== "Upcoming").length;
+    const urgent = openTasks.filter((t) => (t.task_rank ?? 1000) < 300).length;
+    return { today, week, urgent, done: doneTasks.length };
+  }, [openTasks, doneTasks]);
+
+  async function act(t, kind) {
+    setBusy(t.task_id);
+    try {
+      const url = `/api/v1/tasks/${t.task_id}/${kind === "done" ? "complete" : "skip"}`;
+      const body = kind === "done" ? { input_value: (t.input_hint && t.input_hint !== "none") ? "" : null } : { reason: "will_do_later" };
+      const r = await fetch(url, { method: "POST", headers: authHeaders(), body: JSON.stringify(body) });
+      if (!r.ok) throw new Error();
+      emitToast(kind === "done" ? "Done" : "Skipped"); refresh();
+    } catch { emitToast(kind === "done" ? "Couldn't complete (needs input?)" : "Couldn't skip"); } finally { setBusy(null); }
+  }
+  async function addManual() {
+    if (!mImp.trim()) { emitToast("Enter a task"); return; }
+    try {
+      const r = await fetch(`/api/v1/tasks/manual`, { method: "POST", headers: authHeaders(), body: JSON.stringify({ farm_id: farmId, imperative: mImp.trim(), due_date: mDue || null }) });
+      if (!r.ok) throw new Error();
+      emitToast("Task added"); setAddOpen(false); setMImp(""); setMDue(""); refresh();
+    } catch { emitToast("Couldn't add task"); }
+  }
+
+  const Pill = ({ active, onClick, children }) => (
+    <button onClick={onClick} className="text-xs px-2.5 py-1 rounded-full font-semibold" style={active ? { background: C.greenDk, color: "white" } : { color: C.soil, border: `1px solid ${C.border}` }}>{children}</button>
+  );
 
   return (
-    <div className="space-y-4 max-w-3xl">
+    <div className="space-y-3">
+      {/* tabs + enterprise + when */}
+      <div className="flex items-center gap-2 flex-wrap">
+        {[["OPEN", `Pending ${openTasks.length}`], ["COMPLETED", `Completed ${doneTasks.length}`]].map(([k, l]) => (
+          <button key={k} onClick={() => setTab(k)} className="text-sm font-semibold pb-1" style={{ color: tab === k ? C.greenDk : C.muted, borderBottom: tab === k ? `2px solid ${C.green}` : "2px solid transparent" }}>{l}</button>
+        ))}
+        <span className="mx-1" />
+        <Pill active={ent === "all"} onClick={() => setEnt("all")}>All</Pill>
+        <Pill active={ent === "crops"} onClick={() => setEnt("crops")}>Crops</Pill>
+        <Pill active={ent === "animals"} onClick={() => setEnt("animals")}>Animals</Pill>
+        <span className="flex-1" />
+        {WHENS.map((w) => <Pill key={w} active={whenF === w} onClick={() => setWhenF(whenF === w ? null : w)}>{w}</Pill>)}
+      </div>
+      {/* type */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="text-[11px] font-bold uppercase" style={{ color: C.muted }}>Type</span>
+        <Pill active={!typeF} onClick={() => setTypeF(null)}>All</Pill>
+        {TYPES.map((ty) => <Pill key={ty} active={typeF === ty} onClick={() => setTypeF(typeF === ty ? null : ty)}>{ty}</Pill>)}
+      </div>
+      {/* stat cards */}
+      <div className="grid gap-2 grid-cols-2 sm:grid-cols-4">
+        {[["To do today", stats.today, "due in the next day"], ["This week", stats.week, "next 7 days"], ["Urgent", stats.urgent, "do these first"], ["Done", stats.done, "this session"]].map(([l, v, s]) => (
+          <div key={l} className="rounded-xl border p-3" style={{ borderColor: C.border, background: "white" }}>
+            <div className="text-[10px] uppercase" style={{ color: C.muted }}>{l}</div>
+            <div className="text-xl font-bold" style={{ color: C.greenDk }}>{v}</div>
+            <div className="text-[10px]" style={{ color: C.muted }}>{s}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* table */}
+      <div className="rounded-2xl border bg-white overflow-hidden" style={{ borderColor: C.border }}>
+        <div className="grid items-center px-3 py-2 text-[10px] font-bold uppercase" style={{ color: C.muted, gridTemplateColumns: "1fr 90px 90px 80px 70px 120px", borderBottom: `1px solid ${C.border}` }}>
+          <span>Task</span><span>Enterprise</span><span>When</span><span>Type</span><span>Sev</span><span className="text-right">Action</span>
+        </div>
+        {rows.length === 0 ? (
+          <div className="px-4 py-10 text-center">
+            <ListChecks size={24} style={{ color: C.green, margin: "0 auto" }} />
+            <div className="text-sm font-semibold mt-2" style={{ color: C.soil }}>{tab === "OPEN" ? "Nothing matches — you're on top of it" : "No completed tasks"}</div>
+          </div>
+        ) : rows.map((t) => {
+          const sv = sev(t.task_rank); const du = fmtDue(t.due_date);
+          return (
+            <div key={t.task_id} className="grid items-center px-3 py-2.5 text-sm" style={{ gridTemplateColumns: "1fr 90px 90px 80px 70px 120px", borderTop: `1px solid rgba(92,64,51,0.06)` }}>
+              <span className="min-w-0 truncate pr-2" style={{ color: C.soil }}>{t.imperative}</span>
+              <span className="text-[11px] truncate pr-1" style={{ color: C.muted }}>{enterprise(t)}</span>
+              <span className="text-[11px]" style={{ color: du.over ? C.red : C.muted }}>{du.w}</span>
+              <span className="text-[11px]" style={{ color: C.muted }}>{typeOf(t)}</span>
+              <span><span className="text-[9px] font-bold px-1.5 py-0.5 rounded" style={{ background: sv.bg, color: sv.c }}>{sv.k}</span></span>
+              <span className="flex items-center justify-end gap-1.5">
+                {tab === "OPEN" ? (
+                  <>
+                    <button onClick={() => act(t, "done")} disabled={busy === t.task_id} className={`text-[11px] px-2.5 py-1 rounded-lg text-white font-semibold flex items-center gap-1 ${FOCUS}`} style={{ background: C.greenDk }}><CheckCircle2 size={12} />Done</button>
+                    <button onClick={() => act(t, "skip")} disabled={busy === t.task_id} className={`text-[11px] px-2 py-1 rounded-lg font-semibold ${FOCUS}`} style={{ color: C.muted, border: `1px solid ${C.border}` }}>Skip</button>
+                  </>
+                ) : <span className="text-[11px]" style={{ color: C.green }}>✓ done</span>}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+
+      <Modal isOpen={addOpen} onClose={() => setAddOpen(false)} title="Manual task" size="sm"
+        footer={<div className="flex justify-end gap-2">
+          <button onClick={() => setAddOpen(false)} className="px-4 py-2 rounded-lg" style={{ color: C.muted }}>Cancel</button>
+          <button onClick={addManual} className="px-4 py-2 rounded-lg text-white" style={{ background: C.greenDk }}>Add task</button>
+        </div>}>
+        <div className="space-y-3">
+          <label className="block text-sm" style={{ color: C.soil }}>Task
+            <input autoFocus value={mImp} onChange={(e) => setMImp(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") addManual(); }} placeholder="e.g. Fix the east fence" className="mt-1 w-full px-3 py-2 rounded-lg border" style={{ borderColor: C.border }} /></label>
+          <label className="block text-sm" style={{ color: C.soil }}>Due date (optional)
+            <input type="date" value={mDue} onChange={(e) => setMDue(e.target.value)} className="mt-1 w-full px-3 py-2 rounded-lg border" style={{ borderColor: C.border }} /></label>
+        </div>
+      </Modal>
+
+      {/* expose Manual via a floating ref through window event from header button */}
+      <ManualBridge onOpen={() => setAddOpen(true)} />
+    </div>
+  );
+}
+
+// lets the page header's "Manual task" button open the board's modal
+function ManualBridge({ onOpen }) {
+  useEffect(() => {
+    const h = () => onOpen();
+    window.addEventListener("tfos:manual-task", h);
+    return () => window.removeEventListener("tfos:manual-task", h);
+  }, [onOpen]);
+  return null;
+}
+
+function TasksInner() {
+  const navigate = useNavigate();
+  const { farmId } = useCurrentFarm();
+  return (
+    <div className="space-y-4">
       <div className="flex items-start justify-between gap-2 flex-wrap">
         <div>
           <h1 className="text-2xl font-bold" style={{ color: C.soil }}>Tasks</h1>
-          <div className="text-xs mt-0.5" style={{ color: C.muted }}>What the farm needs now · rotation, transplant, compliance, automation</div>
+          <div className="text-xs mt-0.5" style={{ color: C.muted }}>Ranked for what to do next · across your active enterprises</div>
         </div>
-        <div className="flex items-center rounded-lg overflow-hidden" style={{ border: `1px solid ${C.border}` }}>
-          {[["OPEN", "Open"], ["COMPLETED", "Done"]].map(([k, l]) => (
-            <button key={k} onClick={() => setTab(k)} className="text-xs px-3 py-1.5 font-semibold" style={tab === k ? { background: C.greenDk, color: "white" } : { color: C.soil }}>{l}</button>
-          ))}
+        <div className="flex items-center gap-2">
+          <FarmSelector />
+          <button onClick={() => window.dispatchEvent(new CustomEvent("tfos:manual-task"))} className={`text-sm px-3 py-2 rounded-lg text-white flex items-center gap-1.5 ${FOCUS}`} style={{ background: C.greenDk }}><Plus size={14} />Manual task</button>
         </div>
       </div>
-
-      {isLoading ? (
-        <div className="rounded-2xl border p-6 text-sm" style={{ borderColor: C.border, background: "white", color: C.muted }}>Loading tasks…</div>
-      ) : isError ? (
-        <div className="rounded-2xl border p-6 text-sm" style={{ borderColor: C.border, background: "white", color: C.muted }}>Couldn't load tasks. Try again shortly.</div>
-      ) : tasks.length === 0 ? (
-        <div className="rounded-2xl border p-8 text-center" style={{ borderColor: C.border, background: "white" }}>
-          <ListChecks size={26} style={{ color: C.green, margin: "0 auto" }} />
-          <div className="text-sm font-semibold mt-2" style={{ color: C.soil }}>{tab === "OPEN" ? "Nothing due — you're on top of it" : "No completed tasks yet"}</div>
-          <div className="text-xs mt-1" style={{ color: C.muted }}>{tab === "OPEN" ? "Rotation, transplant-prep and compliance tasks appear here as the farm needs them." : "Completed tasks will show here."}</div>
-          {tab === "OPEN" && <button onClick={() => navigate("/farm/locations")} className={`mt-3 text-xs px-3 py-1.5 rounded-lg ${FOCUS}`} style={{ color: C.greenDk, border: `1px solid ${C.border}` }}>Open Locations →</button>}
-        </div>
-      ) : (
-        <div className="space-y-2">
-          {tasks.map((t) => <TaskRow key={t.task_id} t={t} onChanged={refresh} />)}
-        </div>
-      )}
+      <CropPlan farmId={farmId} navigate={navigate} />
+      <Board farmId={farmId} navigate={navigate} />
     </div>
   );
 }
@@ -161,7 +303,9 @@ const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 0, ref
 export default function FarmTasks() {
   return (
     <QueryClientProvider client={queryClient}>
-      <TasksInner />
+      <CurrentFarmProvider>
+        <TasksInner />
+      </CurrentFarmProvider>
     </QueryClientProvider>
   );
 }

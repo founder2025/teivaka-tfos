@@ -494,3 +494,48 @@ async def task_help(
         escalation=None,  # Phase 4.3+: populate from task's entity owner / farm manager
     )
     return _envelope_ok(help_out.model_dump(mode="json"))
+
+
+# --- Manual task creation (Tasks page "Manual task" button) -----------
+from uuid import uuid4 as _uuid4
+from pydantic import BaseModel as _BaseModel
+
+
+class ManualTaskIn(_BaseModel):
+    farm_id: str
+    imperative: str
+    due_date: date | None = None
+    rank_band: RankBand | None = None  # critical/high/medium/low/optional/advisory
+
+
+_BAND_RANK = {"critical": 50, "high": 200, "medium": 450, "low": 750, "optional": 950, "advisory": 1000}
+
+
+@router.post("/manual", response_model=None)
+async def create_manual_task(
+    body: ManualTaskIn,
+    user=Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Create a farmer-entered task (source_module='manual'). Tenant + farm scoped."""
+    if not body.imperative.strip():
+        raise HTTPException(422, {"code": "INVALID_INPUT", "message": "imperative required"})
+    await set_tenant_context(db, user["tenant_id"])
+    rank = _BAND_RANK.get(body.rank_band.value if body.rank_band else "medium", 450)
+    tid = str(_uuid4())
+    title = body.imperative.strip()[:120]
+    await db.execute(
+        text(
+            """
+            INSERT INTO tenant.task_queue
+                (task_id, tenant_id, farm_id, task_type, title, description,
+                 priority, status, imperative, source_module, task_rank, due_date)
+            VALUES
+                (:tid, :tenant, :farm, 'OTHER', :title, :title,
+                 'MEDIUM', 'OPEN', :title, 'manual', :rank, :due)
+            """
+        ),
+        {"tid": tid, "tenant": str(user["tenant_id"]), "farm": body.farm_id,
+         "title": title, "rank": rank, "due": body.due_date},
+    )
+    return _envelope_ok({"task_id": tid, "imperative": title, "status": "OPEN"})

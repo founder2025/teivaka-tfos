@@ -210,7 +210,7 @@ async def transplant_task(batch_id: str, body: TransplantTask, user: dict = Depe
         due = b["expected_transplant_date"]
         if isinstance(due, datetime):
             due = due.date()
-        task_id = f"TSK-{b['farm_id']}-{uuid.uuid4().hex[:8].upper()}"
+        task_id = str(uuid.uuid4())  # UUID so the tasks API (task_id: UUID) can complete it
         await db.execute(
             text("""INSERT INTO tenant.task_queue
                         (task_id, tenant_id, farm_id, task_type, title, description,
