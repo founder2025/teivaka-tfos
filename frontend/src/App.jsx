@@ -60,6 +60,7 @@ const Enterprises   = lazy(() => import("./pages/farmer/Enterprises"));
 const FarmHistory   = lazy(() => import("./pages/farmer/FarmHistory"));
 const WeatherPage   = lazy(() => import("./pages/farmer/WeatherPage"));
 const LocationsPage = lazy(() => import("./pages/farmer/LocationsPage"));
+const FarmTasks     = lazy(() => import("./pages/farmer/FarmTasks"));
 
 // ── Phase 4b Week 1 shell + pages (5-tab FarmerShell) ─────────────────────────
 const FarmerShell   = lazy(() => import("./layouts/FarmerShell"));
@@ -255,7 +256,7 @@ export default function App() {
             <Route path="/classroom/progress"       element={<ComingSoon title="Progress"       phase="4.3" />} />
             <Route path="/classroom/certifications" element={<ComingSoon title="Certifications" phase="6"   />} />
 
-            <Route path="/farm/tasks"        element={<ComingSoon title="Tasks"        phase="4.2" />} />
+            <Route path="/farm/tasks"        element={<FarmTasks />} />
             <Route path="/farm/cycles"       element={<CycleList />} />
             <Route path="/farm/cycles/new"   element={<CycleNew />} />
             <Route path="/farm/harvests"     element={<HarvestList />} />

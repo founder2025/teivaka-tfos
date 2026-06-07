@@ -370,12 +370,14 @@ async def create_rotation_task(pu_id: str, user: dict = Depends(get_current_user
         await db.execute(
             text("""INSERT INTO tenant.task_queue
                         (task_id, tenant_id, farm_id, task_type, title, description,
-                         priority, status, pu_id)
-                    VALUES (:task, :tid, :farm, 'FIELD_TASK', :title, :desc, 'MEDIUM', 'OPEN', :pid)"""),
+                         priority, status, pu_id,
+                         imperative, source_module, source_reference, entity_type, entity_id)
+                    VALUES (:task, :tid, :farm, 'FIELD_TASK', :title, :desc, 'MEDIUM', 'OPEN', :pid,
+                            :title, 'rotation', :sref, 'production_unit', :pid)"""),
             {"task": task_id, "tid": tid, "farm": pu["farm_id"],
              "title": f"Plan rotation — {pu['pu_name']}",
              "desc": "Block is resting/idle. Pick the next crop (legumes preferred after heavy feeders) and prepare the bed. See block advice in Locations.",
-             "pid": pu_id},
+             "sref": f"rotation:{pu_id}", "pid": pu_id},
         )
         await _record_activity(db, tid, pu["farm_id"], pu_id, "ROTATION_TASK",
                                f"Rotation task created for {pu['pu_name']} (block resting/idle).",

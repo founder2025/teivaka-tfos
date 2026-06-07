@@ -214,12 +214,14 @@ async def transplant_task(batch_id: str, body: TransplantTask, user: dict = Depe
         await db.execute(
             text("""INSERT INTO tenant.task_queue
                         (task_id, tenant_id, farm_id, task_type, title, description,
-                         priority, status, pu_id, due_date)
-                    VALUES (:task, :tid, :farm, 'FIELD_TASK', :title, :desc, 'HIGH', 'OPEN', :pid, :due)"""),
+                         priority, status, pu_id, due_date,
+                         imperative, source_module, source_reference, entity_type, entity_id)
+                    VALUES (:task, :tid, :farm, 'FIELD_TASK', :title, :desc, 'HIGH', 'OPEN', :pid, :due,
+                            :title, 'manual', :sref, 'production_unit', :pid)"""),
             {"task": task_id, "tid": tid, "farm": b["farm_id"],
              "title": f"Prepare {pu['pu_name']} for transplanting {b['production_name']}",
              "desc": f"Seedlings from nursery batch {batch_id} are headed to this block. Clear/prep the bed and transplant when ready.",
-             "pid": body.pu_id, "due": due},
+             "sref": f"transplant:{batch_id}:{body.pu_id}", "pid": body.pu_id, "due": due},
         )
         try:
             await db.execute(
