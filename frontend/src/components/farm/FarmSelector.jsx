@@ -66,6 +66,13 @@ export default function FarmSelector() {
     return () => document.removeEventListener("mousedown", onDoc);
   }, [open]);
 
+  // Open the add-farm modal when triggered from elsewhere (e.g. the map "+ Add" menu).
+  useEffect(() => {
+    const onAdd = () => setAddOpen(true);
+    window.addEventListener("tfos:add-farm", onAdd);
+    return () => window.removeEventListener("tfos:add-farm", onAdd);
+  }, []);
+
   const current = farms.find((f) => f.farm_id === farmId);
 
   async function createFarm() {

@@ -17,7 +17,7 @@ import "@geoman-io/leaflet-geoman-free/dist/leaflet-geoman.css";
 import iconRetina from "leaflet/dist/images/marker-icon-2x.png";
 import icon from "leaflet/dist/images/marker-icon.png";
 import shadow from "leaflet/dist/images/marker-shadow.png";
-import { Save, LocateFixed, Layers, Loader2, Check, AlertTriangle, Maximize2, Minimize2, MapPin, Footprints, Undo2, Flag, X, Ruler, Calculator } from "lucide-react";
+import { Save, LocateFixed, Layers, Loader2, Check, AlertTriangle, Maximize2, Minimize2, MapPin, Footprints, Undo2, Flag, X, Ruler, Calculator, Plus, Sprout } from "lucide-react";
 import CapacityCalc from "../../components/farm/CapacityCalc";
 
 L.Icon.Default.mergeOptions({ iconRetinaUrl: iconRetina, iconUrl: icon, shadowUrl: shadow });
@@ -124,6 +124,7 @@ export default function FarmMap({ farmId, onCountsChange, openRequest, onSaved }
   const [distFt, setDistFt] = useState(false);
   const [calcOpen, setCalcOpen] = useState(false);
   const [hasMapped, setHasMapped] = useState(null); // null=loading, false=no geometry yet
+  const [addMenu, setAddMenu] = useState(false);    // the in-map "+ Add" menu
 
   useEffect(() => { drawKindRef.current = drawKind; }, [drawKind]);
 
@@ -368,6 +369,8 @@ export default function FarmMap({ farmId, onCountsChange, openRequest, onSaved }
       window.dispatchEvent(new CustomEvent("tfos:toast", { detail: { message: "This device has no GPS" } }));
       return;
     }
+    setAddMenu(false);
+    mapRef.current?.pm.disableDraw?.();   // switching from on-screen draw to GPS walk
     setWalking(true); setWalkPts([]); redrawWalk([]);
     watchIdRef.current = navigator.geolocation.watchPosition(
       (pos) => {
@@ -478,6 +481,24 @@ export default function FarmMap({ farmId, onCountsChange, openRequest, onSaved }
     }
   }
 
+  // In-map "+ Add" menu: start the right draw tool (or open the add-farm modal).
+  function addDraw(kind) {
+    setAddMenu(false);
+    setDrawKind(kind); drawKindRef.current = kind;
+    const m = mapRef.current; if (!m) return;
+    m.pm.setPathOptions(styleFor(kind));
+    try { m.pm.enableDraw("Polygon"); } catch { /* geoman timing */ }
+  }
+  function addFacility() {
+    setAddMenu(false);
+    pendingFacilityTypeRef.current = null;
+    try { mapRef.current?.pm.enableDraw("Marker"); } catch { /* geoman timing */ }
+  }
+  function addFarm() {
+    setAddMenu(false);
+    window.dispatchEvent(new CustomEvent("tfos:add-farm")); // FarmSelector opens its modal
+  }
+
   function locateMe() {
     if (!navigator.geolocation) return;
     navigator.geolocation.getCurrentPosition(
@@ -556,16 +577,35 @@ export default function FarmMap({ farmId, onCountsChange, openRequest, onSaved }
       {/* FULLSCREEN editor chrome */}
       {fullscreen && (
         <>
-          <div className="absolute z-[1000] top-3 left-3 flex items-center gap-1.5 rounded-xl p-1.5 shadow-lg" style={{ background: "rgba(255,255,255,0.97)", border: `1px solid ${C.border}` }}>
-            <Layers size={18} style={{ color: C.muted, margin: "0 3px" }} />
-            {POLY_KINDS.map((k) => (
-              <button key={k} onClick={() => { setDrawKind(k); mapRef.current?.pm.setPathOptions(styleFor(k)); }}
-                className="text-sm px-3.5 py-2 rounded-lg font-semibold transition"
-                style={drawKind === k ? { background: (KIND_STYLE[k].color === "#F8F3E9" ? C.soil : KIND_STYLE[k].color), color: "white" } : { color: C.soil }}>
-                {k === "BOUNDARY" ? "Boundary" : k === "ZONE" ? "Zone" : "Block"}
-              </button>
-            ))}
-            <span className="text-xs px-1.5 hidden sm:inline" style={{ color: C.muted }}>then draw ▷</span>
+          <div className="absolute z-[1100] top-3 left-3">
+            <button onClick={() => setAddMenu((v) => !v)}
+              className="text-sm px-3.5 py-2 rounded-xl flex items-center gap-1.5 shadow-lg font-bold text-white hover:brightness-95"
+              style={{ background: C.greenDk }}>
+              <Plus size={16} />Add
+            </button>
+            {addMenu && (
+              <>
+                <div className="fixed inset-0 z-[1090]" onClick={() => setAddMenu(false)} />
+                <div className="absolute left-0 mt-1.5 z-[1100] rounded-xl shadow-xl overflow-hidden" style={{ width: 200, background: "white", border: `1px solid ${C.border}` }}>
+                  {[
+                    ["BOUNDARY", "Farm boundary", KIND_STYLE.BOUNDARY.color === "#F8F3E9" ? C.soil : C.soil],
+                    ["ZONE", "Zone", C.green],
+                    ["BLOCK", "Block", C.amber],
+                  ].map(([k, label, dot]) => (
+                    <button key={k} onClick={() => addDraw(k)} className="w-full text-left flex items-center gap-2.5 px-3 py-2.5 text-sm font-semibold hover:bg-[#FCFAF5]" style={{ color: C.soil }}>
+                      <span className="w-2.5 h-2.5 rounded-full" style={{ background: dot }} />{label}
+                    </button>
+                  ))}
+                  <button onClick={addFacility} className="w-full text-left flex items-center gap-2.5 px-3 py-2.5 text-sm font-semibold hover:bg-[#FCFAF5]" style={{ color: C.soil }}>
+                    <MapPin size={14} style={{ color: C.soil }} />Facility pin
+                  </button>
+                  <div style={{ borderTop: `1px solid ${C.border}` }} />
+                  <button onClick={addFarm} className="w-full text-left flex items-center gap-2.5 px-3 py-2.5 text-sm font-semibold hover:bg-[#FCFAF5]" style={{ color: C.greenDk }}>
+                    <Sprout size={14} />New farm…
+                  </button>
+                </div>
+              </>
+            )}
           </div>
 
           <button onClick={() => setFullscreen(false)}
