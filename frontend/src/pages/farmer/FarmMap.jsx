@@ -51,6 +51,16 @@ function layerAreaHa(layer) {
 }
 function styleFor(kind) { return KIND_STYLE[kind] || KIND_STYLE.ZONE; }
 
+const PM_CONTROLS = {
+  position: "topright", drawCircle: false, drawCircleMarker: false,
+  drawPolyline: false, drawRectangle: true, drawText: false, rotateMode: false,
+};
+// preview = static look; fullscreen = full interaction + draw tools
+function setInteractive(map, on) {
+  ["dragging", "scrollWheelZoom", "doubleClickZoom", "boxZoom", "keyboard", "touchZoom"]
+    .forEach((f) => { if (map[f]) (on ? map[f].enable() : map[f].disable()); });
+}
+
 export default function FarmMap({ farmId, onCountsChange }) {
   const elRef = useRef(null);
   const mapRef = useRef(null);
@@ -70,10 +80,20 @@ export default function FarmMap({ farmId, onCountsChange }) {
 
   useEffect(() => { drawKindRef.current = drawKind; }, [drawKind]);
 
-  // Leaflet must recompute size when the container resizes (fullscreen toggle).
+  // Preview is read-only; fullscreen turns on draw tools + map interaction.
   useEffect(() => {
-    if (!mapRef.current) return;
-    const t = setTimeout(() => mapRef.current.invalidateSize(), 80);
+    const map = mapRef.current; if (!map) return;
+    if (fullscreen) {
+      if (!map.pm.controlsVisible?.()) map.pm.addControls(PM_CONTROLS);
+      map.pm.setPathOptions(styleFor(drawKindRef.current));
+      setInteractive(map, true);
+    } else {
+      try { map.pm.removeControls(); } catch { /* not added yet */ }
+      map.pm.disableDraw?.();
+      map.pm.disableGlobalEditMode?.();
+      setInteractive(map, false);
+    }
+    const t = setTimeout(() => map.invalidateSize(), 80);
     return () => clearTimeout(t);
   }, [fullscreen]);
 
@@ -130,12 +150,10 @@ export default function FarmMap({ farmId, onCountsChange }) {
     const fg = L.featureGroup().addTo(map);
     fgRef.current = fg;
 
-    map.pm.addControls({
-      position: "topright", drawCircle: false, drawCircleMarker: false,
-      drawPolyline: false, drawRectangle: true, drawText: false, rotateMode: false,
-    });
+    // Draw tools added only in fullscreen (see fullscreen effect); preview is read-only.
     map.pm.setGlobalOptions({ layerGroup: fg });
     map.pm.setPathOptions(styleFor("ZONE"));
+    setInteractive(map, false);
 
     map.on("pm:create", (e) => {
       const layer = e.layer;
@@ -256,37 +274,51 @@ export default function FarmMap({ farmId, onCountsChange }) {
       <style>{THEME_CSS}</style>
       <div ref={elRef} style={{ position: "absolute", inset: 0, background: C.cream }} />
 
-      {/* draw-kind toolbar (top-left) */}
-      <div className="absolute z-[1000] top-2 left-2 flex items-center gap-1 rounded-lg p-1 shadow" style={{ background: "rgba(255,255,255,0.95)", border: `1px solid ${C.border}` }}>
-        <Layers size={13} style={{ color: C.muted, margin: "0 2px" }} />
-        {POLY_KINDS.map((k) => (
-          <button key={k} onClick={() => { setDrawKind(k); mapRef.current?.pm.setPathOptions(styleFor(k)); }}
-            className="text-[11px] px-2 py-1 rounded font-semibold transition"
-            style={drawKind === k ? { background: (KIND_STYLE[k].color === "#F8F3E9" ? C.soil : KIND_STYLE[k].color), color: "white" } : { color: C.soil }}>
-            {k === "BOUNDARY" ? "Boundary" : k === "ZONE" ? "Zone" : "Block"}
+      {/* PREVIEW: read-only; click anywhere to open the full editor */}
+      {!fullscreen && (
+        <button onClick={() => setFullscreen(true)} aria-label="Open full-screen map editor"
+          className="absolute inset-0 z-[1000] flex items-end justify-center pb-10 group"
+          style={{ background: "transparent" }}>
+          <span className="text-xs px-3.5 py-2 rounded-full shadow flex items-center gap-1.5 font-semibold group-hover:brightness-95"
+            style={{ background: "rgba(255,255,255,0.96)", color: C.soil, border: `1px solid ${C.border}` }}>
+            <Maximize2 size={14} style={{ color: C.greenDk }} />Tap to open map & draw
+          </span>
+        </button>
+      )}
+
+      {/* FULLSCREEN editor chrome */}
+      {fullscreen && (
+        <>
+          <div className="absolute z-[1000] top-2 left-2 flex items-center gap-1 rounded-lg p-1 shadow" style={{ background: "rgba(255,255,255,0.95)", border: `1px solid ${C.border}` }}>
+            <Layers size={13} style={{ color: C.muted, margin: "0 2px" }} />
+            {POLY_KINDS.map((k) => (
+              <button key={k} onClick={() => { setDrawKind(k); mapRef.current?.pm.setPathOptions(styleFor(k)); }}
+                className="text-[11px] px-2 py-1 rounded font-semibold transition"
+                style={drawKind === k ? { background: (KIND_STYLE[k].color === "#F8F3E9" ? C.soil : KIND_STYLE[k].color), color: "white" } : { color: C.soil }}>
+                {k === "BOUNDARY" ? "Boundary" : k === "ZONE" ? "Zone" : "Block"}
+              </button>
+            ))}
+            <span className="text-[10px] px-1 hidden sm:inline" style={{ color: C.muted }}>then draw ▷</span>
+          </div>
+
+          <button onClick={() => setFullscreen(false)}
+            className="absolute z-[1000] top-14 left-2 text-[11px] px-2.5 py-1.5 rounded-lg flex items-center gap-1.5 shadow font-semibold hover:brightness-95"
+            style={{ background: "rgba(255,255,255,0.95)", color: C.soil, border: `1px solid ${C.border}` }}>
+            <Minimize2 size={13} />Close map
           </button>
-        ))}
-        <span className="text-[10px] px-1 hidden sm:inline" style={{ color: C.muted }}>then draw ▷</span>
-      </div>
 
-      {/* expand / fullscreen (top-left, under the kind toolbar) */}
-      <button onClick={() => setFullscreen((v) => !v)}
-        className="absolute z-[1000] top-14 left-2 text-[11px] px-2.5 py-1.5 rounded-lg flex items-center gap-1.5 shadow font-semibold hover:brightness-95"
-        style={{ background: "rgba(255,255,255,0.95)", color: C.soil, border: `1px solid ${C.border}` }}>
-        {fullscreen ? <><Minimize2 size={13} />Close map</> : <><Maximize2 size={13} />Full screen</>}
-      </button>
-
-      {/* actions (bottom-left) */}
-      <div className="absolute z-[1000] bottom-2 left-2 flex items-center gap-1.5">
-        <button onClick={locateMe} className="text-xs px-2.5 py-1.5 rounded-lg flex items-center gap-1.5 shadow hover:brightness-95" style={{ background: "white", color: C.soil, border: `1px solid ${C.border}` }}>
-          <LocateFixed size={13} />GPS
-        </button>
-        <button onClick={save} disabled={saving === "saving"} className="text-xs px-3 py-1.5 rounded-lg flex items-center gap-1.5 shadow text-white hover:brightness-95 disabled:opacity-70"
-          style={{ background: saving === "saved" ? C.green : saving === "error" ? C.red : C.greenDk }}>
-          {saving === "saving" ? <Loader2 size={13} className="animate-spin" /> : saving === "saved" ? <Check size={13} /> : saving === "error" ? <AlertTriangle size={13} /> : <Save size={13} />}
-          {saving === "saving" ? "Saving…" : saving === "saved" ? "Saved" : saving === "error" ? "Failed" : dirty ? "Save map*" : "Save map"}
-        </button>
-      </div>
+          <div className="absolute z-[1000] bottom-2 left-2 flex items-center gap-1.5">
+            <button onClick={locateMe} className="text-xs px-2.5 py-1.5 rounded-lg flex items-center gap-1.5 shadow hover:brightness-95" style={{ background: "white", color: C.soil, border: `1px solid ${C.border}` }}>
+              <LocateFixed size={13} />GPS
+            </button>
+            <button onClick={save} disabled={saving === "saving"} className="text-xs px-3 py-1.5 rounded-lg flex items-center gap-1.5 shadow text-white hover:brightness-95 disabled:opacity-70"
+              style={{ background: saving === "saved" ? C.green : saving === "error" ? C.red : C.greenDk }}>
+              {saving === "saving" ? <Loader2 size={13} className="animate-spin" /> : saving === "saved" ? <Check size={13} /> : saving === "error" ? <AlertTriangle size={13} /> : <Save size={13} />}
+              {saving === "saving" ? "Saving…" : saving === "saved" ? "Saved" : saving === "error" ? "Failed" : dirty ? "Save map*" : "Save map"}
+            </button>
+          </div>
+        </>
+      )}
 
       {/* area readout (bottom-right) */}
       <div className="absolute z-[1000] bottom-2 right-2 text-[11px] px-2.5 py-1.5 rounded-lg shadow" style={{ background: "rgba(255,255,255,0.95)", color: C.soil, border: `1px solid ${C.border}` }}>
