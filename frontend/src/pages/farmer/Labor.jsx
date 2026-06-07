@@ -22,6 +22,7 @@ import { CurrentFarmProvider, useCurrentFarm } from "../../context/CurrentFarmCo
 import FarmSelector from "../../components/farm/FarmSelector";
 import ModeDropdown from "../../components/farm/ModeDropdown";
 import MetricCard from "../../components/farm/MetricCard";
+import AttendanceCard from "../../components/farm/AttendanceCard";
 import Modal from "../../components/ui/Modal.jsx";
 import ThemedSelect from "../../components/inputs/ThemedSelect.jsx";
 
@@ -271,6 +272,10 @@ function LaborInner() {
         {/* Today — who's working */}
         {tab === "today" && (
           <div>
+            {/* Clock in/out — geo-locked to the farm boundary (moved here from Locations) */}
+            <div className="mb-4 rounded-xl p-3" style={{ background: C.cream }}>
+              <AttendanceCard farmId={farmId} />
+            </div>
             {/* On-site now — live from geo-locked clock in/out */}
             <div className="mb-4">
               <div className="flex items-center gap-2 mb-2">
