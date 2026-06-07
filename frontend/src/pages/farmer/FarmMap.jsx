@@ -122,6 +122,7 @@ export default function FarmMap({ farmId, onCountsChange, openRequest, onSaved }
   const [measureDist, setMeasureDist] = useState(0);
   const [distFt, setDistFt] = useState(false);
   const [calcOpen, setCalcOpen] = useState(false);
+  const [hasMapped, setHasMapped] = useState(null); // null=loading, false=no geometry yet
 
   useEffect(() => { drawKindRef.current = drawKind; }, [drawKind]);
 
@@ -277,7 +278,7 @@ export default function FarmMap({ farmId, onCountsChange, openRequest, onSaved }
   async function loadFeatures(map, fg) {
     try {
       const r = await fetch(`/api/v1/farm-map/${encodeURIComponent(farmId)}`, { headers: authHeaders() });
-      if (r.status === 404) { setLoadWarn(false); return; } // new farm, nothing saved yet
+      if (r.status === 404) { setLoadWarn(false); setHasMapped(false); return; } // new farm, nothing saved yet
       if (!r.ok) throw new Error(String(r.status));
       const fc = await r.json();
       (fc.features || []).forEach((f) => {
@@ -297,6 +298,7 @@ export default function FarmMap({ farmId, onCountsChange, openRequest, onSaved }
       if (fg.getLayers().length) map.fitBounds(fg.getBounds().pad(0.15));
       recount();
       setLoadWarn(false);
+      setHasMapped(fg.getLayers().length > 0);
     } catch {
       // Saved features couldn't load (API/migration not live) — map still works.
       setLoadWarn(true);
@@ -429,6 +431,13 @@ export default function FarmMap({ farmId, onCountsChange, openRequest, onSaved }
     measurePtsRef.current = []; setMeasureDist(0); measureLayerRef.current?.clearLayers(); setMeasuring(false);
   }
 
+  // Empty-state CTA: open fullscreen straight into boundary-draw for an unmapped farm.
+  function mapThisFarm() {
+    setDrawKind("BOUNDARY"); drawKindRef.current = "BOUNDARY";
+    pendingDrawRef.current = "Polygon";
+    setFullscreen(true);
+  }
+
   function locateMe() {
     if (!navigator.geolocation) return;
     navigator.geolocation.getCurrentPosition(
@@ -482,16 +491,26 @@ export default function FarmMap({ farmId, onCountsChange, openRequest, onSaved }
       <style>{THEME_CSS}</style>
       <div ref={elRef} style={{ position: "absolute", inset: 0, background: C.cream }} />
 
-      {/* PREVIEW: read-only; click anywhere to open the full editor */}
+      {/* PREVIEW: read-only; click to open the full editor. Unmapped farm gets a CTA. */}
       {!fullscreen && (
-        <button onClick={() => setFullscreen(true)} aria-label="Open full-screen map editor"
-          className="absolute inset-0 z-[1000] flex items-end justify-center pb-10 group"
-          style={{ background: "transparent" }}>
-          <span className="text-xs px-3.5 py-2 rounded-full shadow flex items-center gap-1.5 font-semibold group-hover:brightness-95"
-            style={{ background: "rgba(255,255,255,0.96)", color: C.soil, border: `1px solid ${C.border}` }}>
-            <Maximize2 size={14} style={{ color: C.greenDk }} />Tap to open map & draw
-          </span>
-        </button>
+        <div role="button" tabIndex={0} aria-label="Open full-screen map editor"
+          onClick={() => setFullscreen(true)} onKeyDown={(e) => { if (e.key === "Enter") setFullscreen(true); }}
+          className="absolute inset-0 z-[1000] flex items-center justify-center cursor-pointer"
+          style={{ background: hasMapped === false ? "rgba(58,46,38,0.28)" : "transparent" }}>
+          {hasMapped === false ? (
+            <div onClick={(e) => e.stopPropagation()} className="rounded-2xl shadow-xl text-center p-4" style={{ background: "rgba(255,255,255,0.97)", border: `1px solid ${C.border}`, maxWidth: 270 }}>
+              <MapPin size={22} style={{ color: C.greenDk, margin: "0 auto" }} />
+              <div className="text-sm font-bold mt-1" style={{ color: C.soil }}>This farm isn't mapped yet</div>
+              <div className="text-[11px] mt-0.5" style={{ color: C.muted }}>Draw or GPS-walk its boundary to switch on area, blocks and geo-features.</div>
+              <button onClick={mapThisFarm} className="mt-2.5 text-sm px-4 py-2 rounded-xl text-white font-semibold hover:brightness-95" style={{ background: C.greenDk }}>Map this farm</button>
+            </div>
+          ) : (
+            <span className="absolute bottom-10 text-xs px-3.5 py-2 rounded-full shadow flex items-center gap-1.5 font-semibold"
+              style={{ background: "rgba(255,255,255,0.96)", color: C.soil, border: `1px solid ${C.border}` }}>
+              <Maximize2 size={14} style={{ color: C.greenDk }} />Tap to open map & draw
+            </span>
+          )}
+        </div>
       )}
 
       {/* FULLSCREEN editor chrome */}
