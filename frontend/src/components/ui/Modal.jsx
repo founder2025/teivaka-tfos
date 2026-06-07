@@ -72,7 +72,7 @@ export default function Modal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end md:items-center justify-center md:px-3"
+      className="fixed inset-0 z-[3000] flex items-end md:items-center justify-center md:px-3"
       style={{ background: "rgba(0,0,0,0.4)" }}
       role="dialog"
       aria-modal="true"
