@@ -86,7 +86,7 @@ function setInteractive(map, on) {
     .forEach((f) => { if (map[f]) (on ? map[f].enable() : map[f].disable()); });
 }
 
-export default function FarmMap({ farmId, onCountsChange }) {
+export default function FarmMap({ farmId, onCountsChange, openRequest }) {
   const elRef = useRef(null);
   const mapRef = useRef(null);
   const fgRef = useRef(null);      // FeatureGroup of drawn shapes
@@ -102,6 +102,8 @@ export default function FarmMap({ farmId, onCountsChange }) {
   const measureClickRef = useRef(null);
   const areaUnitRef = useRef("acres");
   const lastAreaRef = useRef(null);  // area (ha) of the most recently created shape
+  const pendingDrawRef = useRef(null);        // 'Marker'|'Polygon' to auto-start on fullscreen open
+  const pendingFacilityTypeRef = useRef(null); // default facility type for an externally-triggered pin
   const [drawKind, setDrawKind] = useState("ZONE");
   const drawKindRef = useRef("ZONE");
   const [status, setStatus] = useState("loading"); // loading|ready
@@ -132,6 +134,10 @@ export default function FarmMap({ farmId, onCountsChange }) {
       if (!map.pm.controlsVisible?.()) map.pm.addControls(PM_CONTROLS);
       map.pm.setPathOptions(styleFor(drawKindRef.current));
       setInteractive(map, true);
+      if (pendingDrawRef.current) {
+        const shape = pendingDrawRef.current; pendingDrawRef.current = null;
+        setTimeout(() => { try { map.pm.enableDraw(shape); } catch { /* geoman timing */ } }, 160);
+      }
     } else {
       try { map.pm.removeControls(); } catch { /* not added yet */ }
       map.pm.disableDraw?.();
@@ -144,6 +150,21 @@ export default function FarmMap({ farmId, onCountsChange }) {
     const t = setTimeout(() => map.invalidateSize(), 80);
     return () => clearTimeout(t);
   }, [fullscreen]);
+
+  // External "Add zone/block/facility" requests from the Locations page chrome.
+  useEffect(() => {
+    if (!openRequest?.nonce) return;
+    const k = openRequest.kind;
+    if (k === "FACILITY") {
+      pendingDrawRef.current = "Marker";
+      pendingFacilityTypeRef.current = openRequest.facilityType || null;
+    } else if (POLY_KINDS.includes(k)) {
+      setDrawKind(k); drawKindRef.current = k;
+      pendingDrawRef.current = "Polygon";
+      pendingFacilityTypeRef.current = null;
+    }
+    setFullscreen(true);
+  }, [openRequest?.nonce]);
 
   // ESC exits fullscreen; autofocus the themed name modal when it opens.
   useEffect(() => {
@@ -217,7 +238,9 @@ export default function FarmMap({ farmId, onCountsChange }) {
       layer._kind = kind;
       if (layer.setStyle && KIND_STYLE[kind]) layer.setStyle(styleFor(kind)); // colour immediately
       pendingRef.current = layer;                       // park it; themed modal names it
-      setNameModal({ open: true, kind, value: "", color: "", facilityType: "" });
+      const ft = isMarker ? (pendingFacilityTypeRef.current || "") : "";
+      pendingFacilityTypeRef.current = null;
+      setNameModal({ open: true, kind, value: "", color: "", facilityType: ft });
     });
     map.on("pm:remove", () => { setDirty(true); recount(); });
 

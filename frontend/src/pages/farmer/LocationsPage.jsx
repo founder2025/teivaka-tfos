@@ -89,6 +89,8 @@ function LocationsInner() {
   const [selected, setSelected] = useState(null);
   const [calcUnit, setCalcUnit] = useState(() => localStorage.getItem("tfos_area_unit") || "acres");
   const [calcShape, setCalcShape] = useState("");
+  const [openReq, setOpenReq] = useState(null);
+  const openMap = (kind, facilityType) => setOpenReq({ kind, facilityType, nonce: Date.now() });
 
   const mapShapes = (mapFeat.data?.features ?? [])
     .map((f) => ({ id: f.properties?.feature_id, label: f.properties?.label || f.properties?.kind, kind: f.properties?.kind, area_ha: f.properties?.area_ha }))
@@ -121,8 +123,8 @@ function LocationsInner() {
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           <FarmSelector /><ModeDropdown />
-          <button onClick={() => emitToast("Add zone — create flow ships with the interactive map (L2)")} className={`text-sm px-3 py-2 rounded-lg flex items-center gap-1.5 hover:brightness-95 ${FOCUS}`} style={{ color: C.soil, border: `1px solid ${C.border}` }}><Plus size={14} />Add zone</button>
-          <button onClick={() => emitToast("Add block — create flow ships with the interactive map (L2)")} className={`text-sm px-3 py-2 rounded-lg text-white flex items-center gap-1.5 hover:brightness-95 ${FOCUS}`} style={{ background: C.greenDk }}><Plus size={14} />Add block</button>
+          <button onClick={() => openMap("ZONE")} className={`text-sm px-3 py-2 rounded-lg flex items-center gap-1.5 hover:brightness-95 ${FOCUS}`} style={{ color: C.soil, border: `1px solid ${C.border}` }}><Plus size={14} />Add zone</button>
+          <button onClick={() => openMap("BLOCK")} className={`text-sm px-3 py-2 rounded-lg text-white flex items-center gap-1.5 hover:brightness-95 ${FOCUS}`} style={{ background: C.greenDk }}><Plus size={14} />Add block</button>
         </div>
       </div>
 
@@ -169,7 +171,7 @@ function LocationsInner() {
               <ColHead extra={<span className="text-[11px]" style={{ color: C.muted }}>draw · auto-area · GPS</span>}>Farm map · {farmId}</ColHead>
               {farmId ? (
                 <Suspense fallback={<div className="rounded-xl flex items-center justify-center" style={{ background: C.paper, height: 460 }}><MapIcon size={26} style={{ color: C.muted }} /></div>}>
-                  <FarmMap farmId={farmId} />
+                  <FarmMap farmId={farmId} openRequest={openReq} />
                 </Suspense>
               ) : (
                 <div className="rounded-xl flex items-center justify-center text-sm" style={{ background: C.paper, height: 460, color: C.muted }}>Pick a farm to map.</div>
@@ -245,7 +247,7 @@ function LocationsInner() {
                 <button onClick={() => go("poultry")} className={`text-[11px] ${FOCUS}`} style={{ color: C.greenDk }}>Open →</button>
               </div>
             ))}
-            {cropRows.length === 0 && flockRows.length === 0 && <div className="text-sm" style={{ color: C.muted }}>No enterprises yet — add one and it appears here with its location.</div>}
+            {cropRows.length === 0 && flockRows.length === 0 && <div className="text-sm" style={{ color: C.muted }}>No enterprises yet — <button onClick={() => go("enterprises")} className={`font-semibold ${FOCUS}`} style={{ color: C.greenDk }}>add one</button> and it appears here with its location.</div>}
             <div className="text-[11px] mt-2" style={{ color: C.muted }}>Tap a crop to find its block. Animal paddock mapping turns on with the interactive map (L2).</div>
           </Card>
 
@@ -288,14 +290,14 @@ function LocationsInner() {
           <Card style={{ padding: 16 }}>
             <ColHead extra={<span className="text-[11px]" style={{ color: C.muted }}>every place work happens — fields, housing, water, storage</span>}>Facilities on this farm</ColHead>
             <div className="grid gap-2.5 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4">
-              <FacilityCard icon={Layers} title="Fields & blocks" value={puRows.length} sub="open-ground growing areas" />
-              <FacilityCard icon={MapPin} title="Zones" value={zoneRows.length} sub="sections that group blocks" />
-              <FacilityCard icon={Home} title="Greenhouses & shade houses" building sub="protected growing structures" onAdd={() => emitToast("Facilities registry ships with the map (L2)")} />
-              <FacilityCard icon={Warehouse} title="Barns & sheds" building sub="animal housing & general shelter" onAdd={() => emitToast("Facilities registry ships with the map (L2)")} />
-              <FacilityCard icon={Fence} title="Paddocks" building sub="fenced grazing for livestock" onAdd={() => emitToast("Facilities registry ships with the map (L2)")} />
-              <FacilityCard icon={Poultry} title="Poultry houses" building sub="layer & broiler housing" onAdd={() => emitToast("Facilities registry ships with the map (L2)")} />
-              <FacilityCard icon={Waves} title="Ponds, tanks & cages" building sub="aquaculture water bodies" onAdd={() => emitToast("Facilities registry ships with the map (L2)")} />
-              <FacilityCard icon={Box} title="Storage & cold rooms" building sub="warehouse, sheds & cold storage" onAdd={() => emitToast("Facilities registry ships with the map (L2)")} />
+              <FacilityCard icon={Layers} title="Fields & blocks" value={puRows.length} sub="open-ground growing areas" onAdd={() => openMap("BLOCK")} />
+              <FacilityCard icon={MapPin} title="Zones" value={zoneRows.length} sub="sections that group blocks" onAdd={() => openMap("ZONE")} />
+              <FacilityCard icon={Home} title="Greenhouses & shade houses" building sub="protected growing structures" onAdd={() => openMap("FACILITY", "Greenhouse")} />
+              <FacilityCard icon={Warehouse} title="Barns & sheds" building sub="animal housing & general shelter" onAdd={() => openMap("FACILITY", "Barn / shed")} />
+              <FacilityCard icon={Fence} title="Paddocks" building sub="fenced grazing for livestock" onAdd={() => openMap("FACILITY", "Paddock")} />
+              <FacilityCard icon={Poultry} title="Poultry houses" building sub="layer & broiler housing" onAdd={() => openMap("FACILITY", "Poultry house")} />
+              <FacilityCard icon={Waves} title="Ponds, tanks & cages" building sub="aquaculture water bodies" onAdd={() => openMap("FACILITY", "Pond / tank")} />
+              <FacilityCard icon={Box} title="Storage & cold rooms" building sub="warehouse, sheds & cold storage" onAdd={() => openMap("FACILITY", "Storage / cold room")} />
             </div>
           </Card>
 
