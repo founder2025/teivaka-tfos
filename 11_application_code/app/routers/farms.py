@@ -88,11 +88,16 @@ async def list_farms(
                 f.created_at,
                 COUNT(DISTINCT z.zone_id) AS zone_count,
                 COUNT(DISTINCT pc.cycle_id) FILTER (WHERE pc.cycle_status = 'ACTIVE') AS active_cycles,
-                COUNT(DISTINCT a.alert_id) FILTER (WHERE a.alert_status = 'OPEN') AS open_alerts
+                COUNT(DISTINCT a.alert_id) FILTER (WHERE a.alert_status = 'OPEN') AS open_alerts,
+                COUNT(DISTINCT w.worker_id) AS member_count,
+                COUNT(DISTINCT pc.production_id) FILTER (WHERE pc.cycle_status = 'ACTIVE') AS crop_types,
+                ARRAY_AGG(DISTINCT p.production_name) FILTER (WHERE pc.cycle_status = 'ACTIVE') AS crop_names
             FROM tenant.farms f
             LEFT JOIN tenant.zones z ON z.farm_id = f.farm_id
             LEFT JOIN tenant.production_cycles pc ON pc.farm_id = f.farm_id
             LEFT JOIN tenant.alerts a ON a.farm_id = f.farm_id
+            LEFT JOIN tenant.workers w ON w.farm_id = f.farm_id
+            LEFT JOIN shared.productions p ON p.production_id = pc.production_id
             {where_clause}
             GROUP BY f.farm_id
             ORDER BY f.farm_id

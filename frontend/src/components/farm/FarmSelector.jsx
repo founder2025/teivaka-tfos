@@ -24,6 +24,12 @@ function authHeaders() {
 }
 function emitToast(m) { window.dispatchEvent(new CustomEvent("tfos:toast", { detail: { message: m } })); }
 const acres = (ha) => (ha == null ? null : `${(Number(ha) * 2.47105).toFixed(2)} acres`);
+function cropLabel(f) {
+  const n = f.crop_types || 0, names = f.crop_names || [];
+  if (n === 0) return null;
+  if (n === 1) return names[0] || "1 crop";
+  return `Mixed · ${n} crops`;
+}
 function roleLabel(r) {
   if (r === "FOUNDER" || r === "ENTERPRISE_ADMIN") return "OWNER";
   return (r || "MEMBER").replace(/_/g, " ");
@@ -128,10 +134,12 @@ export default function FarmSelector() {
                       <span className="text-sm font-bold truncate" style={{ color: C.soil }}>{f.farm_name}</span>
                       {sel && <Check size={13} style={{ color: C.greenDk }} />}
                     </span>
-                    <span className="block text-[11px]" style={{ color: C.muted }}>{f.farm_id}{f.location_island ? ` · ${f.location_island}` : ""}</span>
+                    <span className="block text-[11px]" style={{ color: C.muted }}>
+                      {f.farm_id}{f.location_island ? ` · ${f.location_island}` : ""}{cropLabel(f) ? ` · ${cropLabel(f)}` : ""}
+                    </span>
                     <span className="block text-[11px] mt-0.5" style={{ color: C.muted }}>
                       {(f.active_cycles ?? 0)} active cycle{f.active_cycles === 1 ? "" : "s"}
-                      {f.zone_count != null ? ` · ${f.zone_count} zone${f.zone_count === 1 ? "" : "s"}` : ""}
+                      {` · ${f.member_count ?? 0} member${f.member_count === 1 ? "" : "s"}`}
                       {acres(f.land_area_ha) ? ` · ${acres(f.land_area_ha)}` : ""}
                     </span>
                   </span>

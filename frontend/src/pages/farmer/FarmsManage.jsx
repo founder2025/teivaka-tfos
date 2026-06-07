@@ -20,6 +20,12 @@ const FOCUS = "focus:outline-none focus-visible:ring-2 focus-visible:ring-[#6AA8
 function authHeaders() { const t = localStorage.getItem("tfos_access_token"); return t ? { "Content-Type": "application/json", Authorization: `Bearer ${t}` } : { "Content-Type": "application/json" }; }
 function emitToast(m) { window.dispatchEvent(new CustomEvent("tfos:toast", { detail: { message: m } })); }
 const acres = (ha) => (ha == null ? "—" : `${(Number(ha) * 2.47105).toFixed(2)} acres`);
+function cropLabel(f) {
+  const n = f.crop_types || 0, names = f.crop_names || [];
+  if (n === 0) return null;
+  if (n === 1) return names[0] || "1 crop";
+  return `Mixed · ${n} crops`;
+}
 async function getFarms() { const r = await fetch("/api/v1/farms", { headers: authHeaders() }); if (!r.ok) throw new Error(String(r.status)); return (await r.json())?.farms ?? []; }
 
 function EditModal({ farm, onClose, onSaved }) {
@@ -116,8 +122,8 @@ function ManageInner() {
                     {f.farm_id === farmId && <span className="text-[10px] px-1.5 py-0.5 rounded-full" style={{ background: C.greenTint, color: C.greenDk }}>current</span>}
                     {archived && <span className="text-[10px] px-1.5 py-0.5 rounded-full" style={{ background: C.cream, color: C.muted }}>archived</span>}
                   </div>
-                  <div className="text-[11px] mt-0.5" style={{ color: C.muted }}>{f.farm_id}{f.location_island ? ` · ${f.location_island}` : ""}</div>
-                  <div className="text-[11px]" style={{ color: C.muted }}>{(f.active_cycles ?? 0)} active cycle{f.active_cycles === 1 ? "" : "s"} · {(f.zone_count ?? 0)} zone{f.zone_count === 1 ? "" : "s"} · {acres(f.land_area_ha)}</div>
+                  <div className="text-[11px] mt-0.5" style={{ color: C.muted }}>{f.farm_id}{f.location_island ? ` · ${f.location_island}` : ""}{cropLabel(f) ? ` · ${cropLabel(f)}` : ""}</div>
+                  <div className="text-[11px]" style={{ color: C.muted }}>{(f.active_cycles ?? 0)} active cycle{f.active_cycles === 1 ? "" : "s"} · {(f.member_count ?? 0)} member{f.member_count === 1 ? "" : "s"} · {(f.zone_count ?? 0)} zone{f.zone_count === 1 ? "" : "s"} · {acres(f.land_area_ha)}</div>
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
                   <button onClick={() => setEdit(f)} title="Edit" className={`p-2 rounded-lg ${FOCUS}`} style={{ color: C.soil, border: `1px solid ${C.border}` }}><Pencil size={14} /></button>
