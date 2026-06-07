@@ -23,6 +23,10 @@ import FarmSelector from "../../components/farm/FarmSelector";
 import ModeDropdown from "../../components/farm/ModeDropdown";
 
 const FarmMap = lazy(() => import("./FarmMap"));
+import CapacityCalc from "../../components/farm/CapacityCalc";
+
+const AREA_UNITS = { acres: "acres", ha: "ha", m2: "m²" };
+const useFarmMapFeatures = (id) => useQuery({ queryKey: ["loc-map", id], queryFn: () => getJSON(`/api/v1/farm-map/${encodeURIComponent(id)}`), enabled: !!id, retry: 0 });
 
 const C = {
   soil: "#5C4033", cream: "#F8F3E9", border: "#E6DED0", muted: "#8A7863", ink: "#3A2E26",
@@ -77,10 +81,18 @@ function LocationsInner() {
   const pus = usePUs(farmId);
   const crops = useCrops(farmId);
   const flocks = useFlocks(farmId);
+  const mapFeat = useFarmMapFeatures(farmId);
 
   const [zoneFilter, setZoneFilter] = useState(null);
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState(null);
+  const [calcUnit, setCalcUnit] = useState(() => localStorage.getItem("tfos_area_unit") || "acres");
+  const [calcShape, setCalcShape] = useState("");
+
+  const mapShapes = (mapFeat.data?.features ?? [])
+    .map((f) => ({ id: f.properties?.feature_id, label: f.properties?.label || f.properties?.kind, kind: f.properties?.kind, area_ha: f.properties?.area_ha }))
+    .filter((s) => (s.kind === "ZONE" || s.kind === "BLOCK") && s.area_ha != null);
+  const calcArea = mapShapes.find((s) => s.id === calcShape)?.area_ha ?? mapShapes[0]?.area_ha ?? null;
 
   const zoneRows = zones.data?.data ?? [];
   const puRows = pus.data?.data ?? [];
@@ -234,6 +246,35 @@ function LocationsInner() {
             ))}
             {cropRows.length === 0 && flockRows.length === 0 && <div className="text-sm" style={{ color: C.muted }}>No enterprises yet — add one and it appears here with its location.</div>}
             <div className="text-[11px] mt-2" style={{ color: C.muted }}>Tap a crop to find its block. Animal paddock mapping turns on with the interactive map (L2).</div>
+          </Card>
+
+          {/* capacity calculator */}
+          <Card style={{ padding: 16 }}>
+            <ColHead extra={
+              <div className="flex items-center rounded-lg overflow-hidden" style={{ border: `1px solid ${C.border}` }}>
+                {Object.entries(AREA_UNITS).map(([k, lbl]) => (
+                  <button key={k} onClick={() => { setCalcUnit(k); localStorage.setItem("tfos_area_unit", k); }} className="text-[11px] px-2 py-1 font-semibold"
+                    style={calcUnit === k ? { background: C.soil, color: "white" } : { color: C.soil }}>{lbl}</button>
+                ))}
+              </div>
+            }>Capacity calculator</ColHead>
+            {mapShapes.length === 0 ? (
+              <div className="text-sm" style={{ color: C.muted }}>Draw or walk a zone/block on the map first — then pick it here to estimate how many plants or animals it can hold.</div>
+            ) : (
+              <div className="grid gap-4 md:grid-cols-2">
+                <div>
+                  <label className="text-[11px] block mb-1" style={{ color: C.muted }}>Pick a zone or block</label>
+                  <select value={calcShape || mapShapes[0]?.id || ""} onChange={(e) => setCalcShape(e.target.value)}
+                    className={`w-full px-3 py-2 rounded-lg text-sm ${FOCUS}`} style={{ border: `1.5px solid ${C.border}`, background: C.paper, color: C.soil }}>
+                    {mapShapes.map((s) => <option key={s.id} value={s.id}>{s.label} ({s.kind.toLowerCase()})</option>)}
+                  </select>
+                  <p className="text-[11px] mt-2" style={{ color: C.muted }}>Area comes straight from what you mapped. Enter your own spacing — TFOS only does the maths, it won't invent agronomy.</p>
+                </div>
+                <div className="rounded-xl p-3" style={{ background: C.paper }}>
+                  <CapacityCalc areaHa={calcArea} unit={calcUnit} compact />
+                </div>
+              </div>
+            )}
           </Card>
 
           {/* facilities */}
