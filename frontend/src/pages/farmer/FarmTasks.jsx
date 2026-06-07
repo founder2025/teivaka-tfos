@@ -80,9 +80,10 @@ function cropStep(c) {
 }
 
 function CropPlan({ farmId, navigate }) {
-  const { data } = useQuery({ queryKey: ["tasks-cycles", farmId], queryFn: () => getJSON(`/api/v1/cycles?farm_id=${encodeURIComponent(farmId)}`), enabled: !!farmId, retry: 0 });
-  const cycles = (data?.data ?? data?.cycles ?? []).filter((c) => ["PLANNED", "ACTIVE", "HARVESTING", "CLOSING"].includes(c.cycle_status));
-  if (!cycles.length) return null;
+  const { data } = useQuery({ queryKey: ["crop-plan", farmId], queryFn: () => getJSON(`/api/v1/crop-plan/farm-steps?farm_id=${encodeURIComponent(farmId)}`), enabled: !!farmId, retry: 0 });
+  const steps = data?.data ?? [];
+  if (!steps.length) return null;
+  const anyUnverified = steps.some((s) => s.verification === "SEED_UNVERIFIED");
   return (
     <div className="rounded-2xl border bg-white" style={{ borderColor: C.border }}>
       <div className="flex items-center justify-between gap-2 px-4 py-3 flex-wrap" style={{ borderBottom: `1px solid ${C.border}` }}>
@@ -90,26 +91,25 @@ function CropPlan({ farmId, navigate }) {
         <span className="text-[11px]" style={{ color: C.muted }}>Worked out from each crop's stage + days in the ground. Tap to log.</span>
       </div>
       <div>
-        {cycles.map((c) => {
-          const s = cropStep(c);
-          const label = c.production_name || c.production_id || "Crop";
-          const block = c.pu_farmer_label || c.pu_name || c.pu_id || "";
-          return (
-            <div key={c.cycle_id} className="flex items-center gap-3 px-4 py-2.5" style={{ borderTop: `1px solid rgba(92,64,51,0.06)` }}>
-              <div className="flex-1 min-w-0">
-                <div className="text-sm" style={{ color: C.soil }}><span className="font-semibold">{block}</span>{block ? " · " : ""}{label}</div>
-                <div className="flex items-center gap-2 mt-0.5">
-                  <span className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold" style={s.now ? { background: C.greenTint, color: C.greenDk } : { color: C.muted, border: `1px solid ${C.border}` }}>{s.now ? "Do now" : s.when}</span>
-                  <span className="text-xs" style={{ color: s.now ? C.soil : C.muted }}>{s.text}</span>
-                </div>
+        {steps.map((s) => (
+          <div key={s.cycle_id} className="flex items-center gap-3 px-4 py-2.5" style={{ borderTop: `1px solid rgba(92,64,51,0.06)` }}>
+            <div className="flex-1 min-w-0">
+              <div className="text-sm" style={{ color: C.soil }}><span className="font-semibold">{s.block}</span>{s.block ? " · " : ""}{s.crop}</div>
+              <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                <span className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold" style={s.do_now ? { background: C.greenTint, color: C.greenDk } : { color: C.muted, border: `1px solid ${C.border}` }}>{s.do_now ? "Do now" : s.when}</span>
+                <span className="text-xs" style={{ color: s.do_now ? C.soil : C.muted }}>{s.text}</span>
+                {s.stage && <span className="text-[10px]" style={{ color: C.muted }}>· {s.stage}</span>}
               </div>
-              <span className="text-[11px] shrink-0" style={{ color: C.muted }}>{s.when}</span>
-              <button onClick={() => navigate(s.text.startsWith("Ready") || s.text.startsWith("Harvest") ? "/farm/harvest/new" : "/farm/cycles")} className={`text-[11px] px-2.5 py-1 rounded-lg font-semibold shrink-0 ${FOCUS}`} style={{ color: C.greenDk, border: `1px solid ${C.border}` }}>+ Log</button>
+              {s.ongoing && <div className="text-[11px] mt-0.5" style={{ color: C.muted }}>Ongoing: {s.ongoing}</div>}
             </div>
-          );
-        })}
+            <span className="text-[11px] shrink-0" style={{ color: C.muted }}>{s.when}</span>
+            <button onClick={() => navigate(s.category === "HARVEST" ? "/farm/harvest/new" : "/farm/cycles")} className={`text-[11px] px-2.5 py-1 rounded-lg font-semibold shrink-0 ${FOCUS}`} style={{ color: C.greenDk, border: `1px solid ${C.border}` }}>+ Log</button>
+          </div>
+        ))}
       </div>
-      <div className="px-4 py-2 text-[10px]" style={{ color: C.muted }}>Stage milestones from your cycle dates. Crop-specific steps (spacing, side-dress timing) arrive with the seeded growth-plan library.</div>
+      {anyUnverified && (
+        <div className="px-4 py-2 text-[10px]" style={{ color: C.muted }}>Indicative guidance from the crop-plan library (FAO/SPC) — confirm timing with your extension officer. NPK amounts come from the cited nutrition KB.</div>
+      )}
     </div>
   );
 }

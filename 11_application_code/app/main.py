@@ -64,6 +64,7 @@ from app.routers import (
     farm_map,
     attendance,
     tis_context,
+    crop_plan,
     kb,
     kb_articles,
     community,
@@ -311,6 +312,7 @@ app.include_router(weather.router,            prefix=f"{PREFIX}/weather",       
 app.include_router(farm_map.router,           prefix=f"{PREFIX}/farm-map",           tags=["Farm Map"])
 app.include_router(attendance.router,         prefix=f"{PREFIX}/attendance",         tags=["Attendance"])
 app.include_router(tis_context.router,        prefix=f"{PREFIX}/tis-context",        tags=["TIS Context"])
+app.include_router(crop_plan.router,          prefix=f"{PREFIX}/crop-plan",          tags=["Crop Plan"])
 
 # Knowledge Base
 app.include_router(kb.router,                 prefix=f"{PREFIX}/kb",                 tags=["Knowledge Base"])
