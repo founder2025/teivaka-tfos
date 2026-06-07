@@ -161,6 +161,7 @@ Recent strikes (added in Sprint 7):
 - B78: Container alembic state can lag host. teivaka_api `/app/alembic/versions/` was missing 064/065/066 (and 067) at Strike #96 execution time despite DB head being 066. Required `docker cp` of intermediate files before `alembic upgrade head` could chain. Add CI/build-time check that `ls /app/alembic/versions/` matches host `11_application_code/alembic/versions/` at every container build, or bake migration files via Dockerfile COPY rather than volume/build-context drift. Surfaced Strike #96.
 - B79: Smoke verification psql commands need `SET app.tenant_id = '<uuid>'` prefix when querying any `tenant.*` table — RLS is FORCED on tenant tables and psql with no session var returns 0 rows even after a successful insert. Update smoke template for #98 onward; first-five-minutes window is the right scope for live-verify queries (5 min was the operator-suggested correct cadence; 15 min and 2 hours both missed the actual browser submit due to timing).
 - B80: Alignment Contract uses location-specific framing (Kadavu, Pacific Island smallholder) throughout. Update to universal framing — global smallholder agriculture as addressable market. Connectivity-class decisions stay framed by constraint, not geography. Surfaced Strike #97 doctrine work.
+- B82: Farm map privacy opt-out. `tenant.users.map_privacy` was referenced by `GET /admin/analytics/map` but never existed in schema/migrations (latent 500; endpoint unused by frontend). Patched 2026-06-07 to drop the column refs (privacy = no-op, is_anonymous=false). Proper fix: add `map_privacy BOOLEAN DEFAULT false` to `tenant.users` via migration, restore the opt-out CASE in `/admin/analytics/map`, and honour it in `GET /farm-map/global-pins` (the new Locations-L2 platform pins endpoint) + the `/admin/map` page. Surfaced during Locations L2 global-map work.
 
 **Open blockers:**
 - Q14 TTS provider — RESOLVED via Web Speech API in Phase 8-1 scope; SoloTaskCard.jsx already uses it
@@ -237,7 +238,9 @@ Every step hash-chained in audit.events, verifiable via /verify/{audit_hash}, sc
 
 **Backend change:** edit /opt/teivaka/03_backend or the container code, then `docker compose -f /opt/teivaka/04_environment/docker-compose.yml up -d --build api`.
 
-**Caddy change:** edit /opt/teivaka/04_environment/Caddyfile.production, then `docker exec teivaka_caddy caddy reload --config /etc/caddy/Caddyfile`.
+**Caddy change:** edit /opt/teivaka/04_environment/Caddyfile.production, then **recreate the container** — `docker compose -f /opt/teivaka/04_environment/docker-compose.yml up -d --force-recreate caddy`.
+
+> ⚠️ **Single-file bind-mount inode trap (do NOT just `caddy reload`).** The compose mounts `./Caddyfile.production:/etc/caddy/Caddyfile:ro` — a *single-file* bind mount, bound to the file's inode. `git checkout`/`sed`/editors that write-temp-then-rename give the file a **new inode**, so the container keeps serving the **old** file and `caddy reload` re-reads that stale copy. Symptom: host file + `docker exec teivaka_caddy grep <change> /etc/caddy/Caddyfile` disagree. Fix: `--force-recreate caddy` re-resolves the mount. Verify after: `docker exec teivaka_caddy grep <change> /etc/caddy/Caddyfile` and `curl -sI https://teivaka.com/ | grep -i <header>` both show the new value. (Surfaced 2026-06-07 adding Esri tiles to CSP `img-src` for the Locations L2 map — 20 min lost to a "successful" reload that served the old CSP.)
 
 **TIS bridge change:** edit /opt/tis-bridge/server.js, then `sudo systemctl restart tis-bridge`.
 

@@ -426,8 +426,12 @@ async def admin_map_data(
 ):
     """
     All farm locations for admin map view.
-    Admin sees all farms regardless of privacy settings.
-    Opted-out farms returned as anonymous gray dots (no profile data).
+
+    NOTE: `tenant.users.map_privacy` was referenced here but never existed in the
+    schema or any migration, so this query used to fail with "column does not
+    exist" (it is not wired to the frontend, so the break was latent). Until a
+    real opt-out column ships (backlog B82), privacy is a no-op: every active farm
+    with coordinates is returned, is_anonymous = false. Response shape preserved.
     """
     result = await db.execute(
         text("""
@@ -437,9 +441,9 @@ async def admin_map_data(
                 f.gps_lng,
                 f.farm_name,
                 t.subscription_tier,
-                CASE WHEN u.map_privacy = true THEN NULL ELSE u.full_name END AS farmer_name,
-                CASE WHEN u.map_privacy = true THEN NULL ELSE f.farm_name END AS display_name,
-                u.map_privacy AS is_anonymous
+                u.full_name AS farmer_name,
+                f.farm_name AS display_name,
+                false       AS is_anonymous
             FROM tenant.farms f
             JOIN tenant.tenants t ON t.tenant_id = f.tenant_id
             JOIN tenant.users u ON u.tenant_id = f.tenant_id AND u.role IN ('FOUNDER','FARMER')
