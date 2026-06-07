@@ -420,6 +420,47 @@ async def assemble_farm_context(
     if row["island_logistics"]:
         context_parts.append("Island logistics: Active (ferry-dependent supply chain)")
 
+    # Phase 6: ground TIS in the farm's blocks + recent logged activity so it can
+    # answer "what should I do on Block 1?" / "why is this field idle?" from real
+    # data. Best-effort — must never break the chat (Inviolable #1: facts only).
+    try:
+        blocks = await session.execute(
+            text("""
+                SELECT pu.pu_name, c.cycle_status, p.production_name
+                  FROM tenant.production_units pu
+                  LEFT JOIN LATERAL (
+                       SELECT pc.* FROM tenant.production_cycles pc
+                        WHERE pc.pu_id = pu.pu_id
+                        ORDER BY pc.planting_date DESC NULLS LAST, pc.created_at DESC LIMIT 1
+                  ) c ON TRUE
+                  LEFT JOIN shared.productions p ON p.production_id = c.production_id
+                 WHERE pu.farm_id = :farm_id AND pu.is_active = true
+                 ORDER BY pu.pu_id LIMIT 25
+            """),
+            {"farm_id": farm_id},
+        )
+        blines = []
+        for b in blocks.mappings().all():
+            if b["production_name"] and b["cycle_status"] in ("PLANNED", "ACTIVE", "HARVESTING", "CLOSING"):
+                blines.append(f"{b['pu_name']}: {b['production_name']} ({b['cycle_status'].lower()})")
+            else:
+                blines.append(f"{b['pu_name']}: empty/resting")
+        if blines:
+            context_parts.append("\nBLOCKS (fields):\n- " + "\n- ".join(blines))
+    except Exception:
+        pass
+    try:
+        acts = await session.execute(
+            text("""SELECT summary FROM tenant.farm_activity_context
+                     WHERE farm_id = :farm_id ORDER BY occurred_at DESC LIMIT 12"""),
+            {"farm_id": farm_id},
+        )
+        alines = [a[0] for a in acts.fetchall()]
+        if alines:
+            context_parts.append("\nRECENT FARM ACTIVITY (newest first):\n- " + "\n- ".join(alines))
+    except Exception:
+        pass
+
     return "\n".join(context_parts)
 
 

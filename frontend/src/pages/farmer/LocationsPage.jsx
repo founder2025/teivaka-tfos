@@ -113,6 +113,19 @@ function LocationsInner() {
   const [calcShape, setCalcShape] = useState("");
   const [openReq, setOpenReq] = useState(null);
   const [renameVal, setRenameVal] = useState(null); // null = not renaming
+  const [teachVal, setTeachVal] = useState(null);   // null = not teaching TIS
+  async function saveTeach() {
+    const sel = puRows.find((p) => p.pu_id === selected);
+    if (!sel || !teachVal?.trim()) { setTeachVal(null); return; }
+    try {
+      const r = await fetch(`/api/v1/tis-context/teach`, {
+        method: "POST", headers: { "Content-Type": "application/json", ...authHeaders() },
+        body: JSON.stringify({ farm_id: farmId, pu_id: sel.pu_id, kind: "NOTE", summary: `${sel.pu_name}: ${teachVal.trim()}` }),
+      });
+      if (r.ok) emitToast("TIS noted it");
+    } catch { emitToast("Couldn't save"); }
+    setTeachVal(null);
+  }
   const openMap = (kind, facilityType) => setOpenReq({ kind, facilityType, nonce: Date.now() });
   async function saveRename() {
     const sel = puRows.find((p) => p.pu_id === selected);
@@ -356,7 +369,21 @@ function LocationsInner() {
                   </div>
                 );
               })()}
-              <button onClick={() => go("cycles")} className={`mt-3 text-xs px-3 py-1.5 rounded-lg hover:brightness-95 ${FOCUS}`} style={{ color: C.greenDk, border: `1px solid ${C.border}` }}>Open production →</button>
+              <div className="mt-3 flex items-center gap-2 flex-wrap">
+                <button onClick={() => go("cycles")} className={`text-xs px-3 py-1.5 rounded-lg hover:brightness-95 ${FOCUS}`} style={{ color: C.greenDk, border: `1px solid ${C.border}` }}>Open production →</button>
+                {teachVal === null ? (
+                  <button onClick={() => setTeachVal("")} className={`text-xs px-3 py-1.5 rounded-lg hover:brightness-95 ${FOCUS}`} style={{ color: C.soil, border: `1px solid ${C.border}` }}>✨ Teach TIS</button>
+                ) : (
+                  <div className="flex items-center gap-1.5 flex-1 min-w-[200px]">
+                    <input autoFocus value={teachVal} onChange={(e) => setTeachVal(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === "Enter") saveTeach(); if (e.key === "Escape") setTeachVal(null); }}
+                      placeholder="Tell TIS about this block…"
+                      className={`flex-1 px-2 py-1.5 rounded-lg text-xs ${FOCUS}`} style={{ border: `1.5px solid ${C.border}`, background: C.paper, color: C.soil }} />
+                    <button onClick={saveTeach} className={`text-[11px] px-2.5 py-1.5 rounded-lg text-white ${FOCUS}`} style={{ background: C.greenDk }}>Save</button>
+                    <button onClick={() => setTeachVal(null)} className={`text-[11px] ${FOCUS}`} style={{ color: C.muted }}>Cancel</button>
+                  </div>
+                )}
+              </div>
             </Card>
           )}
 

@@ -221,4 +221,15 @@ async def transplant_task(batch_id: str, body: TransplantTask, user: dict = Depe
              "desc": f"Seedlings from nursery batch {batch_id} are headed to this block. Clear/prep the bed and transplant when ready.",
              "pid": body.pu_id, "due": due},
         )
+        try:
+            await db.execute(
+                text("""INSERT INTO tenant.farm_activity_context
+                            (tenant_id, farm_id, pu_id, kind, summary, source, created_by)
+                        VALUES (:tid, :farm, :pid, 'TRANSPLANT_PLANNED', :s, 'auto', CAST(:uid AS uuid))"""),
+                {"tid": tid, "farm": b["farm_id"], "pid": body.pu_id,
+                 "s": f"Planned to transplant {b['production_name']} into {pu['pu_name']}.",
+                 "uid": str(user.get("user_id")) if user.get("user_id") else None},
+            )
+        except Exception:
+            pass
     return {"ok": True, "existing": False, "task_id": task_id}

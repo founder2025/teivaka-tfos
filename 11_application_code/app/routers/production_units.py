@@ -129,7 +129,35 @@ async def rename_production_unit(pu_id: str, body: PURename, user: dict = Depend
         row = res.mappings().first()
         if not row:
             raise HTTPException(status_code=404, detail="Production unit not found")
+        if body.pu_name:
+            await _record_activity(db, str(user["tenant_id"]),
+                                   await _farm_of_pu(db, pu_id, str(user["tenant_id"])),
+                                   pu_id, "BLOCK_RENAMED", f"Block renamed to '{row['pu_name']}'.",
+                                   user.get("user_id"))
         return {"data": dict(row)}
+
+
+async def _farm_of_pu(db, pu_id, tid):
+    r = await db.execute(text("SELECT farm_id FROM tenant.production_units WHERE pu_id=:pid AND tenant_id=:tid"),
+                         {"pid": pu_id, "tid": tid})
+    row = r.first()
+    return row[0] if row else None
+
+
+async def _record_activity(db, tid, farm_id, pu_id, kind, summary, uid):
+    """Append a grounded note TIS will read (best-effort — never break the caller)."""
+    if not farm_id:
+        return
+    try:
+        await db.execute(
+            text("""INSERT INTO tenant.farm_activity_context
+                        (tenant_id, farm_id, pu_id, kind, summary, source, created_by)
+                    VALUES (:tid, :farm, :pid, :kind, :summary, 'auto', CAST(:uid AS uuid))"""),
+            {"tid": tid, "farm": farm_id, "pid": pu_id, "kind": kind,
+             "summary": summary, "uid": str(uid) if uid else None},
+        )
+    except Exception:
+        pass
 
 
 @router.get("/{pu_id}/advice")
@@ -349,4 +377,7 @@ async def create_rotation_task(pu_id: str, user: dict = Depends(get_current_user
              "desc": "Block is resting/idle. Pick the next crop (legumes preferred after heavy feeders) and prepare the bed. See block advice in Locations.",
              "pid": pu_id},
         )
+        await _record_activity(db, tid, pu["farm_id"], pu_id, "ROTATION_TASK",
+                               f"Rotation task created for {pu['pu_name']} (block resting/idle).",
+                               user.get("user_id"))
     return {"ok": True, "existing": False, "task_id": task_id}
