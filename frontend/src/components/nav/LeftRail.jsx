@@ -39,7 +39,30 @@ function currentPillarKey(pathname) {
   );
 }
 
-function RailItem({ item, onNavigate }) {
+function useTaskCount() {
+  const [c, setC] = useState({ open: 0, overdue: 0 });
+  useEffect(() => {
+    let alive = true;
+    const tok = localStorage.getItem("tfos_access_token");
+    if (!tok) return;
+    async function load() {
+      try {
+        const r = await fetch("/api/v1/tasks/count", { headers: { Authorization: `Bearer ${tok}` } });
+        if (!r.ok) return;
+        const d = await r.json();
+        if (alive && d?.data) setC({ open: d.data.open || 0, overdue: d.data.overdue || 0 });
+      } catch { /* nav badge is non-critical */ }
+    }
+    load();
+    const id = setInterval(load, 60_000);
+    const onVis = () => { if (document.visibilityState === "visible") load(); };
+    document.addEventListener("visibilitychange", onVis);
+    return () => { alive = false; clearInterval(id); document.removeEventListener("visibilitychange", onVis); };
+  }, []);
+  return c;
+}
+
+function RailItem({ item, onNavigate, badge, badgeOverdue }) {
   const Icon = item.icon;
   const href = resolveHref(item);
   const isPhase = Boolean(item.phase);
@@ -75,6 +98,11 @@ function RailItem({ item, onNavigate }) {
     >
       <Icon size={18} strokeWidth={1.75} style={{ color: "inherit" }} />
       <span className="flex-1 truncate">{item.label}</span>
+      {badge > 0 && (
+        <span style={{ minWidth: 18, height: 18, padding: "0 5px", borderRadius: 9, fontSize: 11, fontWeight: 700,
+          display: "inline-flex", alignItems: "center", justifyContent: "center", color: "#fff",
+          background: badgeOverdue ? "#D4442E" : "#3E7B1F" }}>{badge > 99 ? "99+" : badge}</span>
+      )}
       {isPhase && <Lock size={12} style={{ opacity: 0.6 }} aria-label="Coming soon" />}
     </NavLink>
   );
@@ -86,6 +114,7 @@ export default function LeftRail() {
   const pillar = pillarKey ? PILLAR_SUB_NAV[pillarKey] : null;
   const { open, close, width } = useLeftRail();
   const mobile = useIsMobile();
+  const taskCount = useTaskCount();
   const panelRef = useRef(null);
 
   // Click-outside close on mobile only — on desktop the rail stays put while
@@ -178,7 +207,9 @@ export default function LeftRail() {
           aria-label={`${pillar.label} sub-navigation`}
         >
           {pillar.items.map((item) => (
-            <RailItem key={item.path} item={item} onNavigate={onNavigate} />
+            <RailItem key={item.path} item={item} onNavigate={onNavigate}
+              badge={item.path === "/farm/tasks" ? taskCount.open : 0}
+              badgeOverdue={item.path === "/farm/tasks" && taskCount.overdue > 0} />
           ))}
         </nav>
       </aside>

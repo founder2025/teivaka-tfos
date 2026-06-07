@@ -1,6 +1,6 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { NavLink } from "react-router-dom";
-import { Bell } from "lucide-react";
+import { Bell, ListChecks } from "lucide-react";
 import { useTisSse } from "../../hooks/useTisSse";
 
 const C = {
@@ -40,6 +40,18 @@ function relativeTime(iso) {
 export default function NotificationsPanel({ onClose }) {
   const { advisories, markRead } = useTisSse();
   const rootRef = useRef(null);
+  const [taskN, setTaskN] = useState({ open: 0, overdue: 0 });
+
+  useEffect(() => {
+    const tok = localStorage.getItem("tfos_access_token");
+    if (!tok) return;
+    (async () => {
+      try {
+        const r = await fetch("/api/v1/tasks/count", { headers: { Authorization: `Bearer ${tok}` } });
+        if (r.ok) { const d = await r.json(); if (d?.data) setTaskN({ open: d.data.open || 0, overdue: d.data.overdue || 0 }); }
+      } catch { /* non-critical */ }
+    })();
+  }, []);
 
   useEffect(() => {
     function onDocClick(e) {
@@ -101,14 +113,28 @@ export default function NotificationsPanel({ onClose }) {
 
       {/* List */}
       <div className="overflow-y-auto flex-1" style={{ maxHeight: 388 }}>
-        {advisories.length === 0 ? (
+        {(taskN.overdue > 0 || taskN.open > 0) && (
+          <NavLink to="/farm/tasks" onClick={onClose} className="w-full text-left flex gap-3 items-stretch"
+            style={{ borderBottom: `1px solid ${C.border}`, background: taskN.overdue > 0 ? "rgba(212,68,46,0.06)" : C.tint, textDecoration: "none", color: "inherit" }}>
+            <span aria-hidden className="flex-shrink-0" style={{ width: 6, background: taskN.overdue > 0 ? "#D4442E" : "#3E7B1F" }} />
+            <div className="flex-1 min-w-0 flex items-center gap-2" style={{ padding: "10px 12px" }}>
+              <ListChecks size={16} style={{ color: taskN.overdue > 0 ? "#D4442E" : C.greenDk, flexShrink: 0 }} />
+              <span style={{ fontSize: 13, color: C.soil }}>
+                {taskN.overdue > 0
+                  ? <><strong>{taskN.overdue}</strong> task{taskN.overdue === 1 ? "" : "s"} overdue</>
+                  : <><strong>{taskN.open}</strong> open task{taskN.open === 1 ? "" : "s"}</>} — tap to review
+              </span>
+            </div>
+          </NavLink>
+        )}
+        {advisories.length === 0 && taskN.open === 0 && taskN.overdue === 0 ? (
           <div className="py-10 px-6 flex flex-col items-center text-center gap-2">
             <Bell size={48} strokeWidth={1.5} style={{ color: C.soil, opacity: 0.45 }} />
             <p className="text-sm" style={{ opacity: 0.75 }}>
               All caught up. TIS will ping you here when something needs attention.
             </p>
           </div>
-        ) : (
+        ) : advisories.length === 0 ? null : (
           <ul>
             {advisories.map((a) => {
               const unread = !a.read_at;

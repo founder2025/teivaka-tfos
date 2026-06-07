@@ -602,3 +602,24 @@ async def task_history(
         "closed_at": r["closed_at"].isoformat() if r["closed_at"] else None,
     } for r in rows]
     return _envelope_ok({"total": len(data), "tasks": data})
+
+
+@router.get("/count", response_model=None)
+async def task_count(user=Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """Cheap counts for the nav badge: open / overdue / urgent (tenant-wide)."""
+    await set_tenant_context(db, user["tenant_id"])
+    row = (
+        await db.execute(
+            text(
+                """
+                SELECT
+                  COUNT(*) FILTER (WHERE status='OPEN') AS open,
+                  COUNT(*) FILTER (WHERE status='OPEN' AND due_date IS NOT NULL AND due_date < CURRENT_DATE) AS overdue,
+                  COUNT(*) FILTER (WHERE status='OPEN' AND task_rank < 300) AS urgent
+                FROM tenant.task_queue WHERE tenant_id = :tid
+                """
+            ),
+            {"tid": str(user["tenant_id"])},
+        )
+    ).first()
+    return _envelope_ok({"open": int(row.open or 0), "overdue": int(row.overdue or 0), "urgent": int(row.urgent or 0)})
