@@ -16,7 +16,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { QueryClientProvider, QueryClient } from "@tanstack/react-query";
-import { Clock, Camera, Sprout, Package, Coins, Bird, ShieldCheck, FileText, RefreshCw, AlertTriangle, Plus, Download, Printer, Search, Database } from "lucide-react";
+import { Clock, Camera, Sprout, Package, Coins, Bird, ShieldCheck, FileText, RefreshCw, AlertTriangle, Plus, Download, Printer, Search, Database, ListChecks } from "lucide-react";
 
 import { CurrentFarmProvider, useCurrentFarm } from "../../context/CurrentFarmContext";
 import FarmSelector from "../../components/farm/FarmSelector";
@@ -31,9 +31,9 @@ const PAGE = 100;
 
 const CHIPS = [
   { id: "all", label: "All" }, { id: "harvest", label: "Harvest" }, { id: "field", label: "Field" },
-  { id: "cash", label: "Cash" }, { id: "livestock", label: "Animals" }, { id: "photos", label: "Photos" },
+  { id: "cash", label: "Cash" }, { id: "livestock", label: "Animals" }, { id: "task", label: "Tasks" }, { id: "photos", label: "Photos" },
 ];
-const CAT_ICON = { harvest: Package, field: Sprout, cash: Coins, livestock: Bird };
+const CAT_ICON = { harvest: Package, field: Sprout, cash: Coins, livestock: Bird, task: ListChecks };
 
 function authHeaders() { const t = localStorage.getItem("tfos_access_token"); return t ? { Authorization: `Bearer ${t}` } : {}; }
 async function getJSON(url) { const r = await fetch(url, { headers: authHeaders() }); if (!r.ok) throw new Error(String(r.status)); return r.json(); }
@@ -68,6 +68,10 @@ function normCash(c, i) {
 function normFlock(f, i) {
   return { id: f.flock_id || `fl-${i}`, day: dayOf(f.placed_date), time: "", cat: "livestock", label: "Flock placed", summary: [f.flock_label, f.placed_count != null ? `${f.placed_count} birds` : null].filter(Boolean).join(" · "), who: "you", pu: f.current_pu_id || "", route: "poultry", isPhoto: false };
 }
+function normTask(t, i) {
+  const label = t.status === "COMPLETED" ? "Task done" : t.status === "SKIPPED" ? "Task skipped" : "Task expired";
+  return { id: t.task_id || `tk-${i}`, day: dayOf(t.closed_at), time: timeOf(t.closed_at), cat: "task", label, summary: [t.imperative, t.source_module].filter(Boolean).join(" · "), who: "you", pu: t.pu_id || t.entity_id || "", route: "tasks", isPhoto: false };
+}
 
 // ── paging hook: server-side range + offset accumulation across sources
 function useTimeline(farmId, from, to) {
@@ -75,8 +79,8 @@ function useTimeline(farmId, from, to) {
   const [loading, setLoading] = useState(false);
   const [errored, setErrored] = useState({});
   const [hasMore, setHasMore] = useState(false);
-  const raw = useRef({ field: [], harvest: [], cash: [], livestock: [] });
-  const more = useRef({ field: true, harvest: true, cash: true });
+  const raw = useRef({ field: [], harvest: [], cash: [], livestock: [], task: [] });
+  const more = useRef({ field: true, harvest: true, cash: true, task: true });
   const reqId = useRef(0);
 
   const rangeQS = useCallback((fromK, toK) => {
@@ -87,11 +91,11 @@ function useTimeline(farmId, from, to) {
   }, [farmId, from, to]);
 
   const recompute = useCallback(() => {
-    const all = [...raw.current.field, ...raw.current.harvest, ...raw.current.cash, ...raw.current.livestock]
+    const all = [...raw.current.field, ...raw.current.harvest, ...raw.current.cash, ...raw.current.livestock, ...raw.current.task]
       .filter((e) => e.day && (!from || e.day >= from) && (!to || e.day <= to))
       .sort((a, b) => (b.day + (b.time || "")).localeCompare(a.day + (a.time || "")));
     setRows(all);
-    setHasMore(more.current.field || more.current.harvest || more.current.cash);
+    setHasMore(more.current.field || more.current.harvest || more.current.cash || more.current.task);
   }, [from, to]);
 
   const fetchPage = useCallback(async (key, off) => {
@@ -99,11 +103,13 @@ function useTimeline(farmId, from, to) {
       field: () => `/api/v1/field-events?${rangeQS("from_date", "to_date")}&limit=${PAGE}&offset=${off}`,
       harvest: () => `/api/v1/harvests?${rangeQS("date_from", "date_to")}&limit=${PAGE}&offset=${off}`,
       cash: () => `/api/v1/cash-ledger?${rangeQS("period_start", "period_end")}&limit=${PAGE}&offset=${off}`,
+      task: () => `/api/v1/tasks/history?${rangeQS("from_date", "to_date")}&limit=${PAGE}&offset=${off}`,
     };
     const pickers = {
       field: (j) => (j.data?.events ?? j.events ?? []).map(normFieldEvent),
       harvest: (j) => (j.data?.harvests ?? j.harvests ?? []).map(normHarvest),
       cash: (j) => (j.data?.entries ?? j.entries ?? []).map(normCash),
+      task: (j) => (j.data?.tasks ?? []).map(normTask),
     };
     try {
       const j = await getJSON(builders[key]());
@@ -133,16 +139,16 @@ function useTimeline(farmId, from, to) {
     if (!farmId) return;
     const my = ++reqId.current;
     setLoading(true);
-    raw.current = { field: [], harvest: [], cash: [], livestock: [] };
-    more.current = { field: true, harvest: true, cash: true };
-    await Promise.all([fetchPage("field", 0), fetchPage("harvest", 0), fetchPage("cash", 0), fetchFlocks()]);
+    raw.current = { field: [], harvest: [], cash: [], livestock: [], task: [] };
+    more.current = { field: true, harvest: true, cash: true, task: true };
+    await Promise.all([fetchPage("field", 0), fetchPage("harvest", 0), fetchPage("cash", 0), fetchPage("task", 0), fetchFlocks()]);
     if (my !== reqId.current) return;
     recompute(); setLoading(false);
   }, [farmId, fetchPage, fetchFlocks, recompute]);
 
   const loadMore = useCallback(async () => {
     setLoading(true);
-    await Promise.all(["field", "harvest", "cash"].filter((k) => more.current[k]).map((k) => fetchPage(k, raw.current[k].length)));
+    await Promise.all(["field", "harvest", "cash", "task"].filter((k) => more.current[k]).map((k) => fetchPage(k, raw.current[k].length)));
     recompute(); setLoading(false);
   }, [fetchPage, recompute]);
 
@@ -150,7 +156,7 @@ function useTimeline(farmId, from, to) {
   const fetchAll = useCallback(async () => {
     let guard = 0;
     while ((more.current.field || more.current.harvest || more.current.cash) && guard < 200) {
-      await Promise.all(["field", "harvest", "cash"].filter((k) => more.current[k]).map((k) => fetchPage(k, raw.current[k].length)));
+      await Promise.all(["field", "harvest", "cash", "task"].filter((k) => more.current[k]).map((k) => fetchPage(k, raw.current[k].length)));
       guard++;
     }
     recompute();

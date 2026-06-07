@@ -107,3 +107,39 @@ def reset_tis_daily_counters():
         return {"tenants_reset": cur.rowcount}
     finally:
         conn.close()
+
+
+@celery_app.task(
+    name="app.workers.maintenance_worker.expire_due_tasks",
+    bind=True,
+    max_retries=2,
+    queue="maintenance",
+)
+def expire_due_tasks(self):
+    """Auto-close OPEN tasks past their expires_at -> status reflects default_outcome
+    (EXPIRED unless the task asked to auto-complete). Cross-tenant via the worker's
+    superuser connection (BYPASSRLS). Keeps stale tasks from piling up."""
+    logger.info(f"[TASK EXPIRE] Starting at {datetime.now().isoformat()}")
+    conn = get_sync_db()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE tenant.task_queue
+                   SET status = CASE WHEN default_outcome = 'auto_complete' THEN 'COMPLETED' ELSE 'EXPIRED' END,
+                       updated_at = now(),
+                       completed_at = CASE WHEN default_outcome = 'auto_complete' THEN now() ELSE completed_at END
+                 WHERE status = 'OPEN' AND expires_at IS NOT NULL AND expires_at < now()
+                RETURNING task_id
+                """
+            )
+            n = cur.rowcount
+        conn.commit()
+        logger.info(f"[TASK EXPIRE] Closed {n} stale task(s)")
+        return {"expired": n}
+    except Exception as e:
+        conn.rollback()
+        logger.error(f"[TASK EXPIRE] failed: {e}")
+        raise
+    finally:
+        conn.close()

@@ -342,6 +342,25 @@ async def complete_task(
 
     await db.commit()
 
+    # Teach TIS + leave a history trail: log the completion into farm_activity_context.
+    # Separate best-effort txn so it can never roll back the completion.
+    try:
+        await db.execute(
+            text(
+                """
+                INSERT INTO tenant.farm_activity_context
+                    (tenant_id, farm_id, pu_id, kind, summary, source, created_by)
+                SELECT tenant_id, farm_id, pu_id, 'TASK_DONE', :s, 'auto', CAST(:uid AS uuid)
+                  FROM tenant.task_queue WHERE task_id = :tid AND tenant_id = :tenant
+                """
+            ),
+            {"s": f"Completed: {task.imperative}"[:500], "uid": str(user["user_id"]),
+             "tid": str(task_id), "tenant": str(user["tenant_id"])},
+        )
+        await db.commit()
+    except Exception:
+        await db.rollback()
+
     # Fetch next task for Solo preload
     next_task = await _fetch_next_task(db, user["tenant_id"])
 
@@ -539,3 +558,47 @@ async def create_manual_task(
          "title": title, "rank": rank, "due": body.due_date},
     )
     return _envelope_ok({"task_id": tid, "imperative": title, "status": "OPEN"})
+
+
+@router.get("/history", response_model=None)
+async def task_history(
+    user=Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    from_date: date | None = Query(default=None),
+    to_date: date | None = Query(default=None),
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+):
+    """Completed / skipped / expired tasks for the Farm History timeline.
+    Ordered by when they closed (completed_at, else updated_at)."""
+    await set_tenant_context(db, user["tenant_id"])
+    where = ["tenant_id = :tid", "status IN ('COMPLETED','SKIPPED','EXPIRED')"]
+    params: dict = {"tid": str(user["tenant_id"]), "limit": limit, "offset": offset}
+    if from_date:
+        where.append("COALESCE(completed_at, updated_at) >= :fromd")
+        params["fromd"] = from_date
+    if to_date:
+        where.append("COALESCE(completed_at, updated_at) < (:tod::date + 1)")
+        params["tod"] = to_date
+    rows = (
+        await db.execute(
+            text(
+                f"""
+                SELECT task_id, imperative, status, source_module, entity_type, entity_id,
+                       pu_id, COALESCE(completed_at, updated_at) AS closed_at, due_date
+                FROM tenant.task_queue
+                WHERE {' AND '.join(where)}
+                ORDER BY COALESCE(completed_at, updated_at) DESC
+                LIMIT :limit OFFSET :offset
+                """
+            ),
+            params,
+        )
+    ).mappings().all()
+    data = [{
+        "task_id": str(r["task_id"]), "imperative": r["imperative"], "status": r["status"],
+        "source_module": r["source_module"], "entity_type": r["entity_type"],
+        "entity_id": r["entity_id"], "pu_id": r["pu_id"],
+        "closed_at": r["closed_at"].isoformat() if r["closed_at"] else None,
+    } for r in rows]
+    return _envelope_ok({"total": len(data), "tasks": data})

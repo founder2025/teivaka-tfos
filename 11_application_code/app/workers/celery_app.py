@@ -89,6 +89,12 @@ app.conf.update(
             "schedule": crontab(minute=0),
             "options": {"queue": "notifications"},
         },
+        # Auto-expire stale tasks: every hour at :30
+        "expire-due-tasks": {
+            "task": "app.workers.maintenance_worker.expire_due_tasks",
+            "schedule": crontab(minute=30),
+            "options": {"queue": "maintenance"},
+        },
         # AI insights weekly: Sunday 06:00 Fiji = Saturday 18:00 UTC
         "ai-insights-weekly": {
             "task": "app.workers.ai_worker.generate_weekly_insights",
