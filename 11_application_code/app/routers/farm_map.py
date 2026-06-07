@@ -133,9 +133,34 @@ async def put_farm_map(farm_id: str, fc: FeatureCollection,
             text("DELETE FROM tenant.map_features WHERE tenant_id = :tid AND farm_id = :farm_id"),
             {"tid": tid, "farm_id": farm_id},
         )
+        created = {"blocks": [], "zones": []}
+        default_zone_id = None
         for f in fc.features:
             props = dict(f.properties or {})
             area = props.get("area_ha")
+            kind = _kind(props)
+            ref_id = props.get("ref_id")
+
+            # Canonical binding (Phase 1): a drawn/walked ZONE or BLOCK with no
+            # ref_id mints a real tenant.zones / tenant.production_units record so
+            # it becomes first-class across cycles/harvest/events/rotation/reports.
+            # Best-effort: a perm/constraint gap must never break saving geometry.
+            if not ref_id and kind == "ZONE":
+                try:
+                    ref_id = await _mint_zone(db, tid, farm_id, props.get("label"), area)
+                    created["zones"].append(ref_id)
+                except Exception:
+                    ref_id = None
+            elif not ref_id and kind == "BLOCK":
+                try:
+                    if default_zone_id is None:
+                        default_zone_id = await _ensure_default_zone(db, tid, farm_id)
+                    ref_id = await _mint_pu(db, tid, farm_id, default_zone_id, props.get("label"), area)
+                    created["blocks"].append(ref_id)
+                except Exception:
+                    ref_id = None
+            props["ref_id"] = ref_id
+
             await db.execute(
                 text("""
                     INSERT INTO tenant.map_features
@@ -147,8 +172,8 @@ async def put_farm_map(farm_id: str, fc: FeatureCollection,
                          :area_ha, CAST(:uid AS uuid))
                 """),
                 {
-                    "tid": tid, "farm_id": farm_id, "kind": _kind(props),
-                    "ref_id": props.get("ref_id"),
+                    "tid": tid, "farm_id": farm_id, "kind": kind,
+                    "ref_id": ref_id,
                     "label": props.get("label"),
                     "geometry": _json(f.geometry),
                     "properties": _json(props),
@@ -176,7 +201,67 @@ async def put_farm_map(farm_id: str, fc: FeatureCollection,
         except Exception:
             pass  # grant/column gap must not fail the map save
 
-    return {"ok": True, "farm_id": farm_id, "saved": len(fc.features), "pin": pin}
+    return {"ok": True, "farm_id": farm_id, "saved": len(fc.features), "pin": pin, "created": created}
+
+
+# ── Phase 1 canonical-binding helpers: mint zones / production_units ─────────
+async def _next_zone_id(db, farm_id: str) -> str:
+    r = await db.execute(
+        text("SELECT COALESCE(MAX(CAST(SUBSTRING(zone_id FROM :off) AS INT)),0) AS m "
+             "FROM tenant.zones WHERE zone_id ~ :pat"),
+        {"off": len(farm_id) + 3, "pat": f"^{farm_id}-Z[0-9]+$"},
+    )
+    return f"{farm_id}-Z{(int(r.scalar() or 0) + 1):02d}"
+
+
+async def _next_pu_id(db, farm_id: str) -> str:
+    r = await db.execute(
+        text("SELECT COALESCE(MAX(CAST(SUBSTRING(pu_id FROM :off) AS INT)),0) AS m "
+             "FROM tenant.production_units WHERE pu_id ~ :pat"),
+        {"off": len(farm_id) + 4, "pat": f"^{farm_id}-PU[0-9]+$"},
+    )
+    return f"{farm_id}-PU{(int(r.scalar() or 0) + 1):03d}"
+
+
+async def _mint_zone(db, tid, farm_id, label, area_ha) -> str:
+    zid = await _next_zone_id(db, farm_id)
+    await db.execute(
+        text("""INSERT INTO tenant.zones (zone_id, tenant_id, farm_id, zone_name, zone_type, area_ha)
+                VALUES (:zid, :tid, :farm, :name, 'MIXED', :area)"""),
+        {"zid": zid, "tid": tid, "farm": farm_id, "name": (label or "Zone").strip(),
+         "area": float(area_ha) if isinstance(area_ha, (int, float)) else None},
+    )
+    return zid
+
+
+async def _ensure_default_zone(db, tid, farm_id) -> str:
+    r = await db.execute(
+        text("SELECT zone_id FROM tenant.zones WHERE tenant_id = :tid AND farm_id = :farm ORDER BY zone_id LIMIT 1"),
+        {"tid": tid, "farm": farm_id},
+    )
+    row = r.first()
+    if row:
+        return row[0]
+    zid = await _next_zone_id(db, farm_id)
+    await db.execute(
+        text("""INSERT INTO tenant.zones (zone_id, tenant_id, farm_id, zone_name, zone_type)
+                VALUES (:zid, :tid, :farm, 'Main zone', 'MIXED')"""),
+        {"zid": zid, "tid": tid, "farm": farm_id},
+    )
+    return zid
+
+
+async def _mint_pu(db, tid, farm_id, zone_id, label, area_ha) -> str:
+    pid = await _next_pu_id(db, farm_id)
+    area_sqm = round(float(area_ha) * 10000, 2) if isinstance(area_ha, (int, float)) else None
+    await db.execute(
+        text("""INSERT INTO tenant.production_units
+                    (pu_id, tenant_id, zone_id, farm_id, pu_name, pu_type, area_sqm)
+                VALUES (:pid, :tid, :zone, :farm, :name, 'PLOT', :area)"""),
+        {"pid": pid, "tid": tid, "zone": zone_id, "farm": farm_id,
+         "name": (label or "Block").strip(), "area": area_sqm},
+    )
+    return pid
 
 
 import json as _jsonlib

@@ -12,7 +12,7 @@
  */
 import { useMemo, useState, lazy, Suspense } from "react";
 import { useNavigate } from "react-router-dom";
-import { QueryClientProvider, QueryClient, useQuery } from "@tanstack/react-query";
+import { QueryClientProvider, QueryClient, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   MapPin, Plus, Search, Layers, Map as MapIcon, Sprout, Bird, Warehouse, Home,
   Fence, Bird as Poultry, Waves, Box, AlertTriangle, RefreshCw, Compass,
@@ -76,7 +76,13 @@ function FacilityCard({ icon: Icon, title, value, sub, building, onAdd }) {
 function LocationsInner() {
   const { farmId } = useCurrentFarm();
   const navigate = useNavigate();
+  const qc = useQueryClient();
   const go = (sub) => navigate(`/farm/${sub}`);
+  const refreshSpatial = () => {
+    qc.invalidateQueries({ queryKey: ["loc-pus", farmId] });
+    qc.invalidateQueries({ queryKey: ["loc-zones", farmId] });
+    qc.invalidateQueries({ queryKey: ["loc-map", farmId] });
+  };
 
   const zones = useZones(farmId);
   const pus = usePUs(farmId);
@@ -90,7 +96,20 @@ function LocationsInner() {
   const [calcUnit, setCalcUnit] = useState(() => localStorage.getItem("tfos_area_unit") || "acres");
   const [calcShape, setCalcShape] = useState("");
   const [openReq, setOpenReq] = useState(null);
+  const [renameVal, setRenameVal] = useState(null); // null = not renaming
   const openMap = (kind, facilityType) => setOpenReq({ kind, facilityType, nonce: Date.now() });
+  async function saveRename() {
+    const sel = puRows.find((p) => p.pu_id === selected);
+    if (!sel || !renameVal?.trim()) { setRenameVal(null); return; }
+    try {
+      const r = await fetch(`/api/v1/production-units/${encodeURIComponent(sel.pu_id)}`, {
+        method: "PATCH", headers: { "Content-Type": "application/json", ...authHeaders() },
+        body: JSON.stringify({ pu_name: renameVal.trim() }),
+      });
+      if (r.ok) { refreshSpatial(); emitToast("Block renamed"); }
+    } catch { /* non-fatal */ }
+    setRenameVal(null);
+  }
 
   const mapShapes = (mapFeat.data?.features ?? [])
     .map((f) => ({ id: f.properties?.feature_id, label: f.properties?.label || f.properties?.kind, kind: f.properties?.kind, area_ha: f.properties?.area_ha }))
@@ -171,7 +190,7 @@ function LocationsInner() {
               <ColHead extra={<span className="text-[11px]" style={{ color: C.muted }}>draw · auto-area · GPS</span>}>Farm map · {farmId}</ColHead>
               {farmId ? (
                 <Suspense fallback={<div className="rounded-xl flex items-center justify-center" style={{ background: C.paper, height: 460 }}><MapIcon size={26} style={{ color: C.muted }} /></div>}>
-                  <FarmMap farmId={farmId} openRequest={openReq} />
+                  <FarmMap farmId={farmId} openRequest={openReq} onSaved={refreshSpatial} />
                 </Suspense>
               ) : (
                 <div className="rounded-xl flex items-center justify-center text-sm" style={{ background: C.paper, height: 460, color: C.muted }}>Pick a farm to map.</div>
@@ -208,11 +227,24 @@ function LocationsInner() {
           {sel && (
             <Card style={{ padding: 16 }}>
               <div className="flex items-start justify-between gap-2 flex-wrap">
-                <div>
-                  <div className="text-sm font-bold" style={{ color: C.soil }}>{puCode(sel)}</div>
+                <div className="flex-1 min-w-0">
+                  {renameVal === null ? (
+                    <div className="flex items-center gap-2">
+                      <div className="text-sm font-bold" style={{ color: C.soil }}>{puCode(sel)}</div>
+                      {sel.pu_id && <button onClick={() => setRenameVal(sel.pu_name || "")} className={`text-[11px] ${FOCUS}`} style={{ color: C.greenDk }}>Rename</button>}
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-1.5">
+                      <input autoFocus value={renameVal} onChange={(e) => setRenameVal(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === "Enter") saveRename(); if (e.key === "Escape") setRenameVal(null); }}
+                        className={`px-2 py-1 rounded-lg text-sm ${FOCUS}`} style={{ border: `1.5px solid ${C.border}`, background: C.paper, color: C.soil }} />
+                      <button onClick={saveRename} className={`text-[11px] px-2 py-1 rounded-lg text-white ${FOCUS}`} style={{ background: C.greenDk }}>Save</button>
+                      <button onClick={() => setRenameVal(null)} className={`text-[11px] ${FOCUS}`} style={{ color: C.muted }}>Cancel</button>
+                    </div>
+                  )}
                   <div className="text-xs mt-0.5" style={{ color: C.muted }}>{zName(zoneById[sel.zone_id] || {})}{sel.production_name ? ` · ${sel.production_name}` : ""}</div>
                 </div>
-                <button onClick={() => setSelected(null)} className={`text-xs ${FOCUS}`} style={{ color: C.greenDk }}>Close</button>
+                <button onClick={() => { setSelected(null); setRenameVal(null); }} className={`text-xs ${FOCUS}`} style={{ color: C.greenDk }}>Close</button>
               </div>
               <div className="grid gap-2 grid-cols-2 sm:grid-cols-4 mt-3">
                 {[["Zone", zName(zoneById[sel.zone_id] || {})], ["Crop", sel.production_name || "—"], ["Status", puStatus(sel).toLowerCase() || "—"], ["Area", fmtArea(puArea(sel))]].map(([l, v]) => (

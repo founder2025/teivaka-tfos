@@ -86,7 +86,7 @@ function setInteractive(map, on) {
     .forEach((f) => { if (map[f]) (on ? map[f].enable() : map[f].disable()); });
 }
 
-export default function FarmMap({ farmId, onCountsChange, openRequest }) {
+export default function FarmMap({ farmId, onCountsChange, openRequest, onSaved }) {
   const elRef = useRef(null);
   const mapRef = useRef(null);
   const fgRef = useRef(null);      // FeatureGroup of drawn shapes
@@ -446,7 +446,12 @@ export default function FarmMap({ farmId, onCountsChange, openRequest }) {
         body: JSON.stringify({ type: "FeatureCollection", features }),
       });
       if (!r.ok) throw new Error(String(r.status));
+      await r.json().catch(() => null);
       setSaving("saved"); setDirty(false);
+      // Server may have minted canonical blocks/zones (production_units/zones) and
+      // set ref_ids — rehydrate so shapes carry their pu_id and the page lists refresh.
+      try { fgRef.current.clearLayers(); await loadFeatures(mapRef.current, fgRef.current); } catch { /* keep current */ }
+      onSaved?.();
       setTimeout(() => setSaving("idle"), 2000);
     } catch {
       setSaving("error");
