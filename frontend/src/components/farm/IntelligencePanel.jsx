@@ -1,0 +1,7 @@
+import { Sparkles, ArrowRight, AlertTriangle } from "lucide-react";
+const C={paper:"#FFFFFF",green:"#6AA84F",greenDk:"#3E7B1F",soil:"#5C4033",amber:"#BF9000",red:"#A32D2D",line:"#E2D8C3",muted:"#8A7B6F",cream:"#F8F3E9"};
+const I={opp:["Grow Eggplant — strongest right now (return +34%).","Tomato earns the most — net FJD 4,200."],risk:["2 things on hold — do not sell or harvest until cleared."],rec:["Put your next effort into Eggplant.","Keep logging daily — your bank record gets stronger every entry."]};
+export default function IntelligencePanel(){const B=[{icon:ArrowRight,title:"Opportunities",color:C.greenDk,lines:I.opp},{icon:AlertTriangle,title:"Risks",color:C.red,lines:I.risk},{icon:Sparkles,title:"Recommendations",color:C.green,lines:I.rec}];return(
+<section className="rounded-2xl px-4 py-4" style={{background:C.paper,border:`1px solid ${C.line}`}}>
+<div className="flex items-center gap-2 mb-3"><Sparkles size={15} style={{color:C.greenDk}}/><h3 className="text-sm font-semibold" style={{color:C.soil}}>Intelligence</h3><span className="text-xs" style={{color:C.muted}}>· What the system sees in your numbers</span></div>
+{B.map((b,i)=>{const Ic=b.icon;return(<div key={i} className="rounded-xl p-3 mb-2" style={{border:`1px solid ${C.line}`}}><div className="flex items-center gap-2 font-bold mb-1" style={{color:C.soil}}><Ic size={15} style={{color:b.color}}/>{b.title}</div>{b.lines.map((l,j)=>(<div key={j} className="text-[13px] py-0.5" style={{color:C.soil}}>{l}</div>))}</div>);})}</section>);}
