@@ -17,7 +17,7 @@ import "@geoman-io/leaflet-geoman-free/dist/leaflet-geoman.css";
 import iconRetina from "leaflet/dist/images/marker-icon-2x.png";
 import icon from "leaflet/dist/images/marker-icon.png";
 import shadow from "leaflet/dist/images/marker-shadow.png";
-import { Save, LocateFixed, Layers, Loader2, Check, AlertTriangle, Maximize2, Minimize2, MapPin } from "lucide-react";
+import { Save, LocateFixed, Layers, Loader2, Check, AlertTriangle, Maximize2, Minimize2, MapPin, Footprints, Undo2, Flag, X } from "lucide-react";
 
 L.Icon.Default.mergeOptions({ iconRetinaUrl: iconRetina, iconUrl: icon, shadowUrl: shadow });
 
@@ -68,6 +68,9 @@ export default function FarmMap({ farmId, onCountsChange }) {
   const meRef = useRef(null);      // "you are here" marker
   const pendingRef = useRef(null); // freshly-drawn layer awaiting a name
   const nameInputRef = useRef(null);
+  const walkLayerRef = useRef(null); // L.layerGroup for walk vertices + preview
+  const watchIdRef = useRef(null);   // geolocation.watchPosition id
+  const lastPosRef = useRef(null);   // latest {lat,lng,acc} from the watch
   const [drawKind, setDrawKind] = useState("ZONE");
   const drawKindRef = useRef("ZONE");
   const [status, setStatus] = useState("loading"); // loading|ready
@@ -77,6 +80,9 @@ export default function FarmMap({ farmId, onCountsChange }) {
   const [total, setTotal] = useState({ zones: 0, blocks: 0, ha: 0 });
   const [fullscreen, setFullscreen] = useState(false);
   const [nameModal, setNameModal] = useState({ open: false, kind: "ZONE", value: "" });
+  const [walking, setWalking] = useState(false);     // GPS walk-the-boundary mode
+  const [walkPts, setWalkPts] = useState([]);        // captured corners [{lat,lng,acc}]
+  const [liveAcc, setLiveAcc] = useState(null);      // current GPS accuracy (m)
 
   useEffect(() => { drawKindRef.current = drawKind; }, [drawKind]);
 
@@ -91,6 +97,7 @@ export default function FarmMap({ farmId, onCountsChange }) {
       try { map.pm.removeControls(); } catch { /* not added yet */ }
       map.pm.disableDraw?.();
       map.pm.disableGlobalEditMode?.();
+      cleanupWalk();
       setInteractive(map, false);
     }
     const t = setTimeout(() => map.invalidateSize(), 80);
@@ -152,6 +159,7 @@ export default function FarmMap({ farmId, onCountsChange }) {
 
     const fg = L.featureGroup().addTo(map);
     fgRef.current = fg;
+    walkLayerRef.current = L.layerGroup().addTo(map); // walk vertices + live preview
 
     // Draw tools added only in fullscreen (see fullscreen effect); preview is read-only.
     map.pm.setGlobalOptions({ layerGroup: fg });
@@ -177,7 +185,11 @@ export default function FarmMap({ farmId, onCountsChange }) {
     loadFeatures(map, fg);
     const onResize = () => map.invalidateSize();
     window.addEventListener("resize", onResize);
-    return () => { window.removeEventListener("resize", onResize); map.remove(); mapRef.current = null; };
+    return () => {
+      window.removeEventListener("resize", onResize);
+      if (watchIdRef.current != null) navigator.geolocation.clearWatch(watchIdRef.current);
+      map.remove(); mapRef.current = null;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -227,6 +239,77 @@ export default function FarmMap({ farmId, onCountsChange }) {
     pendingRef.current = null;
     setNameModal({ open: false, kind: "ZONE", value: "" });
     recount();
+  }
+
+  // ── GPS walk-the-boundary capture ───────────────────────────────────
+  // Farmer stands at each corner and taps "Drop corner"; we record the actual
+  // GPS fix. No on-screen drawing — accurate for interior / sloped land.
+  function accColor(a) { return a == null ? C.muted : a <= 10 ? C.green : a <= 25 ? C.amber : C.red; }
+
+  function redrawWalk(pts) {
+    const lg = walkLayerRef.current; if (!lg) return;
+    lg.clearLayers();
+    pts.forEach((p, i) => {
+      L.circleMarker([p.lat, p.lng], { radius: 7, color: "#fff", weight: 2, fillColor: C.greenDk, fillOpacity: 1 })
+        .bindTooltip(String(i + 1), { permanent: true, direction: "center", className: "tfos-vtx" })
+        .addTo(lg);
+    });
+    const latlngs = pts.map((p) => [p.lat, p.lng]);
+    if (pts.length >= 3) L.polygon(latlngs, { ...styleFor(drawKindRef.current), dashArray: "5 5" }).addTo(lg);
+    else if (pts.length === 2) L.polyline(latlngs, { color: C.greenDk, weight: 2, dashArray: "5 5" }).addTo(lg);
+  }
+
+  function startWalk() {
+    if (!navigator.geolocation) {
+      window.dispatchEvent(new CustomEvent("tfos:toast", { detail: { message: "This device has no GPS" } }));
+      return;
+    }
+    setWalking(true); setWalkPts([]); redrawWalk([]);
+    watchIdRef.current = navigator.geolocation.watchPosition(
+      (pos) => {
+        const { latitude, longitude, accuracy } = pos.coords;
+        lastPosRef.current = { lat: latitude, lng: longitude, acc: accuracy };
+        setLiveAcc(accuracy);
+        const map = mapRef.current;
+        if (meRef.current) meRef.current.setLatLng([latitude, longitude]);
+        else meRef.current = L.circleMarker([latitude, longitude], { radius: 6, color: "#fff", weight: 2, fillColor: C.green, fillOpacity: 1 }).addTo(map).bindTooltip("You are here");
+      },
+      () => window.dispatchEvent(new CustomEvent("tfos:toast", { detail: { message: "Allow location access to walk the boundary" } })),
+      { enableHighAccuracy: true, maximumAge: 1000, timeout: 12000 }
+    );
+    // jump to first fix
+    navigator.geolocation.getCurrentPosition((pos) => mapRef.current?.setView([pos.coords.latitude, pos.coords.longitude], 19), () => {}, { enableHighAccuracy: true });
+  }
+
+  function dropCorner() {
+    const pos = lastPosRef.current;
+    if (!pos) { window.dispatchEvent(new CustomEvent("tfos:toast", { detail: { message: "Waiting for a GPS fix…" } })); return; }
+    const next = [...walkPts, pos];
+    setWalkPts(next); redrawWalk(next);
+    mapRef.current?.panTo([pos.lat, pos.lng]);
+  }
+  function undoCorner() {
+    const next = walkPts.slice(0, -1);
+    setWalkPts(next); redrawWalk(next);
+  }
+  function stopWatch() {
+    if (watchIdRef.current != null) { navigator.geolocation.clearWatch(watchIdRef.current); watchIdRef.current = null; }
+  }
+  function finishWalk() {
+    if (walkPts.length < 3) return;
+    const kind = drawKindRef.current;
+    const layer = L.polygon(walkPts.map((p) => [p.lat, p.lng]), styleFor(kind));
+    layer._kind = kind;
+    fgRef.current.addLayer(layer);
+    pendingRef.current = layer;
+    cleanupWalk();
+    setNameModal({ open: true, kind, value: "" }); // themed name modal, then it's saved on the map
+  }
+  function cancelWalk() { cleanupWalk(); }
+  function cleanupWalk() {
+    stopWatch();
+    walkLayerRef.current?.clearLayers();
+    setWalking(false); setWalkPts([]); setLiveAcc(null);
   }
 
   function locateMe() {
@@ -310,16 +393,59 @@ export default function FarmMap({ farmId, onCountsChange }) {
             <Minimize2 size={16} />Close map
           </button>
 
-          <div className="absolute z-[1000] bottom-3 left-3 flex items-center gap-2">
-            <button onClick={locateMe} className="text-sm px-3.5 py-2.5 rounded-xl flex items-center gap-2 shadow-lg font-semibold hover:brightness-95" style={{ background: "white", color: C.soil, border: `1px solid ${C.border}` }}>
-              <LocateFixed size={16} />GPS
+          {!walking && (
+            <button onClick={startWalk}
+              className="absolute z-[1000] top-[116px] left-3 text-sm px-3.5 py-2.5 rounded-xl flex items-center gap-2 shadow-lg font-semibold text-white hover:brightness-95"
+              style={{ background: C.soil }}>
+              <Footprints size={16} />Walk the {drawKind === "BLOCK" ? "block" : drawKind === "BOUNDARY" ? "boundary" : "zone"} (GPS)
             </button>
-            <button onClick={save} disabled={saving === "saving"} className="text-sm px-5 py-2.5 rounded-xl flex items-center gap-2 shadow-lg text-white font-semibold hover:brightness-95 disabled:opacity-70"
-              style={{ background: saving === "saved" ? C.green : saving === "error" ? C.red : C.greenDk }}>
-              {saving === "saving" ? <Loader2 size={16} className="animate-spin" /> : saving === "saved" ? <Check size={16} /> : saving === "error" ? <AlertTriangle size={16} /> : <Save size={16} />}
-              {saving === "saving" ? "Saving…" : saving === "saved" ? "Saved" : saving === "error" ? "Failed" : dirty ? "Save map*" : "Save map"}
-            </button>
-          </div>
+          )}
+
+          {!walking && (
+            <div className="absolute z-[1000] bottom-3 left-3 flex items-center gap-2">
+              <button onClick={locateMe} className="text-sm px-3.5 py-2.5 rounded-xl flex items-center gap-2 shadow-lg font-semibold hover:brightness-95" style={{ background: "white", color: C.soil, border: `1px solid ${C.border}` }}>
+                <LocateFixed size={16} />GPS
+              </button>
+              <button onClick={save} disabled={saving === "saving"} className="text-sm px-5 py-2.5 rounded-xl flex items-center gap-2 shadow-lg text-white font-semibold hover:brightness-95 disabled:opacity-70"
+                style={{ background: saving === "saved" ? C.green : saving === "error" ? C.red : C.greenDk }}>
+                {saving === "saving" ? <Loader2 size={16} className="animate-spin" /> : saving === "saved" ? <Check size={16} /> : saving === "error" ? <AlertTriangle size={16} /> : <Save size={16} />}
+                {saving === "saving" ? "Saving…" : saving === "saved" ? "Saved" : saving === "error" ? "Failed" : dirty ? "Save map*" : "Save map"}
+              </button>
+            </div>
+          )}
+
+          {/* FIELD WALK panel — stand at each corner, tap Drop corner, walk to next */}
+          {walking && (
+            <div className="absolute z-[1001] bottom-3 left-1/2 -translate-x-1/2 w-[min(440px,calc(100%-1.5rem))] rounded-2xl shadow-xl p-3.5" style={{ background: "white", border: `1px solid ${C.border}` }}>
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <div className="flex items-center gap-2">
+                  <Footprints size={16} style={{ color: C.soil }} />
+                  <span className="text-sm font-bold" style={{ color: C.soil }}>Walking the {drawKind === "BLOCK" ? "block" : drawKind === "BOUNDARY" ? "boundary" : "zone"}</span>
+                </div>
+                <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{ color: accColor(liveAcc), border: `1px solid ${C.border}` }}>
+                  {liveAcc == null ? "GPS…" : `GPS ±${Math.round(liveAcc)}m`}
+                </span>
+              </div>
+              <div className="text-xs mb-2.5" style={{ color: C.muted }}>
+                {walkPts.length === 0 ? "Stand at the first corner and tap Drop corner." : `${walkPts.length} corner${walkPts.length === 1 ? "" : "s"} captured — walk to the next and drop again.`}
+                {liveAcc != null && liveAcc > 25 ? " · Move to open sky for better accuracy." : ""}
+              </div>
+              <button onClick={dropCorner} className="w-full text-base px-4 py-3 rounded-xl flex items-center justify-center gap-2 text-white font-bold hover:brightness-95 mb-2" style={{ background: C.greenDk }}>
+                <MapPin size={18} />Drop corner here
+              </button>
+              <div className="flex items-center gap-2">
+                <button onClick={undoCorner} disabled={!walkPts.length} className="flex-1 text-sm px-3 py-2 rounded-xl flex items-center justify-center gap-1.5 font-semibold hover:brightness-95 disabled:opacity-40" style={{ color: C.soil, border: `1px solid ${C.border}` }}>
+                  <Undo2 size={15} />Undo
+                </button>
+                <button onClick={finishWalk} disabled={walkPts.length < 3} className="flex-[2] text-sm px-3 py-2 rounded-xl flex items-center justify-center gap-1.5 text-white font-semibold hover:brightness-95 disabled:opacity-40" style={{ background: C.soil }}>
+                  <Flag size={15} />Finish {walkPts.length >= 3 ? `(${walkPts.length} corners)` : `(need ${3 - walkPts.length} more)`}
+                </button>
+                <button onClick={cancelWalk} className="text-sm px-3 py-2 rounded-xl flex items-center justify-center font-semibold hover:brightness-95" style={{ color: C.red, border: `1px solid ${C.border}` }}>
+                  <X size={15} />
+                </button>
+              </div>
+            </div>
+          )}
         </>
       )}
 
@@ -400,4 +526,10 @@ const THEME_CSS = `
 .tfos-map .leaflet-tooltip-top:before, .tfos-map .leaflet-tooltip-bottom:before,
 .tfos-map .leaflet-tooltip-left:before, .tfos-map .leaflet-tooltip-right:before { display: none; }
 .tfos-map .leaflet-control-attribution { background: rgba(248,243,233,.85) !important; color: #8A7863 !important; border-radius: 6px 0 0 0; }
+/* Walk-mode corner number badges */
+.tfos-map .leaflet-tooltip.tfos-vtx {
+  background: #3E7B1F !important; color: #fff !important; border: 2px solid #fff !important;
+  border-radius: 999px !important; font-weight: 700 !important; font-size: 11px !important;
+  padding: 0 !important; width: 18px; height: 18px; line-height: 14px; text-align: center; box-shadow: none !important;
+}
 `;
