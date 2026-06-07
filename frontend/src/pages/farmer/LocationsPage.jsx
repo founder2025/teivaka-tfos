@@ -10,7 +10,7 @@
  * financials/crops + flocks (where each enterprise is). Honest: the map
  * (L2), facilities registry, add zone/block create forms. No fabricated geometry.
  */
-import { useMemo, useState } from "react";
+import { useMemo, useState, lazy, Suspense } from "react";
 import { useNavigate } from "react-router-dom";
 import { QueryClientProvider, QueryClient, useQuery } from "@tanstack/react-query";
 import {
@@ -21,6 +21,8 @@ import {
 import { CurrentFarmProvider, useCurrentFarm } from "../../context/CurrentFarmContext";
 import FarmSelector from "../../components/farm/FarmSelector";
 import ModeDropdown from "../../components/farm/ModeDropdown";
+
+const FarmMap = lazy(() => import("./FarmMap"));
 
 const C = {
   soil: "#5C4033", cream: "#F8F3E9", border: "#E6DED0", muted: "#8A7863", ink: "#3A2E26",
@@ -112,7 +114,7 @@ function LocationsInner() {
       </div>
 
       <div className="rounded-xl border p-3 text-xs" style={{ background: C.greenTint, borderColor: C.border, color: C.greenDk }}>
-        <strong>Interactive satellite map ships next.</strong> You'll draw your own zones, blocks and farm boundary on a live satellite map, with labels and auto-calculated area + live GPS. For now, your zones and blocks are listed below.
+        <strong>Draw your farm on the satellite map.</strong> Pick Zone, Block or Boundary, draw it on the live satellite image, and area auto-calculates. Use GPS to centre on where you're standing. Your existing zones and blocks are also listed below.
       </div>
 
       {loading ? (
@@ -149,15 +151,17 @@ function LocationsInner() {
               {zoneFilter && <button onClick={() => setZoneFilter(null)} className={`mt-2 text-[11px] ${FOCUS}`} style={{ color: C.greenDk }}>Clear zone filter</button>}
             </Card>
 
-            {/* map placeholder (L2) */}
+            {/* interactive satellite map (L2) */}
             <Card style={{ padding: 14 }}>
-              <ColHead>Farm map · {farmId}</ColHead>
-              <div className="rounded-xl border flex flex-col items-center justify-center text-center p-6" style={{ borderColor: C.border, borderStyle: "dashed", background: C.paper, minHeight: 200 }}>
-                <MapIcon size={28} style={{ color: C.muted }} />
-                <div className="text-sm font-semibold mt-2" style={{ color: C.soil }}>Interactive satellite map — ships next</div>
-                <div className="text-xs mt-1 max-w-xs" style={{ color: C.muted }}>Draw your zones, blocks and boundary on a live satellite map, with labels, auto-area and live GPS.</div>
-                <div className="text-[11px] mt-3" style={{ color: C.muted }}>{zoneRows.length} zones · {puRows.length} blocks mapped as lists today</div>
-              </div>
+              <ColHead extra={<span className="text-[11px]" style={{ color: C.muted }}>draw · auto-area · GPS</span>}>Farm map · {farmId}</ColHead>
+              {farmId ? (
+                <Suspense fallback={<div className="rounded-xl flex items-center justify-center" style={{ background: C.paper, height: 460 }}><MapIcon size={26} style={{ color: C.muted }} /></div>}>
+                  <FarmMap farmId={farmId} />
+                </Suspense>
+              ) : (
+                <div className="rounded-xl flex items-center justify-center text-sm" style={{ background: C.paper, height: 460, color: C.muted }}>Pick a farm to map.</div>
+              )}
+              <div className="text-[11px] mt-2" style={{ color: C.muted }}>Pick Zone/Block/Boundary, draw on the satellite image, name it. Area auto-calculates. Tap Save map to keep it.</div>
             </Card>
 
             {/* block list */}
@@ -253,7 +257,7 @@ function LocationsInner() {
               <Compass size={18} style={{ color: C.greenDk, marginTop: 1 }} />
               <div>
                 <div className="text-sm font-semibold" style={{ color: C.soil }}>Map, boundaries & GPS</div>
-                <div className="text-xs mt-0.5 max-w-xl" style={{ color: C.muted }}>Next: draw your zones and blocks on a live satellite map, set your farm boundary, and GPS + area auto-calculate as you walk and mark your edges. Worker attendance can then be geo-locked to your farm area.</div>
+                <div className="text-xs mt-0.5 max-w-xl" style={{ color: C.muted }}>Your drawn zones, blocks and boundary are saved to your farm with auto-calculated area. Next (L3): geo-lock worker attendance to your farm boundary and pin facility points (sheds, water, gates).</div>
               </div>
             </div>
           </div>
