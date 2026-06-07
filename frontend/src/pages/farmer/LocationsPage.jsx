@@ -28,6 +28,17 @@ import AttendanceCard from "../../components/farm/AttendanceCard";
 
 const AREA_UNITS = { acres: "acres", ha: "ha", m2: "m²" };
 const useFarmMapFeatures = (id) => useQuery({ queryKey: ["loc-map", id], queryFn: () => getJSON(`/api/v1/farm-map/${encodeURIComponent(id)}`), enabled: !!id, retry: 0 });
+const useBlockStatus = (id) => useQuery({ queryKey: ["loc-status", id], queryFn: () => getJSON(`/api/v1/production-units/status?farm_id=${encodeURIComponent(id)}`), enabled: !!id, retry: 0 });
+
+// Block state machine → pill colour (Phase 2)
+const STATE_STYLE = {
+  EMPTY:      { bg: "#EFEAE0", fg: "#8A7863", label: "Empty" },
+  PREPARING:  { bg: "#EFE6D6", fg: "#5C4033", label: "Preparing" },
+  ACTIVE:     { bg: "#E9F2DD", fg: "#3E7B1F", label: "Growing" },
+  HARVESTING: { bg: "#FBF0D8", fg: "#BF9000", label: "Harvesting" },
+  RESTING:    { bg: "#E6EEF6", fg: "#2D6CDF", label: "Resting" },
+  IDLE:       { bg: "#FBEAE7", fg: "#D4442E", label: "Idle" },
+};
 
 const C = {
   soil: "#5C4033", cream: "#F8F3E9", border: "#E6DED0", muted: "#8A7863", ink: "#3A2E26",
@@ -82,6 +93,7 @@ function LocationsInner() {
     qc.invalidateQueries({ queryKey: ["loc-pus", farmId] });
     qc.invalidateQueries({ queryKey: ["loc-zones", farmId] });
     qc.invalidateQueries({ queryKey: ["loc-map", farmId] });
+    qc.invalidateQueries({ queryKey: ["loc-status", farmId] });
   };
 
   const zones = useZones(farmId);
@@ -89,6 +101,8 @@ function LocationsInner() {
   const crops = useCrops(farmId);
   const flocks = useFlocks(farmId);
   const mapFeat = useFarmMapFeatures(farmId);
+  const blockStatus = useBlockStatus(farmId);
+  const statusByPu = useMemo(() => Object.fromEntries((blockStatus.data?.data ?? []).map((s) => [s.pu_id, s])), [blockStatus.data]);
 
   const [zoneFilter, setZoneFilter] = useState(null);
   const [search, setSearch] = useState("");
@@ -208,13 +222,14 @@ function LocationsInner() {
               {blocks.length === 0 ? <div className="text-sm" style={{ color: C.muted }}>No blocks{zoneFilter || q ? " match" : " yet"}.</div> : (
                 <div className="space-y-1 max-h-[420px] overflow-y-auto">
                   {blocks.map((p) => {
-                    const s = puStatus(p);
+                    const st = statusByPu[p.pu_id];
+                    const sty = st ? (STATE_STYLE[st.state] || STATE_STYLE.EMPTY) : null;
                     return (
                       <div key={p.pu_id} role="button" tabIndex={0} onClick={() => setSelected(p.pu_id)} onKeyDown={(e) => { if (e.key === "Enter") setSelected(p.pu_id); }}
                         className={`flex items-center gap-2 rounded-lg p-2 cursor-pointer hover:bg-[#FCFAF5] ${FOCUS}`} style={{ border: `1px solid ${selected === p.pu_id ? C.green : "transparent"}` }}>
                         <span className="text-xs font-semibold shrink-0" style={{ color: C.soil }}>{puCode(p)}</span>
-                        <span className="text-[11px] flex-1 min-w-0 truncate" style={{ color: C.muted }}>{p.production_name || zName(zoneById[p.zone_id] || {})}</span>
-                        {s && <span className="text-[10px] px-1.5 py-0.5 rounded-full shrink-0" style={{ color: statusColor(s), border: `1px solid ${C.border}` }}>{s.toLowerCase()}</span>}
+                        <span className="text-[11px] flex-1 min-w-0 truncate" style={{ color: C.muted }}>{st?.crop || p.production_name || zName(zoneById[p.zone_id] || {})}</span>
+                        {sty && <span className="text-[10px] px-1.5 py-0.5 rounded-full shrink-0 font-semibold" style={{ color: sty.fg, background: sty.bg }}>{st.label}</span>}
                       </div>
                     );
                   })}
@@ -247,10 +262,25 @@ function LocationsInner() {
                 <button onClick={() => { setSelected(null); setRenameVal(null); }} className={`text-xs ${FOCUS}`} style={{ color: C.greenDk }}>Close</button>
               </div>
               <div className="grid gap-2 grid-cols-2 sm:grid-cols-4 mt-3">
-                {[["Zone", zName(zoneById[sel.zone_id] || {})], ["Crop", sel.production_name || "—"], ["Status", puStatus(sel).toLowerCase() || "—"], ["Area", fmtArea(puArea(sel))]].map(([l, v]) => (
-                  <div key={l} className="rounded-lg p-2" style={{ background: C.paper }}><div className="text-[9px] uppercase" style={{ color: C.muted }}>{l}</div><div className="text-sm font-semibold truncate" style={{ color: C.soil }}>{v}</div></div>
-                ))}
+                {[["Zone", zName(zoneById[sel.zone_id] || {})],
+                  ["Crop", statusByPu[sel.pu_id]?.crop || statusByPu[sel.pu_id]?.last_crop || sel.production_name || "—"],
+                  ["State", statusByPu[sel.pu_id]?.label || "—"],
+                  ["Area", fmtArea(puArea(sel))]].map(([l, v]) => {
+                  const isState = l === "State";
+                  const sty = isState && statusByPu[sel.pu_id] ? (STATE_STYLE[statusByPu[sel.pu_id].state] || STATE_STYLE.EMPTY) : null;
+                  return (
+                    <div key={l} className="rounded-lg p-2" style={{ background: sty ? sty.bg : C.paper }}>
+                      <div className="text-[9px] uppercase" style={{ color: C.muted }}>{l}</div>
+                      <div className="text-sm font-semibold truncate" style={{ color: sty ? sty.fg : C.soil }}>{v}</div>
+                    </div>
+                  );
+                })}
               </div>
+              {statusByPu[sel.pu_id]?.state === "IDLE" && (
+                <div className="mt-2 text-[11px] rounded-lg px-2.5 py-1.5" style={{ background: STATE_STYLE.IDLE.bg, color: STATE_STYLE.IDLE.fg }}>
+                  This block has been idle {statusByPu[sel.pu_id].days_idle} days. Rotation suggestions arrive in Phase 3.
+                </div>
+              )}
               <button onClick={() => go("cycles")} className={`mt-3 text-xs px-3 py-1.5 rounded-lg hover:brightness-95 ${FOCUS}`} style={{ color: C.greenDk, border: `1px solid ${C.border}` }}>Open production →</button>
             </Card>
           )}
