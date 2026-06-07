@@ -127,6 +127,39 @@ async def clock(body: ClockIn, user: dict = Depends(get_current_user)):
     }
 
 
+@router.get("/on-site")
+async def on_site(farm_id: str, user: dict = Depends(get_current_user)):
+    """Who's on-site today — latest clock event per worker (Fiji day), with the
+    on_site flag = last event was a CLOCK_IN. Manager summary for the Labor page."""
+    tid = str(user["tenant_id"])
+    async with get_rls_db(tid) as db:
+        res = await db.execute(
+            text("""
+                SELECT DISTINCT ON (COALESCE(worker_id::text, worker_name, attendance_id::text))
+                       worker_id, worker_name, kind, occurred_at, inside_boundary, distance_m
+                  FROM tenant.worker_attendance
+                 WHERE tenant_id = :tid AND farm_id = :farm_id
+                   AND (occurred_at AT TIME ZONE 'Pacific/Fiji')::date
+                       = (now() AT TIME ZONE 'Pacific/Fiji')::date
+                 ORDER BY COALESCE(worker_id::text, worker_name, attendance_id::text), occurred_at DESC
+            """),
+            {"tid": tid, "farm_id": farm_id},
+        )
+        rows = [dict(r) for r in res.mappings().all()]
+    data = []
+    for r in rows:
+        data.append({
+            "worker_id": str(r["worker_id"]) if r.get("worker_id") else None,
+            "worker_name": r.get("worker_name") or "Unnamed",
+            "on_site": r["kind"] == "CLOCK_IN",
+            "last_kind": r["kind"],
+            "last_at": r["occurred_at"].isoformat() if r.get("occurred_at") else None,
+            "inside_boundary": r.get("inside_boundary"),
+            "distance_m": float(r["distance_m"]) if r.get("distance_m") is not None else None,
+        })
+    return {"on_site_count": sum(1 for d in data if d["on_site"]), "total_today": len(data), "data": data}
+
+
 @router.get("")
 async def list_attendance(farm_id: str, limit: int = 50,
                           user: dict = Depends(get_current_user)):

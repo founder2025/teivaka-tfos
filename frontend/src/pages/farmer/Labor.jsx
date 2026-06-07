@@ -84,6 +84,13 @@ async function fetchLabor(farmId) {
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const b = await res.json(); return b?.data ?? [];
 }
+async function fetchOnSite(farmId) {
+  if (!farmId) return { on_site_count: 0, data: [] };
+  const res = await fetch(`/api/v1/attendance/on-site?farm_id=${encodeURIComponent(farmId)}`, { headers: authHeaders() });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+function fmtClock(iso) { try { return new Date(iso).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" }); } catch { return ""; } }
 
 // ── Modals (functional, API-backed) ──────────────────────────────────
 function AddWorkerModal({ farmId, isOpen, onClose, onSaved }) {
@@ -204,8 +211,10 @@ function LaborInner() {
 
   const workersQuery = useQuery({ queryKey: ["workers", farmId], queryFn: () => fetchWorkers(farmId), enabled: !!farmId });
   const laborQuery = useQuery({ queryKey: ["labor", farmId], queryFn: () => fetchLabor(farmId), enabled: !!farmId });
+  const onSiteQuery = useQuery({ queryKey: ["onsite", farmId], queryFn: () => fetchOnSite(farmId), enabled: !!farmId, refetchInterval: 60_000 });
   const workers = workersQuery.data ?? [];
   const attendance = laborQuery.data ?? [];
+  const onSite = onSiteQuery.data ?? { on_site_count: 0, data: [] };
   const wagesRecorded = useMemo(() => attendance.reduce((s, r) => s + Number(r.total_pay_fjd ?? 0), 0), [attendance]);
   const activeTab = TABS.find((t) => t.id === tab) || TABS[0];
 
@@ -227,8 +236,8 @@ function LaborInner() {
       <div className="grid gap-2 grid-cols-2 sm:grid-cols-3 md:grid-cols-5">
         <MetricCard label="Active workers" value={String(workers.length)} sub="on roster" loading={workersQuery.isLoading} />
         <MetricCard label="Wages recorded" value={formatFJD(wagesRecorded)} sub="recent timesheets" loading={laborQuery.isLoading} />
-        <MetricCard label="On-site now" phase="Phase 4.2" />
-        <MetricCard label="Expected today" phase="Phase 4.2" />
+        <MetricCard label="On-site now" value={String(onSite.on_site_count)} sub="GPS clocked in" loading={onSiteQuery.isLoading} />
+        <MetricCard label="Clocked today" value={String(onSite.total_today ?? onSite.data.length)} sub="in & out" loading={onSiteQuery.isLoading} />
         <MetricCard label="Next payday" phase="Phase 4.2" />
       </div>
 
@@ -254,9 +263,36 @@ function LaborInner() {
           )}
         </div>
 
-        {/* Today — who's working (real worker grid; live status awaits a check-in endpoint) */}
+        {/* Today — who's working */}
         {tab === "today" && (
           <div>
+            {/* On-site now — live from geo-locked clock in/out */}
+            <div className="mb-4">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: C.soil }}>On-site now</span>
+                <span className="text-[10px] px-2 py-0.5 rounded-full" style={{ background: C.greenTint, color: C.greenDk }}>{onSite.on_site_count} on-site · GPS</span>
+              </div>
+              {onSiteQuery.isLoading ? <p className="text-xs" style={{ color: C.muted }}>Checking…</p>
+                : onSite.data.length === 0 ? <p className="text-xs" style={{ color: C.muted }}>No one has clocked in today. Workers clock in from <strong>Locations → Worker attendance</strong> (GPS-checked against your farm boundary).</p>
+                : (
+                  <div className="grid gap-2 grid-cols-1 sm:grid-cols-2">
+                    {onSite.data.map((p, i) => (
+                      <div key={i} className="flex items-center gap-3 rounded-xl p-2.5" style={{ background: C.cream }}>
+                        <div className="w-9 h-9 rounded-full flex items-center justify-center text-xs font-semibold text-white" style={{ background: p.on_site ? C.green : C.muted }}>{initials(p.worker_name)}</div>
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium text-sm truncate" style={{ color: C.soil }}>{p.worker_name}</div>
+                          <div className="text-[11px]" style={{ color: C.muted }}>{p.on_site ? "Clocked in" : "Clocked out"} {fmtClock(p.last_at)}{p.inside_boundary === false ? ` · ~${Math.round(p.distance_m)}m off-farm` : ""}</div>
+                        </div>
+                        <span className="text-[10px] font-semibold px-2 py-1 rounded-full" style={{
+                          color: p.on_site ? (p.inside_boundary === false ? C.amber : C.greenDk) : C.muted,
+                          background: "white", border: `1px solid ${C.border}`,
+                        }}>{p.on_site ? (p.inside_boundary === false ? "off-farm" : "on-site") : "out"}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+            </div>
+            <div className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: C.soil }}>Roster</div>
             {workersQuery.isLoading && <p style={{ color: C.muted }}>Loading team…</p>}
             {!workersQuery.isLoading && workers.length === 0 && <p style={{ color: C.muted }}>No workers on this farm yet. Add workers in the Roster tab.</p>}
             <div className="grid gap-2 grid-cols-1 sm:grid-cols-2">
@@ -272,7 +308,7 @@ function LaborInner() {
               ))}
             </div>
             {workers.length > 0 && (
-              <p className="text-xs mt-3" style={{ color: C.muted }}>Live on-site / expected status needs a worker check-in endpoint — until then, status reads “—”. Use “Mark attendance” to log a day.</p>
+              <p className="text-xs mt-3" style={{ color: C.muted }}>Live on-site status comes from GPS clock-in (Locations → Worker attendance). “Mark attendance” logs a paid timesheet day for payroll.</p>
             )}
           </div>
         )}
