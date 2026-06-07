@@ -43,16 +43,22 @@ export default function Modal({
 }) {
   const dialogRef = useRef(null);
 
-  // ESC closes; lock body scroll while open.
+  // Keep a stable ref to onClose so the focus/scroll-lock effect below depends
+  // ONLY on isOpen. (onClose is usually an inline arrow recreated every render;
+  // depending on it re-ran this effect on every keystroke and stole focus back
+  // to the first field.)
+  const onCloseRef = useRef(onClose);
+  useEffect(() => { onCloseRef.current = onClose; });
+
+  // ESC closes; lock body scroll while open; autofocus once on open.
   useEffect(() => {
     if (!isOpen) return;
     function onKey(e) {
-      if (e.key === "Escape") onClose?.();
+      if (e.key === "Escape") onCloseRef.current?.();
     }
     document.addEventListener("keydown", onKey);
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
-    // Move focus into the dialog after mount.
     const tid = setTimeout(() => {
       const focusable = dialogRef.current?.querySelector(
         "[autofocus], input, select, textarea, button:not([aria-label='Close'])",
@@ -64,7 +70,7 @@ export default function Modal({
       document.body.style.overflow = prevOverflow;
       clearTimeout(tid);
     };
-  }, [isOpen, onClose]);
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
