@@ -43,6 +43,7 @@ const MeSettings    = lazy(() => import("./pages/farmer/MeSettings"));
 const FieldEventNew = lazy(() => import("./pages/farmer/FieldEventNew"));
 const KnowledgeBase = lazy(() => import("./pages/farmer/KnowledgeBase"));
 const FarmManager   = lazy(() => import("./pages/farmer/FarmManager"));
+const FarmsManage   = lazy(() => import("./pages/farmer/FarmsManage"));
 const TIS           = lazy(() => import("./pages/farmer/TIS"));
 const Calendar      = lazy(() => import("./pages/farmer/FarmerCalendar"));
 const Members       = lazy(() => import("./pages/farmer/Members"));
@@ -272,6 +273,7 @@ export default function App() {
             <Route path="/farm/gallery"      element={<ComingSoon title="Gallery" />} />
             <Route path="/farm/partnerships" element={<ComingSoon title="Partnerships" />} />
             <Route path="/farm/locations"    element={<LocationsPage />} />
+            <Route path="/farm/manage"       element={<FarmsManage />} />
 
             <Route path="/tis/history" element={<ComingSoon title="TIS History" phase="4.3" />} />
             <Route path="/tis/voice"   element={<ComingSoon title="TIS Voice"   phase="5"   />} />

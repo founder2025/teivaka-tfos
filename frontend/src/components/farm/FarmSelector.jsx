@@ -9,7 +9,8 @@
  */
 import { useState, useEffect, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, ChevronDown, Check, Sprout } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { Plus, ChevronDown, Check, Sprout, Settings } from "lucide-react";
 
 import { useCurrentFarm } from "../../context/CurrentFarmContext";
 import { getCurrentUser } from "../../utils/auth";
@@ -46,6 +47,7 @@ export default function FarmSelector() {
   const [island, setIsland] = useState("");
   const [busy, setBusy] = useState(false);
   const wrapRef = useRef(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
     if (farms.length && !farms.some((f) => f.farm_id === farmId)) setFarmId(farms[0].farm_id);
@@ -143,6 +145,11 @@ export default function FarmSelector() {
               className="w-full flex items-center gap-2 rounded-xl px-2.5 py-2 text-sm font-semibold hover:brightness-95"
               style={{ color: C.greenDk }}>
               <Plus size={15} />Add another farm
+            </button>
+            <button onClick={() => { setOpen(false); navigate("/farm/manage"); }}
+              className="w-full flex items-center gap-2 rounded-xl px-2.5 py-2 text-sm font-semibold hover:brightness-95"
+              style={{ color: C.soil }}>
+              <Settings size={15} />Manage farms
             </button>
           </div>
         </div>

@@ -397,3 +397,45 @@ async def update_farm(
 
     logger.info(f"Farm {farm_id} updated by user {user['user_id']}")
     return dict(row)
+
+
+@router.delete("/{farm_id}", summary="Delete a farm (only if empty)")
+async def delete_farm(
+    farm_id: str,
+    user: dict = Depends(require_role("FOUNDER")),
+    db: AsyncSession = Depends(get_tenant_db),
+):
+    """Hard-delete a farm — refused (409) if it has any zones, blocks or cycles
+    (archive it instead via PATCH is_active=false). For an empty farm, also clears
+    the auto-created light children (active groups, map features, attendance,
+    activity, tasks) so the FK delete succeeds. FOUNDER only."""
+    chk = (await db.execute(
+        text("""
+            SELECT (SELECT count(*) FROM tenant.zones WHERE farm_id = :fid) AS zones,
+                   (SELECT count(*) FROM tenant.production_units WHERE farm_id = :fid) AS pus,
+                   (SELECT count(*) FROM tenant.production_cycles WHERE farm_id = :fid) AS cycles
+        """),
+        {"fid": farm_id},
+    )).mappings().first()
+    if chk and (chk["zones"] or chk["pus"] or chk["cycles"]):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="This farm has zones, blocks or cycles — archive it instead of deleting.",
+        )
+
+    # Clear the auto-created light children so the FK delete succeeds (all present
+    # in this deployment; one txn, so no per-statement try/except — that would
+    # abort the txn under asyncpg).
+    for tbl in ("tenant.farm_active_groups", "tenant.map_features",
+                "tenant.worker_attendance", "tenant.farm_activity_context",
+                "tenant.task_queue"):
+        await db.execute(text(f"DELETE FROM {tbl} WHERE farm_id = :fid"), {"fid": farm_id})
+
+    res = await db.execute(
+        text("DELETE FROM tenant.farms WHERE farm_id = :fid RETURNING farm_id"),
+        {"fid": farm_id},
+    )
+    if not res.first():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Farm not found")
+    logger.info(f"Farm {farm_id} deleted by user {user['user_id']}")
+    return {"ok": True, "deleted": farm_id}
