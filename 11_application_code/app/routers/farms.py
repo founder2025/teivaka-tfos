@@ -126,6 +126,9 @@ async def create_farm(
 
     params = payload.model_dump()
     params["farm_id"] = farm_id
+    # location_name is NOT NULL in schema but optional in the quick "Add farm"
+    # form — fall back to the island, then the farm name, so the insert can't 500.
+    params["location_name"] = payload.location_name or payload.location_island or payload.farm_name
     # tenant_id is NOT NULL with no DB default — pull from the RLS session var
     # that get_tenant_db already SET LOCAL-ed for this transaction.
     result = await db.execute(
