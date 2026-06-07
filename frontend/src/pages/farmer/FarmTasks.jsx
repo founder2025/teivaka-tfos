@@ -18,6 +18,7 @@ import { CheckCircle2, SkipForward, Plus, Sprout, ListChecks } from "lucide-reac
 import { CurrentFarmProvider, useCurrentFarm } from "../../context/CurrentFarmContext";
 import FarmSelector from "../../components/farm/FarmSelector";
 import Modal from "../../components/ui/Modal.jsx";
+import { taskTarget } from "../../utils/taskBridge";
 
 const C = { soil: "#5C4033", cream: "#F8F3E9", border: "#E6DED0", muted: "#8A7863", green: "#6AA84F", greenDk: "#3E7B1F", amber: "#BF9000", red: "#D4442E", paper: "#FCFAF5", greenTint: "#E9F2DD" };
 const FOCUS = "focus:outline-none focus-visible:ring-2 focus-visible:ring-[#6AA84F]";
@@ -237,12 +238,17 @@ function Board({ farmId, navigate }) {
               <span className="text-[11px]" style={{ color: C.muted }}>{typeOf(t)}</span>
               <span><span className="text-[9px] font-bold px-1.5 py-0.5 rounded" style={{ background: sv.bg, color: sv.c }}>{sv.k}</span></span>
               <span className="flex items-center justify-end gap-1.5">
-                {tab === "OPEN" ? (
-                  <>
-                    <button onClick={() => act(t, "done")} disabled={busy === t.task_id} className={`text-[11px] px-2.5 py-1 rounded-lg text-white font-semibold flex items-center gap-1 ${FOCUS}`} style={{ background: C.greenDk }}><CheckCircle2 size={12} />Done</button>
-                    <button onClick={() => act(t, "skip")} disabled={busy === t.task_id} className={`text-[11px] px-2 py-1 rounded-lg font-semibold ${FOCUS}`} style={{ color: C.muted, border: `1px solid ${C.border}` }}>Skip</button>
-                  </>
-                ) : <span className="text-[11px]" style={{ color: C.green }}>✓ done</span>}
+                {tab === "OPEN" ? (() => {
+                  const tgt = taskTarget(t);
+                  return (
+                    <>
+                      {tgt
+                        ? <button onClick={() => navigate(tgt.route)} className={`text-[11px] px-2.5 py-1 rounded-lg text-white font-semibold flex items-center gap-1 ${FOCUS}`} style={{ background: C.greenDk }} title="Log the real record and complete">{tgt.label}</button>
+                        : <button onClick={() => act(t, "done")} disabled={busy === t.task_id} className={`text-[11px] px-2.5 py-1 rounded-lg text-white font-semibold flex items-center gap-1 ${FOCUS}`} style={{ background: C.greenDk }}><CheckCircle2 size={12} />Done</button>}
+                      <button onClick={() => act(t, "skip")} disabled={busy === t.task_id} className={`text-[11px] px-2 py-1 rounded-lg font-semibold ${FOCUS}`} style={{ color: C.muted, border: `1px solid ${C.border}` }}>Skip</button>
+                    </>
+                  );
+                })() : <span className="text-[11px]" style={{ color: C.green }}>✓ done</span>}
               </span>
             </div>
           );

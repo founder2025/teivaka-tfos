@@ -24,6 +24,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import ThemedSelect from "../../components/inputs/ThemedSelect.jsx";
+import { completeLinkedTask } from "../../utils/taskBridge";
 
 const C = {
   soil:    "#5C4033",
@@ -288,6 +289,7 @@ export default function HarvestNew() {
 
       if (res.status === 201) {
         setToast("Harvest logged");
+        await completeLinkedTask();  // if opened from a harvest task, close it
         setTimeout(() => navigate("/farm"), 700);
         return;
       }

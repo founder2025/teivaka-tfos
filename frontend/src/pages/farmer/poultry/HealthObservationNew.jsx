@@ -6,6 +6,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { z } from 'zod';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { completeLinkedTask } from '../../../utils/taskBridge';
 import { apiClient } from '../../../utils/apiClient';
 import { useEventMutation } from '../../../utils/useEventMutation';
 
@@ -74,7 +75,7 @@ function Inner() {
   const mutation = useEventMutation({
     eventType: 'HEALTH_OBSERVATION',
     successMessage: 'Health logged ✓',
-    onSuccess: () => setTimeout(() => navigate('/farm'), 800),
+    onSuccess: () => { completeLinkedTask(); setTimeout(() => navigate('/farm'), 800); },
   });
 
   useEffect(() => {

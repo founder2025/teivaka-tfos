@@ -16,9 +16,10 @@
  *  - On 4xx → inline form error
  */
 import React, { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import ThemedSelect from "../../components/inputs/ThemedSelect.jsx";
 import CapacityCalc from "../../components/farm/CapacityCalc.jsx";
+import { completeLinkedTask } from "../../utils/taskBridge";
 
 // ── Helpers ──────────────────────────────────────────────────────────
 function authHeaders() {
@@ -137,7 +138,8 @@ export default function CycleNew() {
 
   // Anchors
   const [farmId, setFarmId] = useState(null);
-  const [puId, setPuId] = useState("");
+  const [searchParams] = useSearchParams();
+  const [puId, setPuId] = useState(searchParams.get("pu") || "");
   const [productionId, setProductionId] = useState("");
 
   // Reference data
@@ -276,6 +278,7 @@ export default function CycleNew() {
         const cycleId = eventData.event_id || eventData.cycle_id || "(unknown)";
         const hashShort = (eventData.audit_hash || "").slice(0, 8);
         setToast(`Crop run started · ${cycleId} · audit ${hashShort}`);
+        await completeLinkedTask();  // if opened from a rotation/transplant task, close it
         setTimeout(() => navigate("/farm/cycles"), 800);
         return;
       }
