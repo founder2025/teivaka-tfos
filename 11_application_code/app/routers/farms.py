@@ -18,6 +18,7 @@ import logging
 
 from app.middleware.rls import get_current_user, get_tenant_db, require_role
 from app.services.farm_active_groups_defaults import insert_default_active_groups
+from app.services.onboarding_service import next_farm_id
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -26,17 +27,17 @@ router = APIRouter()
 # ─── Schemas ──────────────────────────────────────────────────────────────────
 
 class FarmCreate(BaseModel):
-    farm_id: str
+    farm_id: Optional[str] = None      # auto-minted (F{NN}-{tenant suffix}) when absent
     farm_name: str
-    location_name: str
+    location_name: Optional[str] = None
     location_island: Optional[str] = None
     land_area_ha: Optional[float] = None
     notes: Optional[str] = None
 
     @field_validator("farm_id")
     @classmethod
-    def farm_id_upper(cls, v: str) -> str:
-        return v.upper().strip()
+    def farm_id_upper(cls, v):
+        return v.upper().strip() if v else v
 
 
 class FarmUpdate(BaseModel):
@@ -109,16 +110,22 @@ async def create_farm(
     db: AsyncSession = Depends(get_tenant_db),
 ):
     """Creates a new farm under the current tenant. FOUNDER role required."""
+    # Auto-mint a globally-unique, tenant-scoped farm_id when the client doesn't
+    # supply one ("Add Farm" flow) — same scheme as onboarding (F{NN}-{suffix}).
+    farm_id = payload.farm_id or await next_farm_id(db, user["tenant_id"])
+
     exists = await db.execute(
         text("SELECT 1 FROM tenant.farms WHERE farm_id = :farm_id"),
-        {"farm_id": payload.farm_id},
+        {"farm_id": farm_id},
     )
     if exists.first():
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=f"Farm '{payload.farm_id}' already exists",
+            detail=f"Farm '{farm_id}' already exists",
         )
 
+    params = payload.model_dump()
+    params["farm_id"] = farm_id
     # tenant_id is NOT NULL with no DB default — pull from the RLS session var
     # that get_tenant_db already SET LOCAL-ed for this transaction.
     result = await db.execute(
@@ -133,7 +140,7 @@ async def create_farm(
             RETURNING farm_id, farm_name, location_name,
                       location_island, land_area_ha, is_active, notes, created_at
         """),
-        payload.model_dump(),
+        params,
     )
     row = result.mappings().first()
 
@@ -141,7 +148,7 @@ async def create_farm(
     # MONEY/NOTES/OTHER active; 8 production groups inactive (user opts in via onboarding).
     # Same transaction as the farm INSERT — atomic via get_tenant_db's session.begin().
     # tenant_id required by Migration 076 (Strike #121).
-    await insert_default_active_groups(db, payload.farm_id, user["user_id"], str(user["tenant_id"]))
+    await insert_default_active_groups(db, farm_id, user["user_id"], str(user["tenant_id"]))
 
     logger.info(f"Farm created: {row['farm_id']} by user {user['user_id']}")
     return dict(row)

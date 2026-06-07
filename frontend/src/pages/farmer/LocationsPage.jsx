@@ -10,7 +10,7 @@
  * financials/crops + flocks (where each enterprise is). Honest: the map
  * (L2), facilities registry, add zone/block create forms. No fabricated geometry.
  */
-import { useMemo, useState, lazy, Suspense } from "react";
+import { useMemo, useState, useEffect, lazy, Suspense } from "react";
 import { useNavigate } from "react-router-dom";
 import { QueryClientProvider, QueryClient, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -127,6 +127,8 @@ function LocationsInner() {
     setTeachVal(null);
   }
   const openMap = (kind, facilityType) => setOpenReq({ kind, facilityType, nonce: Date.now() });
+  // On farm switch, drop the open block detail / inline editors (stale across farms).
+  useEffect(() => { setSelected(null); setZoneFilter(null); setRenameVal(null); setTeachVal(null); }, [farmId]);
   async function saveRename() {
     const sel = puRows.find((p) => p.pu_id === selected);
     if (!sel || !renameVal?.trim()) { setRenameVal(null); return; }

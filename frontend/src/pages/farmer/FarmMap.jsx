@@ -124,6 +124,20 @@ export default function FarmMap({ farmId, onCountsChange, openRequest, onSaved }
   const [calcOpen, setCalcOpen] = useState(false);
 
   useEffect(() => { drawKindRef.current = drawKind; }, [drawKind]);
+
+  // Instant farm switch: keep the map instance alive, just swap its layers to the
+  // newly-selected farm (skips first mount — init already loads). No remount.
+  const didMountRef = useRef(false);
+  useEffect(() => {
+    if (!didMountRef.current) { didMountRef.current = true; return; }
+    const map = mapRef.current, fg = fgRef.current;
+    if (!map || !fg) return;
+    cleanupWalk(); stopMeasure(); setCalcOpen(false); setFullscreen(false);
+    fg.clearLayers();
+    setTotal({ zones: 0, blocks: 0, ha: 0 });
+    loadFeatures(map, fg);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [farmId]);
   useEffect(() => { areaUnitRef.current = areaUnit; localStorage.setItem("tfos_area_unit", areaUnit);
     fgRef.current?.eachLayer((l) => refreshLayer(l)); }, [areaUnit]);
 
