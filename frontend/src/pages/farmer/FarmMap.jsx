@@ -138,13 +138,16 @@ export default function FarmMap({ farmId, onCountsChange }) {
   // init map once
   useEffect(() => {
     if (mapRef.current || !elRef.current) return;
-    const map = L.map(elRef.current, { center: FIJI, zoom: 13, zoomControl: true });
+    const map = L.map(elRef.current, { center: FIJI, zoom: 13, zoomControl: true, maxZoom: 22 });
     mapRef.current = map;
+    // maxNativeZoom: Esri imagery for rural areas runs out ~z17-18; beyond that
+    // Leaflet upscales the last real tile instead of showing "Map data not yet
+    // available" — lets the farmer zoom right in to draw small blocks.
     L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
-      maxZoom: 19, attribution: "Tiles &copy; Esri — World Imagery",
+      maxZoom: 22, maxNativeZoom: 18, attribution: "Tiles &copy; Esri — World Imagery",
     }).addTo(map);
     L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}", {
-      maxZoom: 19, opacity: 0.9,
+      maxZoom: 22, maxNativeZoom: 18, opacity: 0.9,
     }).addTo(map);
 
     const fg = L.featureGroup().addTo(map);
@@ -289,31 +292,31 @@ export default function FarmMap({ farmId, onCountsChange }) {
       {/* FULLSCREEN editor chrome */}
       {fullscreen && (
         <>
-          <div className="absolute z-[1000] top-2 left-2 flex items-center gap-1 rounded-lg p-1 shadow" style={{ background: "rgba(255,255,255,0.95)", border: `1px solid ${C.border}` }}>
-            <Layers size={13} style={{ color: C.muted, margin: "0 2px" }} />
+          <div className="absolute z-[1000] top-3 left-3 flex items-center gap-1.5 rounded-xl p-1.5 shadow-lg" style={{ background: "rgba(255,255,255,0.97)", border: `1px solid ${C.border}` }}>
+            <Layers size={18} style={{ color: C.muted, margin: "0 3px" }} />
             {POLY_KINDS.map((k) => (
               <button key={k} onClick={() => { setDrawKind(k); mapRef.current?.pm.setPathOptions(styleFor(k)); }}
-                className="text-[11px] px-2 py-1 rounded font-semibold transition"
+                className="text-sm px-3.5 py-2 rounded-lg font-semibold transition"
                 style={drawKind === k ? { background: (KIND_STYLE[k].color === "#F8F3E9" ? C.soil : KIND_STYLE[k].color), color: "white" } : { color: C.soil }}>
                 {k === "BOUNDARY" ? "Boundary" : k === "ZONE" ? "Zone" : "Block"}
               </button>
             ))}
-            <span className="text-[10px] px-1 hidden sm:inline" style={{ color: C.muted }}>then draw ▷</span>
+            <span className="text-xs px-1.5 hidden sm:inline" style={{ color: C.muted }}>then draw ▷</span>
           </div>
 
           <button onClick={() => setFullscreen(false)}
-            className="absolute z-[1000] top-14 left-2 text-[11px] px-2.5 py-1.5 rounded-lg flex items-center gap-1.5 shadow font-semibold hover:brightness-95"
-            style={{ background: "rgba(255,255,255,0.95)", color: C.soil, border: `1px solid ${C.border}` }}>
-            <Minimize2 size={13} />Close map
+            className="absolute z-[1000] top-[68px] left-3 text-sm px-3.5 py-2 rounded-xl flex items-center gap-2 shadow-lg font-semibold hover:brightness-95"
+            style={{ background: "rgba(255,255,255,0.97)", color: C.soil, border: `1px solid ${C.border}` }}>
+            <Minimize2 size={16} />Close map
           </button>
 
-          <div className="absolute z-[1000] bottom-2 left-2 flex items-center gap-1.5">
-            <button onClick={locateMe} className="text-xs px-2.5 py-1.5 rounded-lg flex items-center gap-1.5 shadow hover:brightness-95" style={{ background: "white", color: C.soil, border: `1px solid ${C.border}` }}>
-              <LocateFixed size={13} />GPS
+          <div className="absolute z-[1000] bottom-3 left-3 flex items-center gap-2">
+            <button onClick={locateMe} className="text-sm px-3.5 py-2.5 rounded-xl flex items-center gap-2 shadow-lg font-semibold hover:brightness-95" style={{ background: "white", color: C.soil, border: `1px solid ${C.border}` }}>
+              <LocateFixed size={16} />GPS
             </button>
-            <button onClick={save} disabled={saving === "saving"} className="text-xs px-3 py-1.5 rounded-lg flex items-center gap-1.5 shadow text-white hover:brightness-95 disabled:opacity-70"
+            <button onClick={save} disabled={saving === "saving"} className="text-sm px-5 py-2.5 rounded-xl flex items-center gap-2 shadow-lg text-white font-semibold hover:brightness-95 disabled:opacity-70"
               style={{ background: saving === "saved" ? C.green : saving === "error" ? C.red : C.greenDk }}>
-              {saving === "saving" ? <Loader2 size={13} className="animate-spin" /> : saving === "saved" ? <Check size={13} /> : saving === "error" ? <AlertTriangle size={13} /> : <Save size={13} />}
+              {saving === "saving" ? <Loader2 size={16} className="animate-spin" /> : saving === "saved" ? <Check size={16} /> : saving === "error" ? <AlertTriangle size={16} /> : <Save size={16} />}
               {saving === "saving" ? "Saving…" : saving === "saved" ? "Saved" : saving === "error" ? "Failed" : dirty ? "Save map*" : "Save map"}
             </button>
           </div>
@@ -369,11 +372,19 @@ const THEME_CSS = `
 .tfos-map .leaflet-bar, .tfos-map .leaflet-pm-toolbar .leaflet-buttons-control-button {
   border-color: #E6DED0 !important; border-radius: 10px !important;
 }
-.tfos-map .leaflet-bar a { color: #5C4033 !important; background: #FCFAF5 !important; }
+/* Bigger, easier-to-tap zoom controls */
+.tfos-map .leaflet-bar a {
+  color: #5C4033 !important; background: #FCFAF5 !important;
+  width: 42px !important; height: 42px !important; line-height: 42px !important; font-size: 22px !important;
+}
 .tfos-map .leaflet-bar a:hover { background: #F8F3E9 !important; }
+/* Bigger Geoman draw toolbar + icons */
 .tfos-map .leaflet-pm-toolbar .leaflet-buttons-control-button {
   background-color: #FCFAF5 !important; box-shadow: 0 1px 2px rgba(58,46,38,.12) !important;
+  width: 44px !important; height: 44px !important; background-size: 24px 24px !important;
 }
+.tfos-map .leaflet-pm-toolbar .button-container { width: 44px !important; height: 44px !important; }
+.tfos-map .leaflet-pm-actions-container .leaflet-pm-action { font-size: 13px !important; }
 .tfos-map .leaflet-pm-toolbar .button-container.active .leaflet-buttons-control-button,
 .tfos-map .leaflet-pm-toolbar .leaflet-buttons-control-button:hover { background-color: #E9F2DD !important; }
 .tfos-map .leaflet-pm-actions-container .leaflet-pm-action {
