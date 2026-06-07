@@ -19,6 +19,7 @@ const ADMIN_TABS = [
   { path: "/admin/users",     label: "Users",            icon: "👥" },
   { path: "/admin/content",   label: "Content",          icon: "📋" },
   { path: "/admin/analytics", label: "Analytics",        icon: "📈" },
+  { path: "/admin/map",       label: "Farm Map",         icon: "🗺️" },
   { path: "/admin/settings",  label: "Platform Settings", icon: "⚙️"  },
 ];
 

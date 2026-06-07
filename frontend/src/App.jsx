@@ -114,6 +114,7 @@ const AdminDashboard = lazy(() => import("./pages/admin/AdminDashboard"));
 const AdminUsers     = lazy(() => import("./pages/admin/AdminUsers"));
 const AdminContent   = lazy(() => import("./pages/admin/AdminContent"));
 const AdminAnalytics = lazy(() => import("./pages/admin/AdminAnalytics"));
+const AdminMap       = lazy(() => import("./pages/admin/AdminMap"));
 const AdminSettings  = lazy(() => import("./pages/admin/AdminSettings"));
 const InputsSandbox  = lazy(() => import("./pages/admin/InputsSandbox"));
 
@@ -173,6 +174,9 @@ export default function App() {
           } />
           <Route path="/admin/analytics" element={
             <AdminRoute><AdminAnalytics /></AdminRoute>
+          } />
+          <Route path="/admin/map" element={
+            <AdminRoute><AdminMap /></AdminRoute>
           } />
           <Route path="/admin/settings" element={
             <AdminRoute><AdminSettings /></AdminRoute>
