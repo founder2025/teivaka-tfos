@@ -6,6 +6,7 @@ from uuid import uuid4
 from sqlalchemy import text
 from app.db.session import get_rls_db
 from app.middleware.rls import get_current_user
+from app.core.task_engine import emit_task
 
 router = APIRouter()
 
@@ -287,11 +288,11 @@ async def whats_due(pu_id: str, user: dict = Depends(get_current_user)):
             raise HTTPException(status_code=404, detail="Production unit not found")
 
         tasks_rows = (await db.execute(
-            text("""SELECT task_id, title, description, priority, status, task_type, due_date
+            text("""SELECT task_id, COALESCE(imperative, title) AS title, status, task_type, due_date, task_rank
                       FROM tenant.task_queue
-                     WHERE tenant_id = :tid AND pu_id = :pid AND status IN ('OPEN','IN_PROGRESS')
-                     ORDER BY (due_date IS NULL), due_date,
-                              CASE priority WHEN 'CRITICAL' THEN 0 WHEN 'HIGH' THEN 1 WHEN 'MEDIUM' THEN 2 ELSE 3 END"""),
+                     WHERE tenant_id = :tid AND status = 'OPEN'
+                       AND (pu_id = :pid OR (entity_type = 'production_unit' AND entity_id = :pid))
+                     ORDER BY (due_date IS NULL), due_date, task_rank ASC"""),
             {"tid": tid, "pid": pu_id},
         )).mappings().all()
 
@@ -328,7 +329,7 @@ async def whats_due(pu_id: str, user: dict = Depends(get_current_user)):
     def _due(t):
         return t["due_date"] is None or t["due_date"] <= today
     tasks = [{
-        "task_id": t["task_id"], "title": t["title"], "priority": t["priority"],
+        "task_id": str(t["task_id"]), "title": t["title"], "task_rank": t["task_rank"],
         "task_type": t["task_type"], "status": t["status"],
         "due_date": t["due_date"].isoformat() if t["due_date"] else None,
         "due": _due(t),
@@ -357,29 +358,16 @@ async def create_rotation_task(pu_id: str, user: dict = Depends(get_current_user
         pu = pr.mappings().first()
         if not pu:
             raise HTTPException(status_code=404, detail="Production unit not found")
-        ex = await db.execute(
-            text("""SELECT task_id FROM tenant.task_queue
-                     WHERE tenant_id = :tid AND pu_id = :pid
-                       AND status IN ('OPEN','IN_PROGRESS') AND title ILIKE 'Plan rotation%'"""),
-            {"tid": tid, "pid": pu_id},
-        )
-        existing = ex.first()
-        if existing:
-            return {"ok": True, "existing": True, "task_id": existing[0]}
-        task_id = str(uuid4())  # UUID so the tasks API (task_id: UUID) can complete it
-        await db.execute(
-            text("""INSERT INTO tenant.task_queue
-                        (task_id, tenant_id, farm_id, task_type, title, description,
-                         priority, status, pu_id,
-                         imperative, source_module, source_reference, entity_type, entity_id)
-                    VALUES (:task, :tid, :farm, 'FIELD_TASK', :title, :desc, 'MEDIUM', 'OPEN', :pid,
-                            :title, 'rotation', :sref, 'production_unit', :pid)"""),
-            {"task": task_id, "tid": tid, "farm": pu["farm_id"],
-             "title": f"Plan rotation — {pu['pu_name']}",
-             "desc": "Block is resting/idle. Pick the next crop (legumes preferred after heavy feeders) and prepare the bed. See block advice in Locations.",
-             "sref": f"rotation:{pu_id}", "pid": pu_id},
+        # Canonical feeder: emit_task dedupes on (source_module, source_reference)
+        # and keeps lifecycle parity with every other engine.
+        task_id = await emit_task(
+            db=db, tenant_id=user["tenant_id"], farm_id=pu["farm_id"],
+            source_module="rotation", source_reference=f"rotation:{pu_id}",
+            imperative=f"Plan rotation — {pu['pu_name']}"[:120], rank=450, icon_key="Sprout",
+            task_type="FIELD_TASK", entity_type="production_unit", entity_id=pu_id,
+            body_md="Block is resting/idle. Pick the next crop (legumes preferred after heavy feeders) and prepare the bed. See block advice in Locations.",
         )
         await _record_activity(db, tid, pu["farm_id"], pu_id, "ROTATION_TASK",
                                f"Rotation task created for {pu['pu_name']} (block resting/idle).",
                                user.get("user_id"))
-    return {"ok": True, "existing": False, "task_id": task_id}
+    return {"ok": True, "task_id": str(task_id)}

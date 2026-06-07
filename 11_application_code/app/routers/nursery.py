@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import text
 from app.db.session import get_rls_db
 from app.middleware.rls import get_current_user
+from app.core.task_engine import emit_task
 from pydantic import BaseModel
 from decimal import Decimal
 from datetime import datetime, date
@@ -199,30 +200,18 @@ async def transplant_task(batch_id: str, body: TransplantTask, user: dict = Depe
         )).mappings().first()
         if not pu:
             raise HTTPException(status_code=404, detail="Production unit not found")
-        ex = (await db.execute(
-            text("""SELECT task_id FROM tenant.task_queue
-                     WHERE tenant_id = :tid AND pu_id = :pid
-                       AND status IN ('OPEN','IN_PROGRESS') AND title ILIKE 'Prepare%transplant%'"""),
-            {"tid": tid, "pid": body.pu_id},
-        )).first()
-        if ex:
-            return {"ok": True, "existing": True, "task_id": ex[0]}
         due = b["expected_transplant_date"]
         if isinstance(due, datetime):
             due = due.date()
-        task_id = str(uuid.uuid4())  # UUID so the tasks API (task_id: UUID) can complete it
-        await db.execute(
-            text("""INSERT INTO tenant.task_queue
-                        (task_id, tenant_id, farm_id, task_type, title, description,
-                         priority, status, pu_id, due_date,
-                         imperative, source_module, source_reference, entity_type, entity_id)
-                    VALUES (:task, :tid, :farm, 'FIELD_TASK', :title, :desc, 'HIGH', 'OPEN', :pid, :due,
-                            :title, 'manual', :sref, 'production_unit', :pid)"""),
-            {"task": task_id, "tid": tid, "farm": b["farm_id"],
-             "title": f"Prepare {pu['pu_name']} for transplanting {b['production_name']}",
-             "desc": f"Seedlings from nursery batch {batch_id} are headed to this block. Clear/prep the bed and transplant when ready.",
-             "sref": f"transplant:{batch_id}:{body.pu_id}", "pid": body.pu_id, "due": due},
+        # Canonical feeder: emit_task dedupes on source_reference + lifecycle parity.
+        task_id = await emit_task(
+            db=db, tenant_id=user["tenant_id"], farm_id=b["farm_id"],
+            source_module="manual", source_reference=f"transplant:{batch_id}:{body.pu_id}",
+            imperative=f"Prepare {pu['pu_name']} for {b['production_name']}"[:120], rank=200, icon_key="Sprout",
+            task_type="FIELD_TASK", entity_type="production_unit", entity_id=body.pu_id, due_date=due,
+            body_md=f"Seedlings from nursery batch {batch_id} are headed to this block. Clear/prep the bed and transplant when ready.",
         )
+        task_id = str(task_id)
         try:
             await db.execute(
                 text("""INSERT INTO tenant.farm_activity_context

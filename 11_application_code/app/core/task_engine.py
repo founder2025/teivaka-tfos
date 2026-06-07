@@ -21,7 +21,7 @@ Deployment target: /opt/teivaka/11_application_code/app/core/task_engine.py
 """
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, date
 from typing import Literal
 from uuid import UUID, uuid4
 
@@ -63,6 +63,7 @@ async def emit_task(
     entity_id: str | None = None,
     task_type: TaskType = "OTHER",
     title: str | None = None,
+    due_date: date | None = None,
 ) -> UUID:
     """Upsert a task. Returns task_id.
 
@@ -167,6 +168,7 @@ async def emit_task(
                         input_hint = :hint,
                         default_outcome = :outcome,
                         task_type = :ttype,
+                        due_date = :due,
                         updated_at = NOW()
                     WHERE task_id = :tid
                     """
@@ -181,6 +183,7 @@ async def emit_task(
                     "hint": input_hint,
                     "outcome": default_outcome,
                     "ttype": task_type,
+                    "due": due_date,
                     "tid": str(existing_task_id),
                 },
             )
@@ -197,7 +200,7 @@ async def emit_task(
                 task_rank, icon_key, input_hint,
                 source_module, source_reference,
                 body_md, expires_at, default_outcome,
-                entity_type, entity_id,
+                entity_type, entity_id, due_date,
                 status, created_at
             ) VALUES (
                 :task_id, :tenant_id, :farm_id,
@@ -205,7 +208,7 @@ async def emit_task(
                 :rank, :icon, :hint,
                 :sm, :sr,
                 :body, :expires, :outcome,
-                :etype, :eid,
+                :etype, :eid, :due,
                 'OPEN', NOW()
             )
             """
@@ -227,6 +230,7 @@ async def emit_task(
             "outcome": default_outcome,
             "etype": entity_type,
             "eid": entity_id,
+            "due": due_date,
         },
     )
 
