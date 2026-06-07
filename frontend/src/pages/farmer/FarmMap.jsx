@@ -17,7 +17,7 @@ import "@geoman-io/leaflet-geoman-free/dist/leaflet-geoman.css";
 import iconRetina from "leaflet/dist/images/marker-icon-2x.png";
 import icon from "leaflet/dist/images/marker-icon.png";
 import shadow from "leaflet/dist/images/marker-shadow.png";
-import { Save, LocateFixed, Layers, Loader2, Check, AlertTriangle, Maximize2, Minimize2, MapPin, Footprints, Undo2, Flag, X, Ruler, Calculator, Plus, Sprout } from "lucide-react";
+import { Save, LocateFixed, Layers, Loader2, Check, AlertTriangle, Maximize2, Minimize2, MapPin, Footprints, Undo2, Flag, X, Ruler, Calculator, Plus, Sprout, Pencil, Trash2 } from "lucide-react";
 import CapacityCalc from "../../components/farm/CapacityCalc";
 
 L.Icon.Default.mergeOptions({ iconRetinaUrl: iconRetina, iconUrl: icon, shadowUrl: shadow });
@@ -125,6 +125,10 @@ export default function FarmMap({ farmId, onCountsChange, openRequest, onSaved }
   const [calcOpen, setCalcOpen] = useState(false);
   const [hasMapped, setHasMapped] = useState(null); // null=loading, false=no geometry yet
   const [addMenu, setAddMenu] = useState(false);    // the in-map "+ Add" menu
+  const [editMode, setEditMode] = useState(false);  // tap-a-shape-to-rename mode
+  const [renameTarget, setRenameTarget] = useState(null); // {layer,name,kind,ref_id}
+  const editModeRef = useRef(false);
+  useEffect(() => { editModeRef.current = editMode; if (!editMode) setRenameTarget(null); }, [editMode]);
 
   useEffect(() => { drawKindRef.current = drawKind; }, [drawKind]);
 
@@ -164,6 +168,8 @@ export default function FarmMap({ farmId, onCountsChange, openRequest, onSaved }
       cleanupWalk();
       stopMeasure();
       setCalcOpen(false);
+      setEditMode(false);
+      setAddMenu(false);
       setInteractive(map, false);
     }
     const t = setTimeout(() => map.invalidateSize(), 80);
@@ -206,6 +212,9 @@ export default function FarmMap({ farmId, onCountsChange, openRequest, onSaved }
     refreshLayer(layer);
     layer.on("pm:edit", () => { refreshLayer(layer); markDirty(); });
     layer.on("pm:dragend", () => { refreshLayer(layer); markDirty(); });
+    layer.on("click", () => {
+      if (editModeRef.current) setRenameTarget({ layer, name: layer._label || "", kind: layer._kind, ref_id: layer._ref_id });
+    });
   }
   function refreshLayer(layer) {
     const ha = layerAreaHa(layer);
@@ -499,6 +508,27 @@ export default function FarmMap({ farmId, onCountsChange, openRequest, onSaved }
     window.dispatchEvent(new CustomEvent("tfos:add-farm")); // FarmSelector opens its modal
   }
 
+  // Edit mode: tap a shape -> rename it; the name persists to the canonical record
+  // (block -> production_units, zone -> zones) so it propagates everywhere by id.
+  async function saveShapeName() {
+    const t = renameTarget; if (!t) return;
+    const name = (t.name || "").trim();
+    t.layer._label = name; refreshLayer(t.layer); markDirty();
+    try {
+      if (t.kind === "BLOCK" && t.ref_id) {
+        await fetch(`/api/v1/production-units/${encodeURIComponent(t.ref_id)}`, { method: "PATCH", headers: { "Content-Type": "application/json", ...authHeaders() }, body: JSON.stringify({ pu_name: name }) });
+      } else if (t.kind === "ZONE" && t.ref_id) {
+        await fetch(`/api/v1/zones/${encodeURIComponent(t.ref_id)}`, { method: "PATCH", headers: { "Content-Type": "application/json", ...authHeaders() }, body: JSON.stringify({ zone_name: name }) });
+      }
+      onSaved?.();  // refresh page lists so the rename shows everywhere
+    } catch { /* geometry label still updated; Save map persists it */ }
+    setRenameTarget(null);
+  }
+  function deleteShape() {
+    const t = renameTarget; if (t && fgRef.current) { fgRef.current.removeLayer(t.layer); markDirty(); }
+    setRenameTarget(null);
+  }
+
   function locateMe() {
     if (!navigator.geolocation) return;
     navigator.geolocation.getCurrentPosition(
@@ -634,7 +664,35 @@ export default function FarmMap({ farmId, onCountsChange, openRequest, onSaved }
               style={calcOpen ? { background: C.greenDk, color: "white" } : { background: "rgba(255,255,255,0.97)", color: C.soil, border: `1px solid ${C.border}` }}>
               <Calculator size={14} />Calculator
             </button>
+            <button onClick={() => setEditMode((v) => !v)} className="text-xs px-3 py-2 rounded-xl shadow-lg font-semibold flex items-center gap-1.5"
+              style={editMode ? { background: C.soil, color: "white" } : { background: "rgba(255,255,255,0.97)", color: C.soil, border: `1px solid ${C.border}` }}>
+              <Pencil size={14} />Edit
+            </button>
           </div>
+
+          {editMode && !renameTarget && (
+            <div className="absolute z-[1001] top-[164px] left-3 text-[11px] px-2.5 py-1.5 rounded-lg shadow-lg max-w-[240px]" style={{ background: "rgba(255,255,255,0.97)", color: C.soil, border: `1px solid ${C.border}` }}>
+              Tap a zone/block to rename it. Use the edit tool (top-right) to drag its edges. Tap <strong>Save map</strong> to keep reshapes.
+            </div>
+          )}
+
+          {renameTarget && (
+            <div className="absolute z-[1002] bottom-3 left-1/2 -translate-x-1/2 w-[min(380px,calc(100%-1.5rem))] rounded-2xl shadow-xl p-3.5" style={{ background: "white", border: `1px solid ${C.border}` }}>
+              <div className="text-sm font-bold mb-1.5" style={{ color: C.soil }}>Rename {String(renameTarget.kind || "shape").toLowerCase()}</div>
+              <input autoFocus value={renameTarget.name} onChange={(e) => setRenameTarget((t) => ({ ...t, name: e.target.value }))}
+                onKeyDown={(e) => { if (e.key === "Enter") saveShapeName(); if (e.key === "Escape") setRenameTarget(null); }}
+                className="w-full px-3 py-2.5 rounded-lg text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-[#6AA84F]" style={{ border: `1.5px solid ${C.border}`, background: C.paper, color: C.soil }} placeholder="Name" />
+              {(renameTarget.kind === "BLOCK" || renameTarget.kind === "ZONE") && !renameTarget.ref_id && (
+                <p className="text-[10px] mt-1" style={{ color: C.muted }}>Save the map first to link this shape, then renaming updates it everywhere.</p>
+              )}
+              <div className="flex items-center gap-2 mt-3">
+                <button onClick={deleteShape} className="text-[11px] px-2.5 py-2 rounded-lg font-semibold flex items-center gap-1.5" style={{ color: C.red, border: `1px solid ${C.border}` }}><Trash2 size={13} />Remove</button>
+                <span className="flex-1" />
+                <button onClick={() => setRenameTarget(null)} className="text-[11px] px-2.5 py-2 rounded-lg font-semibold" style={{ color: C.muted }}>Cancel</button>
+                <button onClick={saveShapeName} className="text-sm px-4 py-2 rounded-lg text-white font-semibold" style={{ background: C.greenDk }}>Save name</button>
+              </div>
+            </div>
+          )}
 
           {!walking && !measuring && (
             <div className="absolute z-[1000] bottom-3 left-3 flex items-center gap-2 flex-wrap">
