@@ -17,7 +17,7 @@ import "@geoman-io/leaflet-geoman-free/dist/leaflet-geoman.css";
 import iconRetina from "leaflet/dist/images/marker-icon-2x.png";
 import icon from "leaflet/dist/images/marker-icon.png";
 import shadow from "leaflet/dist/images/marker-shadow.png";
-import { Save, LocateFixed, Layers, Trash2, Loader2, Check, AlertTriangle } from "lucide-react";
+import { Save, LocateFixed, Layers, Loader2, Check, AlertTriangle, Maximize2, Minimize2, MapPin } from "lucide-react";
 
 L.Icon.Default.mergeOptions({ iconRetinaUrl: iconRetina, iconUrl: icon, shadowUrl: shadow });
 
@@ -56,6 +56,8 @@ export default function FarmMap({ farmId, onCountsChange }) {
   const mapRef = useRef(null);
   const fgRef = useRef(null);      // FeatureGroup of drawn shapes
   const meRef = useRef(null);      // "you are here" marker
+  const pendingRef = useRef(null); // freshly-drawn layer awaiting a name
+  const nameInputRef = useRef(null);
   const [drawKind, setDrawKind] = useState("ZONE");
   const drawKindRef = useRef("ZONE");
   const [status, setStatus] = useState("loading"); // loading|ready
@@ -63,8 +65,26 @@ export default function FarmMap({ farmId, onCountsChange }) {
   const [saving, setSaving] = useState("idle");     // idle|saving|saved|error
   const [dirty, setDirty] = useState(false);
   const [total, setTotal] = useState({ zones: 0, blocks: 0, ha: 0 });
+  const [fullscreen, setFullscreen] = useState(false);
+  const [nameModal, setNameModal] = useState({ open: false, kind: "ZONE", value: "" });
 
   useEffect(() => { drawKindRef.current = drawKind; }, [drawKind]);
+
+  // Leaflet must recompute size when the container resizes (fullscreen toggle).
+  useEffect(() => {
+    if (!mapRef.current) return;
+    const t = setTimeout(() => mapRef.current.invalidateSize(), 80);
+    return () => clearTimeout(t);
+  }, [fullscreen]);
+
+  // ESC exits fullscreen; autofocus the themed name modal when it opens.
+  useEffect(() => {
+    if (!fullscreen) return;
+    const onKey = (e) => { if (e.key === "Escape" && !nameModal.open) setFullscreen(false); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [fullscreen, nameModal.open]);
+  useEffect(() => { if (nameModal.open) setTimeout(() => nameInputRef.current?.focus(), 40); }, [nameModal.open]);
 
   // bind metadata + popup + live-area to a layer
   function decorate(layer, props = {}) {
@@ -121,10 +141,10 @@ export default function FarmMap({ farmId, onCountsChange }) {
       const layer = e.layer;
       const isMarker = e.shape === "Marker";
       const kind = isMarker ? "FACILITY" : drawKindRef.current;
-      const label = window.prompt(`Name this ${kind.toLowerCase()}:`, "") || "";
-      decorate(layer, { kind, label });
-      layer.on("pm:remove", () => { setDirty(true); recount(); });
-      markDirty();
+      layer._kind = kind;
+      if (layer.setStyle && KIND_STYLE[kind]) layer.setStyle(styleFor(kind)); // colour immediately
+      pendingRef.current = layer;                       // park it; themed modal names it
+      setNameModal({ open: true, kind, value: "" });
     });
     map.on("pm:remove", () => { setDirty(true); recount(); });
 
@@ -169,6 +189,25 @@ export default function FarmMap({ farmId, onCountsChange }) {
     }
   }
 
+  // themed name modal (replaces window.prompt)
+  function confirmName() {
+    const layer = pendingRef.current;
+    if (layer) {
+      decorate(layer, { kind: layer._kind, label: nameModal.value.trim() });
+      layer.on("pm:remove", () => { setDirty(true); recount(); });
+      markDirty();
+    }
+    pendingRef.current = null;
+    setNameModal({ open: false, kind: "ZONE", value: "" });
+  }
+  function cancelName() {
+    const layer = pendingRef.current;
+    if (layer && fgRef.current) fgRef.current.removeLayer(layer); // discard the shape
+    pendingRef.current = null;
+    setNameModal({ open: false, kind: "ZONE", value: "" });
+    recount();
+  }
+
   function locateMe() {
     if (!navigator.geolocation) return;
     navigator.geolocation.getCurrentPosition(
@@ -208,8 +247,13 @@ export default function FarmMap({ farmId, onCountsChange }) {
     }
   }
 
+  const wrapStyle = fullscreen
+    ? { position: "fixed", inset: 0, height: "100vh", width: "100vw", zIndex: 2000, borderRadius: 0 }
+    : { height: 460 };
+
   return (
-    <div className="relative rounded-xl overflow-hidden border" style={{ borderColor: C.border, height: 460 }}>
+    <div className={`tfos-map relative overflow-hidden border ${fullscreen ? "" : "rounded-xl"}`} style={{ borderColor: C.border, ...wrapStyle }}>
+      <style>{THEME_CSS}</style>
       <div ref={elRef} style={{ position: "absolute", inset: 0, background: C.cream }} />
 
       {/* draw-kind toolbar (top-left) */}
@@ -222,8 +266,15 @@ export default function FarmMap({ farmId, onCountsChange }) {
             {k === "BOUNDARY" ? "Boundary" : k === "ZONE" ? "Zone" : "Block"}
           </button>
         ))}
-        <span className="text-[10px] px-1" style={{ color: C.muted }}>then draw ▷</span>
+        <span className="text-[10px] px-1 hidden sm:inline" style={{ color: C.muted }}>then draw ▷</span>
       </div>
+
+      {/* expand / fullscreen (top-left, under the kind toolbar) */}
+      <button onClick={() => setFullscreen((v) => !v)}
+        className="absolute z-[1000] top-14 left-2 text-[11px] px-2.5 py-1.5 rounded-lg flex items-center gap-1.5 shadow font-semibold hover:brightness-95"
+        style={{ background: "rgba(255,255,255,0.95)", color: C.soil, border: `1px solid ${C.border}` }}>
+        {fullscreen ? <><Minimize2 size={13} />Close map</> : <><Maximize2 size={13} />Full screen</>}
+      </button>
 
       {/* actions (bottom-left) */}
       <div className="absolute z-[1000] bottom-2 left-2 flex items-center gap-1.5">
@@ -254,6 +305,56 @@ export default function FarmMap({ farmId, onCountsChange }) {
           <span>Saved map not loaded — draw works, Save needs migration 082 live.</span>
         </div>
       )}
+
+      {/* themed name modal (replaces window.prompt) */}
+      {nameModal.open && (
+        <div className="absolute inset-0 z-[1002] flex items-center justify-center p-4" style={{ background: "rgba(58,46,38,0.45)" }}
+          onKeyDown={(e) => { if (e.key === "Enter") confirmName(); if (e.key === "Escape") cancelName(); }}>
+          <div className="rounded-2xl shadow-xl w-full max-w-sm p-5" style={{ background: "white", border: `1px solid ${C.border}` }}>
+            <div className="flex items-center gap-2 mb-1">
+              <MapPin size={16} style={{ color: nameModal.kind === "BLOCK" ? C.amber : nameModal.kind === "FACILITY" ? C.soil : C.greenDk }} />
+              <h3 className="text-base font-bold" style={{ color: C.soil }}>Name this {nameModal.kind.toLowerCase()}</h3>
+            </div>
+            <p className="text-xs mb-3" style={{ color: C.muted }}>Give it a name you'll recognise — e.g. "East dalo field" or "Layer house".</p>
+            <input ref={nameInputRef} value={nameModal.value}
+              onChange={(e) => setNameModal((m) => ({ ...m, value: e.target.value }))}
+              placeholder={`${nameModal.kind.charAt(0) + nameModal.kind.slice(1).toLowerCase()} name`}
+              className="w-full px-3 py-2.5 rounded-lg text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-[#6AA84F]"
+              style={{ border: `1.5px solid ${C.border}`, background: C.cream, color: C.soil }} />
+            <div className="flex items-center justify-end gap-2 mt-4">
+              <button onClick={cancelName} className="text-sm px-3.5 py-2 rounded-lg font-semibold hover:brightness-95" style={{ color: C.soil, border: `1px solid ${C.border}` }}>Discard</button>
+              <button onClick={confirmName} className="text-sm px-4 py-2 rounded-lg font-semibold text-white hover:brightness-95" style={{ background: C.greenDk }}>Save name</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+
+// Scoped overrides so Leaflet + Geoman controls match the cream/soil theme.
+const THEME_CSS = `
+.tfos-map .leaflet-bar, .tfos-map .leaflet-pm-toolbar .leaflet-buttons-control-button {
+  border-color: #E6DED0 !important; border-radius: 10px !important;
+}
+.tfos-map .leaflet-bar a { color: #5C4033 !important; background: #FCFAF5 !important; }
+.tfos-map .leaflet-bar a:hover { background: #F8F3E9 !important; }
+.tfos-map .leaflet-pm-toolbar .leaflet-buttons-control-button {
+  background-color: #FCFAF5 !important; box-shadow: 0 1px 2px rgba(58,46,38,.12) !important;
+}
+.tfos-map .leaflet-pm-toolbar .button-container.active .leaflet-buttons-control-button,
+.tfos-map .leaflet-pm-toolbar .leaflet-buttons-control-button:hover { background-color: #E9F2DD !important; }
+.tfos-map .leaflet-pm-actions-container .leaflet-pm-action {
+  background: #5C4033 !important; color: #F8F3E9 !important; border: none !important;
+  font-weight: 600 !important; padding: 4px 8px !important;
+}
+.tfos-map .leaflet-pm-actions-container .leaflet-pm-action:hover { background: #3A2E26 !important; }
+.tfos-map .leaflet-pm-actions-container .leaflet-pm-action.action-cancel { background: #D4442E !important; }
+.tfos-map .leaflet-tooltip {
+  background: #F8F3E9 !important; border: 1px solid #E6DED0 !important; color: #3A2E26 !important;
+  font-weight: 600 !important; border-radius: 8px !important; box-shadow: 0 1px 3px rgba(58,46,38,.15) !important;
+}
+.tfos-map .leaflet-tooltip-top:before, .tfos-map .leaflet-tooltip-bottom:before,
+.tfos-map .leaflet-tooltip-left:before, .tfos-map .leaflet-tooltip-right:before { display: none; }
+.tfos-map .leaflet-control-attribution { background: rgba(248,243,233,.85) !important; color: #8A7863 !important; border-radius: 6px 0 0 0; }
+`;
