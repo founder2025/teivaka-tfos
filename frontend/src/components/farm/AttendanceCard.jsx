@@ -16,9 +16,10 @@ const fmtTime = (iso) => { try { return new Date(iso).toLocaleString(undefined, 
 
 export default function AttendanceCard({ farmId }) {
   const [list, setList] = useState([]);
+  const [workers, setWorkers] = useState([]);
   const [busy, setBusy] = useState(null);     // CLOCK_IN | CLOCK_OUT while sending
   const [result, setResult] = useState(null); // last clock result
-  const [worker, setWorker] = useState("");
+  const [workerId, setWorkerId] = useState(""); // "" = myself
 
   async function loadList() {
     if (!farmId) return;
@@ -27,18 +28,26 @@ export default function AttendanceCard({ farmId }) {
       if (r.ok) { const d = await r.json(); setList(d.data || []); }
     } catch { /* non-fatal */ }
   }
-  useEffect(() => { loadList(); }, [farmId]);
+  async function loadWorkers() {
+    if (!farmId) return;
+    try {
+      const r = await fetch(`/api/v1/workers?farm_id=${encodeURIComponent(farmId)}`, { headers: authHeaders() });
+      if (r.ok) { const d = await r.json(); setWorkers(d.data || []); }
+    } catch { /* non-fatal */ }
+  }
+  useEffect(() => { loadList(); loadWorkers(); }, [farmId]);
 
   function clock(kind) {
     if (!navigator.geolocation) { setResult({ error: "This device has no GPS." }); return; }
     setBusy(kind); setResult(null);
+    const picked = workers.find((w) => w.worker_id === workerId);
     navigator.geolocation.getCurrentPosition(
       async (pos) => {
         const { latitude, longitude, accuracy } = pos.coords;
         try {
           const r = await fetch(`/api/v1/attendance/clock`, {
             method: "POST", headers: { "Content-Type": "application/json", ...authHeaders() },
-            body: JSON.stringify({ farm_id: farmId, kind, lat: latitude, lng: longitude, accuracy_m: accuracy, worker_name: worker.trim() || null }),
+            body: JSON.stringify({ farm_id: farmId, kind, lat: latitude, lng: longitude, accuracy_m: accuracy, worker_id: picked?.worker_id || null, worker_name: picked?.full_name || null }),
           });
           if (!r.ok) throw new Error(String(r.status));
           setResult(await r.json());
@@ -66,8 +75,11 @@ export default function AttendanceCard({ farmId }) {
         Clock in or out from the field — we check your GPS against your farm boundary. Draw your <strong>Boundary</strong> on the map to switch on the geo-lock.
       </p>
 
-      <input value={worker} onChange={(e) => setWorker(e.target.value)} placeholder="Worker name (optional — defaults to you)"
-        className={`w-full px-3 py-2 rounded-lg text-sm mb-2.5 ${FOCUS}`} style={{ border: `1.5px solid ${C.border}`, background: C.paper, color: C.soil }} />
+      <select value={workerId} onChange={(e) => setWorkerId(e.target.value)}
+        className={`w-full px-3 py-2 rounded-lg text-sm mb-2.5 ${FOCUS}`} style={{ border: `1.5px solid ${C.border}`, background: C.paper, color: C.soil }}>
+        <option value="">Myself (this login)</option>
+        {workers.map((w) => <option key={w.worker_id} value={w.worker_id}>{w.full_name}</option>)}
+      </select>
 
       <div className="flex items-center gap-2">
         <Btn kind="CLOCK_IN" label="Clock in" Icon={LogIn} primary />

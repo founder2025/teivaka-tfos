@@ -215,6 +215,11 @@ function LaborInner() {
   const workers = workersQuery.data ?? [];
   const attendance = laborQuery.data ?? [];
   const onSite = onSiteQuery.data ?? { on_site_count: 0, data: [] };
+  const statusByWorker = useMemo(() => {
+    const m = {};
+    (onSite.data || []).forEach((p) => { if (p.worker_id) m[p.worker_id] = p; });
+    return m;
+  }, [onSite]);
   const wagesRecorded = useMemo(() => attendance.reduce((s, r) => s + Number(r.total_pay_fjd ?? 0), 0), [attendance]);
   const activeTab = TABS.find((t) => t.id === tab) || TABS[0];
 
@@ -301,9 +306,18 @@ function LaborInner() {
                   <div className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-semibold text-white" style={{ background: C.green }}>{initials(w.full_name)}</div>
                   <div className="flex-1">
                     <div className="font-medium text-sm" style={{ color: C.soil }}>{w.full_name}</div>
-                    <div className="text-xs" style={{ color: C.muted }}>{typeLabel(w.worker_type)} · {formatFJD(w.daily_rate_fjd)}/day</div>
+                    <div className="text-xs" style={{ color: C.muted }}>{typeLabel(w.worker_type)} · {formatFJD(w.daily_rate_fjd)}/day{statusByWorker[w.worker_id]?.last_at ? ` · ${fmtClock(statusByWorker[w.worker_id].last_at)}` : ""}</div>
                   </div>
-                  <span className="text-[10px] font-semibold px-2 py-1 rounded-full" style={{ color: C.muted, background: "white", border: `1px solid ${C.border}` }}>status —</span>
+                  {(() => {
+                    const st = statusByWorker[w.worker_id];
+                    const onsite = st?.on_site, off = onsite && st?.inside_boundary === false;
+                    return (
+                      <span className="text-[10px] font-semibold px-2 py-1 rounded-full" style={{
+                        color: !st ? C.muted : off ? C.amber : onsite ? C.greenDk : C.muted,
+                        background: "white", border: `1px solid ${C.border}`,
+                      }}>{!st ? "—" : off ? "off-farm" : onsite ? "on-site" : "out"}</span>
+                    );
+                  })()}
                 </div>
               ))}
             </div>
