@@ -58,7 +58,8 @@ export default function FarmMap({ farmId, onCountsChange }) {
   const meRef = useRef(null);      // "you are here" marker
   const [drawKind, setDrawKind] = useState("ZONE");
   const drawKindRef = useRef("ZONE");
-  const [status, setStatus] = useState("loading"); // loading|ready|error
+  const [status, setStatus] = useState("loading"); // loading|ready
+  const [loadWarn, setLoadWarn] = useState(false);  // saved features couldn't load
   const [saving, setSaving] = useState("idle");     // idle|saving|saved|error
   const [dirty, setDirty] = useState(false);
   const [total, setTotal] = useState({ zones: 0, blocks: 0, ha: 0 });
@@ -127,15 +128,22 @@ export default function FarmMap({ farmId, onCountsChange }) {
     });
     map.on("pm:remove", () => { setDirty(true); recount(); });
 
+    // Map is usable the moment Leaflet is up — don't gate it on the API.
+    setStatus("ready");
+    // Container is sized late under lazy/Suspense; force tile repaint.
+    setTimeout(() => map.invalidateSize(), 120);
+    setTimeout(() => map.invalidateSize(), 450);
     loadFeatures(map, fg);
-    return () => { map.remove(); mapRef.current = null; };
+    const onResize = () => map.invalidateSize();
+    window.addEventListener("resize", onResize);
+    return () => { window.removeEventListener("resize", onResize); map.remove(); mapRef.current = null; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function loadFeatures(map, fg) {
-    setStatus("loading");
     try {
       const r = await fetch(`/api/v1/farm-map/${encodeURIComponent(farmId)}`, { headers: authHeaders() });
+      if (r.status === 404) { setLoadWarn(false); return; } // new farm, nothing saved yet
       if (!r.ok) throw new Error(String(r.status));
       const fc = await r.json();
       (fc.features || []).forEach((f) => {
@@ -154,11 +162,10 @@ export default function FarmMap({ farmId, onCountsChange }) {
       });
       if (fg.getLayers().length) map.fitBounds(fg.getBounds().pad(0.15));
       recount();
-      setStatus("ready"); setDirty(false);
-    } catch (e) {
-      setStatus(fg.getLayers ? "ready" : "error"); // empty/new farm is fine
-      if (String(e.message) === "404") setStatus("ready");
-      else if (!fg || !fg.getLayers().length) setStatus("error");
+      setLoadWarn(false);
+    } catch {
+      // Saved features couldn't load (API/migration not live) — map still works.
+      setLoadWarn(true);
     }
   }
 
@@ -240,11 +247,11 @@ export default function FarmMap({ farmId, onCountsChange }) {
           <Loader2 size={22} className="animate-spin" style={{ color: C.greenDk }} />
         </div>
       )}
-      {status === "error" && (
-        <div className="absolute inset-0 z-[1001] flex flex-col items-center justify-center text-center p-4" style={{ background: "rgba(248,243,233,0.92)" }}>
-          <AlertTriangle size={20} style={{ color: C.amber }} />
-          <div className="text-sm font-semibold mt-1" style={{ color: C.soil }}>Couldn't load the map</div>
-          <div className="text-xs mt-0.5" style={{ color: C.muted }}>You can still draw — saving needs the farm-map API live.</div>
+      {/* non-blocking: saved features didn't load, but the map still works */}
+      {loadWarn && (
+        <div className="absolute z-[1000] top-2 right-2 max-w-[200px] text-[10px] px-2 py-1.5 rounded-lg shadow flex items-start gap-1.5" style={{ background: "rgba(255,255,255,0.95)", color: C.amber, border: `1px solid ${C.border}` }}>
+          <AlertTriangle size={12} style={{ flexShrink: 0, marginTop: 1 }} />
+          <span>Saved map not loaded — draw works, Save needs migration 082 live.</span>
         </div>
       )}
     </div>
