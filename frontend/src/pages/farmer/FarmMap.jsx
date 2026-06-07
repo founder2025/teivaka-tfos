@@ -128,7 +128,12 @@ export default function FarmMap({ farmId, onCountsChange, openRequest, onSaved }
   const [editMode, setEditMode] = useState(false);  // tap-a-shape-to-rename mode
   const [renameTarget, setRenameTarget] = useState(null); // {layer,name,kind,ref_id}
   const editModeRef = useRef(false);
-  useEffect(() => { editModeRef.current = editMode; if (!editMode) setRenameTarget(null); }, [editMode]);
+  useEffect(() => {
+    editModeRef.current = editMode;
+    const m = mapRef.current;
+    if (m) { try { editMode ? m.pm.enableGlobalEditMode() : m.pm.disableGlobalEditMode(); } catch { /* geoman */ } }
+    if (!editMode) setRenameTarget(null);
+  }, [editMode]);
 
   useEffect(() => { drawKindRef.current = drawKind; }, [drawKind]);
 
@@ -154,7 +159,8 @@ export default function FarmMap({ farmId, onCountsChange, openRequest, onSaved }
   useEffect(() => {
     const map = mapRef.current; if (!map) return;
     if (fullscreen) {
-      if (!map.pm.controlsVisible?.()) map.pm.addControls(PM_CONTROLS);
+      // No Geoman toolbar — our "+ Add" menu + "Edit" toggle drive draw/edit, so
+      // the map stays uncluttered (and the overflowing Finish/Cancel bar is gone).
       map.pm.setPathOptions(styleFor(drawKindRef.current));
       setInteractive(map, true);
       if (pendingDrawRef.current) {
@@ -162,7 +168,6 @@ export default function FarmMap({ farmId, onCountsChange, openRequest, onSaved }
         setTimeout(() => { try { map.pm.enableDraw(shape); } catch { /* geoman timing */ } }, 160);
       }
     } else {
-      try { map.pm.removeControls(); } catch { /* not added yet */ }
       map.pm.disableDraw?.();
       map.pm.disableGlobalEditMode?.();
       cleanupWalk();
@@ -237,8 +242,9 @@ export default function FarmMap({ farmId, onCountsChange, openRequest, onSaved }
   // init map once
   useEffect(() => {
     if (mapRef.current || !elRef.current) return;
-    const map = L.map(elRef.current, { center: FIJI, zoom: 13, zoomControl: true, maxZoom: 22 });
+    const map = L.map(elRef.current, { center: FIJI, zoom: 13, zoomControl: false, maxZoom: 22 });
     mapRef.current = map;
+    L.control.zoom({ position: "topright" }).addTo(map); // top-left is our toolbar; keep zoom clear of it
     // maxNativeZoom: Esri imagery for rural areas runs out ~z17-18; beyond that
     // Leaflet upscales the last real tile instead of showing "Map data not yet
     // available" — lets the farmer zoom right in to draw small blocks.
@@ -607,74 +613,75 @@ export default function FarmMap({ farmId, onCountsChange, openRequest, onSaved }
       {/* FULLSCREEN editor chrome */}
       {fullscreen && (
         <>
-          <div className="absolute z-[1100] top-3 left-3">
-            <button onClick={() => setAddMenu((v) => !v)}
-              className="text-sm px-3.5 py-2 rounded-xl flex items-center gap-1.5 shadow-lg font-bold text-white hover:brightness-95"
-              style={{ background: C.greenDk }}>
-              <Plus size={16} />Add
-            </button>
-            {addMenu && (
-              <>
-                <div className="fixed inset-0 z-[1090]" onClick={() => setAddMenu(false)} />
-                <div className="absolute left-0 mt-1.5 z-[1100] rounded-xl shadow-xl overflow-hidden" style={{ width: 200, background: "white", border: `1px solid ${C.border}` }}>
-                  {[
-                    ["BOUNDARY", "Farm boundary", KIND_STYLE.BOUNDARY.color === "#F8F3E9" ? C.soil : C.soil],
-                    ["ZONE", "Zone", C.green],
-                    ["BLOCK", "Block", C.amber],
-                  ].map(([k, label, dot]) => (
-                    <button key={k} onClick={() => addDraw(k)} className="w-full text-left flex items-center gap-2.5 px-3 py-2.5 text-sm font-semibold hover:bg-[#FCFAF5]" style={{ color: C.soil }}>
-                      <span className="w-2.5 h-2.5 rounded-full" style={{ background: dot }} />{label}
-                    </button>
-                  ))}
-                  <button onClick={addFacility} className="w-full text-left flex items-center gap-2.5 px-3 py-2.5 text-sm font-semibold hover:bg-[#FCFAF5]" style={{ color: C.soil }}>
-                    <MapPin size={14} style={{ color: C.soil }} />Facility pin
-                  </button>
-                  <div style={{ borderTop: `1px solid ${C.border}` }} />
-                  <button onClick={addFarm} className="w-full text-left flex items-center gap-2.5 px-3 py-2.5 text-sm font-semibold hover:bg-[#FCFAF5]" style={{ color: C.greenDk }}>
-                    <Sprout size={14} />New farm…
-                  </button>
-                </div>
-              </>
+          {/* One organised control stack — top-left. Primary row, then view/tools row. */}
+          <div className="absolute z-[1100] top-3 left-3 flex flex-col gap-2" style={{ maxWidth: "calc(100% - 1.5rem)" }}>
+            {/* Row 1 — primary actions */}
+            <div className="flex items-center gap-2">
+              <div className="relative">
+                <button onClick={() => setAddMenu((v) => !v)}
+                  className="h-10 px-4 rounded-xl flex items-center gap-1.5 shadow-lg font-bold text-white hover:brightness-95"
+                  style={{ background: C.greenDk }}>
+                  <Plus size={17} />Add
+                </button>
+                {addMenu && (
+                  <>
+                    <div className="fixed inset-0 z-[1090]" onClick={() => setAddMenu(false)} />
+                    <div className="absolute left-0 top-full mt-1.5 z-[1100] rounded-xl shadow-xl overflow-hidden" style={{ width: 210, background: "white", border: `1px solid ${C.border}` }}>
+                      {[["BOUNDARY", "Farm boundary", C.soil], ["ZONE", "Zone", C.green], ["BLOCK", "Block", C.amber]].map(([k, label, dot]) => (
+                        <button key={k} onClick={() => addDraw(k)} className="w-full text-left flex items-center gap-2.5 px-3.5 py-2.5 text-sm font-semibold hover:bg-[#FCFAF5]" style={{ color: C.soil }}>
+                          <span className="w-2.5 h-2.5 rounded-full" style={{ background: dot }} />{label}
+                        </button>
+                      ))}
+                      <button onClick={addFacility} className="w-full text-left flex items-center gap-2.5 px-3.5 py-2.5 text-sm font-semibold hover:bg-[#FCFAF5]" style={{ color: C.soil }}>
+                        <MapPin size={15} style={{ color: C.soil }} />Facility pin
+                      </button>
+                      <div style={{ borderTop: `1px solid ${C.border}` }} />
+                      <button onClick={addFarm} className="w-full text-left flex items-center gap-2.5 px-3.5 py-2.5 text-sm font-semibold hover:bg-[#FCFAF5]" style={{ color: C.greenDk }}>
+                        <Sprout size={15} />New farm…
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+              <button onClick={() => setEditMode((v) => !v)} className="h-10 px-4 rounded-xl flex items-center gap-1.5 shadow-lg font-semibold hover:brightness-95"
+                style={editMode ? { background: C.soil, color: "white" } : { background: "rgba(255,255,255,0.97)", color: C.soil, border: `1px solid ${C.border}` }}>
+                <Pencil size={16} />Edit
+              </button>
+              <button onClick={() => setFullscreen(false)} className="h-10 px-4 rounded-xl flex items-center gap-1.5 shadow-lg font-semibold hover:brightness-95"
+                style={{ background: "rgba(255,255,255,0.97)", color: C.soil, border: `1px solid ${C.border}` }}>
+                <Minimize2 size={16} />Close
+              </button>
+            </div>
+
+            {/* Row 2 — view + tools */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <div className="flex items-center h-10 rounded-xl shadow-lg overflow-hidden" style={{ border: `1px solid ${C.border}`, background: "rgba(255,255,255,0.97)" }}>
+                {Object.entries(BASE_LAYERS).map(([k, b]) => (
+                  <button key={k} onClick={() => switchBase(k)} className="h-full px-3 text-sm font-semibold" style={baseLayer === k ? { background: C.greenDk, color: "white" } : { color: C.soil }}>{b.label}</button>
+                ))}
+              </div>
+              <div className="flex items-center h-10 rounded-xl shadow-lg overflow-hidden" style={{ border: `1px solid ${C.border}`, background: "rgba(255,255,255,0.97)" }}>
+                {Object.entries(AREA_UNITS).map(([k, u]) => (
+                  <button key={k} onClick={() => setAreaUnit(k)} className="h-full px-3 text-sm font-semibold" style={areaUnit === k ? { background: C.soil, color: "white" } : { color: C.soil }}>{u.label}</button>
+                ))}
+              </div>
+              <button onClick={() => (measuring ? stopMeasure() : startMeasure())} className="h-10 px-3.5 rounded-xl shadow-lg text-sm font-semibold flex items-center gap-1.5"
+                style={measuring ? { background: C.soil, color: "white" } : { background: "rgba(255,255,255,0.97)", color: C.soil, border: `1px solid ${C.border}` }}>
+                <Ruler size={15} />Measure
+              </button>
+              <button onClick={() => { setCalcOpen((o) => !o); if (measuring) stopMeasure(); }} className="h-10 px-3.5 rounded-xl shadow-lg text-sm font-semibold flex items-center gap-1.5"
+                style={calcOpen ? { background: C.greenDk, color: "white" } : { background: "rgba(255,255,255,0.97)", color: C.soil, border: `1px solid ${C.border}` }}>
+                <Calculator size={15} />Calculator
+              </button>
+            </div>
+
+            {/* Row 3 — edit hint */}
+            {editMode && !renameTarget && (
+              <div className="text-[11px] px-2.5 py-1.5 rounded-lg shadow-lg max-w-[260px]" style={{ background: "rgba(255,255,255,0.97)", color: C.soil, border: `1px solid ${C.border}` }}>
+                Tap a zone/block to rename it · drag its edges to reshape · then <strong>Save map</strong>.
+              </div>
             )}
           </div>
-
-          <button onClick={() => setFullscreen(false)}
-            className="absolute z-[1000] top-[68px] left-3 text-sm px-3.5 py-2 rounded-xl flex items-center gap-2 shadow-lg font-semibold hover:brightness-95"
-            style={{ background: "rgba(255,255,255,0.97)", color: C.soil, border: `1px solid ${C.border}` }}>
-            <Minimize2 size={16} />Close map
-          </button>
-
-          {/* utility bar: base layer · units · measure · calculator */}
-          <div className="absolute z-[1000] top-[116px] left-3 flex flex-wrap items-center gap-1.5 max-w-[calc(100%-1.5rem)]">
-            <div className="flex items-center rounded-xl shadow-lg overflow-hidden" style={{ border: `1px solid ${C.border}`, background: "rgba(255,255,255,0.97)" }}>
-              {Object.entries(BASE_LAYERS).map(([k, b]) => (
-                <button key={k} onClick={() => switchBase(k)} className="text-xs px-3 py-2 font-semibold" style={baseLayer === k ? { background: C.greenDk, color: "white" } : { color: C.soil }}>{b.label}</button>
-              ))}
-            </div>
-            <div className="flex items-center rounded-xl shadow-lg overflow-hidden" style={{ border: `1px solid ${C.border}`, background: "rgba(255,255,255,0.97)" }}>
-              {Object.entries(AREA_UNITS).map(([k, u]) => (
-                <button key={k} onClick={() => setAreaUnit(k)} className="text-xs px-2.5 py-2 font-semibold" style={areaUnit === k ? { background: C.soil, color: "white" } : { color: C.soil }}>{u.label}</button>
-              ))}
-            </div>
-            <button onClick={() => (measuring ? stopMeasure() : startMeasure())} className="text-xs px-3 py-2 rounded-xl shadow-lg font-semibold flex items-center gap-1.5"
-              style={measuring ? { background: C.soil, color: "white" } : { background: "rgba(255,255,255,0.97)", color: C.soil, border: `1px solid ${C.border}` }}>
-              <Ruler size={14} />Measure
-            </button>
-            <button onClick={() => { setCalcOpen((o) => !o); if (measuring) stopMeasure(); }} className="text-xs px-3 py-2 rounded-xl shadow-lg font-semibold flex items-center gap-1.5"
-              style={calcOpen ? { background: C.greenDk, color: "white" } : { background: "rgba(255,255,255,0.97)", color: C.soil, border: `1px solid ${C.border}` }}>
-              <Calculator size={14} />Calculator
-            </button>
-            <button onClick={() => setEditMode((v) => !v)} className="text-xs px-3 py-2 rounded-xl shadow-lg font-semibold flex items-center gap-1.5"
-              style={editMode ? { background: C.soil, color: "white" } : { background: "rgba(255,255,255,0.97)", color: C.soil, border: `1px solid ${C.border}` }}>
-              <Pencil size={14} />Edit
-            </button>
-          </div>
-
-          {editMode && !renameTarget && (
-            <div className="absolute z-[1001] top-[164px] left-3 text-[11px] px-2.5 py-1.5 rounded-lg shadow-lg max-w-[240px]" style={{ background: "rgba(255,255,255,0.97)", color: C.soil, border: `1px solid ${C.border}` }}>
-              Tap a zone/block to rename it. Use the edit tool (top-right) to drag its edges. Tap <strong>Save map</strong> to keep reshapes.
-            </div>
-          )}
 
           {renameTarget && (
             <div className="absolute z-[1002] bottom-3 left-1/2 -translate-x-1/2 w-[min(380px,calc(100%-1.5rem))] rounded-2xl shadow-xl p-3.5" style={{ background: "white", border: `1px solid ${C.border}` }}>
@@ -696,13 +703,13 @@ export default function FarmMap({ farmId, onCountsChange, openRequest, onSaved }
 
           {!walking && !measuring && (
             <div className="absolute z-[1000] bottom-3 left-3 flex items-center gap-2 flex-wrap">
-              <button onClick={startWalk} className="text-sm px-3.5 py-2.5 rounded-xl flex items-center gap-2 shadow-lg font-semibold text-white hover:brightness-95" style={{ background: C.soil }}>
+              <button onClick={startWalk} className="h-10 px-4 rounded-xl flex items-center gap-2 shadow-lg text-sm font-semibold text-white hover:brightness-95" style={{ background: C.soil }}>
                 <Footprints size={16} />Walk {drawKind === "BLOCK" ? "block" : drawKind === "BOUNDARY" ? "boundary" : "zone"}
               </button>
-              <button onClick={locateMe} className="text-sm px-3.5 py-2.5 rounded-xl flex items-center gap-2 shadow-lg font-semibold hover:brightness-95" style={{ background: "white", color: C.soil, border: `1px solid ${C.border}` }}>
+              <button onClick={locateMe} className="h-10 px-4 rounded-xl flex items-center gap-2 shadow-lg text-sm font-semibold hover:brightness-95" style={{ background: "white", color: C.soil, border: `1px solid ${C.border}` }}>
                 <LocateFixed size={16} />GPS
               </button>
-              <button onClick={save} disabled={saving === "saving"} className="text-sm px-5 py-2.5 rounded-xl flex items-center gap-2 shadow-lg text-white font-semibold hover:brightness-95 disabled:opacity-70"
+              <button onClick={save} disabled={saving === "saving"} className="h-10 px-5 rounded-xl flex items-center gap-2 shadow-lg text-sm text-white font-semibold hover:brightness-95 disabled:opacity-70"
                 style={{ background: saving === "saved" ? C.green : saving === "error" ? C.red : C.greenDk }}>
                 {saving === "saving" ? <Loader2 size={16} className="animate-spin" /> : saving === "saved" ? <Check size={16} /> : saving === "error" ? <AlertTriangle size={16} /> : <Save size={16} />}
                 {saving === "saving" ? "Saving…" : saving === "saved" ? "Saved" : saving === "error" ? "Failed" : dirty ? "Save map*" : "Save map"}
