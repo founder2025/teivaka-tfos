@@ -512,3 +512,59 @@ async def update_platform_settings(
 ):
     """Update platform settings. Full implementation pending shared.platform_settings table."""
     return {"message": "Settings updated", "updated": req.model_dump(exclude_none=True)}
+
+
+@router.get("/task-engine")
+async def task_engine_health(
+    _: dict = Depends(require_admin()),
+    db: AsyncSession = Depends(get_db),
+):
+    """Task-engine health (cross-tenant) — per-source counts + last-produced
+    (worker/feeder liveness), invalid/orphaned rows, and overall totals. Turns the
+    'is every feeder alive?' check into one observable view."""
+    by_source = (await db.execute(text("""
+        SELECT source_module,
+               COUNT(*)                                            AS total,
+               COUNT(*) FILTER (WHERE status = 'OPEN')             AS open,
+               COUNT(*) FILTER (WHERE status = 'OPEN'
+                                  AND due_date IS NOT NULL
+                                  AND due_date < CURRENT_DATE)     AS overdue,
+               COUNT(*) FILTER (WHERE status = 'COMPLETED')        AS completed,
+               MAX(created_at)                                     AS last_created,
+               MAX(completed_at)                                   AS last_completed
+          FROM tenant.task_queue
+         GROUP BY source_module
+         ORDER BY source_module
+    """))).mappings().all()
+
+    invalid = (await db.execute(text("""
+        SELECT COUNT(*) AS n FROM tenant.task_queue
+         WHERE imperative IS NULL OR imperative = '' OR farm_id IS NULL
+            OR source_module IS NULL
+            OR status NOT IN ('OPEN','COMPLETED','SKIPPED','EXPIRED','CANCELLED')
+    """))).scalar()
+
+    totals = (await db.execute(text("""
+        SELECT COUNT(*) FILTER (WHERE status='OPEN')      AS open,
+               COUNT(*) FILTER (WHERE status='OPEN' AND due_date IS NOT NULL AND due_date < CURRENT_DATE) AS overdue,
+               COUNT(*) FILTER (WHERE status='COMPLETED') AS completed,
+               COUNT(*) FILTER (WHERE status='SKIPPED')   AS skipped,
+               COUNT(*) FILTER (WHERE status='EXPIRED')   AS expired,
+               COUNT(*)                                   AS total
+          FROM tenant.task_queue
+    """))).mappings().first()
+
+    def iso(v):
+        return v.isoformat() if v is not None else None
+    rows = [{
+        "source_module": r["source_module"],
+        "total": int(r["total"]), "open": int(r["open"]),
+        "overdue": int(r["overdue"]), "completed": int(r["completed"]),
+        "last_created": iso(r["last_created"]), "last_completed": iso(r["last_completed"]),
+    } for r in by_source]
+    return {
+        "by_source": rows,
+        "invalid_rows": int(invalid or 0),
+        "totals": {k: int(totals[k]) for k in ("open", "overdue", "completed", "skipped", "expired", "total")},
+        "generated_at": __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat(),
+    }
