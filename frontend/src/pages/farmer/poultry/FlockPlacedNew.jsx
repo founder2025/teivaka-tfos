@@ -17,6 +17,7 @@ import { useNavigate } from 'react-router-dom';
 import { z } from 'zod';
 import { QueryClient, QueryClientProvider, useMutation } from '@tanstack/react-query';
 import { apiClient } from '../../../utils/apiClient';
+import CapacityCalc from '../../../components/farm/CapacityCalc.jsx';
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false, staleTime: 30_000 } },
@@ -229,6 +230,16 @@ function FlockPlacedNewInner() {
                 ))}
               </select>
             </div>
+            {(() => {
+              const selPu = pus.find((p) => p.pu_id === puId);
+              const aha = selPu?.area_sqm ? Number(selPu.area_sqm) / 10000 : null;
+              if (!aha) return null;
+              return (
+                <div style={{ border: `1px solid ${C.border}`, borderRadius: 12, padding: 12, background: '#FCFAF5' }}>
+                  <CapacityCalc areaHa={aha} unit="m2" compact />
+                </div>
+              );
+            })()}
           </div>
         </section>
 

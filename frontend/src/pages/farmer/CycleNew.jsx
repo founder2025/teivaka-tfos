@@ -18,6 +18,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import ThemedSelect from "../../components/inputs/ThemedSelect.jsx";
+import CapacityCalc from "../../components/farm/CapacityCalc.jsx";
 
 // ── Helpers ──────────────────────────────────────────────────────────
 function authHeaders() {
@@ -389,6 +390,18 @@ export default function CycleNew() {
       <Field label="Planned area (m²)">
         <Input type="number" value={plannedAreaSqm} onChange={setPlannedAreaSqm} min="0" step="0.01" />
       </Field>
+
+      {(() => {
+        const selPu = productionUnits.find((p) => p.pu_id === puId);
+        const aha = plannedAreaSqm ? parseFloat(plannedAreaSqm) / 10000
+          : (selPu?.area_sqm ? Number(selPu.area_sqm) / 10000 : null);
+        if (!aha) return null;
+        return (
+          <div style={{ margin: "4px 0 8px", border: "1px solid #E6DED0", borderRadius: 12, padding: 12, background: "#FCFAF5" }}>
+            <CapacityCalc areaHa={aha} unit="acres" compact />
+          </div>
+        );
+      })()}
 
       <Field label="Planned yield (kg)">
         <Input type="number" value={plannedYieldKg} onChange={setPlannedYieldKg} min="0" step="0.01" />
