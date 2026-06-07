@@ -17,7 +17,8 @@ import "@geoman-io/leaflet-geoman-free/dist/leaflet-geoman.css";
 import iconRetina from "leaflet/dist/images/marker-icon-2x.png";
 import icon from "leaflet/dist/images/marker-icon.png";
 import shadow from "leaflet/dist/images/marker-shadow.png";
-import { Save, LocateFixed, Layers, Loader2, Check, AlertTriangle, Maximize2, Minimize2, MapPin, Footprints, Undo2, Flag, X } from "lucide-react";
+import { Save, LocateFixed, Layers, Loader2, Check, AlertTriangle, Maximize2, Minimize2, MapPin, Footprints, Undo2, Flag, X, Ruler, Calculator } from "lucide-react";
+import CapacityCalc from "../../components/farm/CapacityCalc";
 
 L.Icon.Default.mergeOptions({ iconRetinaUrl: iconRetina, iconUrl: icon, shadowUrl: shadow });
 
@@ -29,6 +30,25 @@ const KIND_STYLE = {
   BLOCK: { color: "#BF9000", weight: 2, fillColor: "#BF9000", fillOpacity: 0.22 },
 };
 const POLY_KINDS = ["ZONE", "BLOCK", "BOUNDARY"];
+const SWATCHES = ["#6AA84F", "#BF9000", "#D4442E", "#3E7B1F", "#2D6CDF", "#8E44AD", "#E67E22", "#5C4033"];
+
+// Base layers — all on Esri's arcgisonline host (already CSP-allowed; no Caddy change).
+const BASE_LAYERS = {
+  sat:     { label: "Satellite",   url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", attribution: "Tiles &copy; Esri — World Imagery" },
+  streets: { label: "Streets",     url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}", attribution: "Tiles &copy; Esri — World Street Map" },
+  topo:    { label: "Terrain",     url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}", attribution: "Tiles &copy; Esri — World Topo Map" },
+};
+// Area units — canonical storage is hectares; display converts. Acres default.
+const AREA_UNITS = { acres: { label: "acres", per_ha: 2.47105 }, ha: { label: "ha", per_ha: 1 }, m2: { label: "m²", per_ha: 10000 } };
+function fmtAreaU(ha, unit) {
+  if (ha == null) return "—";
+  const u = AREA_UNITS[unit] || AREA_UNITS.acres;
+  return `${(ha * u.per_ha).toLocaleString(undefined, { maximumFractionDigits: 2 })} ${u.label}`;
+}
+function fmtDist(m, ft) {
+  if (ft) { const f = m * 3.28084; return f >= 5280 ? `${(f / 5280).toFixed(2)} mi` : `${Math.round(f)} ft`; }
+  return m >= 1000 ? `${(m / 1000).toFixed(2)} km` : `${Math.round(m)} m`;
+}
 
 function authHeaders() { const t = localStorage.getItem("tfos_access_token"); return t ? { Authorization: `Bearer ${t}` } : {}; }
 
@@ -49,7 +69,11 @@ function layerAreaHa(layer) {
   while (Array.isArray(ll) && ll.length && Array.isArray(ll[0])) ll = ll[0];
   return ll && ll.length >= 3 ? geodesicAreaHa(ll) : null;
 }
-function styleFor(kind) { return KIND_STYLE[kind] || KIND_STYLE.ZONE; }
+function styleFor(kind, color) {
+  const base = KIND_STYLE[kind] || KIND_STYLE.ZONE;
+  if (!color) return base;
+  return kind === "BOUNDARY" ? { ...base, color } : { ...base, color, fillColor: color };
+}
 
 const PM_CONTROLS = {
   position: "topright", drawCircle: false, drawCircleMarker: false,
@@ -71,6 +95,12 @@ export default function FarmMap({ farmId, onCountsChange }) {
   const walkLayerRef = useRef(null); // L.layerGroup for walk vertices + preview
   const watchIdRef = useRef(null);   // geolocation.watchPosition id
   const lastPosRef = useRef(null);   // latest {lat,lng,acc} from the watch
+  const baseLayersRef = useRef({});  // {sat,streets,topo} tile layers
+  const measureLayerRef = useRef(null);
+  const measurePtsRef = useRef([]);
+  const measureClickRef = useRef(null);
+  const areaUnitRef = useRef("acres");
+  const lastAreaRef = useRef(null);  // area (ha) of the most recently created shape
   const [drawKind, setDrawKind] = useState("ZONE");
   const drawKindRef = useRef("ZONE");
   const [status, setStatus] = useState("loading"); // loading|ready
@@ -79,12 +109,20 @@ export default function FarmMap({ farmId, onCountsChange }) {
   const [dirty, setDirty] = useState(false);
   const [total, setTotal] = useState({ zones: 0, blocks: 0, ha: 0 });
   const [fullscreen, setFullscreen] = useState(false);
-  const [nameModal, setNameModal] = useState({ open: false, kind: "ZONE", value: "" });
+  const [nameModal, setNameModal] = useState({ open: false, kind: "ZONE", value: "", color: "" });
   const [walking, setWalking] = useState(false);     // GPS walk-the-boundary mode
   const [walkPts, setWalkPts] = useState([]);        // captured corners [{lat,lng,acc}]
   const [liveAcc, setLiveAcc] = useState(null);      // current GPS accuracy (m)
+  const [areaUnit, setAreaUnit] = useState(() => localStorage.getItem("tfos_area_unit") || "acres");
+  const [baseLayer, setBaseLayer] = useState("sat");
+  const [measuring, setMeasuring] = useState(false);
+  const [measureDist, setMeasureDist] = useState(0);
+  const [distFt, setDistFt] = useState(false);
+  const [calcOpen, setCalcOpen] = useState(false);
 
   useEffect(() => { drawKindRef.current = drawKind; }, [drawKind]);
+  useEffect(() => { areaUnitRef.current = areaUnit; localStorage.setItem("tfos_area_unit", areaUnit);
+    fgRef.current?.eachLayer((l) => refreshLayer(l)); }, [areaUnit]);
 
   // Preview is read-only; fullscreen turns on draw tools + map interaction.
   useEffect(() => {
@@ -98,6 +136,8 @@ export default function FarmMap({ farmId, onCountsChange }) {
       map.pm.disableDraw?.();
       map.pm.disableGlobalEditMode?.();
       cleanupWalk();
+      stopMeasure();
+      setCalcOpen(false);
       setInteractive(map, false);
     }
     const t = setTimeout(() => map.invalidateSize(), 80);
@@ -119,16 +159,17 @@ export default function FarmMap({ farmId, onCountsChange }) {
     layer._kind = kind;
     layer._ref_id = props.ref_id ?? null;
     layer._label = props.label ?? "";
-    if (layer.setStyle && KIND_STYLE[kind]) layer.setStyle(styleFor(kind));
+    layer._color = props.color || null;
+    if (layer.setStyle && KIND_STYLE[kind]) layer.setStyle(styleFor(kind, layer._color));
     refreshLayer(layer);
     layer.on("pm:edit", () => { refreshLayer(layer); markDirty(); });
     layer.on("pm:dragend", () => { refreshLayer(layer); markDirty(); });
   }
   function refreshLayer(layer) {
     const ha = layerAreaHa(layer);
-    layer._area_ha = ha;
+    if (ha != null) layer._area_ha = ha;
     const name = layer._label || layer._kind;
-    layer.bindTooltip(ha != null ? `${name} · ${ha.toFixed(2)} ha` : name, { permanent: false, direction: "center" });
+    layer.bindTooltip(layer._area_ha != null ? `${name} · ${fmtAreaU(layer._area_ha, areaUnitRef.current)}` : name, { permanent: false, direction: "center" });
   }
   function markDirty() { setDirty(true); recount(); }
   function recount() {
@@ -150,16 +191,17 @@ export default function FarmMap({ farmId, onCountsChange }) {
     // maxNativeZoom: Esri imagery for rural areas runs out ~z17-18; beyond that
     // Leaflet upscales the last real tile instead of showing "Map data not yet
     // available" — lets the farmer zoom right in to draw small blocks.
-    L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
-      maxZoom: 22, maxNativeZoom: 18, attribution: "Tiles &copy; Esri — World Imagery",
-    }).addTo(map);
-    L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}", {
-      maxZoom: 22, maxNativeZoom: 18, opacity: 0.9,
-    }).addTo(map);
+    Object.entries(BASE_LAYERS).forEach(([key, b]) => {
+      baseLayersRef.current[key] = L.tileLayer(b.url, { maxZoom: 22, maxNativeZoom: 18, attribution: b.attribution });
+    });
+    baseLayersRef.current.sat.addTo(map); // default
+    // Place labels over satellite only (streets/topo already carry their own).
+    baseLayersRef.current.labels = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}", { maxZoom: 22, maxNativeZoom: 18, opacity: 0.9 }).addTo(map);
 
     const fg = L.featureGroup().addTo(map);
     fgRef.current = fg;
     walkLayerRef.current = L.layerGroup().addTo(map); // walk vertices + live preview
+    measureLayerRef.current = L.layerGroup().addTo(map);
 
     // Draw tools added only in fullscreen (see fullscreen effect); preview is read-only.
     map.pm.setGlobalOptions({ layerGroup: fg });
@@ -173,7 +215,7 @@ export default function FarmMap({ farmId, onCountsChange }) {
       layer._kind = kind;
       if (layer.setStyle && KIND_STYLE[kind]) layer.setStyle(styleFor(kind)); // colour immediately
       pendingRef.current = layer;                       // park it; themed modal names it
-      setNameModal({ open: true, kind, value: "" });
+      setNameModal({ open: true, kind, value: "", color: "" });
     });
     map.on("pm:remove", () => { setDirty(true); recount(); });
 
@@ -211,7 +253,7 @@ export default function FarmMap({ farmId, onCountsChange }) {
         }
         if (!layer) return;
         fg.addLayer(layer);
-        decorate(layer, { kind: p.kind, ref_id: p.ref_id, label: p.label });
+        decorate(layer, { kind: p.kind, ref_id: p.ref_id, label: p.label, color: p.color });
       });
       if (fg.getLayers().length) map.fitBounds(fg.getBounds().pad(0.15));
       recount();
@@ -226,18 +268,19 @@ export default function FarmMap({ farmId, onCountsChange }) {
   function confirmName() {
     const layer = pendingRef.current;
     if (layer) {
-      decorate(layer, { kind: layer._kind, label: nameModal.value.trim() });
+      decorate(layer, { kind: layer._kind, label: nameModal.value.trim(), color: nameModal.color || null });
       layer.on("pm:remove", () => { setDirty(true); recount(); });
+      lastAreaRef.current = layer._area_ha ?? lastAreaRef.current;
       markDirty();
     }
     pendingRef.current = null;
-    setNameModal({ open: false, kind: "ZONE", value: "" });
+    setNameModal({ open: false, kind: "ZONE", value: "", color: "" });
   }
   function cancelName() {
     const layer = pendingRef.current;
     if (layer && fgRef.current) fgRef.current.removeLayer(layer); // discard the shape
     pendingRef.current = null;
-    setNameModal({ open: false, kind: "ZONE", value: "" });
+    setNameModal({ open: false, kind: "ZONE", value: "", color: "" });
     recount();
   }
 
@@ -301,15 +344,50 @@ export default function FarmMap({ farmId, onCountsChange }) {
     const layer = L.polygon(walkPts.map((p) => [p.lat, p.lng]), styleFor(kind));
     layer._kind = kind;
     fgRef.current.addLayer(layer);
+    layer._area_ha = layerAreaHa(layer);
     pendingRef.current = layer;
     cleanupWalk();
-    setNameModal({ open: true, kind, value: "" }); // themed name modal, then it's saved on the map
+    setNameModal({ open: true, kind, value: "", color: "" }); // themed name modal, then it's saved on the map
   }
   function cancelWalk() { cleanupWalk(); }
   function cleanupWalk() {
     stopWatch();
     walkLayerRef.current?.clearLayers();
     setWalking(false); setWalkPts([]); setLiveAcc(null);
+  }
+
+  // ── base layer (Satellite / Streets / Terrain) ──────────────────────
+  function switchBase(key) {
+    const map = mapRef.current, layers = baseLayersRef.current;
+    ["sat", "streets", "topo"].forEach((k) => { if (layers[k] && map.hasLayer(layers[k])) map.removeLayer(layers[k]); });
+    layers[key].addTo(map); layers[key].bringToBack();
+    if (key === "sat") { if (!map.hasLayer(layers.labels)) layers.labels.addTo(map); }
+    else if (map.hasLayer(layers.labels)) map.removeLayer(layers.labels);
+    setBaseLayer(key);
+  }
+
+  // ── distance measure tool ───────────────────────────────────────────
+  function startMeasure() {
+    setCalcOpen(false);
+    if (walking) cleanupWalk();
+    mapRef.current?.pm.disableDraw?.();
+    measurePtsRef.current = []; setMeasureDist(0); measureLayerRef.current.clearLayers();
+    const handler = (e) => { measurePtsRef.current = [...measurePtsRef.current, e.latlng]; redrawMeasure(); };
+    measureClickRef.current = handler; mapRef.current.on("click", handler);
+    setMeasuring(true);
+  }
+  function redrawMeasure() {
+    const lg = measureLayerRef.current, pts = measurePtsRef.current, map = mapRef.current;
+    lg.clearLayers();
+    pts.forEach((p) => L.circleMarker(p, { radius: 5, color: "#fff", weight: 2, fillColor: C.soil, fillOpacity: 1 }).addTo(lg));
+    if (pts.length >= 2) L.polyline(pts, { color: C.soil, weight: 3, dashArray: "6 5" }).addTo(lg);
+    let d = 0; for (let i = 1; i < pts.length; i++) d += map.distance(pts[i - 1], pts[i]);
+    setMeasureDist(d);
+  }
+  function undoMeasure() { measurePtsRef.current = measurePtsRef.current.slice(0, -1); redrawMeasure(); }
+  function stopMeasure() {
+    if (measureClickRef.current) { mapRef.current?.off("click", measureClickRef.current); measureClickRef.current = null; }
+    measurePtsRef.current = []; setMeasureDist(0); measureLayerRef.current?.clearLayers(); setMeasuring(false);
   }
 
   function locateMe() {
@@ -334,7 +412,7 @@ export default function FarmMap({ farmId, onCountsChange }) {
     const features = [];
     fg.eachLayer((l) => {
       const gj = l.toGeoJSON();
-      gj.properties = { kind: l._kind || "BLOCK", ref_id: l._ref_id ?? null, label: l._label || "", area_ha: l._area_ha ?? null };
+      gj.properties = { kind: l._kind || "BLOCK", ref_id: l._ref_id ?? null, label: l._label || "", color: l._color || null, area_ha: l._area_ha ?? null };
       features.push(gj);
     });
     try {
@@ -393,16 +471,33 @@ export default function FarmMap({ farmId, onCountsChange }) {
             <Minimize2 size={16} />Close map
           </button>
 
-          {!walking && (
-            <button onClick={startWalk}
-              className="absolute z-[1000] top-[116px] left-3 text-sm px-3.5 py-2.5 rounded-xl flex items-center gap-2 shadow-lg font-semibold text-white hover:brightness-95"
-              style={{ background: C.soil }}>
-              <Footprints size={16} />Walk the {drawKind === "BLOCK" ? "block" : drawKind === "BOUNDARY" ? "boundary" : "zone"} (GPS)
+          {/* utility bar: base layer · units · measure · calculator */}
+          <div className="absolute z-[1000] top-[116px] left-3 flex flex-wrap items-center gap-1.5 max-w-[calc(100%-1.5rem)]">
+            <div className="flex items-center rounded-xl shadow-lg overflow-hidden" style={{ border: `1px solid ${C.border}`, background: "rgba(255,255,255,0.97)" }}>
+              {Object.entries(BASE_LAYERS).map(([k, b]) => (
+                <button key={k} onClick={() => switchBase(k)} className="text-xs px-3 py-2 font-semibold" style={baseLayer === k ? { background: C.greenDk, color: "white" } : { color: C.soil }}>{b.label}</button>
+              ))}
+            </div>
+            <div className="flex items-center rounded-xl shadow-lg overflow-hidden" style={{ border: `1px solid ${C.border}`, background: "rgba(255,255,255,0.97)" }}>
+              {Object.entries(AREA_UNITS).map(([k, u]) => (
+                <button key={k} onClick={() => setAreaUnit(k)} className="text-xs px-2.5 py-2 font-semibold" style={areaUnit === k ? { background: C.soil, color: "white" } : { color: C.soil }}>{u.label}</button>
+              ))}
+            </div>
+            <button onClick={() => (measuring ? stopMeasure() : startMeasure())} className="text-xs px-3 py-2 rounded-xl shadow-lg font-semibold flex items-center gap-1.5"
+              style={measuring ? { background: C.soil, color: "white" } : { background: "rgba(255,255,255,0.97)", color: C.soil, border: `1px solid ${C.border}` }}>
+              <Ruler size={14} />Measure
             </button>
-          )}
+            <button onClick={() => { setCalcOpen((o) => !o); if (measuring) stopMeasure(); }} className="text-xs px-3 py-2 rounded-xl shadow-lg font-semibold flex items-center gap-1.5"
+              style={calcOpen ? { background: C.greenDk, color: "white" } : { background: "rgba(255,255,255,0.97)", color: C.soil, border: `1px solid ${C.border}` }}>
+              <Calculator size={14} />Calculator
+            </button>
+          </div>
 
-          {!walking && (
-            <div className="absolute z-[1000] bottom-3 left-3 flex items-center gap-2">
+          {!walking && !measuring && (
+            <div className="absolute z-[1000] bottom-3 left-3 flex items-center gap-2 flex-wrap">
+              <button onClick={startWalk} className="text-sm px-3.5 py-2.5 rounded-xl flex items-center gap-2 shadow-lg font-semibold text-white hover:brightness-95" style={{ background: C.soil }}>
+                <Footprints size={16} />Walk {drawKind === "BLOCK" ? "block" : drawKind === "BOUNDARY" ? "boundary" : "zone"}
+              </button>
               <button onClick={locateMe} className="text-sm px-3.5 py-2.5 rounded-xl flex items-center gap-2 shadow-lg font-semibold hover:brightness-95" style={{ background: "white", color: C.soil, border: `1px solid ${C.border}` }}>
                 <LocateFixed size={16} />GPS
               </button>
@@ -411,6 +506,36 @@ export default function FarmMap({ farmId, onCountsChange }) {
                 {saving === "saving" ? <Loader2 size={16} className="animate-spin" /> : saving === "saved" ? <Check size={16} /> : saving === "error" ? <AlertTriangle size={16} /> : <Save size={16} />}
                 {saving === "saving" ? "Saving…" : saving === "saved" ? "Saved" : saving === "error" ? "Failed" : dirty ? "Save map*" : "Save map"}
               </button>
+            </div>
+          )}
+
+          {/* MEASURE panel */}
+          {measuring && (
+            <div className="absolute z-[1001] bottom-3 left-1/2 -translate-x-1/2 w-[min(420px,calc(100%-1.5rem))] rounded-2xl shadow-xl p-3.5" style={{ background: "white", border: `1px solid ${C.border}` }}>
+              <div className="flex items-center justify-between gap-2 mb-1.5">
+                <div className="flex items-center gap-2"><Ruler size={16} style={{ color: C.soil }} /><span className="text-sm font-bold" style={{ color: C.soil }}>Measure distance</span></div>
+                <button onClick={() => setDistFt((v) => !v)} className="text-[11px] px-2 py-0.5 rounded-full font-semibold" style={{ color: C.soil, border: `1px solid ${C.border}` }}>{distFt ? "feet/mi" : "metres/km"}</button>
+              </div>
+              <div className="rounded-xl p-2.5 mb-2 flex items-baseline gap-2" style={{ background: "#E9F2DD" }}>
+                <span className="text-2xl font-bold" style={{ color: C.greenDk }}>{fmtDist(measureDist, distFt)}</span>
+                <span className="text-xs" style={{ color: C.muted }}>{measurePtsRef.current.length} point{measurePtsRef.current.length === 1 ? "" : "s"}</span>
+              </div>
+              <div className="text-xs mb-2.5" style={{ color: C.muted }}>Tap along the path on the map to measure its length.</div>
+              <div className="flex items-center gap-2">
+                <button onClick={undoMeasure} className="flex-1 text-sm px-3 py-2 rounded-xl font-semibold flex items-center justify-center gap-1.5 hover:brightness-95" style={{ color: C.soil, border: `1px solid ${C.border}` }}><Undo2 size={15} />Undo</button>
+                <button onClick={stopMeasure} className="flex-1 text-sm px-3 py-2 rounded-xl font-semibold text-white flex items-center justify-center gap-1.5 hover:brightness-95" style={{ background: C.soil }}><Check size={15} />Done</button>
+              </div>
+            </div>
+          )}
+
+          {/* CALCULATOR panel */}
+          {calcOpen && (
+            <div className="absolute z-[1001] bottom-3 right-3 w-[min(360px,calc(100%-1.5rem))] rounded-2xl shadow-xl p-3.5" style={{ background: "white", border: `1px solid ${C.border}` }}>
+              <div className="flex items-center justify-end mb-1">
+                <button onClick={() => setCalcOpen(false)} className="text-xs font-semibold" style={{ color: C.muted }}><X size={15} /></button>
+              </div>
+              <CapacityCalc areaHa={lastAreaRef.current ?? total.ha ?? null} unit={areaUnit} compact />
+              <p className="text-[11px] mt-2" style={{ color: C.muted }}>Using the last block you finished ({fmtAreaU(lastAreaRef.current ?? total.ha, areaUnit)}).</p>
             </div>
           )}
 
@@ -450,9 +575,11 @@ export default function FarmMap({ farmId, onCountsChange }) {
       )}
 
       {/* area readout (bottom-right) */}
-      <div className="absolute z-[1000] bottom-2 right-2 text-[11px] px-2.5 py-1.5 rounded-lg shadow" style={{ background: "rgba(255,255,255,0.95)", color: C.soil, border: `1px solid ${C.border}` }}>
-        {total.zones} zones · {total.blocks} blocks · {total.ha.toFixed(2)} ha
-      </div>
+      {!calcOpen && (
+        <div className="absolute z-[1000] bottom-2 right-2 text-[11px] px-2.5 py-1.5 rounded-lg shadow" style={{ background: "rgba(255,255,255,0.95)", color: C.soil, border: `1px solid ${C.border}` }}>
+          {total.zones} zones · {total.blocks} blocks · {fmtAreaU(total.ha, areaUnit)}
+        </div>
+      )}
 
       {status === "loading" && (
         <div className="absolute inset-0 z-[1001] flex items-center justify-center" style={{ background: "rgba(248,243,233,0.7)" }}>
@@ -482,6 +609,16 @@ export default function FarmMap({ farmId, onCountsChange }) {
               placeholder={`${nameModal.kind.charAt(0) + nameModal.kind.slice(1).toLowerCase()} name`}
               className="w-full px-3 py-2.5 rounded-lg text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-[#6AA84F]"
               style={{ border: `1.5px solid ${C.border}`, background: C.cream, color: C.soil }} />
+            <div className="mt-3">
+              <span className="text-[11px] block mb-1.5" style={{ color: C.muted }}>Colour</span>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                {SWATCHES.map((sw) => (
+                  <button key={sw} onClick={() => setNameModal((m) => ({ ...m, color: sw }))} aria-label={`colour ${sw}`}
+                    className="w-7 h-7 rounded-full transition" style={{ background: sw, outline: nameModal.color === sw ? `2px solid ${C.soil}` : "none", outlineOffset: 2 }} />
+                ))}
+                <button onClick={() => setNameModal((m) => ({ ...m, color: "" }))} className="text-[11px] px-2 py-1 rounded-lg font-semibold" style={{ color: C.muted, border: `1px solid ${C.border}` }}>Default</button>
+              </div>
+            </div>
             <div className="flex items-center justify-end gap-2 mt-4">
               <button onClick={cancelName} className="text-sm px-3.5 py-2 rounded-lg font-semibold hover:brightness-95" style={{ color: C.soil, border: `1px solid ${C.border}` }}>Discard</button>
               <button onClick={confirmName} className="text-sm px-4 py-2 rounded-lg font-semibold text-white hover:brightness-95" style={{ background: C.greenDk }}>Save name</button>
