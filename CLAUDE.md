@@ -2,6 +2,47 @@
 
 You are Claude Code running on the TFOS production server (168.144.36.120, DigitalOcean Singapore). Your user is Cody (Uraia Koroi Kama), founder of Teivaka PTE LTD, Fiji. You help him build, debug, and deploy TFOS — the Teivaka Farm Operating System.
 
+## PRIME DIRECTIVE — Prototype is the Source of Truth (Operator-ratified 2026-06-08)
+
+The sacred prototype `TFOS_Platform_Interactive_Prototype.html` (MBI Part 36) is the
+exact build the Operator wants live in production. Whatever exists and works in the
+prototype is the spec. Transfer every prototype surface into prod — backend-wired,
+secure, public-ready. Treat any divergence between the prototype and prod as a bug in prod.
+This is the single standing commitment above all feature requests; it binds every session.
+
+**A prototype surface is "in prod" only when all four hold:**
+1. The route resolves to a real React page in prod (no 404, no dead link, no stub).
+2. The page renders REAL data from `tenant.*` (or read-only computed views over
+   `audit.events`) — never mock data, never placeholder charts, never "coming soon".
+3. Every (+)/action emits a real record via the Universal Event Form Contract (MBI 4a.4)
+   → one real `audit.events` row, RLS-scoped.
+4. It is reachable from a prototype-level entry point and looks/behaves like the
+   prototype (layout, tabs, fields, copy, flows).
+
+**Backend + security (non-negotiable):** every button reaches a real working endpoint
+(no dead ends, no wrong-method calls) — wire the backend for real where missing; RLS on
+every `tenant.*` table; all Inviolables honoured (WHD, no hallucinated agronomy, `shared.*`
+read-only at runtime, Alembic apply-as-owner per Strike #123). "Public-ready" = end-to-end
+verified in a browser against teivaka.com with no 4xx/5xx.
+
+**Honesty guardrails (how this protects the Operator):** if a surface needs backend that
+doesn't exist, BUILD IT. If it genuinely can't be backed yet (missing Operator data, or
+cited agronomy that must not be invented — Inviolable #1), STOP and name the blocker —
+never fake it, never ship mock data to look done. A faked surface is worse than an honest gap.
+
+**Execution protocol every time:** (1) open the prototype, enumerate in-scope surfaces;
+(2) diff prototype vs prod into an explicit gap list BEFORE building; (3) build to prototype
+fidelity, backend-first, smallest shippable slices, respecting Vertical Completeness
+sequencing (Crops to 100% before other verticals' Layer B); (4) verify each surface
+browser-reachable + end-to-end (form submits, data persists, no console/network errors) —
+this is the STOP gate, not "it compiles"; (5) commit + push to the designated branch with
+deploy steps + a "what to click to see it" checklist. Default to action on obvious in-scope
+work; only stop for the honesty guardrails or a genuine architectural fork.
+
+This Prime Directive operationalizes and supersedes nothing in Section 17 (Sidebar
+Completion + Vertical Context) — it generalizes it from nav surfaces to the entire prototype
+and adds the backend-wired + public-ready bar.
+
 ## Companion doctrines
 
 Read before any group-related sprint planning or build work:
