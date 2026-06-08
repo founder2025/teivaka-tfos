@@ -725,7 +725,7 @@ export default function Register() {
             <p>TIS queries: <strong>5 per day</strong></p>
           </div>
           <a
-            href="/dashboard"
+            href="/home"
             className="mt-6 inline-block w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-semibold transition-colors"
           >
             Go to My Dashboard →

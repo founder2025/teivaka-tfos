@@ -130,7 +130,7 @@ function UserDropdown({ user, onLogout }) {
       {open && (
         <div className="absolute right-0 top-full mt-2 w-48 bg-white border rounded-xl shadow-xl z-50 py-1 overflow-hidden"
           style={{ borderColor: C.border }}>
-          <Link to="/profile" onClick={() => setOpen(false)}
+          <Link to="/me" onClick={() => setOpen(false)}
             className="flex items-center gap-2 px-4 py-2.5 text-sm hover:bg-gray-50 transition-colors"
             style={{ color: C.soil }}>
             👤 My Profile
@@ -140,7 +140,7 @@ function UserDropdown({ user, onLogout }) {
             style={{ color: C.soil }}>
             🌾 My Farm
           </Link>
-          <Link to="/settings" onClick={() => setOpen(false)}
+          <Link to="/me/settings" onClick={() => setOpen(false)}
             className="flex items-center gap-2 px-4 py-2.5 text-sm hover:bg-gray-50 transition-colors"
             style={{ color: C.soil }}>
             ⚙️ Settings
