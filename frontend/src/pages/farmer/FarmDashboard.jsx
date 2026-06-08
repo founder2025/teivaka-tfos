@@ -302,7 +302,7 @@ function QuickActions({ navigate }) {
     { label: "Harvest", icon: Sprout, go: () => navigate("/farm/harvests") },
     { label: "Cash in", icon: ArrowRight, go: () => navigate("/farm/cash") },
     { label: "Expense", icon: DollarSign, go: () => navigate("/farm/cash") },
-    { label: "Field event", icon: ListChecks, go: () => navigate("/farm/field-events") },
+    { label: "Field event", icon: ListChecks, go: () => navigate("/farm/field-events?new=1") },
     { label: "Labor", icon: Users, go: () => navigate("/farm/labor") },
     { label: "Photo", icon: Camera, go: () => emitToast("Photo capture ships with the mobile log flow") },
   ];

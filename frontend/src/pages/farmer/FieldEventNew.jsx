@@ -27,8 +27,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient, QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { Plus, ListChecks } from "lucide-react";
 import ThemedSelect from "../../components/inputs/ThemedSelect.jsx";
 import ThemedCombobox from "../../components/inputs/ThemedCombobox.jsx";
+import { CurrentFarmProvider, useCurrentFarm } from "../../context/CurrentFarmContext";
+import FarmSelector from "../../components/farm/FarmSelector";
 
 const C = {
   soil:    "#5C4033",
@@ -1038,22 +1041,120 @@ function FieldEventForm() {
   );
 }
 
+// ── Field events LOG (prototype: Farm > Field events) ───────────────────────
+// The /farm/field-events route lands here (the log). The (+) catalog tiles,
+// QuickActions, and dashboard open the FORM via ?type= or ?new=1.
+function feAuthHeaders() {
+  const t = localStorage.getItem("tfos_access_token");
+  return t ? { Authorization: `Bearer ${t}` } : {};
+}
+const FE_HUMAN = {
+  PLANTING: "Planting", TRANSPLANT: "Transplant", TRANSPLANT_LOGGED: "Transplant",
+  FERTILIZE: "Fertilize", FERTILIZER_APPLIED: "Fertilize", IRRIGATE: "Irrigate",
+  IRRIGATION: "Irrigate", SPRAY: "Spray", CHEMICAL_APPLIED: "Spray", PRUNE: "Prune",
+  PRUNING_TRAINING: "Prune/train", PEST_OBSERVE: "Pest sighting", DISEASE_OBSERVE: "Disease sighting",
+  HARVEST_PARTIAL: "Partial harvest", HARVEST_FINAL: "Final harvest", INSPECTION: "Inspection",
+  SOIL_TEST: "Soil test", PHOTO: "Photo", OTHER: "Other", WEED_MANAGEMENT: "Weed mgmt", LAND_PREP: "Land prep",
+};
+function feShort(s) { return s ? String(s).split("-").slice(-1)[0].slice(0, 6) : "—"; }
+function feDate(s) { if (!s) return "—"; try { return new Date(s).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "2-digit" }); } catch { return s; } }
+function feDetail(e) {
+  if (e.chemical_application) return `${e.chemical_application}${e.quantity != null ? ` · ${e.quantity}${e.quantity_unit || ""}` : ""}`;
+  if (e.notes) return e.notes;
+  const p = e.payload_jsonb;
+  if (p && typeof p === "object") {
+    const ks = Object.keys(p).filter((k) => p[k] != null && p[k] !== "" && !["production_id", "cycle_id", "variety_id"].includes(k));
+    if (ks.length) return ks.slice(0, 2).map((k) => `${k.replace(/_/g, " ")}: ${p[k]}`).join(" · ");
+  }
+  return "—";
+}
+
+function FieldEventsLog() {
+  const navigate = useNavigate();
+  const { farmId } = useCurrentFarm();
+  const { data, isLoading, isError, refetch } = useQuery({
+    queryKey: ["field-events", farmId],
+    queryFn: async () => {
+      const r = await fetch(`/api/v1/field-events?farm_id=${encodeURIComponent(farmId)}&limit=100`, { headers: feAuthHeaders() });
+      if (!r.ok) throw new Error(String(r.status));
+      return r.json();
+    },
+    enabled: !!farmId, retry: 0,
+  });
+  const events = data?.data?.events ?? [];
+
+  return (
+    <div className="max-w-5xl mx-auto p-4 space-y-4">
+      <div className="flex items-start justify-between gap-2 flex-wrap">
+        <div>
+          <h1 className="text-2xl font-bold" style={{ color: C.soil }}>Field events</h1>
+          <div className="text-xs mt-0.5" style={{ color: C.muted }}>Spray, irrigation, fertilizer, scouting and more — logged against your blocks</div>
+        </div>
+        <div className="flex items-center gap-2">
+          <FarmSelector />
+          <button onClick={() => navigate("/farm/field-events?new=1")}
+            className="text-sm px-3 py-2 rounded-lg text-white flex items-center gap-1.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#6AA84F]"
+            style={{ background: C.greenDk }}><Plus size={14} />Log event</button>
+        </div>
+      </div>
+
+      <div className="rounded-2xl border bg-white overflow-hidden" style={{ borderColor: C.border }}>
+        <div className="hidden md:grid items-center px-4 py-2 text-[10px] font-bold uppercase"
+          style={{ color: C.muted, gridTemplateColumns: "96px 120px 1fr 90px 80px", borderBottom: `1px solid ${C.border}` }}>
+          <span>Date</span><span>Type</span><span>Detail</span><span>Block</span><span>By</span>
+        </div>
+        {isLoading ? (
+          <div className="px-4 py-10 text-center text-sm" style={{ color: C.muted }}>Loading…</div>
+        ) : isError ? (
+          <div className="px-4 py-10 text-center">
+            <div className="text-sm font-semibold" style={{ color: C.soil }}>Couldn't load field events</div>
+            <button onClick={() => refetch()} className="mt-2 text-xs px-3 py-1.5 rounded-lg text-white" style={{ background: C.greenDk }}>Retry</button>
+          </div>
+        ) : events.length === 0 ? (
+          <div className="px-4 py-12 text-center">
+            <ListChecks size={26} style={{ color: C.green, margin: "0 auto" }} />
+            <div className="text-sm font-semibold mt-2" style={{ color: C.soil }}>No field events yet</div>
+            <div className="text-xs mt-1" style={{ color: C.muted }}>Tap “Log event” to record a spray, irrigation, fertilizer or scouting activity.</div>
+          </div>
+        ) : events.map((e) => (
+          <div key={e.event_id} className="flex md:grid md:items-center gap-3 px-4 py-3"
+            style={{ gridTemplateColumns: "96px 120px 1fr 90px 80px", borderTop: `1px solid rgba(92,64,51,0.06)` }}>
+            <span className="text-[11px] shrink-0" style={{ color: C.muted }}>{feDate(e.event_date)}</span>
+            <span className="text-sm font-medium md:font-normal" style={{ color: C.soil }}>{FE_HUMAN[e.event_type] || e.event_type}</span>
+            <span className="flex-1 min-w-0 text-[13px] md:truncate" style={{ color: C.soil }}>{feDetail(e)}</span>
+            <span className="text-[11px]" style={{ color: C.muted }}>{feShort(e.pu_id)}</span>
+            <span className="text-[11px]" style={{ color: C.muted }}>{feShort(e.created_by)}</span>
+          </div>
+        ))}
+      </div>
+      <p className="text-[11px]" style={{ color: C.muted }}>Showing the most recent {events.length} event{events.length === 1 ? "" : "s"} for this farm.</p>
+    </div>
+  );
+}
+
 function FieldEventDispatcher() {
   const [searchParams] = useSearchParams();
   const typeParam = searchParams.get("type");
+  const isNew = searchParams.get("new");
   if (typeParam === "PLANTING" || typeParam === "TRANSPLANT_LOGGED") {
     return <CropSelectionForm eventType={typeParam} schema={STRIKE_96_FIELDS[typeParam]} />;
   }
   if (typeParam && STRIKE_96_FIELDS[typeParam]) {
     return <Strike96CropsForm eventType={typeParam} />;
   }
-  return <FieldEventForm />;
+  // ?new=1 (or a legacy ?type like CHEMICAL_APPLIED) opens the form; bare route shows the log.
+  if (isNew || typeParam) {
+    return <FieldEventForm />;
+  }
+  return <FieldEventsLog />;
 }
 
 export default function FieldEventNew() {
   return (
     <QueryClientProvider client={queryClient}>
-      <FieldEventDispatcher />
+      <CurrentFarmProvider>
+        <FieldEventDispatcher />
+      </CurrentFarmProvider>
     </QueryClientProvider>
   );
 }

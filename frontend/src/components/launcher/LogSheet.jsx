@@ -110,7 +110,7 @@ const GROUP_ICONS = {
 
 const EVENT_ROUTES = {
   HARVEST_LOGGED:    "/farm/harvest/new",
-  CHEMICAL_APPLIED:  "/farm/field-events",
+  CHEMICAL_APPLIED:  "/farm/field-events?new=1",
   // Strike #97 — CROPS B2 polymorphic forms (Strike #96 backend)
   PLANTING:           "/farm/field-events?type=PLANTING",
   IRRIGATION:         "/farm/field-events?type=IRRIGATION",

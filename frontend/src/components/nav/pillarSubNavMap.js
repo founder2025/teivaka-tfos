@@ -47,6 +47,7 @@ export const PILLAR_SUB_NAV = {
       { path: "/farm/decisions",    label: "Decision Center",   icon: Crosshair },
       { path: "/farm/enterprises",  label: "Enterprises",       icon: LayoutGrid },
       { path: "/farm/cycles",       label: "Production",        icon: Sprout },
+      { path: "/farm/field-events", label: "Field Events",      icon: Activity },
       { path: "/farm/inventory",    label: "Inventory",         icon: Package },
       { path: "/farm/labor",        label: "Labor",             icon: Users2 },
       { path: "/farm/buyers",       label: "Buyers",            icon: Truck },
