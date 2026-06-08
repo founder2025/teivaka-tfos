@@ -197,17 +197,29 @@ function Priorities({ tasks, navigate, onAction }) {
 }
 
 // ── farm summary snapshot ────────────────────────────────────────────
-function FarmSummary({ net, activeCycles, holds, navigate }) {
+function FarmSummary({ score, grade, businesses, net, activeCycles, holds, team, hours, navigate }) {
   const snap = [
     { l: "Production", v: `${activeCycles} active`, sub: "cycles & groups", go: "/farm/cycles" },
     { l: "Cash", v: fjd(net), sub: "net so far", c: net < 0 ? C.red : C.greenDk, go: "/farm/cash" },
     { l: "Inventory", v: "Building", sub: "stock value", c: C.muted, go: "/farm/inventory" },
-    { l: "Labour", v: "—", sub: "team this week", go: "/farm/labor" },
+    { l: "Labour", v: team ? `${team} · ${hours}h` : "—", sub: "team this week", go: "/farm/labor" },
     { l: "Compliance", v: holds ? `${holds} on hold` : "Clear", sub: holds ? "do not sell" : "all clear", c: holds ? C.red : C.greenDk, go: "/farm/compliance" },
     { l: "Weather", v: "Live", sub: "see forecast", go: "/farm/weather" },
   ];
   return (
     <Section icon={Activity} title="Farm summary" meta="your whole farm at a glance">
+      <div className="flex items-center gap-4 rounded-xl px-4 py-3 mb-3" style={{ border: `1px solid ${C.border}`, background: C.cream }}>
+        <div className="text-center" style={{ minWidth: 84 }}>
+          <div style={{ fontSize: 34, fontWeight: 800, lineHeight: 1, color: gradeColor(grade) }}>{score}</div>
+          <div className="text-xs" style={{ color: C.muted }}>/ 100</div>
+        </div>
+        <div>
+          <div className="font-extrabold" style={{ color: C.soil, fontSize: 16 }}>Farm health: {grade}</div>
+          <div className="text-xs mt-0.5" style={{ color: C.muted }}>
+            Across {businesses} {businesses === 1 ? "business" : "businesses"} · {holds ? `${holds} thing${holds === 1 ? "" : "s"} on hold` : "nothing on hold"}
+          </div>
+        </div>
+      </div>
       <div className="grid gap-2 grid-cols-2 sm:grid-cols-3 lg:grid-cols-6">
         {snap.map((s) => <Tile key={s.l} label={s.l} value={s.v} sub={s.sub} color={s.c} onClick={() => navigate(s.go)} />)}
       </div>
@@ -343,6 +355,7 @@ function FarmOverview() {
   const tasks = useQuery({ queryKey: ["ov-tasks"], queryFn: () => getJSON(`/api/v1/tasks?status=OPEN&limit=50`), retry: 0 });
   const cash = q(["ov-cash", farmId], () => getJSON(`/api/v1/cash-ledger?farm_id=${encodeURIComponent(farmId)}&limit=1`));
   const farmsList = useQuery({ queryKey: ["ov-farms"], queryFn: () => getJSON(`/api/v1/farms`), retry: 0 });
+  const labor = q(["ov-labor", farmId], () => getJSON(`/api/v1/labor?farm_id=${encodeURIComponent(farmId)}`));
 
   const finSummary = fin.data?.data?.summary || null;
   const cropRows = crops.data?.data ?? [];
@@ -358,7 +371,28 @@ function FarmOverview() {
   const holds = 0; // no farm-wide holds endpoint yet (honest)
   const openTasks = taskRows.length;
   const cropNet = cropRows.reduce((a, r) => a + (n0(r.total_income_fjd) - n0(r.total_labor_fjd) - n0(r.total_input_cost_fjd)), 0);
-  const standing = cropRows.length ? { grade: cropNet > 0 ? "Strong" : "Steady", score: cropNet > 0 ? Math.min(100, 80 + Math.round(cropNet / 200)) : Math.max(45, 75) } : { grade: "New", score: 0 };
+
+  // Transparent farm-health rubric (mirrors prototype entHealth): each enterprise
+  // starts at 100, −25 if spending more than earned, −20 if nothing in production,
+  // −40 per compliance hold; portfolio score = average across enterprises. Real
+  // signals only — no faked holds (crop-WHD-blocks endpoint pending).
+  const laborRows = labor.data?.data ?? [];
+  const weekAgo = Date.now() - 7 * 864e5;
+  const laborWeek = laborRows.filter((r) => { const d = new Date(r.work_date).getTime(); return Number.isFinite(d) && d >= weekAgo; });
+  const team = new Set(laborWeek.map((r) => r.worker_id)).size;
+  const hours = Math.round(laborWeek.reduce((a, r) => a + Number(r.hours_worked || 0), 0));
+  const flockSpecies = new Set(flockRows.map((f) => f.species || f.flock_type || f.flock_name || "flock")).size;
+  const businesses = cropRows.length + flockSpecies;
+  const entScores = cropRows.map((r) => {
+    const cn = n0(r.total_income_fjd) - n0(r.total_labor_fjd) - n0(r.total_input_cost_fjd);
+    return cn < 0 ? 75 : 100;
+  });
+  for (let i = 0; i < flockSpecies; i++) entScores.push(100);
+  let score = entScores.length ? Math.round(entScores.reduce((a, b) => a + b, 0) / entScores.length) : (activeCycles || head ? 70 : 0);
+  if (activeCycles === 0 && head === 0 && entScores.length) score = Math.max(0, score - 20);
+  if (holds) score = Math.max(0, score - Math.round((holds * 40) / Math.max(1, entScores.length)));
+  const grade = score >= 80 ? "Strong" : score >= 55 ? "Steady" : score >= 30 ? "Watch" : entScores.length ? "At risk" : "New";
+  const standing = { grade, score };
 
   const handleCycleCreated = () => { ["ov-cycles", "ov-crops", "ov-fin"].forEach((k) => qc.invalidateQueries({ queryKey: [k, farmId] })); qc.invalidateQueries({ queryKey: ["ov-tasks"] }); };
   const taskAction = async (id, action) => { try { await postJSON(`/api/v1/tasks/${id}/${action}`); emitToast(action === "complete" ? "Task done" : "Task skipped"); qc.invalidateQueries({ queryKey: ["ov-tasks"] }); } catch { emitToast("Couldn't update the task — try again"); } };
@@ -369,7 +403,7 @@ function FarmOverview() {
       <RecentLoggedStrip farmId={farmId} />
       <TopTaskBanner />
       <PillarCards crops={cropRows} flocks={flockRows} activeCycles={activeCycles} navigate={navigate} />
-      <FarmSummary net={net} activeCycles={activeCycles} holds={holds} navigate={navigate} />
+      <FarmSummary score={score} grade={grade} businesses={businesses} net={net} activeCycles={activeCycles} holds={holds} team={team} hours={hours} navigate={navigate} />
       <BankabilityPath navigate={navigate} />
       <Priorities tasks={taskRows} navigate={navigate} onAction={taskAction} />
       <HeadlineMetrics fin={finSummary} cash={cashBal} activeCycles={activeCycles} head={head} openTasks={openTasks} holds={holds} standing={standing} navigate={navigate} />
