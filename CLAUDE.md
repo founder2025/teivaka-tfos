@@ -4,8 +4,10 @@ You are Claude Code running on the TFOS production server (168.144.36.120, Digit
 
 ## PRIME DIRECTIVE — Prototype is the Source of Truth (Operator-ratified 2026-06-08)
 
-The sacred prototype `TFOS_Platform_Interactive_Prototype.html` (MBI Part 36) is the
-exact build the Operator wants live in production. Whatever exists and works in the
+The sacred prototype `docs/TFOS_MyFarm_Prototype_v263_20260608.html` (MBI Part 36;
+Operator-designated canonical 2026-06-08, supersedes the older
+`docs/TFOS_Platform_Interactive_Prototype.html`) is the exact build the Operator wants
+live in production. Whatever exists and works in the
 prototype is the spec. Transfer every prototype surface into prod — backend-wired,
 secure, public-ready. Treat any divergence between the prototype and prod as a bug in prod.
 This is the single standing commitment above all feature requests; it binds every session.
@@ -377,7 +379,7 @@ past stub status while Crops is below 100% is auto-rejected.
 ### The Sidebar Completion Rule
 
 Every navigation surface that exists in
-`TFOS_Platform_Interactive_Prototype.html` (the sacred prototype,
+`TFOS_MyFarm_Prototype_v263_20260608.html` (the sacred prototype,
 MBI Part 36) must be functional end-to-end in production before
 that surface is considered shipped. Functional end-to-end means:
 
@@ -425,7 +427,7 @@ vertical-default behavior follows mode automatically.
 ### Forbidden Moves (additions to CLAUDE.md Inviolable rules)
 
 1. Build a sub-page in production that does not exist in
-   `TFOS_Platform_Interactive_Prototype.html`, or fails to be
+   `TFOS_MyFarm_Prototype_v263_20260608.html`, or fails to be
    reachable from at least one prototype-defined entry point.
 2. Build Layer B work for any non-Crops vertical beyond stub
    dashboard status while Crops is below 100% per the 7-criterion
