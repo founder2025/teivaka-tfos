@@ -249,7 +249,7 @@ Some files cannot be cleanly split: `App.jsx`, `LeftRail.jsx`, naming dictionary
 
 Per `CLAUDE.md` Section 7, these files are sacred and require explicit Operator approval to modify even in serial mode. **In parallel mode, they are frozen — neither lane may touch them under any condition.**
 
-- `TFOS_Platform_Interactive_Prototype.html`
+- `TFOS_MyFarm_Prototype_v263_20260608.html`
 - `Landing.jsx`, `Login.jsx`, `Register.jsx`, `VerifyEmail.jsx`, `ForgotPassword.jsx`, `ResetPassword.jsx`
 - `pages/farmer/TIS.jsx`
 - `components/nav/BottomNav.jsx`, `components/nav/TopAppBar.jsx`

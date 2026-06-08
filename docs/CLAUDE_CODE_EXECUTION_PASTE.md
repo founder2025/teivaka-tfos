@@ -7,7 +7,7 @@
 **Budget:** ~11-13 days single-thread execution (Day 3 is a 2-day day — absorbs Universal (+) Log button from Nav v2.1 §12).
 **Branch:** `feature/option-3-plus-nav-v2-1`
 
-> **READ ALONGSIDE:** `PROTOTYPE_ALIGNMENT_APPENDIX.md` in this same folder. The prototype (`TFOS_Platform_Interactive_Prototype.html` at Resource Pack root) is the **locked visual target**. The appendix enumerates per-pillar sub-nav items, Farm Overview dashboard layout, and Notifications/Messages dropdown UX that this paste left open. Where paste and appendix disagree, **appendix wins** — the prototype is law.
+> **READ ALONGSIDE:** `PROTOTYPE_ALIGNMENT_APPENDIX.md` in this same folder. The prototype (`TFOS_MyFarm_Prototype_v263_20260608.html` at Resource Pack root) is the **locked visual target**. The appendix enumerates per-pillar sub-nav items, Farm Overview dashboard layout, and Notifications/Messages dropdown UX that this paste left open. Where paste and appendix disagree, **appendix wins** — the prototype is law.
 
 ---
 

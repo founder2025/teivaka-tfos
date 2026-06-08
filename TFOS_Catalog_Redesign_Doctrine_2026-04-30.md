@@ -1,7 +1,7 @@
 # TFOS CATALOG REDESIGN DOCTRINE
 
 **Status:** BINDING. Approved by Operator (Cody) 2026-04-30.
-**Authority:** Sits inside the canonical authority stack as an addendum to `TFOS_Master_Build_Instruction.md` Section 4a. When this document conflicts with prior interpretations of Section 4a.6, this document wins. Conflicts with the prototype `TFOS_Platform_Interactive_Prototype.html` are resolved per Section 8 Convergence Mandate.
+**Authority:** Sits inside the canonical authority stack as an addendum to `TFOS_Master_Build_Instruction.md` Section 4a. When this document conflicts with prior interpretations of Section 4a.6, this document wins. Conflicts with the prototype `TFOS_MyFarm_Prototype_v263_20260608.html` are resolved per Section 8 Convergence Mandate.
 **Scope:** Locks the (+) button (universal log button) architecture, settings architecture, and entity creation locations across the TFOS platform.
 **Read this document before authoring any (+) UI work, settings UI work, or event-catalog migration work.**
 

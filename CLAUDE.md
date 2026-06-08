@@ -5,8 +5,8 @@ You are Claude Code running on the TFOS production server (168.144.36.120, Digit
 ## PRIME DIRECTIVE — Prototype is the Source of Truth (Operator-ratified 2026-06-08)
 
 The sacred prototype `docs/TFOS_MyFarm_Prototype_v263_20260608.html` (MBI Part 36;
-Operator-designated canonical 2026-06-08, supersedes the older
-`docs/TFOS_Platform_Interactive_Prototype.html`) is the exact build the Operator wants
+Operator-designated canonical 2026-06-08 — the SINGLE source of truth; all earlier
+prototype files have been removed from the repo) is the exact build the Operator wants
 live in production. Whatever exists and works in the
 prototype is the spec. Transfer every prototype surface into prod — backend-wired,
 secure, public-ready. Treat any divergence between the prototype and prod as a bug in prod.

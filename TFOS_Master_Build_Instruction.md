@@ -131,7 +131,7 @@ Commercial mode adds a 6th nav tab: **Analytics** (lucide BarChart3 icon), expos
 
 1. **This document** (`TFOS_Master_Build_Instruction.md`) — the law (rules, schema, phase map, drift list, doctrine, cadence)
 2. `TFOS_Platform_Architecture.md` — Growth/Commercial nav contract
-3. `TFOS_Platform_Interactive_Prototype.html` — **SACRED visual + interaction contract.** Never modified without explicit Operator approval.
+3. `TFOS_MyFarm_Prototype_v263_20260608.html` — **SACRED visual + interaction contract.** Never modified without explicit Operator approval.
 4. `TFOS_Foundation_Complete.xlsx` — backend data contract
 5. **Reality on prod** (`git log`, `alembic_version`, `\d` schema, container state) — **wins over docs when they disagree.** Drift gets reconciled into docs the same day, not deferred.
 
@@ -1277,7 +1277,7 @@ The Architect and Claude Code do not, ever, under any framing:
 
 (unchanged from v4.3)
 
-- `TFOS_Platform_Interactive_Prototype.html`
+- `TFOS_MyFarm_Prototype_v263_20260608.html`
 - `Landing.jsx`, `Login.jsx`, `Register.jsx`, `VerifyEmail.jsx`, `ForgotPassword.jsx`, `ResetPassword.jsx`
 - `pages/farmer/TIS.jsx`
 - `components/nav/BottomNav.jsx`, `components/nav/TopAppBar.jsx`
@@ -1503,7 +1503,7 @@ STANDING RULES — v5.0 (2026-05-06):
 CANONICAL STACK:
   1. TFOS_Master_Build_Instruction.md (THIS — sole law)
   2. TFOS_Platform_Architecture.md
-  3. TFOS_Platform_Interactive_Prototype.html (SACRED)
+  3. TFOS_MyFarm_Prototype_v263_20260608.html (SACRED)
   4. TFOS_Foundation_Complete.xlsx
   5. Older versions in _ARCHIVE_/ — reference only.
 
