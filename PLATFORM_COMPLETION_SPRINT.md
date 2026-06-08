@@ -49,12 +49,12 @@ backends — wire them.
 | Production (Cycles) | 🟡 | list real; **6-panel cycle detail + real nursery create** pending |
 | Inventory | 🟡 | real inputs; parity pass |
 | Labor | 🟢 | real workers/attendance |
-| Cash | 🟡 | **verify writes are real** (de-fake), multi-tab parity |
+| Cash | 🟢 | **REAL** — cash.py inserts tenant.cash_ledger + emits audit.events (not the prototype no-op). Confirm FE write path; multi-tab parity |
 | Assets & Equipment | 🟡 | thin; parity pass |
 | Locations | ✅ | L1–L3 map shipped |
 | Compliance | ✅ | crop-WHD page + endpoint (this sprint) |
 | Analytics | 🟡 | back with real decision_signals or honest-empty |
-| Reports | 🟡 | **Bank Evidence must read real audit.events** (de-fake #1) |
+| Reports | 🟡 | Bank Evidence is **REAL** over audit.events but **poultry-only**; build **crop/whole-farm Bank Evidence** (the banker flagship for a crops demo) |
 | Weather | 🟢 | real Open-Meteo |
 | Library | 🟡 | uncertain depth; parity pass |
 | Gallery | 🟡 | real photos; capture stubs |
