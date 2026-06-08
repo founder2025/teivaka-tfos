@@ -24,7 +24,6 @@ import {
 
 import { CurrentFarmProvider, useCurrentFarm } from "../../context/CurrentFarmContext";
 import RecentLoggedStrip from "../../components/farm/RecentLoggedStrip";
-import TopTaskBanner from "../../components/farm/TopTaskBanner";
 import ActiveCyclesTable from "../../components/farm/ActiveCyclesTable";
 import FarmSelector from "../../components/farm/FarmSelector";
 import ModeDropdown from "../../components/farm/ModeDropdown";
@@ -458,7 +457,6 @@ function FarmOverview() {
     <div className="space-y-3">
       <HeaderRow />
       <RecentLoggedStrip farmId={farmId} />
-      <TopTaskBanner />
       <PillarCards crops={cropRows} flocks={flockRows} activeCycles={activeCycles} navigate={navigate} />
       <FarmSummary score={score} grade={grade} businesses={businesses} net={net} activeCycles={activeCycles} holds={holds} team={team} hours={hours} navigate={navigate} />
       <BankabilityPath navigate={navigate} />
