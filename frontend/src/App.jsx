@@ -94,6 +94,7 @@ const IncidentReportedNew    = lazy(() => import("./pages/farmer/poultry/Inciden
 const SuppliesReceivedNew    = lazy(() => import("./pages/farmer/poultry/SuppliesReceivedNew"));
 const PoultryDashboard      = lazy(() => import("./pages/farmer/poultry/PoultryDashboard"));
 const PoultryCompliance     = lazy(() => import("./pages/farmer/poultry/PoultryCompliance"));
+const CropCompliance        = lazy(() => import("./pages/farmer/CropCompliance"));
 const PoultryBankEvidence   = lazy(() => import("./pages/farmer/poultry/PoultryBankEvidence"));
 const LibrarySettings       = lazy(() => import("./pages/farmer/LibrarySettings"));
 const HarvestList   = lazy(() => import("./pages/farmer/HarvestList"));
@@ -270,7 +271,8 @@ export default function App() {
             <Route path="/farm/cash"         element={<CashLedger />} />
             <Route path="/farm/buyers"       element={<Buyers />} />
             <Route path="/farm/equipment"    element={<Equipment />} />
-            <Route path="/farm/compliance"   element={<PoultryCompliance  />} />
+            <Route path="/farm/compliance"   element={<CropCompliance />} />
+            <Route path="/farm/compliance/poultry" element={<PoultryCompliance />} />
             <Route path="/farm/analytics"    element={<Analytics />} />
             <Route path="/farm/reports"      element={<Reports />} />
             <Route path="/farm/decisions"    element={<DecisionCenter />} />

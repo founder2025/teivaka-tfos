@@ -281,6 +281,16 @@ Every step hash-chained in audit.events, verifiable via /verify/{audit_hash}, sc
 
 **Backend change:** edit /opt/teivaka/03_backend or the container code, then `docker compose -f /opt/teivaka/04_environment/docker-compose.yml up -d --build api`.
 
+> ⚠️ **Cached-COPY trap (B78) — `up -d --build api` can ship STALE code.** BuildKit
+> caches the `COPY app /app/app` layer and a plain `--build` may serve the OLD code
+> even after a `git pull` (symptom: build log shows `CACHED [runtime 8/10] COPY ... app`).
+> For any backend code change, build clean: `docker compose -f .../docker-compose.yml
+> build --no-cache api && docker compose -f .../docker-compose.yml up -d api`. Then
+> **prove it landed**: `bash 04_environment/verify-deploy.sh` (checksums the running
+> container's `/app/app` against the host and fails loudly on drift). Surfaced
+> 2026-06-08 — a plain `--build` silently shipped stale code for the crop-WHD endpoint
+> across several rounds until `--no-cache` busted the layer.
+
 **Caddy change:** edit /opt/teivaka/04_environment/Caddyfile.production, then **recreate the container** — `docker compose -f /opt/teivaka/04_environment/docker-compose.yml up -d --force-recreate caddy`.
 
 > ⚠️ **Single-file bind-mount inode trap (do NOT just `caddy reload`).** The compose mounts `./Caddyfile.production:/etc/caddy/Caddyfile:ro` — a *single-file* bind mount, bound to the file's inode. `git checkout`/`sed`/editors that write-temp-then-rename give the file a **new inode**, so the container keeps serving the **old** file and `caddy reload` re-reads that stale copy. Symptom: host file + `docker exec teivaka_caddy grep <change> /etc/caddy/Caddyfile` disagree. Fix: `--force-recreate caddy` re-resolves the mount. Verify after: `docker exec teivaka_caddy grep <change> /etc/caddy/Caddyfile` and `curl -sI https://teivaka.com/ | grep -i <header>` both show the new value. (Surfaced 2026-06-07 adding Esri tiles to CSP `img-src` for the Locations L2 map — 20 min lost to a "successful" reload that served the old CSP.)
