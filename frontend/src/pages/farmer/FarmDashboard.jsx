@@ -412,6 +412,7 @@ function FarmOverview() {
   const cash = q(["ov-cash", farmId], () => getJSON(`/api/v1/cash-ledger?farm_id=${encodeURIComponent(farmId)}&limit=1`));
   const farmsList = useQuery({ queryKey: ["ov-farms"], queryFn: () => getJSON(`/api/v1/farms`), retry: 0 });
   const labor = q(["ov-labor", farmId], () => getJSON(`/api/v1/labor?farm_id=${encodeURIComponent(farmId)}`));
+  const compliance = q(["ov-compliance", farmId], () => getJSON(`/api/v1/crops/compliance/${encodeURIComponent(farmId)}`));
 
   const finSummary = fin.data?.data?.summary || null;
   const cropRows = crops.data?.data ?? [];
@@ -424,14 +425,14 @@ function FarmOverview() {
   const activeCycles = cycleRows.filter((c) => ["ACTIVE", "HARVESTING"].includes((c.cycle_status || "").toUpperCase())).length;
   const head = flockRows.reduce((a, f) => a + n0(f.current_count), 0);
   const net = Number(finSummary?.net_profit_fjd ?? 0);
-  const holds = 0; // no farm-wide holds endpoint yet (honest)
+  const holds = compliance.data?.data?.blocked_count ?? 0; // real crop-WHD holds (/crops/compliance)
   const openTasks = taskRows.length;
   const cropNet = cropRows.reduce((a, r) => a + (n0(r.total_income_fjd) - n0(r.total_labor_fjd) - n0(r.total_input_cost_fjd)), 0);
 
   // Transparent farm-health rubric (mirrors prototype entHealth): each enterprise
   // starts at 100, −25 if spending more than earned, −20 if nothing in production,
-  // −40 per compliance hold; portfolio score = average across enterprises. Real
-  // signals only — no faked holds (crop-WHD-blocks endpoint pending).
+  // −40 per compliance hold; portfolio score = average across enterprises. Holds
+  // come from the real /crops/compliance WHD view — no fabricated numbers.
   const laborRows = labor.data?.data ?? [];
   const weekAgo = Date.now() - 7 * 864e5;
   const laborWeek = laborRows.filter((r) => { const d = new Date(r.work_date).getTime(); return Number.isFinite(d) && d >= weekAgo; });
