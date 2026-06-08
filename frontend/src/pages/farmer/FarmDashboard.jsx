@@ -18,7 +18,7 @@ import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { QueryClient, QueryClientProvider, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  Sprout, Bird, Plus, ArrowRight, ShieldCheck, Link2, FileText, Crosshair, Cloud,
+  Sprout, Bird, Plus, ArrowRight, ShieldCheck, Link2, FileText, Crosshair, Cloud, CloudRain, Sun, CloudSun,
   Coins, DollarSign, Camera, Users, ListChecks, Activity, TrendingUp, Award, Truck, Sparkles,
 } from "lucide-react";
 
@@ -190,6 +190,62 @@ function Priorities({ tasks, navigate, onAction }) {
               </div>
             );
           })}
+        </div>
+      )}
+    </Section>
+  );
+}
+
+// ── weather strip (live Open-Meteo current + 5-day) ──────────────────
+function wmoWx(code) {
+  const c = Number(code);
+  if (c === 0) return { label: "Clear", Icon: Sun };
+  if (c <= 2) return { label: "Partly cloudy", Icon: CloudSun };
+  if (c === 3) return { label: "Overcast", Icon: Cloud };
+  if (c >= 51 && c <= 67) return { label: "Rain", Icon: CloudRain };
+  if (c >= 80 && c <= 82) return { label: "Showers", Icon: CloudRain };
+  if (c >= 95) return { label: "Storm", Icon: CloudRain };
+  return { label: "—", Icon: Cloud };
+}
+const wx1 = (v) => (v == null || v === "" ? null : Math.round(Number(v) * 10) / 10);
+const wxDay = (s) => { try { const d = new Date(s); if (!isNaN(d)) return d.toLocaleDateString("en-US", { weekday: "short" }); } catch { /* noop */ } return String(s || "").slice(5, 10); };
+
+function WeatherStrip({ farmId, navigate }) {
+  const cur = useQuery({ queryKey: ["ov-wx-cur", farmId], queryFn: () => getJSON(`/api/v1/weather/current/${encodeURIComponent(farmId)}`), enabled: !!farmId, retry: 0 });
+  const fc = useQuery({ queryKey: ["ov-wx-daily", farmId], queryFn: () => getJSON(`/api/v1/weather/forecast/${encodeURIComponent(farmId)}?range=daily`), enabled: !!farmId, retry: 0 });
+  const now = cur.data?.data || null;
+  const days = (fc.data?.data ?? []).slice(0, 5);
+  const w = now ? wmoWx(now.weather_code) : null;
+  const noFeed = (cur.isError || fc.isError) || (!cur.isLoading && !now && days.length === 0);
+  return (
+    <Section icon={Cloud} title="Weather" link="See full forecast →" onLink={() => navigate("/farm/weather")}>
+      {cur.isLoading ? (
+        <div className="rounded-xl animate-pulse" style={{ height: 60, background: C.cream }} />
+      ) : noFeed ? (
+        <div className="text-sm" style={{ color: C.muted }}>Live forecast turns on once this farm has a location set. <span className="font-bold">Building</span></div>
+      ) : (
+        <div className="flex items-center gap-4 flex-wrap">
+          {now && (
+            <div className="flex items-center gap-2.5 pr-4" style={{ borderRight: days.length ? `1px solid ${C.border}` : "none" }}>
+              {w && <w.Icon size={30} style={{ color: C.greenDk }} />}
+              <div>
+                <div className="text-2xl font-bold" style={{ color: C.soil }}>{wx1(now.temp_c) != null ? `${wx1(now.temp_c)}°C` : "—"}</div>
+                <div className="text-xs" style={{ color: C.muted }}>{w ? w.label : ""}</div>
+              </div>
+            </div>
+          )}
+          <div className="flex gap-2 overflow-x-auto">
+            {days.map((d, i) => {
+              const dw = wmoWx(d.weather_code);
+              return (
+                <div key={i} className="rounded-xl border p-2 text-center shrink-0 min-w-[64px]" style={{ background: "white", borderColor: C.border }}>
+                  <div className="text-[11px] font-semibold" style={{ color: C.soil }}>{wxDay(d.valid_at)}</div>
+                  <dw.Icon size={16} style={{ color: C.greenDk, margin: "3px auto" }} />
+                  <div className="text-xs font-bold" style={{ color: C.soil }}>{wx1(d.temp_max_c) != null ? `${wx1(d.temp_max_c)}°` : "—"}<span className="font-normal" style={{ color: C.muted }}>{wx1(d.temp_min_c) != null ? `/${wx1(d.temp_min_c)}°` : ""}</span></div>
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
     </Section>
@@ -406,6 +462,7 @@ function FarmOverview() {
       <FarmSummary score={score} grade={grade} businesses={businesses} net={net} activeCycles={activeCycles} holds={holds} team={team} hours={hours} navigate={navigate} />
       <BankabilityPath navigate={navigate} />
       <Priorities tasks={taskRows} navigate={navigate} onAction={taskAction} />
+      <WeatherStrip farmId={farmId} navigate={navigate} />
       <HeadlineMetrics fin={finSummary} cash={cashBal} activeCycles={activeCycles} head={head} openTasks={openTasks} holds={holds} standing={standing} navigate={navigate} />
       <Intelligence crops={cropRows} navigate={navigate} />
       <CyclePipeline cycles={cycleRows} navigate={navigate} />
