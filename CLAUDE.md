@@ -11,7 +11,7 @@ Read before any group-related sprint planning or build work:
 
 ## Current state (refreshed every session — this section is mutable)
 
-**Last verified:** 2026-05-09 (Strike #C2b SEALED — CYCLE_CREATED frontend live; CycleNew.jsx form at /farm/cycles/new; entry from CycleList + LogSheet (+); Crops Wave 2 first user-visible feature shipped)
+**Last verified:** 2026-06-08 (parity branch deployed to prod — Locations L1–L3, multi-farm + switcher, the Tasks pillar P1–P5, P3b external task alerts (shipped disabled per PR.2), Tasks-page reorg, and the `feat/tasks-surface` Labor/Buyers/Equipment all merged and live. Migrations 081–086 applied. Full route↔nav + frontend↔backend endpoint audit passed; 3 dead links fixed.)
 
 **Production:** healthy. teivaka.com HTTPS live.
 - 9 containers running (all healthy as of Strike #122 V7-redux seal commit 0556139):
@@ -24,9 +24,9 @@ Read before any group-related sprint planning or build work:
   - `teivaka_worker_notifications` — healthy (added post-8-2b)
   - `teivaka_beat` — healthy (was unhealthy pre-8-2b; mtime healthcheck added)
   - `teivaka_diag` — running (no healthcheck; diagnostic container)
-- Last commit: `a69d4bb` (Strike #C2b: CYCLE_CREATED frontend — CycleNew.jsx form at /farm/cycles/new; ThemedSelect dropdowns + suggested_layer + current_production_id auto-fill; 409 ACTIVE_CYCLE_EXISTS inline error; CycleList "Start crop" button rewired)
-- Last migration: `077_crops_taxonomy_lock` (Strike #C1: Crops taxonomy lock — widens catalog_group CHECK + 20 new event_types + 26 recategorizations; introduces LABOR/COMPLIANCE/OPERATIONS catalog_groups; 147 total catalog rows)
-- Branch: `feature/option-3-plus-nav-v2-1`
+- Last commit: `785126e` (fix(nav): repair 3 dead links — FarmerLayout /profile→/me, /settings→/me/settings; Register /dashboard→/home. Preceded by merge `13cae11` unifying feat/tasks-surface into parity.)
+- Last migration: `086_task_notifications` (Tasks P3b — tenant.task_notifications external-alert delivery log w/ receipt_confirmed_at + FORCE RLS; applied-as-owner per Strike #123. Chain 081→086 applied. 085_crop_growth_plan = 47 cited SEED_UNVERIFIED stage rows across 10 crops.)
+- Branch: `claude/parity-farm-surfaces` (deployed to prod 2026-06-08; server checked out here; prior dirty working tree preserved in local `server-snapshot-deploy` branch)
 
 **Phase status (Sprint 6 closed; Sprint 7 in-flight, foundation marathon underway):**
 
