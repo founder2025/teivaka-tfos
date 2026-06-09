@@ -65,7 +65,7 @@ backends — wire them.
 | Reports | 🟢 | **crop/whole-farm Bank Evidence PDF shipped** — GET /crops/bank-evidence, audit-anchored (BANK_PDF_GENERATED + report_exports + QR/verify), real cash_ledger/harvest_log/cycles sources; Reports→Bank Evidence has month picker + real Download. Poultry Bank Evidence still separate. Other report types honest-empty |
 | Weather | 🟢 | real Open-Meteo |
 | Library | 🟢 | NEW knowledge reference /farm/library (Chemicals cited WHD, Crops catalog, Nutrition cited NPK+citation, KB articles; Pests honest-empty). Distinct from /me/library (farm-list CRUD). Nav entry TBD |
-| Gallery | 🟡 | real photos; capture stubs |
+| Gallery | 🟢 | real page (was ComingSoon stub) — Photos grid + Timeline from field_events.photo_url, tied to events; honest-empty; video/AI honest-building |
 | Partnerships | 🟡 | parity pass |
 | Settings | 🟡 | parity pass |
 
