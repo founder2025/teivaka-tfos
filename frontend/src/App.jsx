@@ -32,6 +32,7 @@ import ResetPassword from "./pages/ResetPassword";
 import VerifyEmail from "./pages/VerifyEmail";
 import Home from "./pages/farmer/Home";
 const HomePillar = lazy(() => import("./pages/home/HomePillar"));
+const ClassroomPillar = lazy(() => import("./pages/classroom/ClassroomPillar"));
 
 // ── Farmer pages (lazy — farmer bundle does NOT include admin code) ───────────
 const Landing       = lazy(() => import("./pages/Landing"));
@@ -107,7 +108,6 @@ const FarmGallery   = lazy(() => import("./pages/farmer/Gallery"));
 const FarmPartnerships = lazy(() => import("./pages/farmer/Partnerships"));
 const FarmSettings  = lazy(() => import("./pages/farmer/FarmSettings"));
 const InventoryList = lazy(() => import("./pages/farmer/InventoryList"));
-const Classroom     = lazy(() => import("./pages/farmer/Classroom"));
 const Me            = lazy(() => import("./pages/farmer/Me"));
 
 // ── Phase A1 — Solo mode surface (MBI Part 19) ────────────────────────────────
@@ -235,6 +235,9 @@ export default function App() {
           {/* HOME pillar — pixel-exact rebuild with its own prototype shell, so it
               sits OUTSIDE FarmerShell (no double chrome) but behind the onboarding guard. */}
           <Route path="/home" element={<FarmerRoute><HomePillar /></FarmerRoute>} />
+          {/* CLASSROOM pillar — pixel-exact rebuild with its own prototype shell,
+              sits OUTSIDE FarmerShell (no double chrome), behind the onboarding guard. */}
+          <Route path="/classroom" element={<FarmerRoute><ClassroomPillar /></FarmerRoute>} />
           <Route element={<FarmerRoute><FarmerShell /></FarmerRoute>}>
             <Route path="/farm"              element={<FarmDashboard />} />
             <Route path="/farm/harvest/new"  element={<HarvestNew    />} />
@@ -265,7 +268,6 @@ export default function App() {
             <Route path="/farm/poultry/supplies/received" element={<SuppliesReceivedNew  />} />
             <Route path="/farm/poultry" element={<PoultryDashboard  />} />
             <Route path="/farm/poultry/bank-evidence" element={<PoultryBankEvidence  />} />
-            <Route path="/classroom"         element={<Classroom     />} />
             <Route path="/me"                element={<Me            />} />
             <Route path="/me/library"        element={<LibrarySettings   />} />
             <Route path="/tis"               element={<TIS           />} />
