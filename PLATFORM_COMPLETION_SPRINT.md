@@ -86,7 +86,8 @@ backends — wire them.
 **Nav source of truth:** the live Farm sidebar is `NAV.farm_unified` (the 20 rows above), NOT the deprecated `NAV.farm` (vertical-specific). Field events / Cycles / Harvests are folded into **Production** in the unified model — there is no standalone "Field events" sidebar item. The `/farm/field-events` route still exists as the event-logging surface, reached from Production + the (+) launcher.
 
 ## HOME pillar (5)
-| Feed 🟡 | Following 🔴 | Marketplace 🔴 | Directory 🔴 | Saved 🔴 |
+| Feed 🟢 | Following ⏸ | Marketplace 🟢 | Directory ⏸ | Saved ⏸ |
+_PIXEL-EXACT: prototype shell + 5 views at /home (HomePillar, .tfp scoped CSS). Feed=/community/posts, Marketplace=/community/listings (real); Following/Saved/Directory honest-empty (no backend). Icons=lucide stand-ins; topbar dropdowns not yet wired._
 
 ## CLASSROOM (5)
 | Overview 🟡 | Tracks 🔴 | My progress 🔴 | Certification+QR 🔴 | Bookmarks 🔴 |
