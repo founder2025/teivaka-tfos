@@ -55,7 +55,7 @@ backends — wire them.
 | Locations | ✅ | L1–L3 map shipped |
 | Compliance | ✅ | crop-WHD page + endpoint (this sprint) |
 | Analytics | 🟡 | back with real decision_signals or honest-empty |
-| Reports | 🟡 | Bank Evidence is **REAL** over audit.events but **poultry-only**; build **crop/whole-farm Bank Evidence** (the banker flagship for a crops demo) |
+| Reports | 🟢 | **crop/whole-farm Bank Evidence PDF shipped** — GET /crops/bank-evidence, audit-anchored (BANK_PDF_GENERATED + report_exports + QR/verify), real cash_ledger/harvest_log/cycles sources; Reports→Bank Evidence has month picker + real Download. Poultry Bank Evidence still separate. Other report types honest-empty |
 | Weather | 🟢 | real Open-Meteo |
 | Library | 🟡 | uncertain depth; parity pass |
 | Gallery | 🟡 | real photos; capture stubs |
