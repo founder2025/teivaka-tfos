@@ -58,7 +58,7 @@ backends — wire them.
 | Labor | 🟢 | real workers/attendance |
 | Buyers | 🟢 | Directory + Active orders + Receivables + Analytics real (/customers,/orders); Demand + Pipeline honest-empty (no feed yet) |
 | Cash | 🟢 | **REAL** — cash.py inserts tenant.cash_ledger + emits audit.events (not the prototype no-op). Confirm FE write path; multi-tab parity |
-| Assets & Equipment | 🟡 | thin; parity pass |
+| Assets & Equipment | 🟢 | Fleet + Maintenance + Costs + Analytics real (from /equipment fleet data); Usage + Parts honest-empty. Fixed: Add-equipment 500 (phantom make/next_service_due cols) + invalid equip types + service-due read bug |
 | Locations | ✅ | L1–L3 map shipped |
 | Compliance | ✅ | crop-WHD page + endpoint (this sprint) |
 | Analytics | 🟢 | signals now LIVE — decision-engine rewritten over decision_signal_snapshots (was 422'ing on UUID-typed farm_id → never showed); /inputs MV join dropped (live). Parity pass on chart panels still pending |
