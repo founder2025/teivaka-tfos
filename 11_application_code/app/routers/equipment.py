@@ -13,14 +13,14 @@ class EquipmentCreate(BaseModel):
     farm_id: str
     equipment_name: str
     equipment_type: str  # TRACTOR, IRRIGATION, SPRAYER, HAND_TOOL, VEHICLE, OTHER
-    make: Optional[str] = None
+    brand: Optional[str] = None
     model: Optional[str] = None
     serial_number: Optional[str] = None
     purchase_date: Optional[datetime] = None
     purchase_cost_fjd: Optional[Decimal] = None
     current_value_fjd: Optional[Decimal] = None
     last_service_date: Optional[datetime] = None
-    next_service_due: Optional[datetime] = None
+    next_service_date: Optional[datetime] = None
     notes: Optional[str] = None
 
 @router.get("")
@@ -57,26 +57,26 @@ async def create_equipment(body: EquipmentCreate, user: dict = Depends(get_curre
         await db.execute(text("""
             INSERT INTO tenant.equipment
                 (equipment_id, tenant_id, farm_id, equipment_name, equipment_type,
-                 make, model, serial_number, purchase_date, purchase_cost_fjd,
-                 current_value_fjd, last_service_date, next_service_due, notes, created_by)
+                 brand, model, serial_number, purchase_date, purchase_cost_fjd,
+                 current_value_fjd, last_service_date, next_service_date, notes, created_by)
             VALUES
                 (:equipment_id, :tenant_id, :farm_id, :equipment_name, :equipment_type,
-                 :make, :model, :serial_number, :purchase_date, :purchase_cost_fjd,
-                 :current_value_fjd, :last_service_date, :next_service_due, :notes, :created_by)
+                 :brand, :model, :serial_number, :purchase_date, :purchase_cost_fjd,
+                 :current_value_fjd, :last_service_date, :next_service_date, :notes, :created_by)
         """), {
             "equipment_id": equipment_id,
             "tenant_id": str(user["tenant_id"]),
             "farm_id": body.farm_id,
             "equipment_name": body.equipment_name,
             "equipment_type": body.equipment_type,
-            "make": body.make,
+            "brand": body.brand,
             "model": body.model,
             "serial_number": body.serial_number,
             "purchase_date": body.purchase_date,
             "purchase_cost_fjd": body.purchase_cost_fjd,
             "current_value_fjd": body.current_value_fjd,
             "last_service_date": body.last_service_date,
-            "next_service_due": body.next_service_due,
+            "next_service_date": body.next_service_date,
             "notes": body.notes,
             "created_by": str(user["user_id"]),
         })

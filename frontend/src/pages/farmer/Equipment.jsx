@@ -25,18 +25,19 @@ const C = {
 const EQUIP_TYPES = [
   { value: "TRACTOR", label: "Tractor" },
   { value: "IRRIGATION", label: "Irrigation" },
-  { value: "SPRAYER", label: "Sprayer" },
-  { value: "HAND_TOOL", label: "Hand tool" },
+  { value: "TOOL", label: "Tool" },
   { value: "VEHICLE", label: "Vehicle" },
+  { value: "PROCESSING", label: "Processing" },
+  { value: "STORAGE", label: "Storage" },
   { value: "OTHER", label: "Other" },
 ];
 const TABS = [
   { id: "fleet", label: "Fleet", hint: "Assets" },
-  { id: "maintenance", label: "Maintenance", hint: "Service", needs: "a maintenance-log endpoint" },
-  { id: "usage", label: "Usage", hint: "Hours & fuel", needs: "an equipment-usage log" },
-  { id: "costs", label: "Costs", hint: "Per-hour & P&L", needs: "cost-per-hour allocation" },
+  { id: "maintenance", label: "Maintenance", hint: "Service schedule" },
+  { id: "usage", label: "Usage", hint: "Hours & fuel", needs: "an equipment-usage log (no hours/fuel column yet)" },
+  { id: "costs", label: "Costs", hint: "Value & depreciation" },
   { id: "parts", label: "Parts", hint: "Spares", needs: "a spare-parts inventory" },
-  { id: "analytics", label: "Analytics", hint: "Utilization", needs: "utilization analytics" },
+  { id: "analytics", label: "Analytics", hint: "Condition & value" },
 ];
 
 function authHeaders() {
@@ -79,7 +80,7 @@ function AddEquipmentModal({ farmId, isOpen, onClose, onSaved }) {
     try {
       const res = await fetch("/api/v1/equipment", {
         method: "POST", headers: authHeaders(),
-        body: JSON.stringify({ farm_id: farmId, equipment_name: name.trim(), equipment_type: type, make: make.trim() || null, model: model.trim() || null, current_value_fjd: value ? Number(value) : null, next_service_due: nextService || null }),
+        body: JSON.stringify({ farm_id: farmId, equipment_name: name.trim(), equipment_type: type, brand: make.trim() || null, model: model.trim() || null, current_value_fjd: value ? Number(value) : null, next_service_date: nextService || null }),
       });
       if (!res.ok) throw new Error();
       emitToast("Equipment added"); onSaved?.(); onClose?.();
@@ -132,7 +133,7 @@ function EquipmentInner() {
 
   const equipQuery = useQuery({ queryKey: ["equipment", farmId], queryFn: () => fetchEquipment(farmId), enabled: !!farmId });
   const items = equipQuery.data ?? [];
-  const dueCount = items.filter((e) => { const s = serviceDue(e.next_service_due); return s && s.color !== C.green; }).length;
+  const dueCount = items.filter((e) => { const s = serviceDue(e.next_service_date); return s && s.color !== C.green; }).length;
   const fleetValue = items.reduce((s, e) => s + Number(e.current_value_fjd ?? 0), 0);
   const activeTab = TABS.find((t) => t.id === tab) || TABS[0];
 
@@ -171,13 +172,13 @@ function EquipmentInner() {
             {equipQuery.isLoading && <p style={{ color: C.muted }}>Loading fleet…</p>}
             {!equipQuery.isLoading && items.length === 0 && <p style={{ color: C.muted }}>No equipment yet. Add your first asset.</p>}
             {items.map((e) => {
-              const due = serviceDue(e.next_service_due);
+              const due = serviceDue(e.next_service_date);
               return (
                 <div key={e.equipment_id} className="flex items-center justify-between rounded-xl p-2.5" style={{ background: C.cream }}>
                   <div>
                     <div className="font-medium text-sm" style={{ color: C.soil }}>{e.equipment_name}</div>
                     <div className="text-xs" style={{ color: C.muted }}>
-                      {typeLabel(e.equipment_type)}{(e.make || e.model) ? ` · ${[e.make, e.model].filter(Boolean).join(" ")}` : ""}{e.current_value_fjd != null ? ` · ${formatFJD(e.current_value_fjd)}` : ""}
+                      {typeLabel(e.equipment_type)}{(e.brand || e.model) ? ` · ${[e.brand, e.model].filter(Boolean).join(" ")}` : ""}{e.current_value_fjd != null ? ` · ${formatFJD(e.current_value_fjd)}` : ""}
                     </div>
                   </div>
                   {due && (
@@ -190,6 +191,75 @@ function EquipmentInner() {
             })}
           </div>
         )}
+
+        {tab === "maintenance" && (() => {
+          // Real service schedule from the fleet's last/next_service_date + condition.
+          const sorted = [...items].sort((a, b) => String(a.next_service_date || "9999").localeCompare(String(b.next_service_date || "9999")));
+          if (!items.length) return <p style={{ color: C.muted }}>No equipment yet — service schedule appears as you add assets with service dates.</p>;
+          return (
+            <div className="space-y-2">
+              {sorted.map((e) => { const d = serviceDue(e.next_service_date); return (
+                <div key={e.equipment_id} className="flex items-center justify-between rounded-xl p-2.5" style={{ background: C.cream }}>
+                  <div>
+                    <div className="font-medium text-sm" style={{ color: C.soil }}>{e.equipment_name}</div>
+                    <div className="text-xs" style={{ color: C.muted }}>{e.condition ? `${e.condition} · ` : ""}last service {e.last_service_date ? String(e.last_service_date).slice(0, 10) : "—"}</div>
+                  </div>
+                  {d ? <span className="text-xs font-semibold rounded-full px-2 py-1" style={{ color: d.color, background: "white", border: `1px solid ${C.border}` }}>{d.label}</span>
+                     : <span className="text-xs" style={{ color: C.muted }}>no service date</span>}
+                </div>
+              ); })}
+            </div>
+          );
+        })()}
+
+        {tab === "costs" && (() => {
+          // Real value/depreciation by type from purchase_cost_fjd vs current_value_fjd.
+          if (!items.length) return <p style={{ color: C.muted }}>Add equipment to see fleet value and depreciation.</p>;
+          const by = {};
+          items.forEach((e) => { const k = typeLabel(e.equipment_type); (by[k] = by[k] || { cur: 0, buy: 0, n: 0 }); by[k].cur += Number(e.current_value_fjd) || 0; by[k].buy += Number(e.purchase_cost_fjd) || 0; by[k].n += 1; });
+          const totalCur = items.reduce((a, e) => a + (Number(e.current_value_fjd) || 0), 0);
+          const totalBuy = items.reduce((a, e) => a + (Number(e.purchase_cost_fjd) || 0), 0);
+          return (
+            <div className="space-y-2">
+              <div className="text-sm font-semibold" style={{ color: C.soil }}>Fleet value {formatFJD(totalCur)} · purchased {formatFJD(totalBuy)} · depreciation {formatFJD(totalBuy - totalCur)}</div>
+              {Object.entries(by).sort((a, b) => b[1].cur - a[1].cur).map(([k, v]) => (
+                <div key={k} className="flex items-center justify-between rounded-xl p-2.5 text-sm" style={{ background: C.cream }}>
+                  <span style={{ color: C.soil }}>{k} <span style={{ color: C.muted }}>· {v.n}</span></span>
+                  <span style={{ color: C.soil }}>{formatFJD(v.cur)}</span>
+                </div>
+              ))}
+            </div>
+          );
+        })()}
+
+        {tab === "analytics" && (() => {
+          // Real condition + value-by-type breakdown.
+          if (!items.length) return <p style={{ color: C.muted }}>Fleet analytics appear once you add equipment.</p>;
+          const cond = {};
+          items.forEach((e) => { const k = e.condition || "UNKNOWN"; cond[k] = (cond[k] || 0) + 1; });
+          const byType = {};
+          items.forEach((e) => { const k = typeLabel(e.equipment_type); byType[k] = (byType[k] || 0) + (Number(e.current_value_fjd) || 0); });
+          const maxV = Math.max(1, ...Object.values(byType));
+          return (
+            <div className="space-y-3">
+              <div>
+                <div className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: C.muted }}>Condition</div>
+                <div className="flex flex-wrap gap-2">
+                  {Object.entries(cond).map(([k, n]) => <span key={k} className="text-xs rounded-full px-2 py-1" style={{ background: C.cream, color: C.soil }}>{k}: {n}</span>)}
+                </div>
+              </div>
+              <div>
+                <div className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: C.muted }}>Value by type</div>
+                {Object.entries(byType).sort((a, b) => b[1] - a[1]).map(([k, v]) => (
+                  <div key={k} className="mb-1.5">
+                    <div className="flex justify-between text-xs mb-0.5" style={{ color: C.soil }}><span>{k}</span><span>{formatFJD(v)}</span></div>
+                    <div className="h-2 rounded-full" style={{ background: C.cream }}><div className="h-2 rounded-full" style={{ width: `${Math.round((v / maxV) * 100)}%`, background: C.greenDk }} /></div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })()}
 
         {activeTab.needs && <NeedsBlock tab={activeTab} />}
       </section>
