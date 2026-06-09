@@ -48,7 +48,7 @@ backends — wire them.
 ## FARM pillar (20)
 | Surface | Status | Notes |
 |---|---|---|
-| Overview | 🟢 | health card + weather strip + compliance tile real (this sprint); audit remaining tiles for fabricated numbers |
+| Overview | ✅ | tile audit done — every number derived from live endpoints (health rubric, net/holds/cycles/team/hours/cash/tasks), no fabrication; 'Building' tiles honest-empty. Fixed: hardcoded "chain INTACT" badge → real check via GET /me/chain-status (audit.verify_chain_for_tenant) |
 | Farm History | 🟢 | real audit.events read |
 | Tasks | 🟢 | real queue (reorganised) |
 | Decision Center | 🟢 | full coreDecisionView parity (call / state tiles / telling-you / intelligence hub / enterprise rankings / risk intelligence / AI advisor), real endpoints + honest degradation. Fixed: dead link (production→cycles) + /financials/farm 500 (mv_farm_pnl guarded in SAVEPOINT, real-table summary first) |
