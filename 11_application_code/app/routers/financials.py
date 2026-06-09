@@ -20,18 +20,8 @@ async def get_farm_pnl(farm_id: str, period_months: int = 12, user: dict = Depen
         if not farm_check.mappings().first():
             raise HTTPException(status_code=404, detail="Farm not found")
 
-        # Monthly P&L from materialized view
-        monthly = await db.execute(text("""
-            SELECT month_year, total_income_fjd, total_labor_cost_fjd,
-                   total_input_cost_fjd, total_other_cost_fjd,
-                   gross_profit_fjd, net_profit_fjd, profit_margin_pct
-            FROM tenant.mv_farm_pnl
-            WHERE farm_id = :farm_id AND tenant_id = :tid
-              AND month_year >= date_trunc('month', now() - interval ':months months')
-            ORDER BY month_year DESC
-        """), {"farm_id": farm_id, "tid": str(user["tenant_id"]), "months": period_months})
-
-        # Aggregated totals
+        # Aggregated totals over the REAL tables — this is the summary the
+        # Decision Center / Reports rely on. Run it first so it always returns.
         totals = await db.execute(text("""
             SELECT
                 COALESCE(SUM(il.net_amount_fjd), 0) AS total_income,
@@ -47,9 +37,29 @@ async def get_farm_pnl(farm_id: str, period_months: int = 12, user: dict = Depen
                 AND it.transaction_type = 'APPLICATION'
             WHERE f.farm_id = :farm_id AND f.tenant_id = :tid
         """), {"farm_id": farm_id, "tid": str(user["tenant_id"])})
-
         total_row = totals.mappings().first()
-        monthly_rows = [dict(r) for r in monthly.mappings().all()]
+
+        # Monthly P&L from the materialized view (mv_farm_pnl). The MV may not
+        # exist in prod (migration 004 MVs were stubbed). Isolate it in a
+        # SAVEPOINT so a failure rolls back only this query — the summary above
+        # still returns instead of 500'ing the endpoint (which blanks the
+        # Decision Center cash signal). interval must use make_interval —
+        # ':months' cannot bind inside a quoted string literal.
+        monthly_rows = []
+        try:
+            async with db.begin_nested():
+                monthly = await db.execute(text("""
+                    SELECT month_year, total_income_fjd, total_labor_cost_fjd,
+                           total_input_cost_fjd, total_other_cost_fjd,
+                           gross_profit_fjd, net_profit_fjd, profit_margin_pct
+                    FROM tenant.mv_farm_pnl
+                    WHERE farm_id = :farm_id AND tenant_id = :tid
+                      AND month_year >= date_trunc('month', now() - make_interval(months => :months))
+                    ORDER BY month_year DESC
+                """), {"farm_id": farm_id, "tid": str(user["tenant_id"]), "months": period_months})
+                monthly_rows = [dict(r) for r in monthly.mappings().all()]
+        except Exception:
+            monthly_rows = []  # MV absent / not refreshed — summary still returns
 
         total_income = float(total_row["total_income"])
         total_labor = float(total_row["total_labor"])

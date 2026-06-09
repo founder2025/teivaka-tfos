@@ -143,7 +143,7 @@ function DecisionInner() {
     const u = urgent[0];
     call = { color: C.amber, icon: Droplet, title: u.imperative, sub: `${u.source_module || "Task"}${u.body_md ? ` — ${u.body_md}` : ""}`, label: "Go to tasks", act: () => go("tasks") };
   } else {
-    call = { color: C.green, icon: CheckCircle2, title: "Keep the routine going", sub: "No blocks and nothing urgent across the farm right now.", label: "Plan ahead", act: () => go("production") };
+    call = { color: C.green, icon: CheckCircle2, title: "Keep the routine going", sub: "No blocks and nothing urgent across the farm right now.", label: "Plan ahead", act: () => go("cycles") };
   }
   const CallIcon = call.icon;
 
