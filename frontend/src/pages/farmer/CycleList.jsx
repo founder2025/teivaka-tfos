@@ -283,6 +283,11 @@ export default function CycleList() {
     <div style={{ background: C.cream, minHeight: "100%" }}>
       <div style={{ maxWidth: 1200, margin: "0 auto", padding: 24 }}>
         <HeaderBar />
+        <div className="flex items-center justify-between mb-2">
+          <h2 className="text-sm font-semibold uppercase tracking-wider" style={{ color: C.soil }}>Nursery</h2>
+          <Link to="/farm/nursery/new" className="text-sm font-semibold px-3 py-1.5 rounded-lg"
+            style={{ background: C.green, color: "#fff" }}>+ New nursery batch</Link>
+        </div>
             <NurseryRegister farmId={currentFarmId} />
         {loading && <LoadingState />}
         {!loading && error && <ErrorPanel message={error} />}
