@@ -16,6 +16,18 @@ never faked. We present *what the platform actually does*.
    Contract, RLS-scoped, hitting a working endpoint.
 4. Looks/behaves like the prototype.
 
+**PIXEL-EXACT RULE (Operator-ratified 2026-06-10, BINDING — supersedes the functional-mirror approach):**
+Every surface must reproduce the sacred v263 prototype **pixel-for-pixel** — its exact
+layout, CSS, spacing, components and copy — wired to real backend data. NOT a
+re-interpretation in the app's design system. The Operator built the prototype as the
+exact target; our one job is to render *its* markup and *wire it to the server*.
+Method: the prototype's own stylesheet is extracted + scoped under `.tfp`
+(`frontend/src/styles/prototype.css`, via `scripts/scope_prototype_css.py`); each surface
+is rebuilt by copying the prototype's exact DOM/classes into JSX inside `<TfpShell>` and
+swapping mock values for live API data. Honesty rules still apply (real data or
+honest-empty where the prototype faked it). **All previously-built farm surfaces were
+functional mirrors and must be re-done to pixel-exact under this rule.**
+
 **Tighter standard (ratified 2026-06-09 after a fidelity audit):** before building a
 surface, OPEN the prototype's render fn and enumerate its panels; build the SAME panel
 set; each panel is real data OR honest-empty matching the prototype's own empty state

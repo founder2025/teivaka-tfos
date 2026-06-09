@@ -21,6 +21,17 @@ This is the single standing commitment above all feature requests; it binds ever
 4. It is reachable from a prototype-level entry point and looks/behaves like the
    prototype (layout, tabs, fields, copy, flows).
 
+**PIXEL-EXACT RULE (Operator-ratified 2026-06-10, BINDING).** "Looks like the prototype"
+means **pixel-for-pixel** — the prototype's exact CSS, layout, spacing, components and
+copy — NOT a re-interpretation in the app's own design system. The Operator built the
+prototype as the precise target; the job is to render *its* markup and wire it to the
+server. Method: the prototype's stylesheet is extracted + scoped under `.tfp`
+(`frontend/src/styles/prototype.css`, regenerate via `scripts/scope_prototype_css.py`);
+each surface is rebuilt by copying the prototype's exact DOM/classes into JSX inside
+`<TfpShell>`, swapping mock values for live API data (real data or honest-empty per the
+honesty guardrails). Functional-mirror reinterpretations are non-compliant and must be
+re-done pixel-exact.
+
 **Backend + security (non-negotiable):** every button reaches a real working endpoint
 (no dead ends, no wrong-method calls) — wire the backend for real where missing; RLS on
 every `tenant.*` table; all Inviolables honoured (WHD, no hallucinated agronomy, `shared.*`
