@@ -12,7 +12,9 @@
  * numbers). Every action button hits a real endpoint.
  */
 import { useEffect, useState } from "react";
-import { DollarSign, ShoppingBag, Sprout, Crosshair, Plus, X, TrendingUp, TrendingDown, Minus } from "lucide-react";
+import { DollarSign, ShoppingBag, Sprout, Crosshair, Plus, X, TrendingUp, TrendingDown, Minus, Trash2 } from "lucide-react";
+import { getCurrentUser } from "../../utils/auth";
+import { hasRole } from "../../utils/roles";
 
 function authHeaders() {
   const t = localStorage.getItem("tfos_access_token");
@@ -154,14 +156,52 @@ function SupplyModal({ onClose, onDone }) {
   );
 }
 
+const BLANK_SEED = { production_id: "", price_per_kg_fjd: "", grade: "A", island: "", buyer_type: "" };
+function SeedModal({ onClose, onDone }) {
+  const [items, setItems] = useState([{ ...BLANK_SEED }, { ...BLANK_SEED }, { ...BLANK_SEED }]);
+  const [busy, setBusy] = useState(false); const [err, setErr] = useState(null);
+  const set = (i, k, v) => setItems(items.map((r, j) => (j === i ? { ...r, [k]: v } : r)));
+  const submit = async () => {
+    const clean = items.filter((r) => r.production_id && r.price_per_kg_fjd)
+      .map((r) => ({ ...r, production_id: r.production_id.toUpperCase(), price_per_kg_fjd: Number(r.price_per_kg_fjd) }));
+    if (!clean.length) { setErr("Enter at least one crop code and price."); return; }
+    setBusy(true); setErr(null);
+    try { const res = await postJSON("/api/v1/market/prices/seed-reference", { items: clean }); onDone(res?.data?.inserted || clean.length); }
+    catch (e) { setErr(String(e.message || e)); setBusy(false); }
+  };
+  return (
+    <Modal title="Seed reference prices (admin)" onClose={onClose} onSubmit={submit} busy={busy}>
+      {err && <div className="comm-note" style={{ marginBottom: 10, color: "#b3261e" }}>{err}</div>}
+      <div className="comm-note" style={{ marginBottom: 12 }}>Enter <strong>real</strong> reference prices you know. These show on the board as ADMIN_REFERENCE and never count toward the weighted-sales price.</div>
+      <table className="prices-tbl" style={{ marginBottom: 10 }}>
+        <thead><tr><th>Crop code</th><th>FJD/kg</th><th>Grade</th><th>Island</th><th>Buyer</th><th></th></tr></thead>
+        <tbody>
+          {items.map((r, i) => (
+            <tr key={i}>
+              <td><input style={{ ...inp, minWidth: 90 }} value={r.production_id} onChange={(e) => set(i, "production_id", e.target.value.toUpperCase())} placeholder="CRP-TOM" /></td>
+              <td><input style={{ ...inp, width: 80 }} type="number" step="0.01" value={r.price_per_kg_fjd} onChange={(e) => set(i, "price_per_kg_fjd", e.target.value)} /></td>
+              <td><select style={{ ...inp, width: 60 }} value={r.grade} onChange={(e) => set(i, "grade", e.target.value)}><option>A</option><option>B</option><option>C</option></select></td>
+              <td><input style={{ ...inp, width: 90 }} value={r.island} onChange={(e) => set(i, "island", e.target.value)} /></td>
+              <td><input style={{ ...inp, width: 100 }} value={r.buyer_type} onChange={(e) => set(i, "buyer_type", e.target.value)} placeholder="Market" /></td>
+              <td>{items.length > 1 && <button className="btn btn-sm btn-secondary" onClick={() => setItems(items.filter((_, j) => j !== i))}><Trash2 size={12} /></button>}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <button className="btn btn-sm btn-secondary" onClick={() => setItems([...items, { ...BLANK_SEED }])}><Plus size={12} />Add row</button>
+    </Modal>
+  );
+}
+
 /* ---------- views ---------- */
-function Prices({ rows, onAdd }) {
+function Prices({ rows, onAdd, onSeed, isAdmin }) {
   if (!rows) return <div className="comm-note">Loading prices…</div>;
   return (
     <>
       <div style={{ display: "flex", alignItems: "center", marginBottom: 10 }}>
         <span style={{ fontSize: 11.5, color: "var(--muted)", textTransform: "uppercase", letterSpacing: ".5px" }}>Weighted from completed sales · FJD per kg</span>
-        <button className="btn btn-sm btn-primary" style={{ marginLeft: "auto" }} onClick={onAdd}><Plus size={12} />Submit price</button>
+        {isAdmin && <button className="btn btn-sm btn-secondary" style={{ marginLeft: "auto" }} onClick={onSeed}><DollarSign size={12} />Seed reference</button>}
+        <button className="btn btn-sm btn-primary" style={{ marginLeft: isAdmin ? 8 : "auto" }} onClick={onAdd}><Plus size={12} />Submit price</button>
       </div>
       {rows.length === 0 ? (
         <div className="comm-note">No prices logged yet. Submit the price you bought or sold at — the board fills as farmers and buyers report real numbers.</div>
@@ -270,6 +310,7 @@ export default function MarketIntelligence() {
   const [supply, setSupply] = useState(null);
   const [signals, setSignals] = useState(null);
   const [modal, setModal] = useState(null);
+  const isAdmin = (() => { try { return hasRole(getCurrentUser()?.role, "ADMIN"); } catch { return false; } })();
 
   const load = async () => {
     const [p, d, s, sg] = await Promise.allSettled([
@@ -299,7 +340,7 @@ export default function MarketIntelligence() {
         ))}
       </div>
 
-      {tab === "prices" && <Prices rows={prices} onAdd={() => setModal("price")} />}
+      {tab === "prices" && <Prices rows={prices} onAdd={() => setModal("price")} onSeed={() => setModal("seed")} isAdmin={isAdmin} />}
       {tab === "demand" && <Demand rows={demand} onAdd={() => setModal("demand")} />}
       {tab === "supply" && <Supply rows={supply} onAdd={() => setModal("supply")} />}
       {tab === "signals" && <Signals rows={signals} />}
@@ -307,6 +348,7 @@ export default function MarketIntelligence() {
       {modal === "price" && <PriceModal onClose={() => setModal(null)} onDone={done} />}
       {modal === "demand" && <DemandModal onClose={() => setModal(null)} onDone={done} />}
       {modal === "supply" && <SupplyModal onClose={() => setModal(null)} onDone={done} />}
+      {modal === "seed" && <SeedModal onClose={() => setModal(null)} onDone={done} />}
     </div>
   );
 }

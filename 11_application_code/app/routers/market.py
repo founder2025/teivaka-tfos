@@ -25,7 +25,7 @@ from sqlalchemy import text
 from pydantic import BaseModel
 from decimal import Decimal
 from datetime import date, datetime
-from typing import Optional
+from typing import Optional, List
 
 from app.db.session import get_db, get_rls_db
 from app.middleware.rls import get_current_user
@@ -51,6 +51,19 @@ class PriceSubmit(BaseModel):
     notes: Optional[str] = None
     farm_id: Optional[str] = None
     as_reference: bool = False  # admins only — mark as ADMIN_REFERENCE baseline
+
+
+class SeedItem(BaseModel):
+    production_id: str
+    price_per_kg_fjd: Decimal
+    grade: Optional[str] = "A"
+    island: Optional[str] = None
+    buyer_type: Optional[str] = None
+    notes: Optional[str] = None
+
+
+class SeedReference(BaseModel):
+    items: List[SeedItem]
 
 
 class DemandSubmit(BaseModel):
@@ -229,6 +242,38 @@ async def submit_price(body: PriceSubmit, user: dict = Depends(get_current_user)
             "notes": body.notes,
         })).mappings().first()
     return {"data": {"price_record_id": str(row["price_record_id"]), "source": source}}
+
+
+@router.post("/prices/seed-reference")
+async def seed_reference_prices(body: SeedReference, user: dict = Depends(get_current_user)):
+    """Admin/founder only — batch-enter REAL reference prices (source=ADMIN_REFERENCE,
+    is_actual_sale=FALSE so they inform the board but never the weighted-sales figure).
+    Operator-provided numbers only; nothing is generated."""
+    if user.get("role") not in _ADMIN_ROLES:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Reference prices are admin-only")
+    items = [i for i in (body.items or []) if i.production_id and i.price_per_kg_fjd is not None]
+    if not items:
+        return {"data": {"inserted": 0}}
+    async with get_rls_db(str(user["tenant_id"])) as db:
+        for it in items:
+            await db.execute(text("""
+                INSERT INTO community.price_records
+                    (tenant_id, created_by, production_id, grade, island, price_per_kg_fjd,
+                     buyer_type, source, is_actual_sale, notes)
+                VALUES
+                    (:tenant_id, :created_by, :production_id, :grade, :island, :price,
+                     :buyer_type, 'ADMIN_REFERENCE', FALSE, :notes)
+            """), {
+                "tenant_id": str(user["tenant_id"]),
+                "created_by": str(user["user_id"]),
+                "production_id": it.production_id,
+                "grade": it.grade,
+                "island": it.island,
+                "price": it.price_per_kg_fjd,
+                "buyer_type": it.buyer_type,
+                "notes": it.notes,
+            })
+    return {"data": {"inserted": len(items)}}
 
 
 # ----------------------------------------------------------------------------- demand
