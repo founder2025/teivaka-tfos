@@ -43,6 +43,21 @@ endpoint return honest-empty / 501 instead of 500. Not in the Crops critical pat
 (decision-engine — degrades to tasks-only, honest), `tenant.mv_input_balance` (inputs).
 → Decide: build the MVs (refreshable) or rewrite endpoints over base tables.
 
+**RESOLVED (2026-06-09) — rewrote over base tables, no MV / no refresh job:**
+- **decision-engine** `/{farm_id}`, `/summary`, `/refresh`: the endpoint read a
+  *phantom* `mv_decision_signals_current` shape (zone_id/severity/signal_message)
+  that never existed AND typed `farm_id: UUID` — so it **422'd on every real
+  farm id** (`F001-A0EE`), which is why Decision Center signals never showed
+  (silent degrade to tasks-only). Now reads live from `decision_signal_snapshots`
+  (latest per signal) + `decision_signal_config`, status→severity
+  (RED=CRITICAL/AMBER=HIGH), AMBER/RED only; `farm_id: str`; `/refresh` is a
+  no-op success.
+- **inputs** `/`: dropped the `mv_input_balance` LEFT JOIN (an unbuilt MV that
+  500'd the whole list); `stock_status`/`expiring_soon` computed inline over
+  `tenant.inputs`. Unblocks Analytics inputs panel + Decision Center inventory
+  + Inventory page.
+- `mv_farm_pnl` already guarded (real-table summary; monthly degrades to []).
+
 ## Recommended fix order (Crops/whole-farm demo path first)
 
 1. `reports.py` (`/cogk`, `/harvest`) + `financials.py /cokg` — wrong-name + column drift; feed Analytics/Reports.

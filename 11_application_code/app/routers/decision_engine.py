@@ -24,7 +24,7 @@ router = APIRouter()
 
 @router.get("/{farm_id}", summary="Decision signals for farm")
 async def get_decision_signals(
-    farm_id: UUID,
+    farm_id: str,
     severity: Optional[str] = Query(None, description="Filter: CRITICAL | HIGH | MEDIUM | LOW"),
     signal_type: Optional[str] = Query(None, description="Filter by signal type"),
     limit: int = Query(50, ge=1, le=200),
@@ -58,70 +58,79 @@ async def get_decision_signals(
     if not farm:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Farm not found")
 
-    filters = ["farm_id = :farm_id"]
-    params: dict = {"farm_id": str(farm_id), "limit": limit}
-
+    # Live read from the real engine output (decision_signal_snapshots, latest
+    # snapshot per signal) joined to its config — NOT the never-built phantom MV
+    # (mv_decision_signals_current was defined against a different shape and the
+    # endpoint read columns that never existed). Always-current; no refresh job.
+    # Only AMBER/RED are returned — GREEN = healthy, not "what the farm is telling
+    # you". status → severity: RED=CRITICAL, AMBER=HIGH.
+    params: dict = {"farm_id": str(farm_id), "tid": str(user["tenant_id"]), "limit": limit}
+    outer = ["latest.signal_status IN ('RED','AMBER')"]
     if severity:
-        filters.append("severity = :severity")
+        outer.append("latest.severity = :severity")
         params["severity"] = severity.upper()
-
     if signal_type:
-        filters.append("signal_type = :signal_type")
+        outer.append("(upper(latest.signal_type) = :signal_type OR upper(latest.signal_category) = :signal_type)")
         params["signal_type"] = signal_type.upper()
-
-    where_clause = f"WHERE {' AND '.join(filters)}"
+    outer_where = " AND ".join(outer)
 
     result = await db.execute(
         text(f"""
-            SELECT
-                zone_id,
-                zone_code,
-                production_unit_id,
-                crop_name,
-                crop_family,
-                signal_type,
-                severity,
-                signal_message,
-                suggested_action,
-                days_since_event,
-                metric_value,
-                benchmark_value,
-                computed_at
-            FROM tenant.mv_decision_signals_current
-            {where_clause}
-            ORDER BY
-                CASE severity WHEN 'CRITICAL' THEN 0 WHEN 'HIGH' THEN 1 WHEN 'MEDIUM' THEN 2 ELSE 3 END,
-                days_since_event DESC
+            SELECT latest.signal_id, latest.signal_type, latest.signal_category,
+                   latest.severity, latest.signal_message, latest.suggested_action,
+                   latest.crop_name, latest.metric_value, latest.signal_status,
+                   latest.computed_at
+            FROM (
+                SELECT DISTINCT ON (dss.signal_id)
+                    dss.signal_id,
+                    dsc.signal_name                                              AS signal_type,
+                    dsc.signal_category,
+                    CASE dss.signal_status WHEN 'RED' THEN 'CRITICAL'
+                                           WHEN 'AMBER' THEN 'HIGH'
+                                           ELSE 'LOW' END                        AS severity,
+                    COALESCE(dss.notes, dsc.signal_name)                         AS signal_message,
+                    dss.notes                                                    AS suggested_action,
+                    NULL::text                                                   AS crop_name,
+                    dss.computed_value                                           AS metric_value,
+                    dss.signal_status,
+                    dss.snapshot_date                                            AS computed_at
+                FROM tenant.decision_signal_snapshots dss
+                JOIN tenant.decision_signal_config dsc
+                  ON dsc.signal_id = dss.signal_id AND dsc.tenant_id = dss.tenant_id
+                WHERE dss.farm_id = :farm_id AND dss.tenant_id = :tid AND dsc.is_active = true
+                ORDER BY dss.signal_id, dss.snapshot_date DESC
+            ) latest
+            WHERE {outer_where}
+            ORDER BY CASE latest.severity WHEN 'CRITICAL' THEN 0 WHEN 'HIGH' THEN 1 WHEN 'MEDIUM' THEN 2 ELSE 3 END,
+                     latest.computed_at DESC
             LIMIT :limit
         """),
         params,
     )
     signals = [dict(r) for r in result.mappings().all()]
 
-    # Get the timestamp of the last MV refresh
-    mv_meta_result = await db.execute(
+    last_row = (await db.execute(
         text("""
-            SELECT MAX(computed_at) AS last_refresh_at
-            FROM tenant.mv_decision_signals_current
-            WHERE farm_id = :farm_id
+            SELECT MAX(snapshot_date) AS last_at
+            FROM tenant.decision_signal_snapshots
+            WHERE farm_id = :farm_id AND tenant_id = :tid
         """),
-        {"farm_id": str(farm_id)},
-    )
-    mv_meta = mv_meta_result.mappings().first()
+        {"farm_id": str(farm_id), "tid": str(user["tenant_id"])},
+    )).mappings().first()
 
     return {
         "farm_id": str(farm_id),
         "farm_code": farm["farm_code"],
         "signals": signals,
         "total_signals": len(signals),
-        "last_refresh_at": str(mv_meta["last_refresh_at"]) if mv_meta and mv_meta["last_refresh_at"] else None,
-        "note": "Signals are pre-computed. Use POST /decision-engine/refresh to force a refresh.",
+        "last_refresh_at": str(last_row["last_at"]) if last_row and last_row["last_at"] else None,
+        "note": "Live from decision_signal_snapshots (latest per signal); AMBER/RED only.",
     }
 
 
 @router.get("/{farm_id}/summary", summary="Decision signal summary by type and severity")
 async def get_signal_summary(
-    farm_id: UUID,
+    farm_id: str,
     user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_tenant_db),
 ):
@@ -137,36 +146,33 @@ async def get_signal_summary(
     if not farm:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Farm not found")
 
-    # By severity
-    severity_result = await db.execute(
+    # Aggregate the latest snapshot per signal (live), AMBER/RED only.
+    rows = (await db.execute(
         text("""
-            SELECT
-                severity,
-                COUNT(*) AS count
-            FROM tenant.mv_decision_signals_current
-            WHERE farm_id = :farm_id
-            GROUP BY severity
-            ORDER BY CASE severity WHEN 'CRITICAL' THEN 0 WHEN 'HIGH' THEN 1 WHEN 'MEDIUM' THEN 2 ELSE 3 END
+            SELECT severity, signal_type, COUNT(*) AS count
+            FROM (
+                SELECT DISTINCT ON (dss.signal_id)
+                    CASE dss.signal_status WHEN 'RED' THEN 'CRITICAL'
+                                           WHEN 'AMBER' THEN 'HIGH'
+                                           ELSE 'LOW' END AS severity,
+                    dsc.signal_name AS signal_type,
+                    dss.signal_status
+                FROM tenant.decision_signal_snapshots dss
+                JOIN tenant.decision_signal_config dsc
+                  ON dsc.signal_id = dss.signal_id AND dsc.tenant_id = dss.tenant_id
+                WHERE dss.farm_id = :farm_id AND dss.tenant_id = :tid AND dsc.is_active = true
+                ORDER BY dss.signal_id, dss.snapshot_date DESC
+            ) latest
+            WHERE latest.signal_status IN ('RED','AMBER')
+            GROUP BY severity, signal_type
         """),
-        {"farm_id": str(farm_id)},
-    )
-    by_severity = {r["severity"]: r["count"] for r in severity_result.mappings().all()}
-
-    # By type
-    type_result = await db.execute(
-        text("""
-            SELECT
-                signal_type,
-                severity,
-                COUNT(*) AS count
-            FROM tenant.mv_decision_signals_current
-            WHERE farm_id = :farm_id
-            GROUP BY signal_type, severity
-            ORDER BY signal_type, CASE severity WHEN 'CRITICAL' THEN 0 WHEN 'HIGH' THEN 1 WHEN 'MEDIUM' THEN 2 ELSE 3 END
-        """),
-        {"farm_id": str(farm_id)},
-    )
-    by_type = [dict(r) for r in type_result.mappings().all()]
+        {"farm_id": str(farm_id), "tid": str(user["tenant_id"])},
+    )).mappings().all()
+    by_severity: dict = {}
+    by_type = []
+    for r in rows:
+        by_severity[r["severity"]] = by_severity.get(r["severity"], 0) + int(r["count"])
+        by_type.append({"signal_type": r["signal_type"], "severity": r["severity"], "count": int(r["count"])})
 
     total = sum(by_severity.values())
     critical_count = by_severity.get("CRITICAL", 0)
@@ -185,7 +191,7 @@ async def get_signal_summary(
 
 @router.post("/refresh", summary="Manually refresh decision signals MV (FOUNDER only)")
 async def refresh_decision_signals(
-    farm_id: Optional[UUID] = Query(None, description="If omitted, refreshes all farms for tenant"),
+    farm_id: Optional[str] = Query(None, description="If omitted, refreshes all farms for tenant"),
     user: dict = Depends(require_role("FOUNDER")),
     db: AsyncSession = Depends(get_tenant_db),
 ):
@@ -196,19 +202,14 @@ async def refresh_decision_signals(
 
     Note: A full concurrent refresh may take several seconds on large farms.
     """
-    try:
-        # CONCURRENTLY allows reads during refresh but requires a unique index
-        await db.execute(text("REFRESH MATERIALIZED VIEW CONCURRENTLY tenant.mv_decision_signals_current"))
-        logger.info(f"MV refresh triggered by FOUNDER {user['user_id']} farm_id={farm_id}")
-    except Exception as e:
-        logger.error(f"MV refresh failed: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Materialized view refresh failed. Check DB logs.",
-        )
+    # Signals are now read live from decision_signal_snapshots (latest per
+    # signal) — there is no materialized view to refresh. Kept as a no-op
+    # success so any existing caller / button does not 500. The decision engine
+    # worker still writes fresh snapshots on its own schedule.
+    logger.info(f"decision-signals refresh requested by FOUNDER {user['user_id']} farm_id={farm_id} — no-op (always-live)")
 
     return {
-        "status": "refreshed",
-        "message": "mv_decision_signals_current refreshed successfully",
+        "status": "ok",
+        "message": "Signals are read live from decision_signal_snapshots — no refresh needed.",
         "triggered_by": str(user["user_id"]),
     }

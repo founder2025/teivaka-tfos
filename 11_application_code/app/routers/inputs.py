@@ -9,9 +9,20 @@ router = APIRouter()
 async def list_inputs(farm_id: str = None, user: dict = Depends(get_current_user)):
     async with get_rls_db(str(user["tenant_id"])) as db:
         params = {"tid": str(user["tenant_id"])}
-        q = """SELECT i.*, mv.stock_status, mv.expiring_soon
+        # stock_status / expiring_soon are pure derivations over tenant.inputs —
+        # compute them inline instead of joining mv_input_balance (an MV that was
+        # never built; the LEFT JOIN 500'd the whole endpoint → blanked the
+        # Analytics inputs panel / Decision Center inventory / Inventory page).
+        q = """SELECT i.*,
+                      CASE
+                          WHEN i.reorder_point_qty IS NULL THEN 'NO_REORDER_SET'
+                          WHEN i.current_stock_qty <= 0 THEN 'OUT_OF_STOCK'
+                          WHEN i.current_stock_qty <= i.reorder_point_qty THEN 'REORDER_NOW'
+                          WHEN i.current_stock_qty <= i.reorder_point_qty * 1.5 THEN 'LOW_STOCK'
+                          ELSE 'ADEQUATE'
+                      END AS stock_status,
+                      (i.expiry_date IS NOT NULL AND i.expiry_date < CURRENT_DATE + 30) AS expiring_soon
                FROM tenant.inputs i
-               LEFT JOIN tenant.mv_input_balance mv ON mv.input_id = i.input_id
                WHERE i.tenant_id = :tid AND i.is_active = true"""
         if farm_id:
             q += " AND i.farm_id = :farm_id"

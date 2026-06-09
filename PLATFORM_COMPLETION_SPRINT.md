@@ -61,7 +61,7 @@ backends — wire them.
 | Assets & Equipment | 🟡 | thin; parity pass |
 | Locations | ✅ | L1–L3 map shipped |
 | Compliance | ✅ | crop-WHD page + endpoint (this sprint) |
-| Analytics | 🟡 | back with real decision_signals or honest-empty |
+| Analytics | 🟢 | signals now LIVE — decision-engine rewritten over decision_signal_snapshots (was 422'ing on UUID-typed farm_id → never showed); /inputs MV join dropped (live). Parity pass on chart panels still pending |
 | Reports | 🟢 | **crop/whole-farm Bank Evidence PDF shipped** — GET /crops/bank-evidence, audit-anchored (BANK_PDF_GENERATED + report_exports + QR/verify), real cash_ledger/harvest_log/cycles sources; Reports→Bank Evidence has month picker + real Download. Poultry Bank Evidence still separate. Other report types honest-empty |
 | Weather | 🟢 | real Open-Meteo |
 | Library | 🟡 | uncertain depth; parity pass |
