@@ -41,9 +41,10 @@ const STATUS_COLOR = {
 const TABS = [
   { id: "directory", label: "Directory", hint: "Relationships" },
   { id: "orders", label: "Active orders", hint: "Open POs" },
+  { id: "receivables", label: "Receivables", hint: "Money owed" },
   { id: "demand", label: "Demand signals", hint: "Feeds forecast", needs: "a demand-signal feed" },
   { id: "pipeline", label: "Pipeline", hint: "Leads", needs: "a sales-pipeline endpoint" },
-  { id: "analytics", label: "Analytics", hint: "Risk & trends", needs: "buyer reliability scoring" },
+  { id: "analytics", label: "Analytics", hint: "Top buyers" },
 ];
 
 function authHeaders() {
@@ -276,6 +277,54 @@ function BuyersInner() {
             ))}
           </div>
         )}
+
+        {tab === "receivables" && (() => {
+          // Fulfilled-but-unpaid orders = money owed. Real, derived from /orders.
+          const OWED = ["DISPATCHED", "DELIVERED", "INVOICED"];
+          const owed = orders.filter((o) => OWED.includes(o.order_status));
+          const amt = (o) => Number(o.net_amount_fjd ?? o.total_amount_fjd ?? o.total_fjd ?? 0);
+          const total = owed.reduce((a, o) => a + amt(o), 0);
+          const days = (o) => { const d = Date.parse(o.expected_delivery_date || o.order_date); return Number.isFinite(d) ? Math.floor((Date.now() - d) / 864e5) : null; };
+          return (
+            <div className="space-y-2">
+              {ordersQuery.isLoading && <p style={{ color: C.muted }}>Loading…</p>}
+              {!ordersQuery.isLoading && owed.length === 0 && <p style={{ color: C.muted }}>Nothing outstanding — all fulfilled orders are paid.</p>}
+              {owed.length > 0 && <div className="text-sm font-semibold mb-1" style={{ color: C.soil }}>Owed: {formatFJD(total)} across {owed.length} order{owed.length === 1 ? "" : "s"}</div>}
+              {owed.map((o) => { const d = days(o); return (
+                <div key={o.order_id} className="flex items-center justify-between rounded-xl p-2.5" style={{ background: C.cream }}>
+                  <div>
+                    <div className="font-medium text-sm" style={{ color: C.soil }}>{o.customer_name}</div>
+                    <div className="text-xs" style={{ color: C.muted }}>{o.order_status}{d != null ? ` · ${d}d outstanding` : ""}</div>
+                  </div>
+                  <div className="text-sm font-semibold" style={{ color: d != null && d > 30 ? C.red : C.soil }}>{formatFJD(amt(o))}</div>
+                </div>
+              ); })}
+            </div>
+          );
+        })()}
+
+        {tab === "analytics" && (() => {
+          // Top buyers by order value + count. Real, derived from /orders.
+          const amt = (o) => Number(o.net_amount_fjd ?? o.total_amount_fjd ?? o.total_fjd ?? 0);
+          const by = {};
+          orders.filter((o) => o.order_status !== "CANCELLED").forEach((o) => {
+            const k = o.customer_name || o.customer_id || "—";
+            (by[k] = by[k] || { name: k, value: 0, count: 0 }); by[k].value += amt(o); by[k].count += 1;
+          });
+          const ranked = Object.values(by).sort((a, b) => b.value - a.value);
+          const max = ranked.reduce((m, r) => Math.max(m, r.value), 0);
+          if (ranked.length === 0) return <p style={{ color: C.muted }}>Buyer analytics appear once you log orders.</p>;
+          return (
+            <div className="space-y-2">
+              {ranked.map((r) => (
+                <div key={r.name}>
+                  <div className="flex justify-between text-xs mb-0.5" style={{ color: C.soil }}><span className="font-medium">{r.name}</span><span>{formatFJD(r.value)} · {r.count} order{r.count === 1 ? "" : "s"}</span></div>
+                  <div className="h-2 rounded-full" style={{ background: C.cream }}><div className="h-2 rounded-full" style={{ width: `${max ? Math.round((r.value / max) * 100) : 0}%`, background: C.greenDk }} /></div>
+                </div>
+              ))}
+            </div>
+          );
+        })()}
 
         {activeTab.needs && <NeedsBlock tab={activeTab} />}
       </section>
