@@ -89,6 +89,10 @@ backends — wire them.
 | Feed 🟢 | Following ⏸ | Marketplace 🟢 | Directory ⏸ | Saved ⏸ |
 _PIXEL-EXACT: prototype shell + 5 views at /home (HomePillar, .tfp scoped CSS). Feed=/community/posts, Marketplace=/community/listings (real); Following/Saved/Directory honest-empty (no backend). Icons=lucide stand-ins; topbar dropdowns not yet wired._
 
+## MARKET INTELLIGENCE (folded into Home → Marketplace) — Operator feature 2026-06-09
+| Prices 🟢 | Demand 🟢 | Supply 🟢 | Signals/Opportunity 🟢 | Snapshot card ⏸ |
+_Backend-first, future-proof: Migration 088 → community.{price_records,demand_records,supply_forecasts,market_analytics} (cross-tenant community.* pattern, no RLS, GRANTed to teivaka_app). routers/market.py /api/v1/market (prices/demand/supply/signals/snapshot): weighted price Σ(p·q)/Σq over actual sales, confidence by volume, balance + 0–100 opportunity. UI components/home/MarketIntelligence.jsx (prototype prices-tbl/demand-card/signal-tile classes) in the Marketplace view + submit modals. Honest-empty until users submit; transaction-weighted + forecasting engine architected but dormant. NEEDS: migration 088 applied-as-owner + stamp, --no-cache api rebuild, npm build._
+
 ## CLASSROOM (5)
 | Overview 🟢 | Tracks 🟢 | My progress ⏸ | Certification+QR ⏸ | Bookmarks ⏸ |
 _PIXEL-EXACT: prototype shell + 5 views at /classroom (ClassroomPillar, .tfp scoped CSS), replaced the 'coming soon' stub. Overview/Tracks=course-grid from published shared.kb_articles (/api/v1/kb); card → two-pane cp-modal player with body from /api/v1/kb/{id}. My progress/Certification/Bookmarks honest-empty (no completion-tracking backend; prototype's fake "Chemical Compliance" cert NOT replicated). Routed outside FarmerShell._
