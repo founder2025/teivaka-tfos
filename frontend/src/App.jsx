@@ -101,6 +101,7 @@ const HarvestList   = lazy(() => import("./pages/farmer/HarvestList"));
 const CycleList     = lazy(() => import("./pages/farmer/CycleList"));
 const CycleDetail   = lazy(() => import("./pages/farmer/CycleDetail"));
 const NurseryNew    = lazy(() => import("./pages/farmer/NurseryNew"));
+const FarmLibrary   = lazy(() => import("./pages/farmer/Library"));
 const InventoryList = lazy(() => import("./pages/farmer/InventoryList"));
 const Classroom     = lazy(() => import("./pages/farmer/Classroom"));
 const Me            = lazy(() => import("./pages/farmer/Me"));
@@ -280,6 +281,7 @@ export default function App() {
             <Route path="/farm/harvests"     element={<HarvestList />} />
             <Route path="/farm/field-events" element={<FieldEventNew />} />
             <Route path="/farm/inventory"    element={<InventoryList />} />
+            <Route path="/farm/library"      element={<FarmLibrary />} />
             <Route path="/farm/labor"        element={<Labor />} />
             <Route path="/farm/cash"         element={<CashLedger />} />
             <Route path="/farm/buyers"       element={<Buyers />} />
