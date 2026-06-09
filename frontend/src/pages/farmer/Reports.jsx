@@ -219,11 +219,43 @@ function BankDocCard({ farmId }) {
   const cropRows = crops.data?.data ?? [];
   const cycles = cropRows.reduce((a, r) => a + (Number(r.total_cycles) || 0), 0);
   const farm = farmIdentity(farmId);
+  const [period, setPeriod] = useState(new Date().toISOString().slice(0, 7)); // YYYY-MM
+  const [dl, setDl] = useState(false);
+
+  async function downloadPdf() {
+    if (!farmId || dl) return;
+    setDl(true);
+    try {
+      const url = `/api/v1/crops/bank-evidence?period=${encodeURIComponent(period)}&farm_id=${encodeURIComponent(farmId)}`;
+      const r = await fetch(url, { headers: authHeaders() });
+      if (!r.ok) throw new Error(`Couldn't generate (${r.status})`);
+      const blob = await r.blob();
+      const obj = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = obj; a.download = `crop-bank-evidence-${farmId}-${period}.pdf`;
+      document.body.appendChild(a); a.click(); a.remove();
+      URL.revokeObjectURL(obj);
+      emitToast("Bank Evidence PDF generated — audit-anchored");
+    } catch (e) {
+      emitToast(e.message || "Couldn't generate the PDF");
+    } finally {
+      setDl(false);
+    }
+  }
+
   return (
     <div className="rounded-xl border p-4" style={{ background: "white", borderColor: C.border }}>
       <div className="flex items-center justify-between gap-2 flex-wrap" style={{ borderBottom: `2px solid ${C.soil}`, paddingBottom: 10 }}>
         <div><div className="text-base font-extrabold" style={{ color: C.soil }}>{farm.name} — Farm Evidence</div><div className="text-xs" style={{ color: C.muted }}>Whole farm · crops + animals · built from logged records</div></div>
         <span className="text-[11px] inline-flex items-center gap-1 rounded-full px-2.5 py-1" style={{ color: C.greenDk, border: `1px solid ${C.green}` }}><CheckCircle2 size={11} />Verifiable</span>
+      </div>
+      <div className="flex items-center gap-2 flex-wrap mt-3">
+        <label className="text-xs" style={{ color: C.muted }}>Month</label>
+        <input type="month" value={period} onChange={(e) => setPeriod(e.target.value)} className="rounded-lg border px-2 py-1 text-sm" style={{ borderColor: C.border, color: C.soil }} />
+        <button onClick={downloadPdf} disabled={dl || !farmId} className="text-sm px-3 py-1.5 rounded-lg text-white disabled:opacity-50" style={{ background: C.greenDk }}>
+          {dl ? "Generating…" : "Download Bank Evidence PDF"}
+        </button>
+        <span className="text-[11px]" style={{ color: C.muted }}>Real PDF · hash-chained · QR-verifiable</span>
       </div>
       <Section title="The farm">
         <KV k="Location" v={farm.location || "—"} /><KV k="Run by" v={farm.owner} />
