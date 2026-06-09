@@ -5,10 +5,15 @@
  * v263 HTML, MBI Part 36). It is a DESIGN REFERENCE with mock data — not the
  * live platform. We fetch it from GET /api/v1/prototype with the bearer token
  * (the endpoint is gated by require_admin, so there is no public static path)
- * and render it in a sandboxed iframe via a blob URL.
+ * and render it via an iframe `srcDoc`.
  *
- * A persistent amber banner makes clear this is the prototype, not prod, so it
- * can never be mistaken for real data.
+ * Why srcDoc (not a blob: URL): the production CSP has no frame-src, so it
+ * falls back to default-src 'self' and blocks blob: frames. srcDoc has no URL
+ * to fetch, so frame-src doesn't apply; the inlined document inherits the
+ * parent CSP, which already allows 'unsafe-inline' scripts/styles — exactly
+ * what the self-contained prototype uses.
+ *
+ * A persistent amber banner makes clear this is the prototype, not prod.
  */
 import { useEffect, useState } from "react";
 import { authHeader } from "../utils/auth";
@@ -16,11 +21,11 @@ import { authHeader } from "../utils/auth";
 const BANNER_H = 30;
 
 export default function Prototype() {
-  const [src, setSrc] = useState(null);
+  const [html, setHtml] = useState(null);
   const [err, setErr] = useState(null);
 
   useEffect(() => {
-    let url;
+    let alive = true;
     (async () => {
       try {
         const r = await fetch("/api/v1/prototype", { headers: { ...authHeader() } });
@@ -33,16 +38,13 @@ export default function Prototype() {
               : `Couldn't load the prototype (${r.status}).`
           );
         }
-        const html = await r.text();
-        url = URL.createObjectURL(new Blob([html], { type: "text/html" }));
-        setSrc(url);
+        const text = await r.text();
+        if (alive) setHtml(text);
       } catch (e) {
-        setErr(e.message || "Couldn't load the prototype.");
+        if (alive) setErr(e.message || "Couldn't load the prototype.");
       }
     })();
-    return () => {
-      if (url) URL.revokeObjectURL(url);
-    };
+    return () => { alive = false; };
   }, []);
 
   if (err) {
@@ -66,7 +68,7 @@ export default function Prototype() {
       >
         PROTOTYPE — design reference (mock data, not live). Founder/admin only.
       </div>
-      {!src ? (
+      {html == null ? (
         <div style={{ position: "absolute", top: BANNER_H, left: 0, right: 0,
           padding: 24, color: "#8A7863", fontFamily: "system-ui" }}>
           Loading prototype…
@@ -74,7 +76,7 @@ export default function Prototype() {
       ) : (
         <iframe
           title="TFOS Prototype v263"
-          src={src}
+          srcDoc={html}
           style={{
             position: "absolute", top: BANNER_H, left: 0,
             width: "100%", height: `calc(100% - ${BANNER_H}px)`, border: 0,
