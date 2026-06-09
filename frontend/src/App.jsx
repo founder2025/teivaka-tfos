@@ -127,6 +127,9 @@ const InputsSandbox  = lazy(() => import("./pages/admin/InputsSandbox"));
 import Forbidden from "./pages/Forbidden";
 import NotFound  from "./pages/NotFound";
 
+// Founder/admin-only design-reference viewer (mock data; gated server-side).
+const Prototype = lazy(() => import("./pages/Prototype"));
+
 function PageLoader() {
   return (
     <div className="min-h-screen flex items-center justify-center"
@@ -155,6 +158,10 @@ export default function App() {
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/reset-password"  element={<ResetPassword />} />
           <Route path="/verify-email"    element={<VerifyEmail />} />
+
+          {/* Design-reference prototype (founder/admin only; backend require_admin
+              gates the asset — the page just renders it in an iframe). */}
+          <Route path="/prototype" element={<PrivateRoute><Prototype /></PrivateRoute>} />
 
           {/* ── Onboarding (authenticated, not yet onboarded) ───────────── */}
           <Route path="/onboarding" element={

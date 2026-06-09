@@ -80,6 +80,7 @@ from app.routers import (
     admin_monitoring,
     onboarding,
     tis_stream,
+    prototype,
 )
 
 logging.basicConfig(
@@ -262,6 +263,7 @@ app.include_router(poultry_compliance.router,  prefix=PREFIX,                   
 app.include_router(crop_compliance.router,     prefix=PREFIX,                         tags=["Crop Compliance"])
 app.include_router(poultry_bank_evidence.router, prefix=PREFIX,                       tags=["POULTRY Bank Evidence"])
 app.include_router(agronomy.router,            prefix=PREFIX,                         tags=["Agronomy"])
+app.include_router(prototype.router,           prefix=PREFIX,                         tags=["Prototype (founder/admin reference)"])
 app.include_router(verify.router,              prefix=PREFIX,                         tags=["Verify (JSON)"])
 app.include_router(verify.html_router,         prefix="",                             tags=["Verify (HTML)"])
 app.include_router(tis_public.router, prefix=f"{PREFIX}/tis-public", tags=["TIS Public"])
