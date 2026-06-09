@@ -267,7 +267,7 @@ def run_decision_engine(self):
             SELECT tenant_id::TEXT AS tenant_id
             FROM tenant.tenants
             WHERE subscription_status = 'ACTIVE'
-              AND subscription_tier IN ('PREMIUM','CUSTOM','BASIC')
+              AND subscription_tier IN ('BASIC','PREMIUM','PROFESSIONAL','CUSTOM')
         """)
         tenants = cur.fetchall()
         cur.close()
