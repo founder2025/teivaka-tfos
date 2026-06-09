@@ -193,7 +193,9 @@ for ttype, cat, desc, amt, d in cash_rows:
     step(f"cash {ttype} {amt}", "POST", "/api/v1/cash-ledger", {
         "farm_id": farm_id, "transaction_date": iso(date.today() - timedelta(days=d)),
         "transaction_type": ttype, "category": cat, "description": desc,
-        "amount_fjd": amt, "payment_method": "MPAISA",
+        # M-PAiSA settlement is deferred (Q8) — tag cash as MOBILE_MONEY, the
+        # honest valid enum value (PaymentMethod: CASH|BANK_TRANSFER|MOBILE_MONEY|CREDIT|OTHER).
+        "amount_fjd": amt, "payment_method": "MOBILE_MONEY",
     })
 
 # ── 6. workers + labour ──────────────────────────────────────────────────────

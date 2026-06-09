@@ -20,7 +20,7 @@ Both filters compose with AND.
 
 Response (Part 13 envelope):
   {"status": "success",
-   "data":   [{chem_name, active_ingredient, withholding_period_days,
+   "data":   [{chemical_id, chem_name, active_ingredient, withholding_period_days,
                registered_crops, default_unit}, ...],
    "meta":   {"count": <n>, "filters": {...}}}
 """
@@ -73,7 +73,8 @@ async def list_chemicals(
         await db.execute(
             text(
                 f"""
-                SELECT chem_name,
+                SELECT chemical_id,
+                       chem_name,
                        active_ingredient,
                        withholding_period_days,
                        registered_crops,
