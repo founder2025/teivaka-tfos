@@ -33,6 +33,10 @@ BASE_URL = os.environ.get("BASE_URL", "https://teivaka.com").rstrip("/")
 EMAIL    = os.environ.get("EMAIL")
 PASSWORD = os.environ.get("PASSWORD")
 FARM_ID  = os.environ.get("FARM_ID")  # optional
+# Re-run guard: set ONLY_WORKERS=1 to seed ONLY the workers + labour step
+# (e.g. after a failed worker run) WITHOUT duplicating the field events,
+# harvests, cash and weather that a prior run already created.
+ONLY_WORKERS = os.environ.get("ONLY_WORKERS", "").strip() not in ("", "0", "false", "False")
 
 if not EMAIL or not PASSWORD:
     sys.exit("Set EMAIL and PASSWORD env vars (a real, verified demo account).")
@@ -149,8 +153,9 @@ def evt(pu_id, cycle_id, prod_id, etype, payload, days_ago):
 
 
 # ── 3. field events across cycles (the activity feed + WHD story) ─────────────
-print("→ Field events")
-for i, c in enumerate(active):
+if ONLY_WORKERS:
+    print("→ ONLY_WORKERS set — skipping field events / harvests / cash / weather")
+for i, c in enumerate([] if ONLY_WORKERS else active):
     pu, cid, pid = c.get("pu_id"), c.get("cycle_id"), c.get("production_id")
     if not (pu and cid and pid):
         continue
@@ -168,8 +173,9 @@ for i, c in enumerate(active):
              "tank_volume_liters": 16, "target_pest_or_disease": "Whitefly"}, days)
 
 # ── 4. harvests on cleared cycles (skip cycle 0 — it's blocked by recent spray)
-print("→ Harvests")
-for c in active[1:]:
+if not ONLY_WORKERS:
+    print("→ Harvests")
+for c in ([] if ONLY_WORKERS else active[1:]):
     pu, cid, pid = c.get("pu_id"), c.get("cycle_id"), c.get("production_id")
     if not (pu and cid and pid):
         continue
@@ -181,8 +187,9 @@ for c in active[1:]:
     })
 
 # ── 5. cash ledger (sales in + expenses out) ─────────────────────────────────
-print("→ Cash")
-cash_rows = [
+if not ONLY_WORKERS:
+    print("→ Cash")
+cash_rows = [] if ONLY_WORKERS else [
     ("INCOME", "Crop sales", "Nayans eggplant delivery", 273, 5),
     ("INCOME", "Crop sales", "Suva market — cassava", 230, 12),
     ("EXPENSE", "Inputs", "NPK 15:15:15 (2 bags)", 164, 20),
@@ -216,8 +223,9 @@ for wid, rate in worker_ids:
         })
 
 # ── 7. weather observations ──────────────────────────────────────────────────
-print("→ Weather")
-for d in range(1, 8):
+if not ONLY_WORKERS:
+    print("→ Weather")
+for d in ([] if ONLY_WORKERS else range(1, 8)):
     step(f"weather d-{d}", "POST", "/api/v1/weather", {
         "farm_id": farm_id, "observation_date": iso(date.today() - timedelta(days=d)),
         "rainfall_mm": 6 + d, "temp_min_c": 23, "temp_max_c": 30, "humidity_pct": 78,
