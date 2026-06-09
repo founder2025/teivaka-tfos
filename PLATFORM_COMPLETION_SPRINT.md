@@ -106,6 +106,7 @@ backends — wire them.
   New cycle). M-PAiSA deferred — payment_method tag only, no real settlement.
 
 ## Running log
+- 2026-06-09: Decision signals LIVE end-to-end. Root causes both found+fixed: (1) /decision-engine typed farm_id:UUID → 422 on every real farm id (silent degrade to tasks-only); (2) engine tenant gate omitted PROFESSIONAL tier → operator farm (F001-A0EE) never got snapshots. Endpoint rewritten over decision_signal_snapshots (live, no MV); inputs MV-join dropped; tier filter now BASIC/PREMIUM/PROFESSIONAL/CUSTOM. Engine now: 3 tenants/4 farms, 40 snapshots; F001-A0EE has its 10 signals (all GREEN/NULL = farm healthy, shows 'running clear' honestly). beat keeps it fresh.
 - 2026-06-08: Sprint opened.
 - 2026-06-09: B78 guard verified on prod (✅). Census = thin → built demo_seed.py. Prior this session: Prime Directive ratified; single canonical prototype (v263); Field Events log; Overview FARM SUMMARY health card + weather strip; crop-WHD endpoint + Compliance page; B78 deploy guard.
 - 2026-06-09: Prototype reference viewer shipped (founder/admin-only /prototype; require_admin-gated endpoint serving the bundled v263 HTML, iframe + mock-data banner; 1fa9a09). Then P2 real build: 6-panel Production cycle detail at /farm/cycles/:id (f353005) — all six panels real (header/status-actions/CoKG/compliance/activity/harvests), CycleList rows clickable. Frontend-only; needs `npm run build` only. NEXT in P2: real nursery create + Enterprises per-enterprise detail tabs.
