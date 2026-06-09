@@ -12,8 +12,14 @@
  */
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import NurseryRegister from "../../components/farm/NurseryRegister";
 import PerformanceSummary from "../../components/farm/PerformanceSummary";
+
+// NurseryRegister uses react-query and there is no global provider in this app
+// (each page wraps its own). Without this, rendering it throws "No QueryClient
+// set" and blanks the whole Production page.
+const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 0, refetchOnWindowFocus: false, staleTime: 60_000 } } });
 
 const C = {
   soil: "#5C4033", green: "#6AA84F", greenDk: "#3E7B1F", greenTint: "#E9F2DD",
@@ -72,7 +78,7 @@ function Stat({ label, value, color }) {
   );
 }
 
-export default function CycleList() {
+function CycleListInner() {
   const navigate = useNavigate();
   const [farmId, setFarmId] = useState(localStorage.getItem("tfos_current_farm_id") || "");
   const [cycles, setCycles] = useState([]);
@@ -367,4 +373,12 @@ function PlannerView({ pus, cycles, navigate }) {
 
 function Empty({ text }) {
   return <div className="rounded-2xl border p-10 text-center text-sm" style={{ borderColor: C.border, background: "#fff", color: C.muted }}>{text}</div>;
+}
+
+export default function CycleList() {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <CycleListInner />
+    </QueryClientProvider>
+  );
 }
