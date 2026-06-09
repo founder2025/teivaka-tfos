@@ -46,7 +46,7 @@ backends — wire them.
 | Tasks | 🟢 | real queue (reorganised) |
 | Decision Center | 🟡 | real signals; verify no empty fabrication |
 | Enterprises | 🟡 | list exists; per-enterprise detail tabs from real data pending |
-| Production (Cycles) | 🟢 | list real; **6-panel cycle detail shipped** (/farm/cycles/:id — header/status-actions/CoKG/compliance/activity/harvests, all real); real nursery create still pending |
+| Production (Cycles) | 🟢 | **List/Calendar/Planner parity shipped** (real status+layer filters, quick stats, timeline, real block occupancy) + 6-panel cycle detail + nursery create (migration 087). Planner scored-recommendation engine deferred (honest, not faked) |
 | Inventory | 🟡 | real inputs; parity pass |
 | Labor | 🟢 | real workers/attendance |
 | Cash | 🟢 | **REAL** — cash.py inserts tenant.cash_ledger + emits audit.events (not the prototype no-op). Confirm FE write path; multi-tab parity |
