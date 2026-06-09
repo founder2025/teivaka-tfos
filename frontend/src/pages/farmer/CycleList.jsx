@@ -22,7 +22,7 @@
  * dashboard). Update once /farm/cycles/new exists.
  */
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import NurseryRegister from "../../components/farm/NurseryRegister";
 import PerformanceSummary from "../../components/farm/PerformanceSummary";
 
@@ -190,6 +190,7 @@ function CycleCell({ row }) {
 }
 
 function CycleTable({ rows }) {
+  const navigate = useNavigate();
   const thCls = "text-left px-3 py-2 text-xs font-semibold uppercase tracking-wide";
   const tdCls = "px-3 py-2 text-sm align-top";
   return (
@@ -219,6 +220,8 @@ function CycleTable({ rows }) {
             return (
               <tr
                 key={row.cycle_id || i}
+                onClick={() => row.cycle_id && navigate(`/farm/cycles/${encodeURIComponent(row.cycle_id)}`)}
+                className="cursor-pointer hover:opacity-80"
                 style={{ background: stripe, color: C.soil }}
               >
                 <td className={tdCls}><CropCell row={row} /></td>
