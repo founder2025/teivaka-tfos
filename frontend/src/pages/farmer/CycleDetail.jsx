@@ -1,107 +1,85 @@
 /**
  * CycleDetail.jsx — /farm/cycles/:cycleId
  *
- * The prototype's per-cycle detail, backed entirely by real endpoints:
- *   GET   /api/v1/cycles/{id}                 → header + status + layer
- *   GET   /api/v1/cycles/{id}/financials      → CoKG panel
- *   GET   /api/v1/field-events?cycle_id={id}  → activity timeline
- *   GET   /api/v1/harvests?cycle_id={id}      → harvest log
- *   GET   /api/v1/crops/compliance/{farm_id}  → WHD block for this cycle
- *   PATCH /api/v1/cycles/{id}                 → status transitions
+ * Full panel-fidelity transfer of the prototype's cycleDetailView (8 panels):
+ *   Header (breadcrumb, Day/stage/harvest subtitle, Back / Log event / View
+ *           tasks / Close cycle / Mark failed)
+ *   Status banner (FAILED / CLOSED outcome)
+ *   Cycle progress strip
+ *   Grid: Financial · Chemical compliance · Buyer commitments · Rotation ·
+ *         Activity feed · Tasks for this cycle
  *
- * Six panels. No mock data — every value is real or honest-empty.
+ * Real data: /cycles/{id} + /financials, /field-events?cycle_id, /harvests,
+ * /crops/compliance, /cycles?pu_id (block rotation history), /tasks?entity_id.
+ * Honest-empty where no backend exists yet (Buyer commitments — no per-cycle
+ * order link), matching the prototype's own empty state. The prototype's
+ * agronomic BBCH stage isn't tracked in prod, so the progress strip shows the
+ * real cycle LIFECYCLE (Planned→Active→Harvesting→Closing→Closed).
  */
 import { useEffect, useState, useCallback } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useNavigate } from "react-router-dom";
 
 const C = {
   soil: "#5C4033", green: "#6AA84F", greenDk: "#3E7B1F", greenTint: "#E9F2DD",
-  amber: "#BF9000", red: "#B00020", redTint: "#FBEAE6", cream: "#F8F3E9",
-  border: "#E6DED0", muted: "#8A7863", ink: "#3A2E26", panel: "#FFFFFF",
+  amber: "#BF9000", amberTint: "#FBF1D6", red: "#B00020", redTint: "#FBEAE6",
+  cream: "#F8F3E9", border: "#E6DED0", muted: "#8A7863", ink: "#3A2E26", panel: "#FFFFFF",
 };
-
 function authHeaders() {
   const t = localStorage.getItem("tfos_access_token");
   return t ? { "Content-Type": "application/json", Authorization: `Bearer ${t}` }
            : { "Content-Type": "application/json" };
 }
-async function getJSON(u) {
-  const r = await fetch(u, { headers: authHeaders() });
-  if (!r.ok) throw new Error(String(r.status));
-  return r.json();
-}
+async function getJSON(u) { const r = await fetch(u, { headers: authHeaders() }); if (!r.ok) throw new Error(String(r.status)); return r.json(); }
 const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-function fmtDate(iso) {
-  if (!iso) return null;
-  const d = new Date(iso);
-  if (isNaN(d.getTime())) return String(iso);
-  return `${String(d.getUTCDate()).padStart(2,"0")} ${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
-}
-function daysSince(iso) {
-  if (!iso) return null;
-  const d = new Date(iso);
-  if (isNaN(d.getTime())) return null;
-  return Math.floor((Date.now() - d.getTime()) / 86400000);
-}
-function fmtMoney(v) {
-  if (v == null || v === "") return null;
-  const n = Number(v);
-  return isNaN(n) ? null : `$${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-}
-function fmtKg(v) {
-  if (v == null || v === "") return null;
-  const n = Number(v);
-  return isNaN(n) ? null : `${n.toLocaleString()} kg`;
-}
+function fmtDate(iso) { if (!iso) return "—"; const d = new Date(iso); return isNaN(d) ? String(iso) : `${String(d.getUTCDate()).padStart(2,"0")} ${MONTHS[d.getUTCMonth()]} ${String(d.getUTCFullYear()).slice(2)}`; }
+function dnum(iso) { if (!iso) return null; const d = new Date(iso); return isNaN(d) ? null : d.getTime(); }
+function daysBetween(a, b) { const x = dnum(a), y = dnum(b); return x == null || y == null ? null : Math.round((y - x) / 86400000); }
+function daysIn(iso) { const t = dnum(iso); return t == null ? null : Math.floor((Date.now() - t) / 86400000); }
+function fmtMoney(v) { if (v == null || v === "") return null; const n = Number(v); return isNaN(n) ? null : `$${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`; }
+function fmtKg(v) { if (v == null || v === "") return null; const n = Number(v); return isNaN(n) ? null : `${Number(n).toLocaleString()} kg`; }
 
+const LIFECYCLE = ["PLANNED", "ACTIVE", "HARVESTING", "CLOSING", "CLOSED"];
+const LIFECYCLE_LABEL = { PLANNED: "Planned", ACTIVE: "Active", HARVESTING: "Harvesting", CLOSING: "Closing", CLOSED: "Closed" };
 const STATUS_COLORS = {
   PLANNED: { bg: "#EEE7D8", fg: C.soil }, ACTIVE: { bg: C.green, fg: "#fff" },
   HARVESTING: { bg: C.amber, fg: "#fff" }, CLOSING: { bg: C.amber, fg: "#fff" },
   CLOSED: { bg: C.soil, fg: "#fff" }, FAILED: { bg: C.red, fg: "#fff" },
 };
-const NEXT_STATUS = {
-  PLANNED: ["ACTIVE", "FAILED"], ACTIVE: ["HARVESTING", "FAILED"],
-  HARVESTING: ["CLOSING", "FAILED"], CLOSING: ["CLOSED", "FAILED"],
-  CLOSED: [], FAILED: [],
-};
-const STATUS_VERB = {
-  ACTIVE: "Mark active", HARVESTING: "Start harvest",
-  CLOSING: "Begin closing", CLOSED: "Close cycle", FAILED: "Mark failed",
-};
-const LAYER_LABEL = {
-  CASH_FLOW: "Cash Flow", FOOD_SECURITY: "Food Security", LONG_TERM_ASSET: "Long-Term Asset",
-};
+const LAYER_LABEL = { CASH_FLOW: "Cash Flow", FOOD_SECURITY: "Food Security", LONG_TERM_ASSET: "Long-Term Asset" };
+const NEXT_STATUS = { PLANNED: ["ACTIVE", "FAILED"], ACTIVE: ["HARVESTING", "FAILED"], HARVESTING: ["CLOSING", "FAILED"], CLOSING: ["CLOSED", "FAILED"], CLOSED: [], FAILED: [] };
+const STATUS_VERB = { ACTIVE: "Mark active", HARVESTING: "Start harvest", CLOSING: "Begin closing", CLOSED: "Close cycle", FAILED: "Mark failed" };
 
-function Badge({ children, bg, fg }) {
-  return <span className="text-[11px] font-bold px-2 py-0.5 rounded-full" style={{ background: bg, color: fg }}>{children}</span>;
-}
-function Panel({ title, right, children }) {
+function Badge({ children, bg, fg }) { return <span className="text-[11px] font-bold px-2 py-0.5 rounded-full" style={{ background: bg, color: fg }}>{children}</span>; }
+function Panel({ title, action, onAction, children }) {
   return (
     <div className="rounded-2xl border p-4" style={{ borderColor: C.border, background: C.panel }}>
       <div className="flex items-center justify-between mb-2">
         <h2 className="text-sm font-semibold uppercase tracking-wider" style={{ color: C.soil }}>{title}</h2>
-        {right}
+        {action && <button onClick={onAction} className="text-xs font-semibold" style={{ color: C.greenDk }}>{action}</button>}
       </div>
       {children}
     </div>
   );
 }
-function Stat({ label, value, color }) {
+function MiniStat({ label, value, color }) {
   return (
     <div>
       <div className="text-[10px] font-bold uppercase tracking-wider" style={{ color: C.muted }}>{label}</div>
-      <div className="text-lg font-extrabold" style={{ color: color || C.soil }}>{value ?? "—"}</div>
+      <div className="text-base font-extrabold" style={{ color: color || C.soil }}>{value ?? "—"}</div>
     </div>
   );
 }
 
 export default function CycleDetail() {
   const { cycleId } = useParams();
+  const navigate = useNavigate();
   const [cycle, setCycle] = useState(null);
   const [fin, setFin] = useState(null);
   const [events, setEvents] = useState([]);
   const [harvests, setHarvests] = useState([]);
-  const [block, setBlock] = useState(null);
+  const [block, setBlock] = useState(null);     // WHD block for this cycle
+  const [history, setHistory] = useState([]);   // prior cycles in same PU
+  const [openTasks, setOpenTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [acting, setActing] = useState("");
@@ -112,18 +90,22 @@ export default function CycleDetail() {
       const cRes = await getJSON(`/api/v1/cycles/${encodeURIComponent(cycleId)}`);
       const c = cRes?.data || cRes;
       setCycle(c);
-      // Fire the dependent reads in parallel; each is independently fail-soft.
-      const [finRes, evRes, hvRes, cmRes] = await Promise.allSettled([
+      const [finR, evR, hvR, cmR, hiR, tkR] = await Promise.allSettled([
         getJSON(`/api/v1/cycles/${encodeURIComponent(cycleId)}/financials`),
         getJSON(`/api/v1/field-events?cycle_id=${encodeURIComponent(cycleId)}&limit=100`),
         getJSON(`/api/v1/harvests?cycle_id=${encodeURIComponent(cycleId)}`),
         c?.farm_id ? getJSON(`/api/v1/crops/compliance/${encodeURIComponent(c.farm_id)}`) : Promise.resolve(null),
+        c?.pu_id ? getJSON(`/api/v1/cycles?pu_id=${encodeURIComponent(c.pu_id)}&limit=50`) : Promise.resolve(null),
+        getJSON(`/api/v1/tasks?entity_id=${encodeURIComponent(cycleId)}&status=OPEN&limit=100`),
       ]);
-      setFin(finRes.status === "fulfilled" ? (finRes.value?.data || finRes.value) : null);
-      setEvents(evRes.status === "fulfilled" ? ((evRes.value?.data?.events) || []) : []);
-      setHarvests(hvRes.status === "fulfilled" ? ((hvRes.value?.data?.harvests) || []) : []);
-      const blocks = cmRes.status === "fulfilled" ? (cmRes.value?.data?.active_blocks || []) : [];
+      setFin(finR.status === "fulfilled" ? (finR.value?.data || finR.value) : null);
+      setEvents(evR.status === "fulfilled" ? (evR.value?.data?.events || []) : []);
+      setHarvests(hvR.status === "fulfilled" ? (hvR.value?.data?.harvests || []) : []);
+      const blocks = cmR.status === "fulfilled" ? (cmR.value?.data?.active_blocks || []) : [];
       setBlock(blocks.find((b) => b.cycle_id === cycleId) || null);
+      const allCyc = hiR.status === "fulfilled" ? (hiR.value?.data?.cycles || []) : [];
+      setHistory(allCyc.filter((x) => x.cycle_id !== cycleId));
+      setOpenTasks(tkR.status === "fulfilled" ? (Array.isArray(tkR.value?.data) ? tkR.value.data : []) : []);
     } catch (e) {
       setError(e.message === "404" ? "Cycle not found." : "Couldn't load this cycle.");
     } finally {
@@ -139,150 +121,219 @@ export default function CycleDetail() {
     if (next === "CLOSED" && !window.confirm("Close this cycle? This is terminal and computes final CoKG.")) return;
     setActing(next);
     try {
-      const r = await fetch(`/api/v1/cycles/${encodeURIComponent(cycleId)}`, {
-        method: "PATCH", headers: authHeaders(), body: JSON.stringify({ cycle_status: next }),
-      });
-      if (!r.ok) {
-        const body = await r.json().catch(() => ({}));
-        throw new Error(body?.detail?.message || body?.detail || `Transition failed (${r.status})`);
-      }
+      const r = await fetch(`/api/v1/cycles/${encodeURIComponent(cycleId)}`, { method: "PATCH", headers: authHeaders(), body: JSON.stringify({ cycle_status: next }) });
+      if (!r.ok) { const b = await r.json().catch(() => ({})); throw new Error(b?.detail?.message || b?.detail || `Transition failed (${r.status})`); }
       await load();
-    } catch (e) {
-      alert(e.message);
-    } finally {
-      setActing("");
-    }
+    } catch (e) { alert(e.message); } finally { setActing(""); }
   }
 
-  if (loading) return <div className="max-w-4xl mx-auto p-4"><div className="rounded-2xl animate-pulse" style={{ height: 160, background: C.cream }} /></div>;
+  if (loading) return <div className="max-w-5xl mx-auto p-4"><div className="rounded-2xl animate-pulse" style={{ height: 180, background: C.cream }} /></div>;
   if (error) return (
-    <div className="max-w-4xl mx-auto p-4 space-y-3">
+    <div className="max-w-5xl mx-auto p-4 space-y-3">
       <Link to="/farm/cycles" className="text-xs underline" style={{ color: C.greenDk }}>← Back to cycles</Link>
       <div className="rounded-2xl border p-4 text-sm" style={{ borderColor: C.border, color: C.muted }}>{error}</div>
     </div>
   );
 
   const c = cycle || {};
-  const sc = STATUS_COLORS[c.cycle_status] || STATUS_COLORS.PLANNED;
-  const since = daysSince(c.planting_date);
+  const status = (c.cycle_status || "").toUpperCase();
+  const sc = STATUS_COLORS[status] || STATUS_COLORS.PLANNED;
+  const since = daysIn(c.planting_date);
+  const expLen = daysBetween(c.planting_date, c.expected_harvest_date);
+  const toHarvest = c.expected_harvest_date ? daysBetween(new Date().toISOString(), c.expected_harvest_date) : null;
+  const transitions = NEXT_STATUS[status] || [];
+  const lifeIdx = LIFECYCLE.indexOf(status);
+
+  // Financial figures
+  const earned = fmtMoney(fin?.total_revenue_fjd);
+  const spent = fmtMoney(fin?.total_cost_fjd);
   const cokg = fmtMoney(fin?.cogk_fjd_per_kg);
-  const transitions = NEXT_STATUS[c.cycle_status] || [];
+  const margin = fin?.gross_margin_pct != null ? Number(fin.gross_margin_pct) : null;
+  const marginLabel = margin == null ? "In progress" : margin >= 15 ? "Profitable" : margin >= -5 ? "Break-even" : "Loss-making";
+  const marginColor = margin == null ? C.muted : margin >= 15 ? C.greenDk : margin >= -5 ? C.amber : C.red;
+  const planned = Number(c.planned_yield_kg) || 0;
+  const actual = Number(c.actual_yield_kg) || 0;
+  const yieldPct = planned > 0 ? Math.min(100, Math.round((actual / planned) * 100)) : 0;
+
+  // Chemical applications from events
+  const chemEvents = events.filter((e) => String(e.event_type || "").toUpperCase().includes("SPRAY") || String(e.event_type || "").toUpperCase().includes("CHEMICAL") || e.chemical_id);
 
   return (
-    <div className="max-w-4xl mx-auto p-4 space-y-4">
-      <Link to="/farm/cycles" className="text-xs underline" style={{ color: C.greenDk }}>← Back to cycles</Link>
-
-      {/* 1. Header / overview */}
-      <Panel
-        title="Cycle"
-        right={<div className="flex items-center gap-1.5">
-          <Badge bg={sc.bg} fg={sc.fg}>{c.cycle_status}</Badge>
+    <div className="max-w-5xl mx-auto p-4 space-y-4">
+      {/* breadcrumb + header */}
+      <div className="text-xs" style={{ color: C.muted }}>
+        <Link to="/farm/cycles" style={{ color: C.greenDk }}>Crops</Link> › <Link to="/farm/cycles" style={{ color: C.greenDk }}>Cycles</Link> › <span style={{ color: C.soil }}>{c.production_name || c.production_id} · {c.pu_farmer_label || c.pu_id} · {c.farmer_label || c.cycle_id}</span>
+      </div>
+      <div className="flex items-start justify-between gap-2 flex-wrap">
+        <div>
+          <h1 className="text-2xl font-bold" style={{ color: C.soil }}>{c.production_name || c.production_id} · {c.pu_farmer_label || c.pu_id}</h1>
+          <div className="text-xs mt-0.5" style={{ color: C.muted }}>
+            Day {since ?? "—"}{expLen ? ` of expected ${expLen}` : ""} · {LIFECYCLE_LABEL[status] || status}
+            {toHarvest != null && status !== "CLOSED" && status !== "FAILED" ? ` · ${toHarvest > 0 ? `${toHarvest} days to harvest` : "past expected harvest"}` : ""}
+          </div>
+        </div>
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <Badge bg={sc.bg} fg={sc.fg}>{status}</Badge>
           {c.layer && <Badge bg={C.greenTint} fg={C.greenDk}>{LAYER_LABEL[c.layer] || c.layer}</Badge>}
-        </div>}
-      >
-        <div className="text-xl font-extrabold" style={{ color: C.ink }}>{c.production_name || c.production_id}</div>
-        <div className="text-xs mt-0.5" style={{ color: C.muted }}>
-          {c.pu_farmer_label || c.pu_id || "—"} · <span className="font-mono">{c.cycle_id}</span>
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-3">
-          <Stat label="Planted" value={fmtDate(c.planting_date)} />
-          <Stat label="Days since" value={since != null ? `${since}d` : null} />
-          <Stat label="Expected harvest" value={fmtDate(c.expected_harvest_date)} />
-          <Stat label="Actual yield" value={fmtKg(c.actual_yield_kg)} />
+      </div>
+
+      {/* header actions */}
+      <div className="flex flex-wrap gap-2">
+        <ActionBtn onClick={() => navigate("/farm/cycles")}>← Back to list</ActionBtn>
+        <ActionBtn onClick={() => navigate(`/farm/field-events?new=1&cycle=${encodeURIComponent(cycleId)}`)}>+ Log event</ActionBtn>
+        <ActionBtn onClick={() => navigate(`/farm/tasks?cycle=${encodeURIComponent(cycleId)}`)}>View tasks</ActionBtn>
+        {transitions.map((next) => (
+          <ActionBtn key={next} onClick={() => transition(next)} disabled={!!acting} danger={next === "FAILED"}>
+            {acting === next ? "…" : (STATUS_VERB[next] || next)}
+          </ActionBtn>
+        ))}
+      </div>
+
+      {/* outcome banner */}
+      {status === "FAILED" && (
+        <div className="rounded-xl border p-3" style={{ background: C.redTint, borderColor: C.border, borderLeft: `4px solid ${C.red}` }}>
+          <div className="font-bold" style={{ color: C.red }}>This cycle was marked FAILED</div>
         </div>
-      </Panel>
+      )}
+      {status === "CLOSED" && (
+        <div className="rounded-xl border p-3" style={{ background: C.cream, borderColor: C.border }}>
+          <span className="font-bold" style={{ color: C.soil }}>Closed cycle</span>
+          <span style={{ color: C.muted }}> · final yield {fmtKg(c.actual_yield_kg) || "—"} · {earned || "—"} earned{margin != null ? ` · ${marginLabel} (${margin.toFixed(0)}%)` : ""}</span>
+        </div>
+      )}
 
-      {/* 2. Status & actions */}
-      <Panel title="Status & actions">
-        {transitions.length === 0 ? (
-          <div className="text-sm" style={{ color: C.muted }}>This cycle is in a terminal state ({c.cycle_status}). No further transitions.</div>
-        ) : (
-          <div className="flex flex-wrap gap-2">
-            {transitions.map((next) => (
-              <button key={next} onClick={() => transition(next)} disabled={!!acting}
-                className="text-sm font-semibold px-3 py-1.5 rounded-lg disabled:opacity-50"
-                style={{ background: next === "FAILED" ? C.redTint : C.greenTint, color: next === "FAILED" ? C.red : C.greenDk, border: `1px solid ${C.border}` }}>
-                {acting === next ? "…" : (STATUS_VERB[next] || next)}
-              </button>
-            ))}
+      {/* cycle progress strip (real lifecycle) */}
+      <div className="rounded-2xl border p-4" style={{ borderColor: C.border, background: C.panel }}>
+        <div className="text-[10px] font-bold uppercase tracking-wider mb-3" style={{ color: C.muted }}>Cycle progress {status === "FAILED" ? "(failed)" : ""}</div>
+        <div className="flex items-center">
+          {LIFECYCLE.map((s, i) => {
+            const done = lifeIdx > i, cur = lifeIdx === i;
+            const dotBg = status === "FAILED" ? C.redTint : done ? C.green : cur ? C.amber : C.cream;
+            const dotFg = (done || cur) && status !== "FAILED" ? "#fff" : C.muted;
+            return (
+              <div key={s} className="flex items-center" style={{ flex: i < LIFECYCLE.length - 1 ? 1 : "0 0 auto" }}>
+                <div className="flex flex-col items-center" style={{ minWidth: 56 }}>
+                  <div className="w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold" style={{ background: dotBg, color: dotFg }}>{done ? "✓" : i + 1}</div>
+                  <span className="text-[10px] mt-1" style={{ color: cur ? C.soil : C.muted, fontWeight: cur ? 700 : 400 }}>{LIFECYCLE_LABEL[s]}</span>
+                </div>
+                {i < LIFECYCLE.length - 1 && <div className="h-0.5 flex-1" style={{ background: lifeIdx > i ? C.green : C.border }} />}
+              </div>
+            );
+          })}
+        </div>
+        <div className="text-[10px] mt-2" style={{ color: C.muted }}>Lifecycle status (agronomic growth-stage tracking is on the roadmap).</div>
+      </div>
+
+      {/* 6-panel grid */}
+      <div className="grid gap-3 md:grid-cols-2">
+        {/* 1. Financial summary */}
+        <Panel title="Financial summary">
+          {fin ? (
+            <>
+              <div className="text-2xl font-extrabold" style={{ color: C.soil }}>{earned || "Pending"} <span className="text-xs font-normal" style={{ color: C.muted }}>earned</span></div>
+              <Badge bg={margin == null ? C.cream : margin >= 15 ? C.greenTint : margin >= -5 ? C.amberTint : C.redTint} fg={marginColor}>{marginLabel}{margin != null ? ` · ${margin.toFixed(0)}%` : ""}</Badge>
+              <div className="grid grid-cols-2 gap-3 mt-3">
+                <MiniStat label="Spent" value={spent} />
+                <MiniStat label="CoKG estimate" value={cokg} />
+                <MiniStat label="Expected yield" value={planned ? `${planned.toLocaleString()} kg` : "—"} />
+                <MiniStat label="Actual yield" value={fmtKg(c.actual_yield_kg)} />
+              </div>
+              <div className="text-[11px] mt-3" style={{ color: C.muted }}>Yield progress vs expected</div>
+              <div className="h-2 rounded-full mt-1" style={{ background: C.cream }}>
+                <div className="h-2 rounded-full" style={{ width: `${yieldPct}%`, background: C.green }} />
+              </div>
+              <div className="flex justify-between text-[10px] mt-1" style={{ color: C.muted }}><span>0 kg</span><span>{yieldPct}%</span><span>{planned ? `${planned.toLocaleString()} kg` : "—"}</span></div>
+            </>
+          ) : <div className="text-sm" style={{ color: C.muted }}>No financials computed yet — costs roll up as you log inputs, labour and harvests.</div>}
+        </Panel>
+
+        {/* 2. Chemical compliance */}
+        <Panel title="Chemical compliance" action="+ Apply" onAction={() => navigate(`/farm/field-events?new=1&cycle=${encodeURIComponent(cycleId)}`)}>
+          {block ? (
+            <>
+              <div className="text-lg font-extrabold" style={{ color: C.red }}>{block.chemical} — {block.days_remaining}d left</div>
+              <div className="text-[11px] mt-1" style={{ color: C.muted }}>Cannot harvest until withholding clears · clears {fmtDate(block.clear_date)}</div>
+            </>
+          ) : (
+            <>
+              <div className="text-lg font-extrabold" style={{ color: C.greenDk }}>Clear to harvest</div>
+              <div className="text-[11px] mt-1" style={{ color: C.muted }}>No active withholding period</div>
+            </>
+          )}
+          {chemEvents.length > 0 && (
+            <div className="mt-3 pt-3 border-t" style={{ borderColor: C.border }}>
+              <div className="text-[10px] font-bold uppercase tracking-wider mb-1.5" style={{ color: C.muted }}>Recent chemicals</div>
+              {chemEvents.slice(0, 5).map((e) => (
+                <div key={e.event_id} className="flex justify-between text-xs py-0.5">
+                  <span style={{ color: C.soil }}>{e.chemical_application || e.observation_text || "Chemical"}</span>
+                  <span style={{ color: C.muted }}>{fmtDate(e.event_date)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </Panel>
+
+        {/* 3. Buyer commitments — honest-empty (no per-cycle order backend yet) */}
+        <Panel title="Buyer commitments">
+          <div className="text-sm py-2" style={{ color: C.muted }}>No buyer commitments tied to this cycle yet.</div>
+          <div className="text-[10px]" style={{ color: C.muted }}>Per-cycle buyer commitments need an order↔cycle link (on the roadmap) — not faked.</div>
+        </Panel>
+
+        {/* 4. Rotation context — real block history */}
+        <Panel title="Rotation context">
+          <div className="text-[10px] font-bold uppercase tracking-wider mb-1.5" style={{ color: C.muted }}>Prior crops in this block</div>
+          {history.length === 0 ? (
+            <div className="text-xs" style={{ color: C.muted }}>No prior rotation recorded for {c.pu_farmer_label || c.pu_id}.</div>
+          ) : (
+            history.slice(0, 3).map((h) => (
+              <div key={h.cycle_id} className="flex justify-between text-xs py-0.5">
+                <span style={{ color: C.soil }}>{h.production_name || h.production_id}</span>
+                <span style={{ color: C.muted }}>{fmtDate(h.planting_date)} · {(h.cycle_status || "").toUpperCase()}</span>
+              </div>
+            ))
+          )}
+          <div className="mt-2 pt-2 border-t text-[11px]" style={{ borderColor: C.border, color: C.muted }}>Current crop: <b style={{ color: C.soil }}>{c.production_name || c.production_id}</b></div>
+        </Panel>
+
+        {/* 5. Activity feed — real events */}
+        <Panel title="Activity feed" action="View all" onAction={() => navigate("/farm/field-events")}>
+          {events.length === 0 ? (
+            <div className="text-sm" style={{ color: C.muted }}>Nothing logged yet for this cycle.</div>
+          ) : (
+            <div className="space-y-1">
+              {events.slice(0, 8).map((e) => (
+                <div key={e.event_id} className="flex items-center gap-2 text-xs">
+                  <span className="font-mono shrink-0" style={{ color: C.muted, width: 44 }}>{fmtDate(e.event_date).slice(0, 6)}</span>
+                  <span className="font-semibold" style={{ color: C.ink }}>{String(e.event_type || "").replace(/_/g, " ")}</span>
+                  {e.observation_text && <span className="flex-1 text-right truncate" style={{ color: C.soil }}>{e.observation_text}</span>}
+                </div>
+              ))}
+            </div>
+          )}
+        </Panel>
+
+        {/* 6. Tasks for this cycle — real open count + total events */}
+        <Panel title="Tasks for this cycle" action="Open task timeline" onAction={() => navigate(`/farm/tasks?cycle=${encodeURIComponent(cycleId)}`)}>
+          <div className="grid grid-cols-2 gap-3">
+            <MiniStat label="Pending (open)" value={openTasks.length} color={openTasks.length > 0 ? C.amber : C.soil} />
+            <MiniStat label="Total events" value={events.length} />
+            <MiniStat label="Harvests" value={harvests.length} />
+            <MiniStat label="On hold (WHD)" value={block ? 1 : 0} color={block ? C.red : C.soil} />
           </div>
-        )}
-      </Panel>
-
-      {/* 3. Financials — CoKG first */}
-      <Panel title="Financials (Cost of a Kilogram)">
-        {fin ? (
-          <>
-            <div className="rounded-xl p-3 mb-3" style={{ background: C.greenTint }}>
-              <div className="text-[10px] font-bold uppercase tracking-wider" style={{ color: C.greenDk }}>Cost per kg (CoKG)</div>
-              <div className="text-3xl font-extrabold" style={{ color: C.greenDk }}>{cokg || "Pending harvest"}</div>
-            </div>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              <Stat label="Inputs" value={fmtMoney(fin.total_input_cost_fjd)} />
-              <Stat label="Labour" value={fmtMoney(fin.total_labor_cost_fjd)} />
-              <Stat label="Other" value={fmtMoney(fin.total_other_cost_fjd)} />
-              <Stat label="Total cost" value={fmtMoney(fin.total_cost_fjd)} />
-              <Stat label="Revenue" value={fmtMoney(fin.total_revenue_fjd)} color={C.greenDk} />
-              <Stat label="Gross profit" value={fmtMoney(fin.gross_profit_fjd)} color={C.greenDk} />
-              <Stat label="Margin" value={fin.gross_margin_pct != null ? `${Number(fin.gross_margin_pct).toFixed(1)}%` : null} />
-              <Stat label="Harvested" value={fmtKg(fin.total_harvest_kg)} />
-            </div>
-          </>
-        ) : (
-          <div className="text-sm" style={{ color: C.muted }}>No financials computed yet — costs roll up as you log inputs, labour and harvests.</div>
-        )}
-      </Panel>
-
-      {/* 4. Compliance / WHD */}
-      <Panel title="Spray compliance">
-        {block ? (
-          <div className="rounded-xl p-3" style={{ background: C.redTint, borderLeft: `3px solid ${C.red}` }}>
-            <div className="font-bold" style={{ color: C.red }}>On hold — do not sell ({block.days_remaining}d left)</div>
-            <div className="text-xs mt-0.5" style={{ color: C.soil }}>
-              {block.chemical} applied {fmtDate(block.applied_date)} · {block.whd_days}-day withholding · clears <b>{fmtDate(block.clear_date)}</b>.
-            </div>
-          </div>
-        ) : (
-          <div className="text-sm" style={{ color: C.greenDk }}>Clear to harvest — no active chemical withholding on this cycle.</div>
-        )}
-      </Panel>
-
-      {/* 5. Activity timeline */}
-      <Panel title="Activity" right={<span className="text-xs" style={{ color: C.muted }}>{events.length} logged</span>}>
-        {events.length === 0 ? (
-          <div className="text-sm" style={{ color: C.muted }}>Nothing logged yet for this cycle.</div>
-        ) : (
-          <ul className="space-y-1.5">
-            {events.map((e) => (
-              <li key={e.event_id} className="flex items-start gap-2 text-sm">
-                <span className="font-mono text-[11px] mt-0.5 shrink-0" style={{ color: C.muted }}>{fmtDate(e.event_date)}</span>
-                <span className="font-semibold" style={{ color: C.ink }}>{String(e.event_type || "").replace(/_/g, " ")}</span>
-                {e.observation_text && <span style={{ color: C.muted }}>· {e.observation_text}</span>}
-              </li>
-            ))}
-          </ul>
-        )}
-      </Panel>
-
-      {/* 6. Harvest log */}
-      <Panel title="Harvest log" right={<span className="text-xs" style={{ color: C.muted }}>{harvests.length}</span>}>
-        {harvests.length === 0 ? (
-          <div className="text-sm" style={{ color: C.muted }}>No harvests recorded yet.</div>
-        ) : (
-          <ul className="space-y-1.5">
-            {harvests.map((h, i) => (
-              <li key={h.harvest_id || i} className="flex items-center justify-between gap-2 text-sm border-b last:border-0 pb-1.5" style={{ borderColor: C.border }}>
-                <span className="font-mono text-[11px]" style={{ color: C.muted }}>{fmtDate(h.harvest_date)}</span>
-                <span className="font-semibold" style={{ color: C.ink }}>{fmtKg(h.gross_yield_kg) || "—"}</span>
-                <span style={{ color: C.muted }}>
-                  {fmtKg(h.marketable_yield_kg) ? `${fmtKg(h.marketable_yield_kg)} marketable` : ""}
-                  {h.chemical_compliance_cleared === false ? " · ⚠ uncleared" : ""}
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </Panel>
+          <button onClick={() => navigate(`/farm/tasks?cycle=${encodeURIComponent(cycleId)}`)} className="w-full mt-3 text-sm font-semibold px-3 py-2 rounded-lg text-white" style={{ background: C.green }}>Open task timeline →</button>
+        </Panel>
+      </div>
     </div>
+  );
+}
+
+function ActionBtn({ children, onClick, disabled, danger }) {
+  return (
+    <button onClick={onClick} disabled={disabled}
+      className="text-sm font-semibold px-3 py-1.5 rounded-lg disabled:opacity-50"
+      style={{ background: "#fff", border: `1px solid ${"#E6DED0"}`, color: danger ? "#B00020" : "#5C4033" }}>
+      {children}
+    </button>
   );
 }
