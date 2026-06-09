@@ -18,6 +18,8 @@ import {
 } from "lucide-react";
 import TfpShell from "../../components/farm/TfpShell";
 import MarketIntelligence from "../../components/home/MarketIntelligence";
+import FeedView from "../../components/home/FeedView";
+import "../../styles/feed.css";
 
 function authHeaders() {
   const t = localStorage.getItem("tfos_access_token");
@@ -105,9 +107,9 @@ export default function HomePillar() {
 
   let body;
   if (view === "feed") {
-    body = <Feed posts={posts || []} loading={posts == null} />;
+    body = <FeedView initialFilter="all" />;
   } else if (view === "following") {
-    body = <div className="card"><p style={{ color: "var(--muted)" }}>You're not following anyone yet. Follow farmers and their latest posts appear here.</p></div>;
+    body = <FeedView initialFilter="following" />;
   } else if (view === "marketplace") {
     body = (
       <>
@@ -146,7 +148,7 @@ export default function HomePillar() {
       </div>
     );
   } else {
-    body = <div className="card"><h3 style={{ marginTop: 0, color: "var(--soil)" }}>Your saved items</h3><p style={{ color: "var(--muted)" }}>Nothing saved yet. Save a post or listing and it appears here for quick recall.</p></div>;
+    body = <FeedView initialFilter="saved" />;
   }
 
   const action = view === "feed"

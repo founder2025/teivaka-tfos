@@ -71,6 +71,7 @@ from app.routers import (
     community,
     marketplace,
     market,
+    feed,
     subscriptions,
     webhooks,
     reports,
@@ -327,6 +328,7 @@ app.include_router(kb_articles.router,        prefix=f"{PREFIX}/kb/articles",   
 
 # Community & marketplace
 app.include_router(community.router,          prefix=f"{PREFIX}/community",          tags=["Community"])
+app.include_router(feed.router,               prefix=f"{PREFIX}/community",          tags=["Community Feed"])
 app.include_router(marketplace.router,        prefix=f"{PREFIX}/marketplace",        tags=["Marketplace"])
 app.include_router(market.router,             prefix=f"{PREFIX}/market",             tags=["Market Intelligence"])
 
