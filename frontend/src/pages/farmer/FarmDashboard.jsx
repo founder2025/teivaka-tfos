@@ -24,6 +24,7 @@ import {
 
 import { CurrentFarmProvider, useCurrentFarm } from "../../context/CurrentFarmContext";
 import RecentLoggedStrip from "../../components/farm/RecentLoggedStrip";
+import FarmSectionsNav from "../../components/farm/FarmSectionsNav";
 import ActiveCyclesTable from "../../components/farm/ActiveCyclesTable";
 import FarmSelector from "../../components/farm/FarmSelector";
 import ModeDropdown from "../../components/farm/ModeDropdown";
@@ -457,6 +458,7 @@ function FarmOverview() {
   return (
     <div className="space-y-3">
       <HeaderRow />
+      <FarmSectionsNav />
       <RecentLoggedStrip farmId={farmId} />
       <PillarCards crops={cropRows} flocks={flockRows} activeCycles={activeCycles} navigate={navigate} />
       <FarmSummary score={score} grade={grade} businesses={businesses} net={net} activeCycles={activeCycles} holds={holds} team={team} hours={hours} navigate={navigate} />
