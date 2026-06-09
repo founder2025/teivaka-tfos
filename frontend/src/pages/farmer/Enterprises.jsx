@@ -104,6 +104,7 @@ function buildEnterprises(cropData, flockData) {
       id: r.production_id || `crop-${i}`, name: r.production_name, kind: "crop", engineLabel: "Crops",
       income, costs, net, roi, worth: 0, cycles: n0(r.total_cycles), active: n0(r.total_cycles),
       head: 0, groups: 0, status: "active", holds: 0, st: { ...st, color: gradeColor(st.grade) },
+      harvestKg: n0(r.total_harvest_kg), cokg: r.cokg_fjd_per_kg != null ? Number(r.cokg_fjd_per_kg) : null,
     });
   });
   const byType = {};
@@ -472,12 +473,39 @@ function InvestorTab({ D, onOpen, navigate }) {
 }
 
 // ── per-enterprise detail ────────────────────────────────────────────
-function EnterpriseDetail({ e, onBack, go }) {
+function entFdate(iso) { if (!iso) return "—"; const d = new Date(iso); return isNaN(d) ? String(iso) : d.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "2-digit" }); }
+
+function EnterpriseDetail({ e, farmId, onBack, go }) {
   const isAnimal = e.kind === "animal";
   const baseTabs = [["dashboard", "Dashboard"], ["production", isAnimal ? "Herd & animals" : "Production"]];
   if (isAnimal) baseTabs.push(["breeding", "Breeding"]);
   const tabs = baseTabs.concat([["health", "Health"], ["inputs", isAnimal ? "Feed" : "Inputs"], ["labor", "Labour"], ["finance", "Finance"], ["compliance", "Compliance"], ["assets", "Assets"], ["records", "Records"], ["forecasts", "Forecasts"], ["analytics", "Analytics"], ["reports", "Reports"]]);
   const [tab, setTab] = useState("dashboard");
+
+  // Real cycles for this crop enterprise (production_id === e.id).
+  const cyclesQ = useQuery({
+    queryKey: ["entcycles", e.id, farmId],
+    queryFn: () => getJSON(`/api/v1/cycles?farm_id=${encodeURIComponent(farmId)}&limit=200`),
+    enabled: !isAnimal && !!farmId && !e.sample, retry: 0,
+  });
+  const myCycles = useMemo(
+    () => (cyclesQ.data?.data?.cycles || []).filter((c) => c.production_id === e.id),
+    [cyclesQ.data, e.id]
+  );
+  // Real event timeline across this enterprise's cycles (bounded to 8 cycles).
+  const cycleIds = useMemo(() => myCycles.map((c) => c.cycle_id), [myCycles]);
+  const recordsQ = useQuery({
+    queryKey: ["entrecords", e.id, cycleIds.join(",")],
+    enabled: tab === "records" && cycleIds.length > 0 && !e.sample,
+    retry: 0,
+    queryFn: async () => {
+      const slice = cycleIds.slice(0, 8);
+      const lists = await Promise.all(slice.map((id) =>
+        getJSON(`/api/v1/field-events?cycle_id=${encodeURIComponent(id)}&limit=50`).then((r) => r?.data?.events || []).catch(() => [])
+      ));
+      return lists.flat().sort((a, b) => String(b.event_date).localeCompare(String(a.event_date))).slice(0, 30);
+    },
+  });
   return (
     <div className="space-y-3">
       <div className="flex items-start justify-between gap-2 flex-wrap">
@@ -508,10 +536,29 @@ function EnterpriseDetail({ e, onBack, go }) {
       {tab === "production" && (
         <div>
           <Section title="Active units" meta={isAnimal ? "Groups & head" : "Cycles"}>
-            {isAnimal ? <><Row l="Groups" v={e.groups} /><Row l="Head" v={e.head} /></> : <><Row l="Cycles" v={e.cycles} /><Row l="Active now" v={e.active} /></>}
+            {isAnimal ? <><Row l="Groups" v={e.groups} /><Row l="Head" v={e.head} /></> : <><Row l="Cycles" v={e.cycles} /><Row l="Total harvested" v={e.harvestKg ? `${e.harvestKg.toLocaleString()} kg` : "—"} /></>}
           </Section>
-          <Section title="Output & performance"><Build desc={`Yield, output and performance trends build as you log harvests${isAnimal ? " and weights" : ""}.`} link="Open Production" onLink={() => go("cycles")} /></Section>
-          <Section title="Forecasts"><Build desc="Expected output for this enterprise builds once you have a season of records." /></Section>
+          {!isAnimal && (
+            <Section title="Cycles" meta="Every run of this crop · live">
+              {cyclesQ.isLoading ? <div className="text-sm" style={{ color: C.muted }}>Loading cycles…</div>
+                : myCycles.length === 0 ? <Build desc="No cycles logged for this crop yet." link="Start a cycle" onLink={() => go("cycles/new")} />
+                : (
+                  <table className="w-full text-sm">
+                    <tbody>
+                      {myCycles.map((c) => (
+                        <tr key={c.cycle_id} onClick={() => go(`cycles/${c.cycle_id}`)} className={`cursor-pointer hover:bg-[#FCFAF5] ${FOCUS}`} tabIndex={0} onKeyDown={(ev) => { if (ev.key === "Enter") go(`cycles/${c.cycle_id}`); }} style={{ borderTop: `1px solid rgba(92,64,51,0.07)` }}>
+                          <td className="py-1.5">{c.pu_farmer_label || c.pu_id || "—"}</td>
+                          <td className="py-1.5"><span className="text-[11px] px-1.5 py-0.5 rounded" style={{ background: C.cream, color: C.soil }}>{(c.cycle_status || "").toUpperCase()}</span></td>
+                          <td className="py-1.5" style={{ color: C.muted }}>{entFdate(c.planting_date)}</td>
+                          <td className="py-1.5 text-right">{c.actual_yield_kg ? `${Number(c.actual_yield_kg).toLocaleString()} kg` : "—"}</td>
+                          <td className="py-1.5 text-right">{c.cogk_fjd_per_kg != null ? fjd(c.cogk_fjd_per_kg) + "/kg" : "—"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+            </Section>
+          )}
         </div>
       )}
       {tab === "finance" && (
@@ -519,6 +566,8 @@ function EnterpriseDetail({ e, onBack, go }) {
           <Section title="Money" meta="Added up from logged records">
             <Row l="Earned" v={isAnimal ? "—" : fjd(e.income)} /><Row l="Spent" v={isAnimal ? "—" : fjd(e.costs)} />
             <Row l="Net" v={isAnimal ? "—" : fjd(e.net)} vColor={e.net < 0 ? C.red : C.soil} /><Row l="Return on spend" v={isAnimal ? "—" : roiTxt(e.roi)} />
+            {!isAnimal && <Row l="Harvested" v={e.harvestKg ? `${e.harvestKg.toLocaleString()} kg` : "—"} />}
+            {!isAnimal && <Row l="Cost of a kg" v={e.cokg != null ? `${fjd(e.cokg)}/kg` : "—"} />}
             {e.worth > 0 && <Row l="Worth" v={fjd(e.worth)} />}
           </Section>
           {!isAnimal && e.net < 0 && <div className="text-xs -mt-2 mb-3 px-1" style={{ color: C.muted }}>Net is negative because costs come before the harvest pays out — normal mid-season.</div>}
@@ -544,7 +593,25 @@ function EnterpriseDetail({ e, onBack, go }) {
       {tab === "inputs" && <Section title={isAnimal ? "Feed" : "Inputs used"}><Build desc={`${isAnimal ? "Feed, medicines and supplements" : "Seed, fertilizer and chemicals"} show here as you log what you use against this enterprise.`} link="See inventory" onLink={() => go("inventory")} /></Section>}
       {tab === "labor" && <Section title="Assigned staff & productivity"><Build desc="Who works on this enterprise, their hours and what it produces per worker. Builds as you tag work to it." link="Open Labour" onLink={() => go("labor")} /></Section>}
       {tab === "assets" && <Section title="Infrastructure & equipment"><Build desc="Housing, machinery and gear tied to this enterprise." link="Assets & equipment" onLink={() => go("equipment")} /></Section>}
-      {tab === "records" && <Section title="Event timeline"><div className="text-xs mb-1" style={{ color: C.muted }}>A full timeline of everything logged against this enterprise, with photos and notes.</div><Build desc="" /></Section>}
+      {tab === "records" && (
+        <Section title="Event timeline" meta="Everything logged against this crop's cycles · live">
+          {isAnimal ? <Build desc="Animal event timeline builds as you log." />
+            : cycleIds.length === 0 ? <Build desc="No cycles for this crop yet — nothing to show." />
+            : recordsQ.isLoading ? <div className="text-sm" style={{ color: C.muted }}>Loading records…</div>
+            : (recordsQ.data || []).length === 0 ? <Build desc="No field events logged against this crop's cycles yet." link="Log a field event" onLink={() => go("field-events?new=1")} />
+            : (
+              <ul className="space-y-1.5">
+                {(recordsQ.data || []).map((ev) => (
+                  <li key={ev.event_id} className="flex items-start gap-2 text-sm">
+                    <span className="font-mono text-[11px] mt-0.5 shrink-0" style={{ color: C.muted }}>{entFdate(ev.event_date)}</span>
+                    <span className="font-semibold" style={{ color: C.soil }}>{String(ev.event_type || "").replace(/_/g, " ")}</span>
+                    {ev.observation_text && <span style={{ color: C.muted }}>· {ev.observation_text}</span>}
+                  </li>
+                ))}
+              </ul>
+            )}
+        </Section>
+      )}
       {tab === "forecasts" && <Section title="Production, revenue & cost forecasts"><Build desc="What this enterprise is likely to produce, earn and cost next — builds once you have a season of history." /></Section>}
       {tab === "breeding" && <Section title="Breeding"><Build desc="Breeding records, births and lineage build as you log them." /></Section>}
       {tab === "reports" && <Section title="Enterprise reports"><div className="text-sm mb-1" style={{ color: C.muted }}>Make a report for this enterprise — production, finance or compliance — built from its logged records.</div><Build desc="" link="Go to Reports" onLink={() => go("reports")} /></Section>}
@@ -619,7 +686,7 @@ function EnterprisesInner() {
   const D = useMemo(() => derive(ents), [ents]);
   const retry = () => { crops.refetch(); flocks.refetch(); };
 
-  if (openEnt) return <EnterpriseDetail e={openEnt} onBack={() => setOpenEnt(null)} go={navigate} />;
+  if (openEnt) return <EnterpriseDetail e={openEnt} farmId={farmId} onBack={() => setOpenEnt(null)} go={navigate} />;
 
   const tabBody = view === "portfolio"
     ? <PortfolioTab D={D} ents={ents} typeFilter={typeFilter} setTypeFilter={setTypeFilter} standingFilter={standingFilter} setStandingFilter={setStandingFilter} search={search} setSearch={setSearch} onOpen={setOpenEnt} setView={setView} onAdd={() => setAddOpen(true)} navigate={navigate} />

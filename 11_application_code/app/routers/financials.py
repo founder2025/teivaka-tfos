@@ -82,27 +82,40 @@ async def get_crop_financials(farm_id: str, user: dict = Depends(get_current_use
         if not farm_check.mappings().first():
             raise HTTPException(status_code=404, detail="Farm not found")
 
+        # Per-cycle pre-aggregation (CTEs) so the four LEFT JOINs don't fan out
+        # and inflate the SUMs. Real tables: production_cycles / harvest_log /
+        # income_log / labor_attendance / input_transactions. CoKG = cost per kg
+        # (labour + inputs) / harvested kg — cost only, matching the cycle detail.
         result = await db.execute(text("""
+            WITH cyc AS (
+                SELECT cycle_id, production_id
+                FROM   tenant.production_cycles
+                WHERE  farm_id = :farm_id AND tenant_id = :tid
+                       AND cycle_status <> 'FAILED'
+            ),
+            inc AS (SELECT cycle_id, SUM(net_amount_fjd) AS v FROM tenant.income_log        WHERE tenant_id = :tid GROUP BY cycle_id),
+            lab AS (SELECT cycle_id, SUM(total_pay_fjd)   AS v FROM tenant.labor_attendance  WHERE tenant_id = :tid GROUP BY cycle_id),
+            inp AS (SELECT cycle_id, SUM(total_cost_fjd)  AS v FROM tenant.input_transactions WHERE tenant_id = :tid GROUP BY cycle_id),
+            hrv AS (SELECT cycle_id, SUM(gross_yield_kg)  AS kg FROM tenant.harvest_log       WHERE tenant_id = :tid GROUP BY cycle_id)
             SELECT
                 p.production_id,
                 p.production_name,
                 p.production_category,
-                COUNT(c.cycle_id) AS total_cycles,
-                COALESCE(SUM(il.net_amount_fjd), 0) AS total_income_fjd,
-                COALESCE(SUM(la.total_pay_fjd), 0) AS total_labor_fjd,
-                COALESCE(SUM(it.total_cost_fjd), 0) AS total_input_cost_fjd,
-                COALESCE(SUM(h.total_weight_kg), 0) AS total_harvest_kg,
-                CASE WHEN COALESCE(SUM(h.total_weight_kg), 0) > 0
-                     THEN COALESCE(SUM(il.net_amount_fjd + la.total_pay_fjd + it.total_cost_fjd), 0) / SUM(h.total_weight_kg)
-                     ELSE 0
+                COUNT(cyc.cycle_id) AS total_cycles,
+                COALESCE(SUM(inc.v), 0)  AS total_income_fjd,
+                COALESCE(SUM(lab.v), 0)  AS total_labor_fjd,
+                COALESCE(SUM(inp.v), 0)  AS total_input_cost_fjd,
+                COALESCE(SUM(hrv.kg), 0) AS total_harvest_kg,
+                CASE WHEN COALESCE(SUM(hrv.kg), 0) > 0
+                     THEN (COALESCE(SUM(lab.v), 0) + COALESCE(SUM(inp.v), 0)) / SUM(hrv.kg)
+                     ELSE NULL
                 END AS cokg_fjd_per_kg
-            FROM tenant.cycles c
-            JOIN shared.productions p ON p.production_id = c.production_id
-            LEFT JOIN tenant.income_log il ON il.cycle_id = c.cycle_id AND il.tenant_id = c.tenant_id
-            LEFT JOIN tenant.labor_attendance la ON la.cycle_id = c.cycle_id AND la.tenant_id = c.tenant_id
-            LEFT JOIN tenant.input_transactions it ON it.cycle_id = c.cycle_id AND it.tenant_id = c.tenant_id AND it.transaction_type = 'APPLICATION'
-            LEFT JOIN tenant.harvests h ON h.cycle_id = c.cycle_id AND h.tenant_id = c.tenant_id
-            WHERE c.farm_id = :farm_id AND c.tenant_id = :tid AND c.cycle_status IN ('COMPLETED', 'HARVESTING')
+            FROM cyc
+            JOIN      shared.productions p ON p.production_id = cyc.production_id
+            LEFT JOIN inc ON inc.cycle_id = cyc.cycle_id
+            LEFT JOIN lab ON lab.cycle_id = cyc.cycle_id
+            LEFT JOIN inp ON inp.cycle_id = cyc.cycle_id
+            LEFT JOIN hrv ON hrv.cycle_id = cyc.cycle_id
             GROUP BY p.production_id, p.production_name, p.production_category
             ORDER BY total_income_fjd DESC
         """), {"farm_id": farm_id, "tid": str(user["tenant_id"])})
