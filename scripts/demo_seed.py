@@ -207,11 +207,23 @@ for ttype, cat, desc, amt, d in cash_rows:
 
 # ── 6. workers + labour ──────────────────────────────────────────────────────
 print("→ Workers + labour")
+# Idempotent: reuse workers that already exist (by name) so this section is
+# safe to re-run (e.g. ONLY_WORKERS=1 after a failed first pass).
+_, wlist = step("GET workers", "GET",
+                f"/api/v1/workers?farm_id={urllib.parse.quote(farm_id)}", ok_codes=(200,))
+wl = data_of(wlist)
+if isinstance(wl, dict):
+    wl = wl.get("workers") or []
+existing = {w["full_name"]: w.get("worker_id") for w in (wl or []) if w.get("full_name")}
 worker_ids = []
 for nm, rate, wtype in [("Laisenia Waqa", 85, "PERMANENT"), ("Sairusi Tora", 45, "CASUAL")]:
-    code, resp = step(f"worker {nm}", "POST", "/api/v1/workers",
-                      {"farm_id": farm_id, "full_name": nm, "daily_rate_fjd": rate, "worker_type": wtype})
-    wid = data_of(resp).get("worker_id") if code in (200, 201) else None
+    wid = existing.get(nm)
+    if wid:
+        print(f"  ↻ worker {nm} exists — reusing {wid}")
+    else:
+        code, resp = step(f"worker {nm}", "POST", "/api/v1/workers",
+                          {"farm_id": farm_id, "full_name": nm, "daily_rate_fjd": rate, "worker_type": wtype})
+        wid = data_of(resp).get("worker_id") if code in (200, 201) else None
     if wid:
         worker_ids.append((wid, rate))
 for wid, rate in worker_ids:
@@ -220,6 +232,8 @@ for wid, rate in worker_ids:
             "worker_id": wid, "farm_id": farm_id,
             "work_date": iso(date.today() - timedelta(days=d)),
             "hours_worked": 8, "daily_rate_fjd": rate,
+            "total_pay_fjd": rate,  # full 8h day = daily rate (server requires it)
+            "idempotency_key": f"seed-labor-{wid}-{d}",
         })
 
 # ── 7. weather observations ──────────────────────────────────────────────────
