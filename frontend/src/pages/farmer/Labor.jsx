@@ -35,8 +35,8 @@ const C = {
 const WORKER_TYPES = [
   { value: "CASUAL", label: "Casual" },
   { value: "PERMANENT", label: "Permanent" },
-  { value: "SEASONAL", label: "Seasonal" },
-  { value: "CONTRACTOR", label: "Contractor" },
+  { value: "CONTRACT", label: "Contract" },
+  { value: "FAMILY", label: "Family" },
 ];
 
 // Prototype view tabs (all 8, in prototype order). `needs` set = the specific

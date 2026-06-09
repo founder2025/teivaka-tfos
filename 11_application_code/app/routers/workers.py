@@ -18,7 +18,7 @@ class WorkerCreate(BaseModel):
     id_type: Optional[str] = None  # FJ_PASSPORT, FJ_NATIONAL_ID, WORK_PERMIT
     id_number: Optional[str] = None
     daily_rate_fjd: Decimal
-    worker_type: str = "CASUAL"  # CASUAL, PERMANENT, SEASONAL, CONTRACTOR
+    worker_type: str = "CASUAL"  # DB CHECK: PERMANENT | CASUAL | CONTRACT | FAMILY
     start_date: Optional[datetime] = None
     bank_name: Optional[str] = None
     bank_account: Optional[str] = None
@@ -30,7 +30,7 @@ class WorkerCreate(BaseModel):
 async def list_workers(farm_id: str = None, worker_type: str = None, user: dict = Depends(get_current_user)):
     async with get_rls_db(str(user["tenant_id"])) as db:
         params = {"tid": str(user["tenant_id"])}
-        q = """SELECT w.worker_id, w.full_name, w.contact_number, w.whatsapp_number,
+        q = """SELECT w.worker_id, w.full_name, w.phone AS contact_number, w.whatsapp_number,
                       w.daily_rate_fjd, w.worker_type, w.farm_id, w.is_active,
                       w.start_date, w.end_date
                FROM tenant.workers w
@@ -62,37 +62,47 @@ async def create_worker(body: WorkerCreate, user: dict = Depends(get_current_use
     if user["role"] not in ("FOUNDER", "MANAGER", "AGRONOMIST"):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions to create workers")
 
+    # Normalise worker_type onto the DB CHECK set (PERMANENT|CASUAL|CONTRACT|
+    # FAMILY). Legacy/UI aliases are mapped rather than 500'd on the constraint.
+    _WT = {"PERMANENT": "PERMANENT", "CASUAL": "CASUAL", "CONTRACT": "CONTRACT",
+           "FAMILY": "FAMILY", "CONTRACTOR": "CONTRACT", "SEASONAL": "CASUAL"}
+    worker_type = _WT.get((body.worker_type or "").upper())
+    if worker_type is None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"worker_type must be one of {sorted(set(_WT.values()))}",
+        )
+
     worker_id = f"WRK-{uuid.uuid4().hex[:6].upper()}"
+    # Map request fields onto the real tenant.workers columns. The table has
+    # phone / emergency_contact (no contact_number / id_* / bank_* / next_of_kin_*
+    # / created_by columns) — writing those previously 500'd the endpoint.
+    emergency_contact = " — ".join(
+        x for x in (body.next_of_kin_name, body.next_of_kin_contact) if x
+    ) or None
+    start_date = body.start_date.date() if body.start_date else None
     async with get_rls_db(str(user["tenant_id"])) as db:
         await db.execute(text("""
             INSERT INTO tenant.workers
-                (worker_id, tenant_id, farm_id, full_name, contact_number, whatsapp_number,
-                 id_type, id_number, daily_rate_fjd, worker_type, start_date,
-                 bank_name, bank_account, next_of_kin_name, next_of_kin_contact,
-                 notes, created_by)
+                (worker_id, tenant_id, farm_id, full_name, worker_type,
+                 daily_rate_fjd, phone, whatsapp_number, emergency_contact,
+                 start_date, notes)
             VALUES
-                (:worker_id, :tenant_id, :farm_id, :full_name, :contact_number, :whatsapp_number,
-                 :id_type, :id_number, :daily_rate_fjd, :worker_type, :start_date,
-                 :bank_name, :bank_account, :next_of_kin_name, :next_of_kin_contact,
-                 :notes, :created_by)
+                (:worker_id, :tenant_id, :farm_id, :full_name, :worker_type,
+                 :daily_rate_fjd, :phone, :whatsapp_number, :emergency_contact,
+                 :start_date, :notes)
         """), {
             "worker_id": worker_id,
             "tenant_id": str(user["tenant_id"]),
             "farm_id": body.farm_id,
             "full_name": body.full_name,
-            "contact_number": body.contact_number,
-            "whatsapp_number": body.whatsapp_number,
-            "id_type": body.id_type,
-            "id_number": body.id_number,
+            "worker_type": worker_type,
             "daily_rate_fjd": body.daily_rate_fjd,
-            "worker_type": body.worker_type,
-            "start_date": body.start_date,
-            "bank_name": body.bank_name,
-            "bank_account": body.bank_account,
-            "next_of_kin_name": body.next_of_kin_name,
-            "next_of_kin_contact": body.next_of_kin_contact,
+            "phone": body.contact_number,
+            "whatsapp_number": body.whatsapp_number,
+            "emergency_contact": emergency_contact,
+            "start_date": start_date,
             "notes": body.notes,
-            "created_by": str(user["user_id"]),
         })
     return {"data": {"worker_id": worker_id, "full_name": body.full_name, "daily_rate_fjd": str(body.daily_rate_fjd)}}
 
