@@ -56,7 +56,7 @@ backends — wire them.
 | Production (Cycles) | 🟢 | **List/Calendar/Planner parity shipped** (real status+layer filters, quick stats, timeline, real block occupancy) + 6-panel cycle detail + nursery create (migration 087). Consolidates the prototype's Cycles + Harvests + **Field events** daily-loop (no standalone "Field events" item in farm_unified nav). Planner scored-recommendation engine deferred (honest, not faked) |
 | Inventory | 🟢 | 5-view parity (Stock/Reorder/Movements/Suppliers/Analytics) + KPI strip, all real (/inputs,/input-transactions,/suppliers); StockBadge fixed to real statuses |
 | Labor | 🟢 | real workers/attendance |
-| Buyers | 🟡 | parity pass (was missing from this list — farm_unified nav item) |
+| Buyers | 🟢 | Directory + Active orders + Receivables + Analytics real (/customers,/orders); Demand + Pipeline honest-empty (no feed yet) |
 | Cash | 🟢 | **REAL** — cash.py inserts tenant.cash_ledger + emits audit.events (not the prototype no-op). Confirm FE write path; multi-tab parity |
 | Assets & Equipment | 🟡 | thin; parity pass |
 | Locations | ✅ | L1–L3 map shipped |
