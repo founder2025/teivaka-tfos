@@ -17,6 +17,7 @@ import {
   Star, Bookmark, Plus, Shield, DollarSign, ShoppingBag, Rss, Users, List as ListIcon,
 } from "lucide-react";
 import TfpShell from "../../components/farm/TfpShell";
+import MarketIntelligence from "../../components/home/MarketIntelligence";
 
 function authHeaders() {
   const t = localStorage.getItem("tfos_access_token");
@@ -130,6 +131,7 @@ export default function HomePillar() {
               ))}
             </div>
           )}
+        <MarketIntelligence />
       </>
     );
   } else if (view === "directory") {
