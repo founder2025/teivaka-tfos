@@ -85,5 +85,17 @@ backends — wire them.
 - **P6 (Jun 13–14) AVATAR dropdown** — subscription/referrals/affiliate/team/covenant/export/control-room.
 - **P7 (Jun 14–15) FULL-PLATFORM SWEEP** — every route, every (+), every endpoint; no 4xx/5xx; zero fabricated numbers; deploy + smoke; presentation dry-run.
 
+## Demo data
+- **2026-06-09 census (prod):** tenants 3 · farms 4 · cycles 3 · field_events 14 ·
+  harvests 1 · cash 5 · labor 0 · audit_events 306 → **THIN**. Must populate.
+- **Decision:** populate the demo farm via `scripts/demo_seed.py` (drives the REAL
+  API → genuine, hash-chained; never direct inserts). Adds irrigations/fertilizer/
+  sprays (incl. a recent spray = live WHD block for the Compliance demo), harvests,
+  cash in/out, workers + labour, weather. Run once:
+  `EMAIL=.. PASSWORD=.. BASE_URL=https://teivaka.com python3 scripts/demo_seed.py`
+- Requires: a verified demo account with at least one active cycle (Production ›
+  New cycle). M-PAiSA deferred — payment_method tag only, no real settlement.
+
 ## Running log
-- 2026-06-08: Sprint opened. Prior this session: Prime Directive ratified; single canonical prototype (v263); Field Events log; Overview FARM SUMMARY health card + weather strip; crop-WHD endpoint + Compliance page; B78 deploy guard.
+- 2026-06-08: Sprint opened.
+- 2026-06-09: B78 guard verified on prod (✅). Census = thin → built demo_seed.py. Prior this session: Prime Directive ratified; single canonical prototype (v263); Field Events log; Overview FARM SUMMARY health card + weather strip; crop-WHD endpoint + Compliance page; B78 deploy guard.
