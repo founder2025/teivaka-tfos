@@ -16,6 +16,13 @@ never faked. We present *what the platform actually does*.
    Contract, RLS-scoped, hitting a working endpoint.
 4. Looks/behaves like the prototype.
 
+**Tighter standard (ratified 2026-06-09 after a fidelity audit):** before building a
+surface, OPEN the prototype's render fn and enumerate its panels; build the SAME panel
+set; each panel is real data OR honest-empty matching the prototype's own empty state
+WITH a stated reason (e.g. mock engine / missing backend); no dead links (verify every
+action route exists). Proof-of-standard: cycle detail retrofit to all 8 prototype panels
+(8532d28).
+
 ## The façade rule (de-fake, don't copy)
 Prototype = spec for layout/flow, NOT its numbers. Where the prototype fakes
 data, wire the real backend or show honest-empty. Known façades: **Cash** (no-op
