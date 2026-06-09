@@ -46,9 +46,10 @@ backends — wire them.
 | Tasks | 🟢 | real queue (reorganised) |
 | Decision Center | 🟡 | real signals; verify no empty fabrication |
 | Enterprises | 🟡 | list exists; per-enterprise detail tabs from real data pending |
-| Production (Cycles) | 🟢 | **List/Calendar/Planner parity shipped** (real status+layer filters, quick stats, timeline, real block occupancy) + 6-panel cycle detail + nursery create (migration 087). Planner scored-recommendation engine deferred (honest, not faked) |
+| Production (Cycles) | 🟢 | **List/Calendar/Planner parity shipped** (real status+layer filters, quick stats, timeline, real block occupancy) + 6-panel cycle detail + nursery create (migration 087). Consolidates the prototype's Cycles + Harvests + **Field events** daily-loop (no standalone "Field events" item in farm_unified nav). Planner scored-recommendation engine deferred (honest, not faked) |
 | Inventory | 🟡 | real inputs; parity pass |
 | Labor | 🟢 | real workers/attendance |
+| Buyers | 🟡 | parity pass (was missing from this list — farm_unified nav item) |
 | Cash | 🟢 | **REAL** — cash.py inserts tenant.cash_ledger + emits audit.events (not the prototype no-op). Confirm FE write path; multi-tab parity |
 | Assets & Equipment | 🟡 | thin; parity pass |
 | Locations | ✅ | L1–L3 map shipped |
@@ -60,7 +61,8 @@ backends — wire them.
 | Gallery | 🟡 | real photos; capture stubs |
 | Partnerships | 🟡 | parity pass |
 | Settings | 🟡 | parity pass |
-| Field Events | 🟢 | log shipped; reconcile to unified nav |
+
+**Nav source of truth:** the live Farm sidebar is `NAV.farm_unified` (the 20 rows above), NOT the deprecated `NAV.farm` (vertical-specific). Field events / Cycles / Harvests are folded into **Production** in the unified model — there is no standalone "Field events" sidebar item. The `/farm/field-events` route still exists as the event-logging surface, reached from Production + the (+) launcher.
 
 ## HOME pillar (5)
 | Feed 🟡 | Following 🔴 | Marketplace 🔴 | Directory 🔴 | Saved 🔴 |
