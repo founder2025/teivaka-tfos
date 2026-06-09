@@ -5,13 +5,15 @@
  * v263 HTML, MBI Part 36). It is a DESIGN REFERENCE with mock data — not the
  * live platform. We fetch it from GET /api/v1/prototype with the bearer token
  * (the endpoint is gated by require_admin, so there is no public static path)
- * and render it via an iframe `srcDoc`.
+ * and render it as a real blob: document.
  *
- * Why srcDoc (not a blob: URL): the production CSP has no frame-src, so it
- * falls back to default-src 'self' and blocks blob: frames. srcDoc has no URL
- * to fetch, so frame-src doesn't apply; the inlined document inherits the
- * parent CSP, which already allows 'unsafe-inline' scripts/styles — exactly
- * what the self-contained prototype uses.
+ * Why blob: (not srcDoc): srcDoc iframes ignore the inner viewport meta on iOS
+ * Safari, so the responsive prototype fell back to 980px desktop width on
+ * phones; a 4.2 MB srcDoc string is also heavy on mobile. A blob: document is
+ * a real navigation that honors the prototype's own
+ * `<meta name=viewport width=device-width>` → true mobile layout. The CSP
+ * allows blob: in frame-src; the blob doc inherits the parent CSP
+ * ('unsafe-inline'), so the prototype's inline scripts/styles run.
  *
  * A persistent amber banner makes clear this is the prototype, not prod.
  */
@@ -23,10 +25,11 @@ const BANNER_H = 30;
 
 export default function Prototype() {
   const navigate = useNavigate();
-  const [html, setHtml] = useState(null);
+  const [src, setSrc] = useState(null);
   const [err, setErr] = useState(null);
 
   useEffect(() => {
+    let url;
     let alive = true;
     (async () => {
       try {
@@ -40,13 +43,14 @@ export default function Prototype() {
               : `Couldn't load the prototype (${r.status}).`
           );
         }
-        const text = await r.text();
-        if (alive) setHtml(text);
+        const blob = await r.blob();
+        url = URL.createObjectURL(new Blob([blob], { type: "text/html" }));
+        if (alive) setSrc(url);
       } catch (e) {
         if (alive) setErr(e.message || "Couldn't load the prototype.");
       }
     })();
-    return () => { alive = false; };
+    return () => { alive = false; if (url) URL.revokeObjectURL(url); };
   }, []);
 
   if (err) {
@@ -81,7 +85,7 @@ export default function Prototype() {
           Switch to live app →
         </button>
       </div>
-      {html == null ? (
+      {src == null ? (
         <div style={{ position: "absolute", top: BANNER_H, left: 0, right: 0,
           padding: 24, color: "#8A7863", fontFamily: "system-ui" }}>
           Loading prototype…
@@ -89,7 +93,8 @@ export default function Prototype() {
       ) : (
         <iframe
           title="TFOS Prototype v263"
-          srcDoc={html}
+          src={src}
+          allow="fullscreen"
           style={{
             position: "absolute", top: BANNER_H, left: 0,
             width: "100%", height: `calc(100% - ${BANNER_H}px)`, border: 0,
