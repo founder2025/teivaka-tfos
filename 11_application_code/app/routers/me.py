@@ -11,6 +11,30 @@ router = APIRouter()
 LANDING_BASE = "https://teivaka.com"
 
 
+@router.get("/chain-status")
+async def get_my_chain_status(
+    user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Live audit-chain integrity for the caller's tenant — backs the Overview
+    'Verification chain' badge so it reflects a real check, not a hardcoded
+    'INTACT' claim. Reads the SECURITY DEFINER audit.verify_chain_for_tenant."""
+    row = (await db.execute(text("""
+        SELECT total_events, break_count, verified_at
+        FROM audit.verify_chain_for_tenant(cast(:tid AS uuid))
+    """), {"tid": str(user["tenant_id"])})).first()
+    total = int(row.total_events) if row and row.total_events is not None else 0
+    breaks = int(row.break_count) if row and row.break_count is not None else 0
+    return {
+        "data": {
+            "integrity_ok": breaks == 0,
+            "events_in_chain": total,
+            "chain_break_count": breaks,
+            "verified_at": (row.verified_at.isoformat() if row and row.verified_at else None),
+        }
+    }
+
+
 @router.get("/referral")
 async def get_my_referral(
     user: dict = Depends(get_current_user),

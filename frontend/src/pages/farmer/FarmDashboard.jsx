@@ -412,6 +412,7 @@ function FarmOverview() {
   const farmsList = useQuery({ queryKey: ["ov-farms"], queryFn: () => getJSON(`/api/v1/farms`), retry: 0 });
   const labor = q(["ov-labor", farmId], () => getJSON(`/api/v1/labor?farm_id=${encodeURIComponent(farmId)}`));
   const compliance = q(["ov-compliance", farmId], () => getJSON(`/api/v1/crops/compliance/${encodeURIComponent(farmId)}`));
+  const chain = useQuery({ queryKey: ["ov-chain"], queryFn: () => getJSON(`/api/v1/me/chain-status`), retry: 0 });
 
   const finSummary = fin.data?.data?.summary || null;
   const cropRows = crops.data?.data ?? [];
@@ -485,10 +486,28 @@ function FarmOverview() {
 
       <QuickActions navigate={navigate} />
 
-      <div className="rounded-xl border p-3 flex items-center justify-between gap-2 flex-wrap" style={{ background: C.greenTint, borderColor: C.border }}>
-        <div className="flex items-center gap-2 text-xs" style={{ color: C.greenDk }}><ShieldCheck size={14} />Verification chain · <strong>INTACT</strong> — every record carries a stamp; nothing edited after the fact.</div>
-        <button onClick={() => navigate("/farm/history")} className={`text-[11px] px-2.5 py-1 rounded-lg hover:brightness-95 ${FOCUS}`} style={{ color: C.greenDk, border: `1px solid ${C.border}` }}>Open Farm History</button>
-      </div>
+      {(() => {
+        const cd = chain.data?.data;
+        const ok = cd?.integrity_ok;
+        const events = cd?.events_in_chain;
+        const breaks = cd?.chain_break_count;
+        // Real audit-chain check (GET /me/chain-status) — never a hardcoded claim.
+        const loading = chain.isLoading;
+        const errored = chain.isError;
+        const bg = ok === false ? "#FBEAE6" : C.greenTint;
+        const fg = ok === false ? C.red : C.greenDk;
+        let msg;
+        if (loading) msg = "Verification chain · checking…";
+        else if (errored || cd == null) msg = "Every record is hash-chained and stamped.";
+        else if (ok) msg = `Verification chain · INTACT — ${Number(events).toLocaleString()} record${events === 1 ? "" : "s"} hash-chained, none altered after the fact.`;
+        else msg = `Verification chain · ATTENTION — ${breaks} break${breaks === 1 ? "" : "s"} detected in ${Number(events).toLocaleString()} records.`;
+        return (
+          <div className="rounded-xl border p-3 flex items-center justify-between gap-2 flex-wrap" style={{ background: bg, borderColor: C.border }}>
+            <div className="flex items-center gap-2 text-xs" style={{ color: fg }}><ShieldCheck size={14} />{msg}</div>
+            <button onClick={() => navigate("/farm/history")} className={`text-[11px] px-2.5 py-1 rounded-lg hover:brightness-95 ${FOCUS}`} style={{ color: C.greenDk, border: `1px solid ${C.border}` }}>Open Farm History</button>
+          </div>
+        );
+      })()}
 
       <NewCycleModal isOpen={cycleModalOpen} onClose={() => setCycleModalOpen(false)} onCreated={() => { handleCycleCreated(); setCycleModalOpen(false); }} farmId={farmId} />
     </div>
