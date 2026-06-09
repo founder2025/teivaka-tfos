@@ -58,7 +58,7 @@ async def export_cycles_csv(farm_id: str, production_id: str = None, user: dict 
             hrv AS (SELECT cycle_id, SUM(gross_yield_kg) AS kg, SUM(waste_kg) AS waste FROM tenant.harvest_log WHERE tenant_id = :tid GROUP BY cycle_id),
             inc AS (SELECT cycle_id, SUM(net_amount_fjd) AS v FROM tenant.income_log WHERE tenant_id = :tid GROUP BY cycle_id),
             lab AS (SELECT cycle_id, SUM(total_pay_fjd + COALESCE(overtime_pay_fjd, 0)) AS v FROM tenant.labor_attendance WHERE tenant_id = :tid GROUP BY cycle_id),
-            inp AS (SELECT cycle_id, SUM(total_cost_fjd) AS v FROM tenant.input_transactions WHERE tenant_id = :tid AND transaction_type = 'APPLICATION' GROUP BY cycle_id)
+            inp AS (SELECT cycle_id, SUM(total_cost_fjd) AS v FROM tenant.input_transactions WHERE tenant_id = :tid AND txn_type = 'USAGE' GROUP BY cycle_id)
             SELECT cyc.cycle_id,
                    COALESCE(cyc.farmer_label, p.production_name) AS cycle_name,
                    p.production_name, p.production_category,
@@ -154,7 +154,7 @@ async def export_financials_csv(farm_id: str, days: int = 365, user: dict = Depe
             SELECT
                 transaction_date AS date,
                 'EXPENSE' AS record_type,
-                'INPUT_' || transaction_type AS sub_type,
+                'INPUT_' || txn_type AS sub_type,
                 i.input_name AS description,
                 quantity AS quantity_kg,
                 unit_cost_fjd AS unit_price_fjd,
@@ -168,9 +168,9 @@ async def export_financials_csv(farm_id: str, days: int = 365, user: dict = Depe
             FROM tenant.input_transactions it
             JOIN tenant.inputs i ON i.input_id = it.input_id
             WHERE it.farm_id = :farm_id AND it.tenant_id = :tid
-              AND it.transaction_date >= now() - interval '1 day' * :days
-              AND it.transaction_type IN ('PURCHASE', 'APPLICATION')
-            ORDER BY it.transaction_date DESC
+              AND it.txn_date >= now() - interval '1 day' * :days
+              AND it.txn_type IN ('PURCHASE', 'APPLICATION')
+            ORDER BY it.txn_date DESC
         """), params)
 
         rows = (
@@ -215,7 +215,7 @@ async def export_inputs_csv(farm_id: str, days: int = 90, user: dict = Depends(g
         params = {"farm_id": farm_id, "tid": str(user["tenant_id"]), "days": days}
         result = await db.execute(text("""
             SELECT
-                it.txn_id, it.transaction_date, it.transaction_type,
+                it.txn_id, it.txn_date, it.txn_type,
                 i.input_name, i.active_ingredient, i.chemical_class,
                 i.registration_number AS chemical_registration, i.phi_days,
                 it.quantity, i.unit, it.unit_cost_fjd, it.total_cost_fjd,
@@ -224,8 +224,8 @@ async def export_inputs_csv(farm_id: str, days: int = 90, user: dict = Depends(g
             FROM tenant.input_transactions it
             JOIN tenant.inputs i ON i.input_id = it.input_id
             WHERE it.farm_id = :farm_id AND it.tenant_id = :tid
-              AND it.transaction_date >= now() - interval '1 day' * :days
-            ORDER BY it.transaction_date DESC
+              AND it.txn_date >= now() - interval '1 day' * :days
+            ORDER BY it.txn_date DESC
         """), params)
         rows = [dict(r) for r in result.mappings().all()]
 

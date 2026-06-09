@@ -160,7 +160,14 @@ async def crop_bank_evidence(
         ORDER BY event_date DESC LIMIT 30
     """), {"tid": tid, "fid": farm_id, "ps": period_start, "pe": period_end})).mappings().all():
         activity.append((r["d"], str(r["event_type"]).replace("_", " ").title(), (r["observation_text"] or "")[:50]))
-    activity.sort(key=lambda x: x[0] or datetime.min.date(), reverse=True)
+    # cash_ledger.transaction_date is timestamptz (datetime) while harvest_date /
+    # event_date::date are date — normalise the sort key so mixed types don't
+    # raise "can't compare datetime to date".
+    def _as_date(x):
+        if x is None:
+            return datetime.min.date()
+        return x.date() if isinstance(x, datetime) else x
+    activity.sort(key=lambda x: _as_date(x[0]), reverse=True)
     activity = activity[:30]
 
     # 7. Chain bounds + integrity walk (tenant-wide, same as poultry)

@@ -42,7 +42,7 @@ async def get_cogk_trend(farm_id: str, production_id: str = None, periods: int =
             hrv AS (SELECT cycle_id, SUM(gross_yield_kg) AS kg FROM tenant.harvest_log       WHERE tenant_id = :tid GROUP BY cycle_id),
             inc AS (SELECT cycle_id, SUM(net_amount_fjd) AS v FROM tenant.income_log         WHERE tenant_id = :tid GROUP BY cycle_id),
             lab AS (SELECT cycle_id, SUM(total_pay_fjd + COALESCE(overtime_pay_fjd, 0)) AS v FROM tenant.labor_attendance WHERE tenant_id = :tid GROUP BY cycle_id),
-            inp AS (SELECT cycle_id, SUM(total_cost_fjd) AS v FROM tenant.input_transactions WHERE tenant_id = :tid AND transaction_type = 'APPLICATION' GROUP BY cycle_id)
+            inp AS (SELECT cycle_id, SUM(total_cost_fjd) AS v FROM tenant.input_transactions WHERE tenant_id = :tid AND txn_type = 'USAGE' GROUP BY cycle_id)
             SELECT cyc.cycle_id,
                    COALESCE(cyc.farmer_label, p.production_name) AS cycle_name,
                    p.production_name, p.production_id,
@@ -160,12 +160,12 @@ async def get_input_usage_report(farm_id: str, days: int = 90, user: dict = Depe
                 i.unit AS unit,
                 COALESCE(SUM(it.total_cost_fjd), 0) AS total_cost_fjd,
                 COUNT(it.txn_id) AS application_count,
-                MAX(it.transaction_date) AS last_applied
+                MAX(it.txn_date) AS last_applied
             FROM tenant.inputs i
             JOIN tenant.input_transactions it ON it.input_id = i.input_id AND it.tenant_id = i.tenant_id
-                AND it.transaction_type = 'APPLICATION'
+                AND it.txn_type = 'APPLICATION'
                 AND it.farm_id = :farm_id
-                AND it.transaction_date >= now() - interval '1 day' * :days
+                AND it.txn_date >= now() - interval '1 day' * :days
             WHERE i.tenant_id = :tid
             GROUP BY i.input_id, i.input_name, i.input_category, i.active_ingredient, i.chemical_class, i.phi_days, i.unit
             ORDER BY total_cost_fjd DESC

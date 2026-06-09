@@ -33,8 +33,8 @@ async def get_farm_pnl(farm_id: str, period_months: int = 12, user: dict = Depen
             LEFT JOIN tenant.labor_attendance la ON la.farm_id = f.farm_id AND la.tenant_id = f.tenant_id
                 AND la.work_date >= now() - interval '12 months'
             LEFT JOIN tenant.input_transactions it ON it.farm_id = f.farm_id AND it.tenant_id = f.tenant_id
-                AND it.transaction_date >= now() - interval '12 months'
-                AND it.transaction_type = 'APPLICATION'
+                AND it.txn_date >= now() - interval '12 months'
+                AND it.txn_type = 'APPLICATION'
             WHERE f.farm_id = :farm_id AND f.tenant_id = :tid
         """), {"farm_id": farm_id, "tid": str(user["tenant_id"])})
         total_row = totals.mappings().first()
@@ -158,7 +158,7 @@ async def get_cokg_trend(farm_id: str, production_id: str = None, user: dict = D
             hrv AS (SELECT cycle_id, SUM(gross_yield_kg) AS kg FROM tenant.harvest_log       WHERE tenant_id = :tid GROUP BY cycle_id),
             inc AS (SELECT cycle_id, SUM(net_amount_fjd) AS v FROM tenant.income_log         WHERE tenant_id = :tid GROUP BY cycle_id),
             lab AS (SELECT cycle_id, SUM(total_pay_fjd)  AS v FROM tenant.labor_attendance   WHERE tenant_id = :tid GROUP BY cycle_id),
-            inp AS (SELECT cycle_id, SUM(total_cost_fjd) AS v FROM tenant.input_transactions WHERE tenant_id = :tid AND transaction_type = 'APPLICATION' GROUP BY cycle_id)
+            inp AS (SELECT cycle_id, SUM(total_cost_fjd) AS v FROM tenant.input_transactions WHERE tenant_id = :tid AND txn_type = 'USAGE' GROUP BY cycle_id)
             SELECT cyc.cycle_id,
                    COALESCE(cyc.farmer_label, p.production_name) AS cycle_name,
                    p.production_name, cyc.end_date,

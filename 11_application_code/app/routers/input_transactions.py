@@ -47,9 +47,9 @@ async def list_input_transactions(
             q += " AND it.input_id = :input_id"
             params["input_id"] = input_id
         if transaction_type:
-            q += " AND it.transaction_type = :txn_type"
+            q += " AND it.txn_type = :txn_type"
             params["txn_type"] = transaction_type
-        result = await db.execute(text(q + " ORDER BY it.transaction_date DESC LIMIT 200"), params)
+        result = await db.execute(text(q + " ORDER BY it.txn_date DESC LIMIT 200"), params)
         return {"data": [dict(r) for r in result.mappings().all()]}
 
 @router.post("")
