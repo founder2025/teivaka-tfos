@@ -111,6 +111,7 @@ const SoloTaskCard = lazy(() => import("./pages/solo/SoloTaskCard"));
 // ── Day 3a — Nav v2.1 structural stubs ───────────────────────────────────────
 import ComingSoon from "./pages/ComingSoon";
 import UpdateBanner from "./components/UpdateBanner";
+import PrototypeSwitch from "./components/PrototypeSwitch";
 
 // ── Admin pages (lazy — admin bundle never downloaded by farmers) ─────────────
 // React.lazy() means these are separate JS chunks. A farmer session will
@@ -147,6 +148,7 @@ export default function App() {
   return (
     <BrowserRouter>
       <UpdateBanner />
+      <PrototypeSwitch />
       <Suspense fallback={<PageLoader />}>
         <Routes>
 

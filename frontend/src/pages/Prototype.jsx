@@ -16,11 +16,13 @@
  * A persistent amber banner makes clear this is the prototype, not prod.
  */
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { authHeader } from "../utils/auth";
 
 const BANNER_H = 30;
 
 export default function Prototype() {
+  const navigate = useNavigate();
   const [html, setHtml] = useState(null);
   const [err, setErr] = useState(null);
 
@@ -63,10 +65,21 @@ export default function Prototype() {
           position: "absolute", top: 0, left: 0, right: 0, height: BANNER_H,
           display: "flex", alignItems: "center", gap: 8, padding: "0 12px",
           background: "#BF9000", color: "#fff", fontSize: 12, fontWeight: 700,
-          fontFamily: "system-ui", zIndex: 10,
+          fontFamily: "system-ui", zIndex: 10, justifyContent: "space-between",
         }}
       >
-        PROTOTYPE — design reference (mock data, not live). Founder/admin only.
+        <span>PROTOTYPE — design reference (mock data, not live). Founder/admin only.</span>
+        <button
+          onClick={() => navigate("/home")}
+          title="Leave the prototype and use the live app (real data, real login)"
+          style={{
+            background: "#fff", color: "#5C4033", border: 0, borderRadius: 6,
+            padding: "3px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer",
+            whiteSpace: "nowrap",
+          }}
+        >
+          Switch to live app →
+        </button>
       </div>
       {html == null ? (
         <div style={{ position: "absolute", top: BANNER_H, left: 0, right: 0,
