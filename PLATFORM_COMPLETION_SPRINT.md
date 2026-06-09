@@ -90,7 +90,8 @@ backends — wire them.
 _PIXEL-EXACT: prototype shell + 5 views at /home (HomePillar, .tfp scoped CSS). Feed=/community/posts, Marketplace=/community/listings (real); Following/Saved/Directory honest-empty (no backend). Icons=lucide stand-ins; topbar dropdowns not yet wired._
 
 ## CLASSROOM (5)
-| Overview 🟡 | Tracks 🔴 | My progress 🔴 | Certification+QR 🔴 | Bookmarks 🔴 |
+| Overview 🟢 | Tracks 🟢 | My progress ⏸ | Certification+QR ⏸ | Bookmarks ⏸ |
+_PIXEL-EXACT: prototype shell + 5 views at /classroom (ClassroomPillar, .tfp scoped CSS), replaced the 'coming soon' stub. Overview/Tracks=course-grid from published shared.kb_articles (/api/v1/kb); card → two-pane cp-modal player with body from /api/v1/kb/{id}. My progress/Certification/Bookmarks honest-empty (no completion-tracking backend; prototype's fake "Chemical Compliance" cert NOT replicated). Routed outside FarmerShell._
 
 ## TIS (5)
 | Chat ✅ | History 🔴 | Voice 🔴 | Plan my farm 🔴 | Usage 🔴 |
