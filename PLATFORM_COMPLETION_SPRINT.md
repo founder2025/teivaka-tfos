@@ -66,7 +66,7 @@ backends — wire them.
 | Weather | 🟢 | real Open-Meteo |
 | Library | 🟢 | NEW knowledge reference /farm/library (Chemicals cited WHD, Crops catalog, Nutrition cited NPK+citation, KB articles; Pests honest-empty). Distinct from /me/library (farm-list CRUD). Nav entry TBD |
 | Gallery | 🟢 | real page (was ComingSoon stub) — Photos grid + Timeline from field_events.photo_url, tied to events; honest-empty; video/AI honest-building |
-| Partnerships | 🟡 | parity pass |
+| Partnerships | 🟢 | real page (was ComingSoon) — network intro (Buyers/Bank Evidence links) + Land & profit-share from /profit-share (Inviolable #9 honored: rows only exist when really calculated; honest-empty else). Fixed /profit-share GET 500 (phantom tables) |
 | Settings | 🟡 | parity pass |
 
 **Nav source of truth:** the live Farm sidebar is `NAV.farm_unified` (the 20 rows above), NOT the deprecated `NAV.farm` (vertical-specific). Field events / Cycles / Harvests are folded into **Production** in the unified model — there is no standalone "Field events" sidebar item. The `/farm/field-events` route still exists as the event-logging surface, reached from Production + the (+) launcher.
