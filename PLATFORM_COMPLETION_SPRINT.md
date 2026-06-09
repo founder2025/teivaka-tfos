@@ -46,7 +46,7 @@ backends — wire them.
 | Tasks | 🟢 | real queue (reorganised) |
 | Decision Center | 🟡 | real signals; verify no empty fabrication |
 | Enterprises | 🟡 | list exists; per-enterprise detail tabs from real data pending |
-| Production (Cycles) | 🟡 | list real; **6-panel cycle detail + real nursery create** pending |
+| Production (Cycles) | 🟢 | list real; **6-panel cycle detail shipped** (/farm/cycles/:id — header/status-actions/CoKG/compliance/activity/harvests, all real); real nursery create still pending |
 | Inventory | 🟡 | real inputs; parity pass |
 | Labor | 🟢 | real workers/attendance |
 | Cash | 🟢 | **REAL** — cash.py inserts tenant.cash_ledger + emits audit.events (not the prototype no-op). Confirm FE write path; multi-tab parity |
@@ -99,4 +99,5 @@ backends — wire them.
 ## Running log
 - 2026-06-08: Sprint opened.
 - 2026-06-09: B78 guard verified on prod (✅). Census = thin → built demo_seed.py. Prior this session: Prime Directive ratified; single canonical prototype (v263); Field Events log; Overview FARM SUMMARY health card + weather strip; crop-WHD endpoint + Compliance page; B78 deploy guard.
+- 2026-06-09: Prototype reference viewer shipped (founder/admin-only /prototype; require_admin-gated endpoint serving the bundled v263 HTML, iframe + mock-data banner; 1fa9a09). Then P2 real build: 6-panel Production cycle detail at /farm/cycles/:id (f353005) — all six panels real (header/status-actions/CoKG/compliance/activity/harvests), CycleList rows clickable. Frontend-only; needs `npm run build` only. NEXT in P2: real nursery create + Enterprises per-enterprise detail tabs.
 - 2026-06-09: demo_seed.py RAN CLEAN on prod (F001-A0EE). Final census: field_events 35 · harvests 3 · cash 10 · workers 2 · labor 10 (was 14/1/5/0/0). The run surfaced + fixed three latent prod bugs (all dead before today): (1) `GET /chemicals` omitted `chemical_id` → canonical CHEMICAL_APPLIED path couldn't seed sprays/WHD demo (f45b6c8); (2) `POST/GET /workers` wrote/read columns absent from `tenant.workers` (contact_number/id_*/bank_*/next_of_kin_*/created_by) → endpoint 500'd end-to-end, Labor page could never add/list a worker (55fb4e3); (3) FE worker-type SEASONAL/CONTRACTOR not in DB CHECK → UI add would 500 (55fb4e3, backend normalises + FE labels aligned). Also: cash payment_method MPAISA→MOBILE_MONEY; labour total_pay_fjd now sent; ONLY_WORKERS re-run guard + idempotent worker reuse. Founder account password reset (bcrypt, email_verified=true) to authenticate the seed. **NEXT: browser walk** — Farm › Labor (2 workers + attendance), Compliance (red WHD block from CHEM-027 d-2 spray), Overview, Cash.
