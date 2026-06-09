@@ -18,15 +18,15 @@ class ProfitShareCalculateRequest(BaseModel):
 async def list_profit_share(farm_id: str = None, user: dict = Depends(get_current_user)):
     async with get_rls_db(str(user["tenant_id"])) as db:
         params = {"tid": str(user["tenant_id"])}
-        q = """SELECT ps.*, c.cycle_name, c.production_id, p.production_name
-               FROM tenant.profit_share_records ps
-               JOIN tenant.cycles c ON c.cycle_id = ps.cycle_id
+        q = """SELECT ps.*, c.farmer_label AS cycle_name, c.production_id, p.production_name
+               FROM tenant.profit_share ps
+               JOIN tenant.production_cycles c ON c.cycle_id = ps.cycle_id
                LEFT JOIN shared.productions p ON p.production_id = c.production_id
                WHERE ps.tenant_id = :tid"""
         if farm_id:
             q += " AND ps.farm_id = :farm_id"
             params["farm_id"] = farm_id
-        result = await db.execute(text(q + " ORDER BY ps.calculated_at DESC LIMIT 50"), params)
+        result = await db.execute(text(q + " ORDER BY ps.created_at DESC LIMIT 50"), params)
         return {"data": [dict(r) for r in result.mappings().all()]}
 
 @router.post("/calculate/{cycle_id}")

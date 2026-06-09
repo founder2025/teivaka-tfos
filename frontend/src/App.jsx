@@ -103,6 +103,7 @@ const CycleDetail   = lazy(() => import("./pages/farmer/CycleDetail"));
 const NurseryNew    = lazy(() => import("./pages/farmer/NurseryNew"));
 const FarmLibrary   = lazy(() => import("./pages/farmer/Library"));
 const FarmGallery   = lazy(() => import("./pages/farmer/Gallery"));
+const FarmPartnerships = lazy(() => import("./pages/farmer/Partnerships"));
 const InventoryList = lazy(() => import("./pages/farmer/InventoryList"));
 const Classroom     = lazy(() => import("./pages/farmer/Classroom"));
 const Me            = lazy(() => import("./pages/farmer/Me"));
@@ -296,7 +297,7 @@ export default function App() {
             <Route path="/farm/enterprises"  element={<Enterprises />} />
             <Route path="/farm/weather"      element={<WeatherPage />} />
             <Route path="/farm/gallery"      element={<FarmGallery />} />
-            <Route path="/farm/partnerships" element={<ComingSoon title="Partnerships" />} />
+            <Route path="/farm/partnerships" element={<FarmPartnerships />} />
             <Route path="/farm/locations"    element={<LocationsPage />} />
             <Route path="/farm/manage"       element={<FarmsManage />} />
 
