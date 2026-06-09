@@ -31,6 +31,7 @@ import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
 import VerifyEmail from "./pages/VerifyEmail";
 import Home from "./pages/farmer/Home";
+const HomePillar = lazy(() => import("./pages/home/HomePillar"));
 
 // ── Farmer pages (lazy — farmer bundle does NOT include admin code) ───────────
 const Landing       = lazy(() => import("./pages/Landing"));
@@ -231,8 +232,10 @@ export default function App() {
           <Route path="/kb" element={
             <FarmerRoute><KnowledgeBase /></FarmerRoute>
           } />
+          {/* HOME pillar — pixel-exact rebuild with its own prototype shell, so it
+              sits OUTSIDE FarmerShell (no double chrome) but behind the onboarding guard. */}
+          <Route path="/home" element={<FarmerRoute><HomePillar /></FarmerRoute>} />
           <Route element={<FarmerRoute><FarmerShell /></FarmerRoute>}>
-            <Route path="/home"              element={<Home          />} />
             <Route path="/farm"              element={<FarmDashboard />} />
             <Route path="/farm/harvest/new"  element={<HarvestNew    />} />
             <Route path="/farm/poultry/eggs/new" element={<EggsNew   />} />
