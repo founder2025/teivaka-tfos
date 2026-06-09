@@ -39,34 +39,47 @@ async def export_cycles_csv(farm_id: str, production_id: str = None, user: dict 
             raise HTTPException(status_code=404, detail="Farm not found")
 
         params = {"farm_id": farm_id, "tid": str(user["tenant_id"])}
-        q = """
-            SELECT
-                c.cycle_id, c.cycle_name, p.production_name, p.production_category,
-                c.start_date, c.end_date, c.cycle_status,
-                c.area_m2, c.seedlings_count,
-                COALESCE(SUM(h.total_weight_kg), 0) AS harvest_kg,
-                COALESCE(SUM(h.rejected_kg), 0) AS rejected_kg,
-                COALESCE(SUM(il.net_amount_fjd), 0) AS income_fjd,
-                COALESCE(SUM(la.total_pay_fjd + COALESCE(la.overtime_pay_fjd, 0)), 0) AS labor_cost_fjd,
-                COALESCE(SUM(it.total_cost_fjd), 0) AS input_cost_fjd,
-                CASE WHEN COALESCE(SUM(h.total_weight_kg), 0) > 0
-                     THEN ROUND((COALESCE(SUM(la.total_pay_fjd), 0) + COALESCE(SUM(it.total_cost_fjd), 0)) /
-                                COALESCE(SUM(h.total_weight_kg), 0), 2)
-                     ELSE NULL
-                END AS cokg_fjd_per_kg
-            FROM tenant.cycles c
-            JOIN shared.productions p ON p.production_id = c.production_id
-            LEFT JOIN tenant.harvests h ON h.cycle_id = c.cycle_id AND h.tenant_id = c.tenant_id
-            LEFT JOIN tenant.income_log il ON il.cycle_id = c.cycle_id AND il.tenant_id = c.tenant_id
-            LEFT JOIN tenant.labor_attendance la ON la.cycle_id = c.cycle_id AND la.tenant_id = c.tenant_id
-            LEFT JOIN tenant.input_transactions it ON it.cycle_id = c.cycle_id AND it.tenant_id = c.tenant_id
-                AND it.transaction_type = 'APPLICATION'
-            WHERE c.farm_id = :farm_id AND c.tenant_id = :tid
-        """
+        # Real tables + per-cycle CTE pre-aggregation (no fan-out). production_cycles
+        # has no cycle_name/start_date/end_date/area_m2/seedlings_count — use
+        # farmer_label, planting_date, actual_harvest_end, planned_area_sqm.
+        prod_filter = ""
         if production_id:
-            q += " AND c.production_id = :production_id"
+            prod_filter = " AND c.production_id = :production_id"
             params["production_id"] = production_id
-        q += " GROUP BY c.cycle_id, c.cycle_name, p.production_name, p.production_category, c.start_date, c.end_date, c.cycle_status, c.area_m2, c.seedlings_count ORDER BY c.start_date DESC"
+        q = f"""
+            WITH cyc AS (
+                SELECT c.cycle_id, c.production_id, c.farmer_label, c.cycle_status,
+                       c.planting_date AS start_date,
+                       COALESCE(c.actual_harvest_end, c.expected_harvest_date) AS end_date,
+                       c.planned_area_sqm, c.planned_yield_kg
+                FROM tenant.production_cycles c
+                WHERE c.farm_id = :farm_id AND c.tenant_id = :tid{prod_filter}
+            ),
+            hrv AS (SELECT cycle_id, SUM(gross_yield_kg) AS kg, SUM(waste_kg) AS waste FROM tenant.harvest_log WHERE tenant_id = :tid GROUP BY cycle_id),
+            inc AS (SELECT cycle_id, SUM(net_amount_fjd) AS v FROM tenant.income_log WHERE tenant_id = :tid GROUP BY cycle_id),
+            lab AS (SELECT cycle_id, SUM(total_pay_fjd + COALESCE(overtime_pay_fjd, 0)) AS v FROM tenant.labor_attendance WHERE tenant_id = :tid GROUP BY cycle_id),
+            inp AS (SELECT cycle_id, SUM(total_cost_fjd) AS v FROM tenant.input_transactions WHERE tenant_id = :tid AND transaction_type = 'APPLICATION' GROUP BY cycle_id)
+            SELECT cyc.cycle_id,
+                   COALESCE(cyc.farmer_label, p.production_name) AS cycle_name,
+                   p.production_name, p.production_category,
+                   cyc.start_date, cyc.end_date, cyc.cycle_status,
+                   cyc.planned_area_sqm AS area_sqm, cyc.planned_yield_kg,
+                   COALESCE(hrv.kg, 0)    AS harvest_kg,
+                   COALESCE(hrv.waste, 0) AS rejected_kg,
+                   COALESCE(inc.v, 0)     AS income_fjd,
+                   COALESCE(lab.v, 0)     AS labor_cost_fjd,
+                   COALESCE(inp.v, 0)     AS input_cost_fjd,
+                   CASE WHEN COALESCE(hrv.kg, 0) > 0
+                        THEN ROUND((COALESCE(lab.v, 0) + COALESCE(inp.v, 0)) / hrv.kg, 2)
+                        ELSE NULL END AS cokg_fjd_per_kg
+            FROM cyc
+            JOIN      shared.productions p ON p.production_id = cyc.production_id
+            LEFT JOIN hrv ON hrv.cycle_id = cyc.cycle_id
+            LEFT JOIN inc ON inc.cycle_id = cyc.cycle_id
+            LEFT JOIN lab ON lab.cycle_id = cyc.cycle_id
+            LEFT JOIN inp ON inp.cycle_id = cyc.cycle_id
+            ORDER BY cyc.start_date DESC
+        """
         result = await db.execute(text(q), params)
         rows = [dict(r) for r in result.mappings().all()]
 

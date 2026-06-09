@@ -56,3 +56,29 @@ endpoint return honest-empty / 501 instead of 500. Not in the Crops critical pat
 
 Each fix is per-endpoint (rename **and** reconcile columns, like `/crops` and
 `workers`) — never a blind rename.
+
+## Fix-batch progress (2026-06-09)
+
+**Key finding while fixing:** the Crops-path UI (Reports, Analytics, Enterprises,
+Decision Center, cycle detail) is driven by `/financials/crops`,
+`/financials/farm`, `/cycles`, `/decision-engine`, `/field-events`, `/harvests`,
+`/tasks`, `/crops/compliance`, `/inputs`, `/workers`, `/labor`. The `/reports/*`,
+`/financials/cokg`, and `/exports/*` endpoints are **not wired to any frontend
+page yet** — they are dormant API landmines, not live demo breakage. The two
+that the demo UI actually depends on (`/financials/crops`, `/financials/farm`)
+were already fixed in earlier turns.
+
+**Fixed (correct + hardened, even though dormant):**
+- `financials.py /cokg` — production_cycles/harvest_log, CTE pre-agg, real cols.
+- `reports.py /cogk` — same; `reports.py /harvest` — harvest_log + gross_yield_kg/waste_kg.
+- `exports.py /cycles.csv` — production_cycles/harvest_log, planned_area_sqm, CTE pre-agg.
+
+**Deferred — `farms.py /dashboard`:** references an entire phantom schema
+(`tenant.harvests`, `cycle_cost_summary`, `production_unit_id`, `planted_date`,
+`quantity_kg`, `is_compliant`, `sold_to_customer_id`). **No frontend caller** —
+legacy/unused. Do NOT speculatively rewrite; guard to honest-empty or delete in
+a dedicated cleanup, or rewrite only if a farm-dashboard endpoint is wired.
+
+**Still open (off Crops path, unchanged):** delivery, livestock, apiculture,
+profit_share, price_master, rotation, subscriptions, community/admin (Section B),
+plus the MVs (Section C: mv_decision_signals_current, mv_input_balance).

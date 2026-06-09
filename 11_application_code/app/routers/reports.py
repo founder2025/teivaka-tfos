@@ -21,39 +21,50 @@ async def get_cogk_trend(farm_id: str, production_id: str = None, periods: int =
             raise HTTPException(status_code=404, detail="Farm not found")
 
         params = {"farm_id": farm_id, "tid": str(user["tenant_id"]), "periods": periods}
-        q = """
-            SELECT
-                c.cycle_id, c.cycle_name, p.production_name, p.production_id,
-                c.start_date, c.end_date,
-                COALESCE(SUM(h.total_weight_kg), 0) AS total_harvest_kg,
-                COALESCE(SUM(il.net_amount_fjd), 0) AS total_income_fjd,
-                COALESCE(SUM(la.total_pay_fjd + COALESCE(la.overtime_pay_fjd, 0)), 0) AS labor_cost_fjd,
-                COALESCE(SUM(it.total_cost_fjd), 0) AS input_cost_fjd,
-                CASE WHEN COALESCE(SUM(h.total_weight_kg), 0) > 0
-                     THEN ROUND((COALESCE(SUM(la.total_pay_fjd + COALESCE(la.overtime_pay_fjd, 0)), 0) +
-                                 COALESCE(SUM(it.total_cost_fjd), 0)) /
-                                COALESCE(SUM(h.total_weight_kg), 0), 2)
-                     ELSE NULL
-                END AS cokg_fjd_per_kg,
-                CASE WHEN COALESCE(SUM(h.total_weight_kg), 0) > 0
-                     THEN ROUND(COALESCE(SUM(il.net_amount_fjd), 0) /
-                                COALESCE(SUM(h.total_weight_kg), 0), 2)
-                     ELSE NULL
-                END AS revenue_per_kg_fjd
-            FROM tenant.cycles c
-            JOIN shared.productions p ON p.production_id = c.production_id
-            LEFT JOIN tenant.harvests h ON h.cycle_id = c.cycle_id AND h.tenant_id = c.tenant_id
-            LEFT JOIN tenant.income_log il ON il.cycle_id = c.cycle_id AND il.tenant_id = c.tenant_id
-            LEFT JOIN tenant.labor_attendance la ON la.cycle_id = c.cycle_id AND la.tenant_id = c.tenant_id
-            LEFT JOIN tenant.input_transactions it ON it.cycle_id = c.cycle_id AND it.tenant_id = c.tenant_id
-                AND it.transaction_type = 'APPLICATION'
-            WHERE c.farm_id = :farm_id AND c.tenant_id = :tid
-              AND c.cycle_status IN ('COMPLETED', 'HARVESTING')
-        """
+        # Real tables (production_cycles/harvest_log/income_log/labor_attendance/
+        # input_transactions) with per-cycle CTE pre-aggregation (no join fan-out).
+        # production_cycles has no cycle_name/start_date/end_date — use
+        # farmer_label, planting_date, actual_harvest_end. 'COMPLETED' is not a
+        # valid status → CLOSED/CLOSING/HARVESTING (producing cycles).
+        prod_filter = ""
         if production_id:
-            q += " AND c.production_id = :production_id"
+            prod_filter = " AND c.production_id = :production_id"
             params["production_id"] = production_id
-        q += " GROUP BY c.cycle_id, c.cycle_name, p.production_name, p.production_id, c.start_date, c.end_date ORDER BY c.end_date DESC LIMIT :periods"
+        q = f"""
+            WITH cyc AS (
+                SELECT c.cycle_id, c.production_id, c.farmer_label,
+                       c.planting_date AS start_date,
+                       COALESCE(c.actual_harvest_end, c.expected_harvest_date) AS end_date
+                FROM tenant.production_cycles c
+                WHERE c.farm_id = :farm_id AND c.tenant_id = :tid
+                  AND c.cycle_status IN ('CLOSED','CLOSING','HARVESTING'){prod_filter}
+            ),
+            hrv AS (SELECT cycle_id, SUM(gross_yield_kg) AS kg FROM tenant.harvest_log       WHERE tenant_id = :tid GROUP BY cycle_id),
+            inc AS (SELECT cycle_id, SUM(net_amount_fjd) AS v FROM tenant.income_log         WHERE tenant_id = :tid GROUP BY cycle_id),
+            lab AS (SELECT cycle_id, SUM(total_pay_fjd + COALESCE(overtime_pay_fjd, 0)) AS v FROM tenant.labor_attendance WHERE tenant_id = :tid GROUP BY cycle_id),
+            inp AS (SELECT cycle_id, SUM(total_cost_fjd) AS v FROM tenant.input_transactions WHERE tenant_id = :tid AND transaction_type = 'APPLICATION' GROUP BY cycle_id)
+            SELECT cyc.cycle_id,
+                   COALESCE(cyc.farmer_label, p.production_name) AS cycle_name,
+                   p.production_name, p.production_id,
+                   cyc.start_date, cyc.end_date,
+                   COALESCE(hrv.kg, 0) AS total_harvest_kg,
+                   COALESCE(inc.v, 0)  AS total_income_fjd,
+                   COALESCE(lab.v, 0)  AS labor_cost_fjd,
+                   COALESCE(inp.v, 0)  AS input_cost_fjd,
+                   CASE WHEN COALESCE(hrv.kg, 0) > 0
+                        THEN ROUND((COALESCE(lab.v, 0) + COALESCE(inp.v, 0)) / hrv.kg, 2)
+                        ELSE NULL END AS cokg_fjd_per_kg,
+                   CASE WHEN COALESCE(hrv.kg, 0) > 0
+                        THEN ROUND(COALESCE(inc.v, 0) / hrv.kg, 2)
+                        ELSE NULL END AS revenue_per_kg_fjd
+            FROM cyc
+            JOIN      shared.productions p ON p.production_id = cyc.production_id
+            LEFT JOIN hrv ON hrv.cycle_id = cyc.cycle_id
+            LEFT JOIN inc ON inc.cycle_id = cyc.cycle_id
+            LEFT JOIN lab ON lab.cycle_id = cyc.cycle_id
+            LEFT JOIN inp ON inp.cycle_id = cyc.cycle_id
+            ORDER BY cyc.end_date DESC NULLS LAST LIMIT :periods
+        """
         result = await db.execute(text(q), params)
         rows = [dict(r) for r in result.mappings().all()]
 
@@ -119,12 +130,12 @@ async def get_harvest_report(farm_id: str, production_id: str = None, days: int 
             SELECT
                 p.production_id, p.production_name, p.production_category,
                 COUNT(h.harvest_id) AS harvest_events,
-                COALESCE(SUM(h.total_weight_kg), 0) AS total_kg,
-                COALESCE(AVG(h.total_weight_kg), 0) AS avg_kg_per_harvest,
-                COALESCE(SUM(h.rejected_kg), 0) AS total_rejected_kg,
-                ROUND(COALESCE(SUM(h.rejected_kg), 0) / NULLIF(COALESCE(SUM(h.total_weight_kg), 0), 0) * 100, 1) AS rejection_rate_pct
-            FROM tenant.harvests h
-            JOIN tenant.cycles c ON c.cycle_id = h.cycle_id
+                COALESCE(SUM(h.gross_yield_kg), 0) AS total_kg,
+                COALESCE(AVG(h.gross_yield_kg), 0) AS avg_kg_per_harvest,
+                COALESCE(SUM(h.waste_kg), 0) AS total_rejected_kg,
+                ROUND(COALESCE(SUM(h.waste_kg), 0) / NULLIF(COALESCE(SUM(h.gross_yield_kg), 0), 0) * 100, 1) AS rejection_rate_pct
+            FROM tenant.harvest_log h
+            JOIN tenant.production_cycles c ON c.cycle_id = h.cycle_id
             JOIN shared.productions p ON p.production_id = c.production_id
             WHERE h.farm_id = :farm_id AND h.tenant_id = :tid
               AND h.harvest_date >= now() - interval '1 day' * :days
