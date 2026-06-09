@@ -64,7 +64,7 @@ backends — wire them.
 | Analytics | 🟢 | signals now LIVE — decision-engine rewritten over decision_signal_snapshots (was 422'ing on UUID-typed farm_id → never showed); /inputs MV join dropped (live). Parity pass on chart panels still pending |
 | Reports | 🟢 | **crop/whole-farm Bank Evidence PDF shipped** — GET /crops/bank-evidence, audit-anchored (BANK_PDF_GENERATED + report_exports + QR/verify), real cash_ledger/harvest_log/cycles sources; Reports→Bank Evidence has month picker + real Download. Poultry Bank Evidence still separate. Other report types honest-empty |
 | Weather | 🟢 | real Open-Meteo |
-| Library | 🟡 | uncertain depth; parity pass |
+| Library | 🟢 | NEW knowledge reference /farm/library (Chemicals cited WHD, Crops catalog, Nutrition cited NPK+citation, KB articles; Pests honest-empty). Distinct from /me/library (farm-list CRUD). Nav entry TBD |
 | Gallery | 🟡 | real photos; capture stubs |
 | Partnerships | 🟡 | parity pass |
 | Settings | 🟡 | parity pass |
