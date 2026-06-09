@@ -95,6 +95,7 @@ async def list_cycles(
             SELECT pc.cycle_id, pc.farm_id, pc.pu_id, pc.zone_id, pc.production_id,
                    p.production_name, pc.cycle_status, pc.planting_date,
                    pc.expected_harvest_date, pc.actual_yield_kg, pc.cogk_fjd_per_kg,
+                   pc.layer,
                    pc.created_at,
                    pc.farmer_label,
                    pu.farmer_label AS pu_farmer_label,
