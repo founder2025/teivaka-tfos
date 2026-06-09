@@ -64,10 +64,12 @@ backends — wire them.
 | Analytics | 🟢 | signals now LIVE — decision-engine rewritten over decision_signal_snapshots (was 422'ing on UUID-typed farm_id → never showed); /inputs MV join dropped (live). Parity pass on chart panels still pending |
 | Reports | 🟢 | **crop/whole-farm Bank Evidence PDF shipped** — GET /crops/bank-evidence, audit-anchored (BANK_PDF_GENERATED + report_exports + QR/verify), real cash_ledger/harvest_log/cycles sources; Reports→Bank Evidence has month picker + real Download. Poultry Bank Evidence still separate. Other report types honest-empty |
 | Weather | 🟢 | real Open-Meteo |
-| Library | 🟢 | NEW knowledge reference /farm/library (Chemicals cited WHD, Crops catalog, Nutrition cited NPK+citation, KB articles; Pests honest-empty). Distinct from /me/library (farm-list CRUD). Nav entry TBD |
+| Library | 🟢 | NEW knowledge reference /farm/library (Chemicals cited WHD, Crops catalog, Nutrition cited NPK+citation, KB articles; Pests honest-empty). Distinct from /me/library (farm-list CRUD). |
 | Gallery | 🟢 | real page (was ComingSoon stub) — Photos grid + Timeline from field_events.photo_url, tied to events; honest-empty; video/AI honest-building |
 | Partnerships | 🟢 | real page (was ComingSoon) — network intro (Buyers/Bank Evidence links) + Land & profit-share from /profit-share (Inviolable #9 honored: rows only exist when really calculated; honest-empty else). Fixed /profit-share GET 500 (phantom tables) |
 | Settings | 🟢 | real /farm/settings (Farm setup/Team/Preferences/Plan/Audit) — /farms+/workers+tier+chain-status real, units persist; language/notifications → account (not faked) |
+
+**Nav reachability:** all 20 FARM surfaces are linked from the Overview "Farm sections" grid (FarmSectionsNav) — no surface is URL-only.
 
 **Nav source of truth:** the live Farm sidebar is `NAV.farm_unified` (the 20 rows above), NOT the deprecated `NAV.farm` (vertical-specific). Field events / Cycles / Harvests are folded into **Production** in the unified model — there is no standalone "Field events" sidebar item. The `/farm/field-events` route still exists as the event-logging surface, reached from Production + the (+) launcher.
 
