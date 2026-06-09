@@ -54,7 +54,7 @@ backends — wire them.
 | Decision Center | 🟢 | full coreDecisionView parity (call / state tiles / telling-you / intelligence hub / enterprise rankings / risk intelligence / AI advisor), real endpoints + honest degradation. Fixed: dead link (production→cycles) + /financials/farm 500 (mv_farm_pnl guarded in SAVEPOINT, real-table summary first) |
 | Enterprises | 🟢 | **per-enterprise detail wired real** (Production=live cycles list, Finance=CoKG/kg+harvested, Records=event timeline) + **fixed /financials/crops** (was 500'ing on non-existent tenant.cycles/harvests → crop enterprises never appeared). Remaining tabs honest-empty (not faked) |
 | Production (Cycles) | 🟢 | **List/Calendar/Planner parity shipped** (real status+layer filters, quick stats, timeline, real block occupancy) + 6-panel cycle detail + nursery create (migration 087). Consolidates the prototype's Cycles + Harvests + **Field events** daily-loop (no standalone "Field events" item in farm_unified nav). Planner scored-recommendation engine deferred (honest, not faked) |
-| Inventory | 🟡 | real inputs; parity pass |
+| Inventory | 🟢 | 5-view parity (Stock/Reorder/Movements/Suppliers/Analytics) + KPI strip, all real (/inputs,/input-transactions,/suppliers); StockBadge fixed to real statuses |
 | Labor | 🟢 | real workers/attendance |
 | Buyers | 🟡 | parity pass (was missing from this list — farm_unified nav item) |
 | Cash | 🟢 | **REAL** — cash.py inserts tenant.cash_ledger + emits audit.events (not the prototype no-op). Confirm FE write path; multi-tab parity |
