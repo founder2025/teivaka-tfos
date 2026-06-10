@@ -55,6 +55,11 @@ class AuthMiddleware:
         "/api/v1/verify/",
         "/verify/",
         "/api/v1/tis-public/",
+        # Uploaded media (avatars, post photos): browsers fetch <img> with no
+        # Authorization header, so the GET must be public or every image 401s.
+        # Trailing slash keeps POST /api/v1/community/uploads (no slash) fully
+        # authenticated; names are unguessable uuid4 hex (social-CDN model).
+        "/api/v1/community/uploads/",
     )
 
     async def __call__(self, request: Request, call_next):
