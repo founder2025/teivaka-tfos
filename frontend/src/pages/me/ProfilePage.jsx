@@ -407,7 +407,7 @@ export default function ProfilePage({ self = false }) {
   );
 
   return (
-    <div style={{ maxWidth: 880, margin: "0 auto", display: "flex", flexDirection: "column", gap: 12, alignItems: "stretch" }}>
+    <div style={{ width: "100%", maxWidth: 900, margin: "0 auto", padding: "0 16px", boxSizing: "border-box", display: "flex", flexDirection: "column", gap: 12, alignItems: "stretch" }}>
       {/* Sidebar-on-top on every viewport: the pill tab-strip leads, content
           sits centered in one clean column (Operator-directed 2026-06-11). */}
       <TabStrip />
