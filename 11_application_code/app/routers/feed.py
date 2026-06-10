@@ -84,7 +84,15 @@ async def _comments_enabled_col(db):
 
 
 async def _has_table(db, name):
-    return await _has(db, f"tbl_{name}", f"SELECT to_regclass('community.{name}') IS NOT NULL")
+    # Existence AND permission in one probe: a table created by the owner but
+    # not yet granted to the app role must count as absent — including it in a
+    # query 500s with InsufficientPrivilege (forensically reproduced: prod had
+    # feed_hidden present but ungranted, killing the whole feed).
+    return await _has(db, f"tbl_{name}", f"""
+        SELECT COALESCE((SELECT has_table_privilege(current_user, c.oid, 'SELECT')
+                         FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+                         WHERE n.nspname = 'community' AND c.relname = '{name}'), false)
+    """)
 
 
 def _rid():
