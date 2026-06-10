@@ -123,15 +123,29 @@ export default function ProfilePage({ self = false }) {
   const [busyFollow, setBusyFollow] = useState(false);
   const [records, setRecords] = useState(null);
   const [activity, setActivity] = useState(null);
+  const [meData, setMeData] = useState(null);
 
   // resolve own user_id (for /me)
   useEffect(() => {
-    if (self) getJSON("/api/v1/auth/me").then((r) => setMeId((r?.data ?? r)?.user_id)).catch(() => setMeId(null));
+    if (self) getJSON("/api/v1/auth/me").then((r) => { const d = r?.data ?? r; setMeData(d); setMeId(d?.user_id); }).catch(() => setMeId(null));
   }, [self]);
 
   const targetId = self ? meId : routeId;
-  const load = () => { if (targetId) getJSON(`/api/v1/community/profile/${targetId}`).then((r) => setP(r.data || r)).catch(() => setP({})); };
-  useEffect(() => { load(); /* eslint-disable-next-line */ }, [targetId]);
+  // Fallback profile from /auth/me so the OWN profile renders even if the profile API
+  // isn't deployed/reachable yet.
+  const selfFallback = () => meData ? {
+    user_id: meData.user_id, full_name: meData.full_name || meData.email, profession: (meData.profession || meData.account_type || "farmer").toLowerCase(),
+    role: meData.role, country: meData.country, bio: meData.bio, avatar_url: meData.avatar_url,
+    verified: !!meData.email_verified, joined: meData.created_at || null, phone: meData.whatsapp_number || null,
+    is_you: true, is_following: false, is_connected: false, field_visibility: meData.field_visibility || {},
+    stats: { posts: 0, followers: 0, following: 0, records: 0 }, posts: [],
+  } : {};
+  const load = () => {
+    if (!targetId) return;
+    getJSON(`/api/v1/community/profile/${targetId}`).then((r) => setP(r.data || r))
+      .catch(() => setP(self ? selfFallback() : {}));
+  };
+  useEffect(() => { load(); /* eslint-disable-next-line */ }, [targetId, meData]);
   useEffect(() => { if (tab === "records" && p?.is_you && records == null) getJSON("/api/v1/me/records").then((r) => setRecords(r.data || [])).catch(() => setRecords([])); }, [tab, p, records]);
   useEffect(() => { if (tab === "activity" && p?.is_you && activity == null && targetId) getJSON(`/api/v1/community/profile/${targetId}/activity`).then((r) => setActivity(r.data || [])).catch(() => setActivity([])); }, [tab, p, activity, targetId]);
 
