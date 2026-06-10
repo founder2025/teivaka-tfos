@@ -1,9 +1,10 @@
 import { Link } from "react-router-dom";
 import { Menu, Search } from "lucide-react";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import PillarTabs from "./PillarTabs";
 import RightCluster from "./RightCluster";
 import { useLeftRail } from "../../context/LeftRailContext";
+import SearchPalette from "../search/SearchPalette";
 
 const C = {
   soil:    "#5C4033",
@@ -78,13 +79,13 @@ function SearchIconButton({ onClick }) {
 }
 
 export default function TopAppBar() {
-  // Cmd/Ctrl+K — opens search (Phase 3d: same toast as the icon click;
-  // Phase 8 swap to real overlay open).
+  const [searchOpen, setSearchOpen] = useState(false);
+  // Cmd/Ctrl+K — open the global search palette.
   useEffect(() => {
     function handler(e) {
       if ((e.metaKey || e.ctrlKey) && (e.key === "k" || e.key === "K")) {
         e.preventDefault();
-        emitSearchToast();
+        setSearchOpen(true);
       }
     }
     window.addEventListener("keydown", handler);
@@ -110,7 +111,7 @@ export default function TopAppBar() {
           <Link to="/home" className="flex items-center flex-shrink-0" aria-label="teivaka home">
             <TeivakaLogo />
           </Link>
-          <SearchIconButton onClick={emitSearchToast} />
+          <SearchIconButton onClick={() => setSearchOpen(true)} />
         </div>
 
         {/* Spacer — consumes remaining space so right cluster sits at the edge */}
@@ -136,6 +137,7 @@ export default function TopAppBar() {
         {/* Right: cluster */}
         <RightCluster />
       </div>
+      {searchOpen && <SearchPalette onClose={() => setSearchOpen(false)} />}
     </header>
   );
 }

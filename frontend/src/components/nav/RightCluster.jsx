@@ -169,7 +169,6 @@ export default function RightCluster() {
 
   return (
     <div className="flex items-center flex-shrink-0" style={{ gap: 8 }}>
-      <StatusDot />
 
       <div className="relative" data-chat-toggle>
         <IconButton
