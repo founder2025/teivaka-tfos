@@ -609,10 +609,18 @@ async def follow(target_user_id: str, user: dict = Depends(rate_limit_only("foll
     if target_user_id == str(user["user_id"]):
         raise HTTPException(status_code=422, detail="Cannot follow yourself")
     async with get_rls_db(str(user["tenant_id"])) as db:
-        blocked = (await db.execute(text("""
-            SELECT 1 FROM community.user_blocks
-            WHERE (user_id=:me AND blocked_user_id=:them) OR (user_id=:them AND blocked_user_id=:me)
-        """), {"me": str(user["user_id"]), "them": target_user_id})).first()
+        blocked = None
+        try:
+            # SAVEPOINT-isolated: if this check can't run (e.g. migration 094 not
+            # yet applied / grant missing on a given environment), degrade to
+            # not-blocked rather than 500ing the core follow action.
+            async with db.begin_nested():
+                blocked = (await db.execute(text("""
+                    SELECT 1 FROM community.user_blocks
+                    WHERE (user_id=:me AND blocked_user_id=:them) OR (user_id=:them AND blocked_user_id=:me)
+                """), {"me": str(user["user_id"]), "them": target_user_id})).first()
+        except Exception:  # noqa: BLE001
+            blocked = None
         if blocked:
             raise HTTPException(status_code=403, detail="You can't follow this person.")
         await db.execute(text("""
