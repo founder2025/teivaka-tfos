@@ -28,6 +28,11 @@ class Settings(BaseSettings):
     redis_cache_ttl_seconds: int = 300
     redis_rate_limit_window_seconds: int = 86400  # 24 hours for daily TIS limits
 
+    # ── Web Push (VAPID) ────────────────────────────────────────────────────────
+    vapid_public_key: str = ""
+    vapid_private_key: str = ""
+    vapid_subject: str = "mailto:founder@teivaka.com"
+
     # ── Supabase ──────────────────────────────────────────────────────────────
     supabase_url: str = ""
     supabase_anon_key: str = ""

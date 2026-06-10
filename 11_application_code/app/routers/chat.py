@@ -14,6 +14,8 @@ Presence is never exposed for non-connections. community.* has no RLS; FKs to te
 """
 import os
 import json
+import asyncio
+import logging
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import text
@@ -22,6 +24,9 @@ import redis.asyncio as aioredis
 
 from app.db.session import get_db, get_rls_db
 from app.middleware.rls import get_current_user
+from app.config import settings
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -60,6 +65,82 @@ async def _presence_map(user_ids):
 
 class ChatSend(BaseModel):
     body: str
+
+
+class PushSub(BaseModel):
+    endpoint: str
+    keys: dict   # {p256dh, auth}
+    user_agent: str | None = None
+
+
+async def push_to_user(db, user_id, title, body, url="/home"):
+    """Best-effort Web Push to all of a user's subscriptions. No-op until VAPID keys
+    are configured / pywebpush installed. Prunes expired (404/410) subscriptions."""
+    priv = settings.vapid_private_key
+    subj = settings.vapid_subject or "mailto:founder@teivaka.com"
+    if not priv:
+        return
+    rows = (await db.execute(text(
+        "SELECT subscription_id, endpoint, p256dh, auth FROM community.push_subscriptions WHERE user_id = :u"),
+        {"u": str(user_id)})).mappings().all()
+    if not rows:
+        return
+    try:
+        from pywebpush import webpush, WebPushException  # noqa: F401
+    except Exception:  # noqa: BLE001 — dep not installed yet
+        return
+
+    def _send(sub):
+        try:
+            webpush(
+                subscription_info={"endpoint": sub["endpoint"], "keys": {"p256dh": sub["p256dh"], "auth": sub["auth"]}},
+                data=json.dumps({"title": title, "body": body, "url": url}),
+                vapid_private_key=priv,
+                vapid_claims={"sub": subj},
+            )
+            return None
+        except WebPushException as e:  # noqa: PERF203
+            code = getattr(getattr(e, "response", None), "status_code", None)
+            return sub["subscription_id"] if code in (404, 410) else None
+        except Exception:  # noqa: BLE001
+            return None
+
+    try:
+        results = await asyncio.gather(*[asyncio.to_thread(_send, dict(s)) for s in rows])
+        dead = [r for r in results if r]
+        if dead:
+            await db.execute(text("DELETE FROM community.push_subscriptions WHERE subscription_id = ANY(:ids)"), {"ids": dead})
+    except Exception as e:  # noqa: BLE001
+        logger.warning("push_to_user failed: %s", e)
+
+
+# ----------------------------------------------------------------------------- push subscriptions
+@router.get("/push/vapid-public")
+async def vapid_public(user: dict = Depends(get_current_user)):
+    return {"data": {"public_key": settings.vapid_public_key or None}}
+
+
+@router.post("/push/subscribe")
+async def push_subscribe(body: PushSub, user: dict = Depends(get_current_user)):
+    keys = body.keys or {}
+    if not body.endpoint or not keys.get("p256dh") or not keys.get("auth"):
+        raise HTTPException(status_code=422, detail="Invalid subscription")
+    async with get_rls_db(str(user["tenant_id"])) as db:
+        await db.execute(text("""
+            INSERT INTO community.push_subscriptions (user_id, endpoint, p256dh, auth, user_agent)
+            VALUES (:uid, :ep, :p, :a, :ua)
+            ON CONFLICT (endpoint) DO UPDATE SET user_id = EXCLUDED.user_id,
+                p256dh = EXCLUDED.p256dh, auth = EXCLUDED.auth
+        """), {"uid": str(user["user_id"]), "ep": body.endpoint, "p": keys["p256dh"], "a": keys["auth"], "ua": body.user_agent})
+    return {"data": {"ok": True}}
+
+
+@router.delete("/push/subscribe")
+async def push_unsubscribe(body: PushSub, user: dict = Depends(get_current_user)):
+    async with get_rls_db(str(user["tenant_id"])) as db:
+        await db.execute(text("DELETE FROM community.push_subscriptions WHERE endpoint = :ep AND user_id = :uid"),
+                         {"ep": body.endpoint, "uid": str(user["user_id"])})
+    return {"data": {"ok": True}}
 
 
 # ----------------------------------------------------------------------------- presence
@@ -173,6 +254,8 @@ async def chat_send(other_id: str, body: ChatSend, user: dict = Depends(get_curr
             VALUES (:tid, :uid, :body) RETURNING message_id, created_at
         """), {"tid": tid, "uid": uid, "body": body.body.strip()})).mappings().first()
         await db.execute(text("UPDATE community.chat_threads SET last_message_at = now() WHERE thread_id = :tid"), {"tid": tid})
+        # Web Push to the recipient (best-effort; no-op until VAPID configured)
+        await push_to_user(db, other_id, user.get("full_name") or "New message", body.body.strip(), url="/home")
     return {"data": {"thread_id": tid, "message_id": str(row["message_id"]), "created_at": str(row["created_at"])}}
 
 

@@ -6,6 +6,7 @@
 import { useEffect, useRef, useState } from "react";
 import { X, Volume2, VolumeX, Bell } from "lucide-react";
 import { useChat } from "../../context/ChatContext";
+import { enablePush } from "../../utils/push";
 
 const API = "/api/v1/community";
 const tok = () => localStorage.getItem("tfos_access_token");
@@ -34,7 +35,14 @@ export default function ChatDropdown() {
 
   const pick = (c) => { chat.openWith(c); chat.setDropdownOpen(false); };
   const toggleMute = () => { const n = !muted; setMuted(n); localStorage.setItem("tfos_chat_muted", n ? "1" : "0"); };
-  const enableAlerts = () => { if ("Notification" in window) Notification.requestPermission().then(setPerm).catch(() => {}); };
+  const enableAlerts = async () => {
+    const res = await enablePush();
+    setPerm(typeof Notification !== "undefined" ? Notification.permission : "unsupported");
+    if (!res.ok && res.reason === "vapid_not_configured") {
+      // permission granted but server push not yet provisioned — in-tab toast+chime still work
+      console.info("Web Push: server VAPID not configured yet; in-app alerts active.");
+    }
+  };
 
   return (
     <div ref={ref} role="dialog" aria-label="Messages"
