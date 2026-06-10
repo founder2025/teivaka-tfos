@@ -7,6 +7,7 @@ import { useEffect, useRef, useState } from "react";
 import { X, Volume2, VolumeX, Bell } from "lucide-react";
 import { useChat } from "../../context/ChatContext";
 import { enablePush } from "../../utils/push";
+import { useIsNarrow } from "../../hooks/useIsNarrow";
 
 const API = "/api/v1/community";
 const tok = () => localStorage.getItem("tfos_access_token");
@@ -16,6 +17,7 @@ const initials = (n) => (n || "?").split(" ").map((s) => s[0]).slice(0, 2).join(
 const PROF = { farmer: "Farmer", buyer: "Buyer", supplier: "Supplier", service_provider: "Service Provider", banker: "Banker", business: "Business", exporter: "Exporter", importer: "Importer" };
 
 export default function ChatDropdown() {
+  const narrow = useIsNarrow(640);
   const chat = useChat();
   const ref = useRef(null);
   const [local, setLocal] = useState(chat.conns);
@@ -46,8 +48,8 @@ export default function ChatDropdown() {
 
   return (
     <div ref={ref} role="dialog" aria-label="Messages"
-      className="absolute right-0 top-full mt-2 z-50 rounded-lg shadow-xl"
-      style={{ width: 320, maxHeight: 460, background: "#fff", border: `1px solid ${C.line}`, color: C.soil, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+      className={`z-50 rounded-lg shadow-xl ${narrow ? "fixed" : "absolute right-0 top-full mt-2"}`}
+      style={{ ...(narrow ? { left: 8, right: 8, top: 60, width: "auto", maxHeight: "75vh" } : { width: 320, maxHeight: 460 }), background: "#fff", border: `1px solid ${C.line}`, color: C.soil, display: "flex", flexDirection: "column", overflow: "hidden" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 12px", borderBottom: `1px solid ${C.line}` }}>
         <span style={{ fontSize: 14, fontWeight: 600 }}>Messages</span>
         <span style={{ display: "flex", gap: 2 }}>

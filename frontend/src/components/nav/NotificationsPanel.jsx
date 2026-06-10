@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { NavLink } from "react-router-dom";
 import { Bell, ListChecks } from "lucide-react";
 import { useTisSse } from "../../hooks/useTisSse";
+import { useIsNarrow } from "../../hooks/useIsNarrow";
 
 const C = {
   soil:    "#5C4033",
@@ -39,6 +40,7 @@ function relativeTime(iso) {
 
 export default function NotificationsPanel({ onClose, onMarkedRead }) {
   const { advisories, markRead } = useTisSse();
+  const narrow = useIsNarrow(640);
   const rootRef = useRef(null);
   const [taskN, setTaskN] = useState({ open: 0, overdue: 0 });
   const [community, setCommunity] = useState([]);
@@ -96,10 +98,11 @@ export default function NotificationsPanel({ onClose, onMarkedRead }) {
       ref={rootRef}
       role="dialog"
       aria-label="Notifications"
-      className="absolute right-0 top-full mt-2 z-50 rounded-lg shadow-xl"
+      className={`z-50 rounded-lg shadow-xl ${narrow ? "fixed" : "absolute right-0 top-full mt-2"}`}
       style={{
-        width: 360,
-        maxHeight: 480,
+        ...(narrow
+          ? { left: 8, right: 8, top: 60, width: "auto", maxHeight: "75vh" }
+          : { width: 360, maxHeight: 480 }),
         background: "#FFFFFF",
         border: `1px solid ${C.border}`,
         color: C.soil,
