@@ -19,6 +19,7 @@ $PSQL < docs/runbooks/094_reconcile_stray_tables.sql        > /tmp/rb_094.out  2
 $PSQL < docs/runbooks/096_stories_apply_as_owner.sql        > /tmp/rb_096.out  2>&1 && ok "096 stories"   || bad "096 stories (see /tmp/rb_096.out)"
 $PSQL < docs/runbooks/097_kyc_verification_apply_as_owner.sql > /tmp/rb_097.out 2>&1 && ok "097 kyc"      || bad "097 kyc (see /tmp/rb_097.out)"
 $PSQL < docs/runbooks/098_marketplace_v2_apply_as_owner.sql   > /tmp/rb_098.out 2>&1 && ok "098 marketplace" || bad "098 marketplace (see /tmp/rb_098.out)"
+$PSQL < docs/runbooks/099_listing_details_apply_as_owner.sql  > /tmp/rb_099.out 2>&1 && ok "099 listing details" || bad "099 listing details (see /tmp/rb_099.out)"
 
 say "2/7 Verify table shapes (the AmbiguousColumn culprit)"
 SHAPES=$(docker exec teivaka_db psql -U teivaka -d teivaka_db -tA -c "
@@ -43,8 +44,8 @@ OBJS=$(docker exec teivaka_db psql -U teivaka -d teivaka_db -tA -c "
 [ "$OBJS" = "3" ] && ok "stories + verification_requests + kyc_verified all present" || bad "missing objects ($OBJS/3)"
 MKT=$(docker exec teivaka_db psql -U teivaka -d teivaka_db -tA -c "
   SELECT (to_regclass('community.listing_saves') IS NOT NULL)::int
-       + (SELECT count(*) FROM information_schema.columns WHERE table_schema='community' AND table_name='listings' AND column_name IN ('category','sold_at','link_audit_hash'));")
-[ "$MKT" = "4" ] && ok "marketplace v2 objects present (4/4)" || bad "marketplace objects missing ($MKT/4) — paste /tmp/rb_098.out"
+       + (SELECT count(*) FROM information_schema.columns WHERE table_schema='community' AND table_name='listings' AND column_name IN ('category','sold_at','link_audit_hash','price_basis','details'));")
+[ "$MKT" = "6" ] && ok "marketplace objects present (6/6)" || bad "marketplace objects missing ($MKT/6) — paste /tmp/rb_098.out + /tmp/rb_099.out"
 
 say "4/7 Run migrations AS OWNER (alembic upgrade head — the permanent fix)"
 PW=$(docker exec teivaka_db printenv POSTGRES_PASSWORD 2>/dev/null)

@@ -30,6 +30,8 @@ class ListingCreate(BaseModel):
     farm_id: str
     production_id: Optional[str] = None
     category: str = "PRODUCE"   # PRODUCE | INPUTS | TOOLS | LIVESTOCK | SERVICES | WANTED
+    price_basis: str = "kg"     # kg | unit | hour | job | day | head | pack | item | budget
+    details: Optional[dict] = None  # category-specific fields (grade, condition, brand, ...)
     link_audit_hash: Optional[str] = None
     listing_title: str
     listing_description: str
@@ -118,20 +120,28 @@ async def create_listing(body: ListingCreate, user: dict = Depends(community_wri
     cat = (body.category or "PRODUCE").upper()
     if cat not in ("PRODUCE", "INPUTS", "TOOLS", "LIVESTOCK", "SERVICES", "WANTED"):
         cat = "PRODUCE"
+    basis = (body.price_basis or "kg").lower()
+    if basis not in ("kg", "unit", "hour", "job", "day", "head", "pack", "item", "budget"):
+        basis = "kg"
 
     listing_id = f"LST-{uuid.uuid4().hex[:6].upper()}"
     async with get_rls_db(str(user["tenant_id"])) as db:
-        await db.execute(text("""
+        # 099-tolerant: include price_basis/details only when the columns exist.
+        has_099 = bool((await db.execute(text(
+            "SELECT 1 FROM information_schema.columns WHERE table_schema='community' AND table_name='listings' AND column_name='price_basis'"))).scalar())
+        extra_cols = ", price_basis, details" if has_099 else ""
+        extra_vals = ", :price_basis, cast(:details AS jsonb)" if has_099 else ""
+        await db.execute(text(f"""
             INSERT INTO community.listings
                 (listing_id, tenant_id, farm_id, production_id, listing_title, listing_description,
                  quantity_available_kg, price_per_kg_fjd, negotiable, grade, island,
                  pickup_location, available_from, available_until, contact_whatsapp,
-                 photos, notes, listing_status, created_by, category, link_audit_hash)
+                 photos, notes, listing_status, created_by, category, link_audit_hash{extra_cols})
             VALUES
                 (:listing_id, :tenant_id, :farm_id, :production_id, :listing_title, :listing_description,
                  :quantity_available_kg, :price_per_kg_fjd, :negotiable, :grade, :island,
                  :pickup_location, :available_from, :available_until, :contact_whatsapp,
-                 :photos, :notes, 'ACTIVE', :created_by, :category, :link_audit_hash)
+                 :photos, :notes, 'ACTIVE', :created_by, :category, :link_audit_hash{extra_vals})
         """), {
             "listing_id": listing_id,
             "tenant_id": str(user["tenant_id"]),
@@ -153,6 +163,7 @@ async def create_listing(body: ListingCreate, user: dict = Depends(community_wri
             "created_by": str(user["user_id"]),
             "category": cat,
             "link_audit_hash": (body.link_audit_hash or None),
+            **({"price_basis": basis, "details": __import__("json").dumps(body.details or {})} if has_099 else {}),
         })
     return {"data": {"listing_id": listing_id, "listing_status": "ACTIVE"}}
 

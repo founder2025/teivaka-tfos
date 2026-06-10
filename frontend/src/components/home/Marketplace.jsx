@@ -19,12 +19,47 @@ const toast = (m, t) => { try { window.dispatchEvent(new CustomEvent("tfos:toast
 const CATS = [["ALL", "All"], ["PRODUCE", "Produce"], ["INPUTS", "Inputs & seeds"], ["TOOLS", "Tools & equipment"], ["LIVESTOCK", "Livestock"], ["SERVICES", "Services"], ["WANTED", "Wanted"]];
 const CAT_LABEL = Object.fromEntries(CATS);
 const ISLANDS = ["Viti Levu", "Vanua Levu", "Kadavu", "Taveuni", "Ovalau", "Rotuma", "Other"];
+// Category-native config: fields, units and copy adapt to what's being listed.
+const CAT_CFG = {
+  PRODUCE:   { accent: "#3E7B1F", qty: "Quantity (kg)", desc: "Describe it — condition, grade, harvest date…", bases: [["kg", "per kg"], ["unit", "per unit"], ["pack", "per pack"]], loc: "Pickup location — village / town", hash: true,
+               extras: [["grade", "Grade (A / B / Organic / Mixed)"], ["harvest_date", "Harvest date (e.g. 10 Jun)"]], delivery: true },
+  INPUTS:    { accent: "#BF9000", qty: "Quantity available (packs/bags)", desc: "Describe it — brand, pack size, expiry…", bases: [["pack", "per pack"], ["unit", "per unit"], ["kg", "per kg"]], loc: "Pickup location — shop / town", hash: false,
+               extras: [["brand", "Brand / product name"], ["pack_size", "Pack size (e.g. 25 kg bag)"]], delivery: true },
+  TOOLS:     { accent: "#7A5C4E", qty: "How many available", desc: "Describe it — what it does, age, condition…", bases: [["item", "per item"], ["day", "per day (hire)"]], loc: "Pickup location — village / town", hash: false,
+               extras: [["condition", "Condition (New / Used — good / Used — fair)"], ["brand_model", "Brand / model (optional)"]], delivery: false },
+  LIVESTOCK: { accent: "#A32D2D", qty: "Head count", desc: "Describe them — breed, age, health, vaccinations…", bases: [["head", "per head"], ["kg", "per kg (dressed)"]], loc: "Pickup location — farm / village", hash: true,
+               extras: [["animal_type", "Animal (e.g. broiler, goat, piglet)"], ["age_weight", "Age / weight (e.g. 6 wks, ~2 kg)"]], delivery: false },
+  SERVICES:  { accent: "#2C6E8A", qty: null, desc: "What's the service? Experience, equipment, availability…", bases: [["hour", "per hour"], ["job", "per job"], ["day", "per day"]], loc: "Service area — islands / regions covered", hash: false,
+               extras: [["availability", "Availability (e.g. weekdays, from July)"]], delivery: false },
+  WANTED:    { accent: "#5C4033", qty: "Quantity needed", desc: "What do you need? Quantity, grade, when…", bases: [["budget", "total budget"]], loc: "Where you need it — town / island", hash: false,
+               extras: [["needed_by", "Needed by (date)"]], delivery: false },
+};
+const BASIS_SUFFIX = { kg: "/kg", unit: "/unit", hour: "/hr", job: "/job", day: "/day", head: "/head", pack: "/pack", item: "", budget: "" };
+const priceLine = (l) => {
+  const v = fjd(l.price_per_kg_fjd);
+  if (!v) return "Price on request";
+  if ((l.price_basis || "kg") === "budget") return `Budget: ${v}`;
+  return `${v}${BASIS_SUFFIX[l.price_basis || "kg"] ?? "/kg"}`;
+};
+// Profession-aware default category (just a default — freely changeable).
+const PROF_DEFAULT_CAT = { buyer: "WANTED", supplier: "INPUTS", service_provider: "SERVICES", importer: "WANTED", exporter: "WANTED" };
 const fjd = (v) => { const n = Number(v); return isNaN(n) || v == null ? null : `FJD ${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`; };
 const inp = { width: "100%", padding: "9px 11px", border: "1px solid var(--line)", borderRadius: 8, fontSize: 14, background: "#fff", boxSizing: "border-box" };
 
 /* ---------------- new listing ---------------- */
 function NewListingModal({ onClose, onCreated }) {
-  const [f, setF] = useState({ listing_title: "", category: "PRODUCE", listing_description: "", quantity_available_kg: "", price_per_kg_fjd: "", negotiable: true, island: "Viti Levu", pickup_location: "", contact_whatsapp: "", link_audit_hash: "" });
+  const [f, setF] = useState({ listing_title: "", category: "PRODUCE", price_basis: "kg", listing_description: "", quantity_available_kg: "", price_per_kg_fjd: "", negotiable: true, island: "Viti Levu", pickup_location: "", contact_whatsapp: "", link_audit_hash: "" });
+  const [details, setDetails] = useState({});
+  const setD = (k, v) => setDetails((d) => ({ ...d, [k]: v }));
+  // Profession-aware default category from /auth/me (default only — changeable).
+  useEffect(() => {
+    getJSON("/api/v1/auth/me").then((r) => {
+      const prof = ((r?.data ?? r)?.profession || "").toLowerCase();
+      const def = PROF_DEFAULT_CAT[prof];
+      if (def) setF((s2) => ({ ...s2, category: def, price_basis: CAT_CFG[def].bases[0][0] }));
+    }).catch(() => {});
+  }, []);
+  const cfg = CAT_CFG[f.category] || CAT_CFG.PRODUCE;
   const [photos, setPhotos] = useState([]);
   const [pct, setPct] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -61,7 +96,9 @@ function NewListingModal({ onClose, onCreated }) {
         price_per_kg_fjd: f.price_per_kg_fjd === "" ? null : Number(f.price_per_kg_fjd),
         pickup_location: f.pickup_location.trim() || null,
         contact_whatsapp: f.contact_whatsapp.trim() || null,
-        link_audit_hash: f.link_audit_hash.trim() || null,
+        link_audit_hash: cfg.hash ? (f.link_audit_hash.trim() || null) : null,
+        price_basis: f.category === "WANTED" ? "budget" : f.price_basis,
+        details: Object.fromEntries(Object.entries(details).filter(([, v]) => v)),
         photos,
       });
       toast("Listing published ✓", "success");
@@ -77,10 +114,10 @@ function NewListingModal({ onClose, onCreated }) {
           <input style={inp} placeholder="Title — e.g. Fresh cassava, 200 kg" maxLength={80} value={f.listing_title} onChange={(e) => set("listing_title", e.target.value)} />
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
             {CATS.slice(1).map(([v, l]) => (
-              <button key={v} onClick={() => set("category", v)} style={{ padding: "7px 12px", borderRadius: 999, fontSize: 12.5, cursor: "pointer", fontWeight: 600, border: `1px solid ${f.category === v ? "var(--green-dk)" : "var(--line)"}`, background: f.category === v ? "var(--green)" : "#fff", color: f.category === v ? "#fff" : "var(--soil)" }}>{l}</button>
+              <button key={v} onClick={() => { set("category", v); set("price_basis", CAT_CFG[v].bases[0][0]); setDetails({}); }} style={{ padding: "7px 12px", borderRadius: 999, fontSize: 12.5, cursor: "pointer", fontWeight: 600, border: `1px solid ${f.category === v ? "var(--green-dk)" : "var(--line)"}`, background: f.category === v ? "var(--green)" : "#fff", color: f.category === v ? "#fff" : "var(--soil)" }}>{l}</button>
             ))}
           </div>
-          <textarea style={{ ...inp, minHeight: 70 }} placeholder={f.category === "WANTED" ? "What do you need? Quantity, grade, when…" : "Describe it — condition, grade, harvest date…"} maxLength={1000} value={f.listing_description} onChange={(e) => set("listing_description", e.target.value)} />
+          <textarea style={{ ...inp, minHeight: 70 }} placeholder={cfg.desc} maxLength={1000} value={f.listing_description} onChange={(e) => set("listing_description", e.target.value)} />
           {/* photos */}
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
             {photos.map((u, i) => (
@@ -94,18 +131,32 @@ function NewListingModal({ onClose, onCreated }) {
             </button>
             <input ref={fileRef} type="file" accept="image/*" multiple hidden onChange={pick} />
           </div>
+          {/* category-specific extra fields */}
+          {cfg.extras.map(([k, label]) => (
+            <input key={k} style={inp} placeholder={label} maxLength={80} value={details[k] || ""} onChange={(e) => setD(k, e.target.value)} />
+          ))}
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-            <input style={{ ...inp, flex: 1, minWidth: 120 }} type="number" min="0" placeholder="Quantity (kg / units)" value={f.quantity_available_kg} onChange={(e) => set("quantity_available_kg", e.target.value)} />
-            <input style={{ ...inp, flex: 1, minWidth: 120 }} type="number" min="0" step="0.01" placeholder="Price FJD (per kg/unit)" value={f.price_per_kg_fjd} onChange={(e) => set("price_per_kg_fjd", e.target.value)} />
+            {cfg.qty && <input style={{ ...inp, flex: 1, minWidth: 120 }} type="number" min="0" placeholder={cfg.qty} value={f.quantity_available_kg} onChange={(e) => set("quantity_available_kg", e.target.value)} />}
+            <input style={{ ...inp, flex: 1, minWidth: 120 }} type="number" min="0" step="0.01" placeholder={f.category === "WANTED" ? "Budget FJD (total)" : "Price FJD"} value={f.price_per_kg_fjd} onChange={(e) => set("price_per_kg_fjd", e.target.value)} />
+            {f.category !== "WANTED" && (
+              <select style={{ ...inp, width: "auto", minWidth: 110 }} value={f.price_basis} onChange={(e) => set("price_basis", e.target.value)}>
+                {cfg.bases.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+              </select>
+            )}
           </div>
           <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "var(--soil)" }}>
-            <input type="checkbox" checked={f.negotiable} onChange={(e) => set("negotiable", e.target.checked)} /> Price negotiable
+            <input type="checkbox" checked={f.negotiable} onChange={(e) => set("negotiable", e.target.checked)} /> {f.category === "WANTED" ? "Budget flexible" : "Price negotiable"}
           </label>
+          {cfg.delivery && (
+            <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "var(--soil)" }}>
+              <input type="checkbox" checked={!!details.delivery} onChange={(e) => setD("delivery", e.target.checked ? "yes" : "")} /> Delivery available
+            </label>
+          )}
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
             <select style={{ ...inp, flex: 1, minWidth: 140 }} value={f.island} onChange={(e) => set("island", e.target.value)}>
               {ISLANDS.map((i) => <option key={i} value={i}>{i}</option>)}
             </select>
-            <input style={{ ...inp, flex: 2, minWidth: 160 }} placeholder="Pickup location — village / town" maxLength={80} value={f.pickup_location} onChange={(e) => set("pickup_location", e.target.value)} />
+            <input style={{ ...inp, flex: 2, minWidth: 160 }} placeholder={cfg.loc} maxLength={80} value={f.pickup_location} onChange={(e) => set("pickup_location", e.target.value)} />
           </div>
           {gps.length > 0 && (
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
@@ -113,7 +164,7 @@ function NewListingModal({ onClose, onCreated }) {
             </div>
           )}
           <input style={inp} placeholder="WhatsApp contact (optional) — buyers can reach you off-app" maxLength={20} value={f.contact_whatsapp} onChange={(e) => set("contact_whatsapp", e.target.value)} />
-          <input style={inp} placeholder="Verifiable record hash (optional) — prove the harvest" maxLength={64} value={f.link_audit_hash} onChange={(e) => set("link_audit_hash", e.target.value)} />
+          {cfg.hash && <input style={inp} placeholder="Verifiable record hash (optional) — prove it" maxLength={64} value={f.link_audit_hash} onChange={(e) => set("link_audit_hash", e.target.value)} />}
         </div>
         <div className="overlay-foot">
           <button className="btn btn-secondary" onClick={onClose}>Cancel</button>
@@ -167,15 +218,24 @@ function ListingDetail({ l, onClose, onChanged }) {
             </div>
           )}
           <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
-            <span style={{ fontSize: 22, fontWeight: 800, color: "var(--soil)" }}>{fjd(l.price_per_kg_fjd) || "Price on request"}</span>
+            <span style={{ fontSize: 22, fontWeight: 800, color: "var(--soil)" }}>{priceLine(l)}</span>
             {l.negotiable && <span style={{ fontSize: 11.5, color: "var(--green-dk)", fontWeight: 600 }}>negotiable</span>}
             <span style={{ fontSize: 11.5, color: "var(--muted)" }}>{CAT_LABEL[l.category] || l.category}{l.quantity_available_kg ? ` · ${Number(l.quantity_available_kg)} kg` : ""}</span>
           </div>
           <div style={{ fontSize: 12.5, color: "var(--muted)", margin: "4px 0 10px" }}>
-            <MapPin size={12} /> {[l.pickup_location, l.island].filter(Boolean).join(", ") || "Location on request"}
+            <MapPin size={12} /> {l.category === "SERVICES" ? "Service area: " : ""}{[l.pickup_location, l.island].filter(Boolean).join(", ") || "Location on request"}
             {l.created_at ? ` · listed ${new Date(l.created_at).toLocaleDateString()}` : ""}
           </div>
           <p style={{ fontSize: 14, color: "var(--soil)", lineHeight: 1.55, whiteSpace: "pre-wrap" }}>{l.listing_description}</p>
+          {l.details && Object.keys(l.details).length > 0 && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 4, margin: "6px 0 4px" }}>
+              {Object.entries(l.details).map(([k, v]) => (
+                <div key={k} style={{ fontSize: 12.5, color: "var(--soil)" }}>
+                  <span style={{ color: "var(--muted)", textTransform: "capitalize" }}>{k.replace(/_/g, " ")}: </span>{String(v) === "yes" ? "Yes" : String(v)}
+                </div>
+              ))}
+            </div>
+          )}
           {l.link_audit_hash && <a href={`/verify/${l.link_audit_hash}`} target="_blank" rel="noreferrer" style={{ fontSize: 12.5, color: "var(--green-dk)", display: "inline-flex", gap: 5, alignItems: "center" }}><CheckCircle2 size={13} /> Verifiable record · {String(l.link_audit_hash).slice(0, 12)}…</a>}
           {/* seller */}
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 14, padding: "10px 12px", border: "1px solid var(--line)", borderRadius: 10 }}>
@@ -280,7 +340,8 @@ export default function Marketplace() {
                 {l.category === "WANTED" && !l.sold_at && <span style={{ position: "absolute", top: 8, left: 8, background: "#BF9000", color: "#fff", fontSize: 10, fontWeight: 700, padding: "3px 8px", borderRadius: 6 }}>WANTED</span>}
                 <div style={{ padding: "8px 10px 10px" }}>
                   <div style={{ fontWeight: 700, color: "var(--soil)", fontSize: 13.5, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{l.listing_title}</div>
-                  <div style={{ fontSize: 13, fontWeight: 800, color: "var(--green-dk)" }}>{fjd(l.price_per_kg_fjd) || "Price on request"}</div>
+                  <div style={{ fontSize: 13, fontWeight: 800, color: "var(--green-dk)" }}>{priceLine(l)}</div>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: (CAT_CFG[l.category] || CAT_CFG.PRODUCE).accent, textTransform: "uppercase", letterSpacing: 0.4 }}>{CAT_LABEL[l.category] || l.category}</div>
                   <div style={{ fontSize: 11, color: "var(--muted)", display: "flex", alignItems: "center", gap: 4, marginTop: 2 }}>
                     <Avatar src={l.seller_avatar} name={l.seller_name} size={16} fontScale={0.45} />
                     <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{l.seller_name || "Seller"}</span>
