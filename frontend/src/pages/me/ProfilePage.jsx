@@ -393,32 +393,13 @@ export default function ProfilePage({ self = false }) {
   );
 
   return (
-    <div style={{ maxWidth: 1320, margin: "0 auto", display: "flex", flexDirection: narrow ? "column" : "row", gap: narrow ? 10 : 24, alignItems: "flex-start" }}>
-      {/* left rail — desktop only; collapses to TabStrip on mobile */}
-      {narrow ? <TabStrip /> : (
-      <aside style={{ width: 230, flexShrink: 0, position: "sticky", top: 70 }}>
-        <div style={{ ...card, padding: 14 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
-            <Avatar size={40} />
-            <div style={{ minWidth: 0 }}><div style={{ fontWeight: 700, color: C.soil, fontSize: 13.5, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.full_name}</div><div style={{ fontSize: 11, color: C.muted }}>{PROF[p.profession] || p.profession}</div></div>
-          </div>
-          {tabs.map((t) => (
-            <div key={t.id} onClick={() => goTab(t)} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 10px", borderRadius: 8, cursor: "pointer", color: tab === t.id ? C.greenDk : C.soil, background: tab === t.id ? "rgba(106,168,79,0.10)" : "transparent", fontSize: 13.5, minHeight: 40 }}>
-              <t.Icon size={16} /><span>{t.label}</span>
-            </div>
-          ))}
-          <div style={{ fontSize: 10.5, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: ".05em", margin: "12px 0 4px 10px" }}>Network</div>
-          {NETWORK.map((n) => (
-            <div key={n.label} onClick={() => navigate(n.route)} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 10px", borderRadius: 8, cursor: "pointer", color: C.soil, fontSize: 13.5, minHeight: 40 }}>
-              <n.Icon size={16} /><span style={{ flex: 1 }}>{n.label}</span><ArrowRight size={13} style={{ color: C.muted }} />
-            </div>
-          ))}
-        </div>
-      </aside>
-      )}
+    <div style={{ maxWidth: 880, margin: "0 auto", display: "flex", flexDirection: "column", gap: 12, alignItems: "stretch" }}>
+      {/* Sidebar-on-top on every viewport: the pill tab-strip leads, content
+          sits centered in one clean column (Operator-directed 2026-06-11). */}
+      <TabStrip />
 
       {/* main */}
-      <main style={{ flex: 1, minWidth: 0, width: narrow ? "100%" : undefined }}>
+      <main style={{ width: "100%", minWidth: 0 }}>
         {/* header */}
         <div style={{ display: "flex", gap: 16, alignItems: "flex-start", flexWrap: "wrap" }}>
           <label style={{ position: "relative", cursor: isYou ? "pointer" : "default", flexShrink: 0 }}>
