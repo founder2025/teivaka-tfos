@@ -4,6 +4,7 @@ import NotificationsPanel from "./NotificationsPanel";
 import MeMenu from "./MeMenu";
 import { useTisSse } from "../../hooks/useTisSse";
 import { useChat } from "../../context/ChatContext";
+import ChatDropdown from "../chat/ChatDropdown";
 
 const C = {
   soil:    "#5C4033",
@@ -170,14 +171,17 @@ export default function RightCluster() {
     <div className="flex items-center flex-shrink-0" style={{ gap: 8 }}>
       <StatusDot />
 
-      <IconButton
-        icon={MessageSquare}
-        label="Messages"
-        title="Messages"
-        onClick={chat.toggle}
-        active={chat.open}
-        badgeCount={chat.unread}
-      />
+      <div className="relative" data-chat-toggle>
+        <IconButton
+          icon={MessageSquare}
+          label="Messages"
+          title="Messages"
+          onClick={chat.toggleDropdown}
+          active={chat.dropdownOpen}
+          badgeCount={chat.unread}
+        />
+        {chat.dropdownOpen && <ChatDropdown />}
+      </div>
 
       <div className="relative">
         <IconButton
