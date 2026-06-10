@@ -21,6 +21,7 @@ const ADMIN_TABS = [
   { path: "/admin/analytics", label: "Analytics",        icon: "📈" },
   { path: "/admin/map",       label: "Farm Map",         icon: "🗺️" },
   { path: "/admin/task-engine", label: "Task Engine",    icon: "⚙︎" },
+  { path: "/admin/moderation", label: "Moderation",      icon: "🚩" },
   { path: "/admin/settings",  label: "Platform Settings", icon: "⚙️"  },
 ];
 

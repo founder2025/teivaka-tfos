@@ -672,3 +672,65 @@ async def get_media(name: str):
     if not path.exists():
         raise HTTPException(status_code=404, detail="Not found")
     return FileResponse(path)
+
+
+# ----------------------------------------------------------------------------- moderation (admin)
+_ADMIN_ROLES = {"ADMIN", "FOUNDER"}
+
+
+@router.get("/flags")
+async def list_flags(status_filter: str = Query("OPEN"), user: dict = Depends(get_current_user)):
+    """Moderation queue — admin/founder only."""
+    if user.get("role") not in _ADMIN_ROLES:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Moderators only")
+    async with get_db() as db:
+        params = {}
+        clause = ""
+        if status_filter and status_filter.upper() != "ALL":
+            clause = "WHERE fl.status = :st"
+            params["st"] = status_filter.upper()
+        rows = (await db.execute(text(f"""
+            SELECT fl.flag_id, fl.post_id, fl.reply_id, fl.reason, fl.status, fl.created_at,
+                   r.full_name AS reporter_name,
+                   fp.body AS post_body, fp.status AS post_status, fp.author_profession,
+                   au.full_name AS author_name
+            FROM community.feed_flags fl
+            LEFT JOIN tenant.users r ON r.user_id = fl.reporter_user_id
+            LEFT JOIN community.feed_posts fp ON fp.post_id = fl.post_id
+            LEFT JOIN tenant.users au ON au.user_id = fp.author_user_id
+            {clause}
+            ORDER BY fl.created_at DESC LIMIT 100
+        """), params)).mappings().all()
+    return {"data": [dict(r) for r in rows]}
+
+
+class FlagAction(BaseModel):
+    action: str  # HIDE | DISMISS | RESTORE
+
+
+@router.post("/flags/{flag_id}/action")
+async def action_flag(flag_id: str, body: FlagAction, user: dict = Depends(get_current_user)):
+    if user.get("role") not in _ADMIN_ROLES:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Moderators only")
+    act = (body.action or "").upper()
+    async with get_rls_db(str(user["tenant_id"])) as db:
+        flag = (await db.execute(text(
+            "SELECT post_id FROM community.feed_flags WHERE flag_id = :f"), {"f": flag_id})).mappings().first()
+        if not flag:
+            raise HTTPException(status_code=404, detail="Flag not found")
+        if act == "HIDE" and flag["post_id"]:
+            await db.execute(text("UPDATE community.feed_posts SET status='hidden' WHERE post_id=:p"), {"p": flag["post_id"]})
+            new_status = "ACTIONED"
+        elif act == "RESTORE" and flag["post_id"]:
+            await db.execute(text("UPDATE community.feed_posts SET status='active' WHERE post_id=:p"), {"p": flag["post_id"]})
+            new_status = "DISMISSED"
+        elif act == "DISMISS":
+            new_status = "DISMISSED"
+        else:
+            raise HTTPException(status_code=422, detail="Unknown action")
+        await db.execute(text("""
+            UPDATE community.feed_flags
+               SET status=:s, reviewed_by=:by, reviewed_at=now()
+             WHERE flag_id=:f
+        """), {"s": new_status, "by": str(user["user_id"]), "f": flag_id})
+    return {"data": {"flag_id": flag_id, "status": new_status}}

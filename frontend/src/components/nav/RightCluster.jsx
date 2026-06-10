@@ -125,7 +125,21 @@ export default function RightCluster() {
   const [notifOpen, setNotifOpen] = useState(false);
   const [meOpen, setMeOpen] = useState(false);
   const [me, setMe] = useState(null);
+  const [communityUnread, setCommunityUnread] = useState(0);
   const { unreadCount } = useTisSse();
+
+  useEffect(() => {
+    const token = localStorage.getItem("tfos_access_token");
+    if (!token) return undefined;
+    let cancelled = false;
+    const loadCount = () => fetch("/api/v1/community/notifications/count", { headers: { Authorization: `Bearer ${token}` } })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((b) => { if (!cancelled && b?.data) setCommunityUnread(b.data.unread || 0); })
+      .catch(() => {});
+    loadCount();
+    const id = setInterval(loadCount, 30_000);
+    return () => { cancelled = true; clearInterval(id); };
+  }, []);
 
   useEffect(() => {
     const token = localStorage.getItem("tfos_access_token");
@@ -144,9 +158,9 @@ export default function RightCluster() {
 
   const displayName = me?.display_name || me?.full_name || me?.email || "";
   const initials = initialsFrom(displayName, "UK");
-  // Placeholder counts per Day 3a spec; SSE-driven count preferred when present.
-  const messagesCount = 2;
-  const notifCount = unreadCount > 0 ? unreadCount : 4;
+  // Real unread = community activity + TIS advisories.
+  const messagesCount = 0;
+  const notifCount = communityUnread + (unreadCount > 0 ? unreadCount : 0);
 
   return (
     <div className="flex items-center flex-shrink-0" style={{ gap: 8 }}>
@@ -167,7 +181,7 @@ export default function RightCluster() {
           onClick={() => { setMeOpen(false); setNotifOpen((v) => !v); }}
           badgeCount={notifCount}
         />
-        {notifOpen && <NotificationsPanel onClose={() => setNotifOpen(false)} />}
+        {notifOpen && <NotificationsPanel onClose={() => setNotifOpen(false)} onMarkedRead={() => setCommunityUnread(0)} />}
       </div>
 
       <div className="relative">

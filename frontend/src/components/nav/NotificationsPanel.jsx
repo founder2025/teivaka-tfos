@@ -37,10 +37,11 @@ function relativeTime(iso) {
   return `${Math.floor(sec / 86400)}d ago`;
 }
 
-export default function NotificationsPanel({ onClose }) {
+export default function NotificationsPanel({ onClose, onMarkedRead }) {
   const { advisories, markRead } = useTisSse();
   const rootRef = useRef(null);
   const [taskN, setTaskN] = useState({ open: 0, overdue: 0 });
+  const [community, setCommunity] = useState([]);
 
   useEffect(() => {
     const tok = localStorage.getItem("tfos_access_token");
@@ -49,6 +50,25 @@ export default function NotificationsPanel({ onClose }) {
       try {
         const r = await fetch("/api/v1/tasks/count", { headers: { Authorization: `Bearer ${tok}` } });
         if (r.ok) { const d = await r.json(); if (d?.data) setTaskN({ open: d.data.open || 0, overdue: d.data.overdue || 0 }); }
+      } catch { /* non-critical */ }
+    })();
+  }, []);
+
+  // Community notifications: load, then mark all read (opening the panel = seen).
+  useEffect(() => {
+    const tok = localStorage.getItem("tfos_access_token");
+    if (!tok) return;
+    (async () => {
+      try {
+        const r = await fetch("/api/v1/community/notifications?limit=30", { headers: { Authorization: `Bearer ${tok}` } });
+        if (r.ok) {
+          const d = await r.json();
+          setCommunity(d?.data || []);
+          if ((d?.unread || 0) > 0) {
+            await fetch("/api/v1/community/notifications/read", { method: "POST", headers: { Authorization: `Bearer ${tok}` } });
+            onMarkedRead?.();
+          }
+        }
       } catch { /* non-critical */ }
     })();
   }, []);
@@ -127,7 +147,18 @@ export default function NotificationsPanel({ onClose }) {
             </div>
           </NavLink>
         )}
-        {advisories.length === 0 && taskN.open === 0 && taskN.overdue === 0 ? (
+        {community.map((n) => (
+          <NavLink key={n.notification_id} to="/home" onClick={onClose}
+            className="w-full text-left flex gap-3 items-stretch"
+            style={{ borderBottom: `1px solid ${C.border}`, background: n.read_at ? "transparent" : C.tint, textDecoration: "none", color: "inherit" }}>
+            <span aria-hidden className="flex-shrink-0" style={{ width: 6, background: "#6AA84F" }} />
+            <div className="flex-1 min-w-0" style={{ padding: "10px 12px" }}>
+              <p style={{ fontSize: 13, color: C.soil, margin: 0, lineHeight: 1.35 }}>{n.body || `${n.actor_name || "Someone"} ${(n.type || "").toLowerCase()}`}</p>
+              <p style={{ fontSize: 11, color: C.muted, margin: "4px 0 0 0" }}>{relativeTime(n.created_at)}</p>
+            </div>
+          </NavLink>
+        ))}
+        {advisories.length === 0 && community.length === 0 && taskN.open === 0 && taskN.overdue === 0 ? (
           <div className="py-10 px-6 flex flex-col items-center text-center gap-2">
             <Bell size={48} strokeWidth={1.5} style={{ color: C.soil, opacity: 0.45 }} />
             <p className="text-sm" style={{ opacity: 0.75 }}>
