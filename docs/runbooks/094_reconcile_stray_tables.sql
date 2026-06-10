@@ -21,9 +21,8 @@ DO $$
 DECLARE n BIGINT;
 BEGIN
   -- feed_hidden
-  IF to_regclass('community.feed_hidden') IS NOT NULL AND NOT EXISTS (
-      SELECT 1 FROM information_schema.columns
-      WHERE table_schema='community' AND table_name='feed_hidden' AND column_name='user_id')
+  IF to_regclass('community.feed_hidden') IS NOT NULL AND (SELECT count(*) FROM information_schema.columns
+      WHERE table_schema='community' AND table_name='feed_hidden' AND column_name IN ('user_id','post_id')) < 2
   THEN
     EXECUTE 'SELECT count(*) FROM community.feed_hidden' INTO n;
     IF n = 0 THEN
@@ -34,9 +33,8 @@ BEGIN
     END IF;
   END IF;
   -- user_mutes
-  IF to_regclass('community.user_mutes') IS NOT NULL AND NOT EXISTS (
-      SELECT 1 FROM information_schema.columns
-      WHERE table_schema='community' AND table_name='user_mutes' AND column_name='muted_user_id')
+  IF to_regclass('community.user_mutes') IS NOT NULL AND (SELECT count(*) FROM information_schema.columns
+      WHERE table_schema='community' AND table_name='user_mutes' AND column_name IN ('user_id','muted_user_id')) < 2
   THEN
     EXECUTE 'SELECT count(*) FROM community.user_mutes' INTO n;
     IF n = 0 THEN
@@ -47,9 +45,8 @@ BEGIN
     END IF;
   END IF;
   -- user_blocks
-  IF to_regclass('community.user_blocks') IS NOT NULL AND NOT EXISTS (
-      SELECT 1 FROM information_schema.columns
-      WHERE table_schema='community' AND table_name='user_blocks' AND column_name='blocked_user_id')
+  IF to_regclass('community.user_blocks') IS NOT NULL AND (SELECT count(*) FROM information_schema.columns
+      WHERE table_schema='community' AND table_name='user_blocks' AND column_name IN ('user_id','blocked_user_id')) < 2
   THEN
     EXECUTE 'SELECT count(*) FROM community.user_blocks' INTO n;
     IF n = 0 THEN

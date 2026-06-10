@@ -7,7 +7,7 @@
 set -uo pipefail
 cd /opt/teivaka
 COMPOSE="docker compose -f /opt/teivaka/04_environment/docker-compose.yml"
-PSQL="docker exec -i teivaka_db psql -U teivaka -d teivaka_db"
+PSQL="docker exec -i teivaka_db psql -v ON_ERROR_STOP=1 -U teivaka -d teivaka_db"
 fail=0
 say()  { echo -e "\n=== $1 ==="; }
 ok()   { echo "   ✅ $1"; }
@@ -45,7 +45,11 @@ OBJS=$(docker exec teivaka_db psql -U teivaka -d teivaka_db -tA -c "
 MKT=$(docker exec teivaka_db psql -U teivaka -d teivaka_db -tA -c "
   SELECT (to_regclass('community.listing_saves') IS NOT NULL)::int
        + (SELECT count(*) FROM information_schema.columns WHERE table_schema='community' AND table_name='listings' AND column_name IN ('category','sold_at','link_audit_hash','price_basis','details'));")
-[ "$MKT" = "6" ] && ok "marketplace objects present (6/6)" || bad "marketplace objects missing ($MKT/6) — paste /tmp/rb_098.out + /tmp/rb_099.out"
+if [ "$MKT" = "6" ]; then ok "marketplace objects present (6/6)"; else
+  bad "marketplace objects missing ($MKT/6) — runbook output + table owners:"
+  tail -5 /tmp/rb_098.out /tmp/rb_099.out
+  docker exec teivaka_db psql -U teivaka -d teivaka_db -c "SELECT c.relname, pg_get_userbyid(c.relowner) AS owner FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='community' AND c.relname IN ('listings','listing_saves') AND c.relkind='r';"
+fi
 
 say "4/7 Run migrations AS OWNER (alembic upgrade head — the permanent fix)"
 PW=$(docker exec teivaka_db printenv POSTGRES_PASSWORD 2>/dev/null)
