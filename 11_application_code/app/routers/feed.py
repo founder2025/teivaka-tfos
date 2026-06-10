@@ -84,18 +84,22 @@ async def _notify(db, recipient, actor, ntype, post_id=None, reply_id=None, body
     if not recipient or str(recipient) == str(actor):
         return
     try:
-        await db.execute(text("""
-            INSERT INTO community.feed_notifications
-                (user_id, actor_user_id, type, post_id, reply_id, body)
-            VALUES (:uid, :actor, :t, :pid, :rid, :body)
-        """), {"uid": str(recipient), "actor": str(actor), "t": ntype,
-               "pid": post_id, "rid": reply_id, "body": body})
+        # SAVEPOINT-isolated: a failed notification insert must not poison the
+        # caller's transaction (it would abort the actual follow/reply/post).
+        async with db.begin_nested():
+            await db.execute(text("""
+                INSERT INTO community.feed_notifications
+                    (user_id, actor_user_id, type, post_id, reply_id, body)
+                VALUES (:uid, :actor, :t, :pid, :rid, :body)
+            """), {"uid": str(recipient), "actor": str(actor), "t": ntype,
+                   "pid": post_id, "rid": reply_id, "body": body})
     except Exception:  # noqa: BLE001 — notifications are non-critical
         pass
     # Web Push for the same event (best-effort; no-op until VAPID configured)
     try:
         from app.routers.chat import push_to_user
-        await push_to_user(db, recipient, "Teivaka", body or "New activity", url="/home")
+        async with db.begin_nested():
+            await push_to_user(db, recipient, "Teivaka", body or "New activity", url="/home")
     except Exception:  # noqa: BLE001
         pass
 
@@ -926,7 +930,12 @@ async def get_profile(target_id: str, user: dict = Depends(get_current_user)):
         following_n = (await db.execute(text("SELECT count(*) FROM community.follows WHERE follower_user_id=cast(:t AS uuid)"), {"t": target_id})).scalar() or 0
         records_n = 0
         try:
-            records_n = (await db.execute(text("SELECT count(*) FROM audit.events WHERE tenant_id = cast(:tid AS uuid)"), {"tid": str(u["tenant_id"])})).scalar() or 0
+            # SAVEPOINT-isolated (Strike #113 pattern): if the app role can't read
+            # audit.events, the failure must not poison the outer transaction —
+            # without this, every later query in the handler dies with
+            # InFailedSQLTransactionError and the whole profile 500s.
+            async with db.begin_nested():
+                records_n = (await db.execute(text("SELECT count(*) FROM audit.events WHERE tenant_id = cast(:tid AS uuid)"), {"tid": str(u["tenant_id"])})).scalar() or 0
         except Exception:  # noqa: BLE001
             records_n = 0
 

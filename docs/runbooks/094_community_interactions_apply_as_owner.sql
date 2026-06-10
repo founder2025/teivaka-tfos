@@ -35,3 +35,9 @@ ALTER TABLE community.feed_reactions ADD CONSTRAINT feed_reactions_target_type_c
 GRANT SELECT, INSERT, UPDATE, DELETE ON community.feed_hidden TO teivaka_app;
 GRANT SELECT, INSERT, UPDATE, DELETE ON community.user_mutes  TO teivaka_app;
 GRANT SELECT, INSERT, UPDATE, DELETE ON community.user_blocks TO teivaka_app;
+
+-- Profile "Records logged" stat reads the public audit ledger count (B72 scope):
+-- read-only, no RLS bypass concern — audit.events has no row secrets beyond
+-- hashes/types, and the profile endpoint visibility-gates the number anyway.
+GRANT USAGE ON SCHEMA audit TO teivaka_app;
+GRANT SELECT ON audit.events TO teivaka_app;

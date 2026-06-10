@@ -70,6 +70,9 @@ def upgrade():
         "GRANT SELECT, INSERT, UPDATE, DELETE ON community.feed_hidden TO teivaka_app",
         "GRANT SELECT, INSERT, UPDATE, DELETE ON community.user_mutes TO teivaka_app",
         "GRANT SELECT, INSERT, UPDATE, DELETE ON community.user_blocks TO teivaka_app",
+        # Profile "Records logged" stat: read-only count over the audit ledger
+        "GRANT USAGE ON SCHEMA audit TO teivaka_app",
+        "GRANT SELECT ON audit.events TO teivaka_app",
     ])
 
 
