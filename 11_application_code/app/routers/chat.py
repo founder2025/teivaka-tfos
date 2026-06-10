@@ -172,11 +172,11 @@ async def list_connections(user: dict = Depends(get_current_user)):
               ON f2.follower_user_id = f1.followed_user_id AND f2.followed_user_id = f1.follower_user_id
             JOIN tenant.users u ON u.user_id = f1.followed_user_id
             LEFT JOIN community.chat_threads th
-              ON (th.user_lo = :uid AND th.user_hi = u.user_id::text)
-              OR (th.user_lo = u.user_id::text AND th.user_hi = :uid)
-            WHERE f1.follower_user_id = cast(:uid AS uuid) AND u.is_active = TRUE
+              ON (th.user_lo = :uidt AND th.user_hi = u.user_id::text)
+              OR (th.user_lo = u.user_id::text AND th.user_hi = :uidt)
+            WHERE f1.follower_user_id = :uid AND u.is_active = TRUE
             ORDER BY th.last_message_at DESC NULLS LAST, u.full_name
-        """), {"uid": uid})).mappings().all()
+        """), {"uid": uid, "uidt": uid})).mappings().all()
     conns = [dict(r) for r in rows]
     pres = await _presence_map([str(c["user_id"]) for c in conns])
     for c in conns:
@@ -276,7 +276,7 @@ async def chat_unread_count(user: dict = Depends(get_current_user)):
         n = (await db.execute(text("""
             SELECT count(*) FROM community.chat_messages m
             JOIN community.chat_threads th ON th.thread_id = m.thread_id
-            WHERE (th.user_lo = :uid OR th.user_hi = :uid)
-              AND m.sender_user_id <> cast(:uid AS uuid) AND m.read_at IS NULL
-        """), {"uid": uid})).scalar() or 0
+            WHERE (th.user_lo = :uidt OR th.user_hi = :uidt)
+              AND m.sender_user_id <> :uid AND m.read_at IS NULL
+        """), {"uid": uid, "uidt": uid})).scalar() or 0
     return {"data": {"unread": n}}
