@@ -769,17 +769,17 @@ async def get_profile(target_id: str, user: dict = Depends(get_current_user)):
             SELECT user_id, tenant_id, full_name, email, role, account_type, country,
                    bio, avatar_url, whatsapp_number, field_visibility, created_at,
                    COALESCE(email_verified, FALSE) AS verified
-            FROM tenant.users WHERE user_id = :id AND is_active = TRUE
+            FROM tenant.users WHERE user_id = cast(:id AS uuid) AND is_active = TRUE
         """), {"id": target_id})).mappings().first()
         if not u:
             raise HTTPException(status_code=404, detail="Profile not found")
 
         is_you = viewer == str(u["user_id"])
         i_follow = bool((await db.execute(text(
-            "SELECT 1 FROM community.follows WHERE follower_user_id=:v AND followed_user_id=:t"),
+            "SELECT 1 FROM community.follows WHERE follower_user_id=cast(:v AS uuid) AND followed_user_id=cast(:t AS uuid)"),
             {"v": viewer, "t": target_id})).first())
         they_follow = bool((await db.execute(text(
-            "SELECT 1 FROM community.follows WHERE follower_user_id=:t AND followed_user_id=:v"),
+            "SELECT 1 FROM community.follows WHERE follower_user_id=cast(:t AS uuid) AND followed_user_id=cast(:v AS uuid)"),
             {"v": viewer, "t": target_id})).first())
         connected = i_follow and they_follow
         level = 3 if is_you else (2 if connected else (1 if i_follow else 0))
@@ -794,22 +794,22 @@ async def get_profile(target_id: str, user: dict = Depends(get_current_user)):
             return level >= _VIS_LEVEL.get(vis.get(field, "public"), 0)
 
         # stats
-        posts_n = (await db.execute(text("SELECT count(*) FROM community.feed_posts WHERE author_user_id=:t AND status='active'"), {"t": target_id})).scalar() or 0
-        followers_n = (await db.execute(text("SELECT count(*) FROM community.follows WHERE followed_user_id=:t"), {"t": target_id})).scalar() or 0
-        following_n = (await db.execute(text("SELECT count(*) FROM community.follows WHERE follower_user_id=:t"), {"t": target_id})).scalar() or 0
+        posts_n = (await db.execute(text("SELECT count(*) FROM community.feed_posts WHERE author_user_id=cast(:t AS uuid) AND status='active'"), {"t": target_id})).scalar() or 0
+        followers_n = (await db.execute(text("SELECT count(*) FROM community.follows WHERE followed_user_id=cast(:t AS uuid)"), {"t": target_id})).scalar() or 0
+        following_n = (await db.execute(text("SELECT count(*) FROM community.follows WHERE follower_user_id=cast(:t AS uuid)"), {"t": target_id})).scalar() or 0
         records_n = 0
         try:
-            records_n = (await db.execute(text("SELECT count(*) FROM audit.events WHERE tenant_id = :tid"), {"tid": str(u["tenant_id"])})).scalar() or 0
+            records_n = (await db.execute(text("SELECT count(*) FROM audit.events WHERE tenant_id = cast(:tid AS uuid)"), {"tid": str(u["tenant_id"])})).scalar() or 0
         except Exception:  # noqa: BLE001
             records_n = 0
 
         # visible posts
         vprof, _ = await _profile_of(db, viewer)
         if is_you:
-            pwhere = "fp.author_user_id = :t AND fp.status='active'"
+            pwhere = "fp.author_user_id = cast(:t AS uuid) AND fp.status='active'"
             pparams = {"t": target_id}
         else:
-            pwhere = """fp.author_user_id = :t AND fp.status='active' AND (
+            pwhere = """fp.author_user_id = cast(:t AS uuid) AND fp.status='active' AND (
                 fp.audience='everyone'
                 OR (fp.audience='followers' AND :ifollow)
                 OR fp.audience=:vprof)"""
