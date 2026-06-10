@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import text
 from app.db.session import get_rls_db
 from app.middleware.rls import get_current_user
+from app.utils.schema_probe import productions_category
 
 router = APIRouter()
 
@@ -126,9 +127,10 @@ async def get_harvest_report(farm_id: str, production_id: str = None, days: int 
     """Harvest summary by production type and cycle."""
     async with get_rls_db(str(user["tenant_id"])) as db:
         params = {"farm_id": farm_id, "tid": str(user["tenant_id"]), "days": days}
-        q = """
+        pcat_sel, pcat_grp = await productions_category(db)
+        q = f"""
             SELECT
-                p.production_id, p.production_name, p.production_category,
+                p.production_id, p.production_name, {pcat_sel},
                 COUNT(h.harvest_id) AS harvest_events,
                 COALESCE(SUM(h.gross_yield_kg), 0) AS total_kg,
                 COALESCE(AVG(h.gross_yield_kg), 0) AS avg_kg_per_harvest,
@@ -143,7 +145,7 @@ async def get_harvest_report(farm_id: str, production_id: str = None, days: int 
         if production_id:
             q += " AND c.production_id = :production_id"
             params["production_id"] = production_id
-        q += " GROUP BY p.production_id, p.production_name, p.production_category ORDER BY total_kg DESC"
+        q += f" GROUP BY p.production_id, p.production_name, {pcat_grp} ORDER BY total_kg DESC"
         result = await db.execute(text(q), params)
         return {"data": [dict(r) for r in result.mappings().all()]}
 

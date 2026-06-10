@@ -3,6 +3,7 @@ from sqlalchemy import text
 from app.db.session import get_rls_db
 from app.middleware.rls import get_current_user
 from app.core.task_engine import emit_task
+from app.utils.schema_probe import productions_category
 from pydantic import BaseModel
 from decimal import Decimal
 from datetime import datetime, date
@@ -38,7 +39,8 @@ class NurseryBatchCreate(BaseModel):
 async def list_nursery(farm_id: str = None, production_id: str = None, status: str = None, user: dict = Depends(get_current_user)):
     async with get_rls_db(str(user["tenant_id"])) as db:
         params = {"tid": str(user["tenant_id"])}
-        q = """SELECT nb.*, p.production_name, p.production_category
+        pcat_sel, _ = await productions_category(db)
+        q = f"""SELECT nb.*, p.production_name, {pcat_sel}
                FROM tenant.nursery_batches nb
                JOIN shared.productions p ON p.production_id = nb.production_id
                WHERE nb.tenant_id = :tid"""

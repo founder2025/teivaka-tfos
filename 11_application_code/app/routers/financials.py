@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import text
 from app.db.session import get_rls_db
 from app.middleware.rls import get_current_user
+from app.utils.schema_probe import productions_category
 
 router = APIRouter()
 
@@ -96,7 +97,8 @@ async def get_crop_financials(farm_id: str, user: dict = Depends(get_current_use
         # and inflate the SUMs. Real tables: production_cycles / harvest_log /
         # income_log / labor_attendance / input_transactions. CoKG = cost per kg
         # (labour + inputs) / harvested kg — cost only, matching the cycle detail.
-        result = await db.execute(text("""
+        pcat_sel, pcat_grp = await productions_category(db)
+        result = await db.execute(text(f"""
             WITH cyc AS (
                 SELECT cycle_id, production_id
                 FROM   tenant.production_cycles
@@ -110,7 +112,7 @@ async def get_crop_financials(farm_id: str, user: dict = Depends(get_current_use
             SELECT
                 p.production_id,
                 p.production_name,
-                p.production_category,
+                {pcat_sel},
                 COUNT(cyc.cycle_id) AS total_cycles,
                 COALESCE(SUM(inc.v), 0)  AS total_income_fjd,
                 COALESCE(SUM(lab.v), 0)  AS total_labor_fjd,
@@ -126,7 +128,7 @@ async def get_crop_financials(farm_id: str, user: dict = Depends(get_current_use
             LEFT JOIN lab ON lab.cycle_id = cyc.cycle_id
             LEFT JOIN inp ON inp.cycle_id = cyc.cycle_id
             LEFT JOIN hrv ON hrv.cycle_id = cyc.cycle_id
-            GROUP BY p.production_id, p.production_name, p.production_category
+            GROUP BY p.production_id, p.production_name, {pcat_grp}
             ORDER BY total_income_fjd DESC
         """), {"farm_id": farm_id, "tid": str(user["tenant_id"])})
 

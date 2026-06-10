@@ -4,6 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import get_rls_db, get_db, get_db_ctx
 from app.middleware.rls import get_current_user
 from app.utils.community_guard import community_write
+from app.utils.schema_probe import productions_category
 from pydantic import BaseModel
 from decimal import Decimal
 from datetime import datetime
@@ -87,6 +88,7 @@ async def list_community_listings(
         has_cat = bool((await db.execute(text(_col("listings", "category")))).scalar())
         has_sold = bool((await db.execute(text(_col("listings", "sold_at")))).scalar())
         has_saves = bool((await db.execute(text(_tbl("listing_saves")))).scalar())
+        pcat_sel, _ = await productions_category(db)
         vexpr = "COALESCE(u.kyc_verified, FALSE)" if has_kyc else "FALSE"
         saved_expr = ("EXISTS (SELECT 1 FROM community.listing_saves ls WHERE ls.listing_id = cl.listing_id AND ls.user_id = cast(:uid AS uuid))"
                       if has_saves else "FALSE")
@@ -97,7 +99,7 @@ async def list_community_listings(
             where = "cl.listing_status = 'ACTIVE' AND (cl.available_until IS NULL OR cl.available_until >= now())"
             if has_sold:
                 where += " AND cl.sold_at IS NULL"
-        q = f"""SELECT cl.*, p.production_name, p.production_category,
+        q = f"""SELECT cl.*, p.production_name, {pcat_sel},
                        u.full_name AS seller_name, u.avatar_url AS seller_avatar,
                        {vexpr} AS seller_verified, u.created_at AS seller_since,
                        {saved_expr} AS is_saved,

@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import text
 from app.db.session import get_rls_db
 from app.middleware.rls import get_current_user
+from app.utils.schema_probe import productions_category
 from pydantic import BaseModel
 from decimal import Decimal
 from datetime import datetime
@@ -30,7 +31,8 @@ async def list_price_master(
 ):
     async with get_rls_db(str(user["tenant_id"])) as db:
         params = {}
-        q = """SELECT pm.*, p.production_name, p.production_category
+        pcat_sel, _ = await productions_category(db)
+        q = f"""SELECT pm.*, p.production_name, {pcat_sel}
                FROM shared.price_master pm
                JOIN shared.productions p ON p.production_id = pm.production_id
                WHERE pm.is_active = true AND (pm.effective_to IS NULL OR pm.effective_to >= now())"""

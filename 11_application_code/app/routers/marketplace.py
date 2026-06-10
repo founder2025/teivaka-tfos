@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import text
 from app.db.session import get_rls_db, get_db
 from app.middleware.rls import get_current_user
+from app.utils.schema_probe import productions_category
 from pydantic import BaseModel
 from decimal import Decimal
 from datetime import datetime
@@ -35,7 +36,8 @@ async def get_market_prices(
     """
     async with get_rls_db(str(user["tenant_id"])) as db:
         params = {"production_id": production_id, "days": days}
-        q = """SELECT mp.*, p.production_name, p.production_category
+        pcat_sel, _ = await productions_category(db)
+        q = f"""SELECT mp.*, p.production_name, {pcat_sel}
                FROM community.market_price_reports mp
                JOIN shared.productions p ON p.production_id = mp.production_id
                WHERE mp.production_id = :production_id

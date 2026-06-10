@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy import text
 from app.db.session import get_rls_db
 from app.middleware.rls import get_current_user
+from app.utils.schema_probe import productions_category
 
 router = APIRouter()
 
@@ -46,6 +47,7 @@ async def export_cycles_csv(farm_id: str, production_id: str = None, user: dict 
         if production_id:
             prod_filter = " AND c.production_id = :production_id"
             params["production_id"] = production_id
+        pcat_sel, _ = await productions_category(db)
         q = f"""
             WITH cyc AS (
                 SELECT c.cycle_id, c.production_id, c.farmer_label, c.cycle_status,
@@ -61,7 +63,7 @@ async def export_cycles_csv(farm_id: str, production_id: str = None, user: dict 
             inp AS (SELECT cycle_id, SUM(total_cost_fjd) AS v FROM tenant.input_transactions WHERE tenant_id = :tid AND txn_type = 'USAGE' GROUP BY cycle_id)
             SELECT cyc.cycle_id,
                    COALESCE(cyc.farmer_label, p.production_name) AS cycle_name,
-                   p.production_name, p.production_category,
+                   p.production_name, {pcat_sel},
                    cyc.start_date, cyc.end_date, cyc.cycle_status,
                    cyc.planned_area_sqm AS area_sqm, cyc.planned_yield_kg,
                    COALESCE(hrv.kg, 0)    AS harvest_kg,
