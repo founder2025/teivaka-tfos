@@ -23,7 +23,12 @@ so they can't drift. Reads are authenticated (feed is a logged-in surface) so we
 compute per-viewer state and honour audience visibility. Writes set tenant_id for
 provenance (community.* has no RLS). FKs to tenant.users.
 """
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+import os
+import re
+import pathlib
+import shutil
+from fastapi import APIRouter, Depends, HTTPException, Query, status, UploadFile, File
+from fastapi.responses import FileResponse
 from sqlalchemy import text
 from pydantic import BaseModel
 from datetime import datetime
@@ -37,6 +42,18 @@ router = APIRouter()
 
 REACTIONS = {"strong_crop", "good_harvest", "vinaka", "hoping_rain", "learning"}
 _PROFESSION = {"FARMER": "farmer", "BUYER": "buyer", "SUPPLIER": "service_provider", "OTHER": "business"}
+_AUDIENCES = ("everyone", "followers", "farmer", "buyer", "banker", "business", "service_provider")
+
+# Upload storage — served back through /api/v1/community/uploads/{name} (Caddy proxies
+# /api/* to the API). Mount a volume at this path in compose to survive rebuilds.
+MEDIA_DIR = pathlib.Path(os.environ.get("TFOS_MEDIA_DIR", "/app/uploads"))
+try:
+    MEDIA_DIR.mkdir(parents=True, exist_ok=True)
+except Exception:  # noqa: BLE001 — never let upload-dir setup block API boot
+    pass
+_ALLOWED_EXT = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".mp4", ".webm", ".mov"}
+_MAX_BYTES = 15 * 1024 * 1024  # 15 MB
+_MENTION_RE = re.compile(r"@\[([^\]]+)\]")
 
 
 def _pid():
@@ -47,10 +64,38 @@ def _rid():
     return "CRPL-" + uuid.uuid4().hex[:8].upper()
 
 
-async def _profession_of(db, user_id) -> str:
+async def _profile_of(db, user_id):
+    """(profession, country) snapshot for a user."""
     row = (await db.execute(text(
-        "SELECT account_type FROM tenant.users WHERE user_id = :uid"), {"uid": str(user_id)})).mappings().first()
-    return _PROFESSION.get((row or {}).get("account_type", "FARMER"), "farmer")
+        "SELECT account_type, country FROM tenant.users WHERE user_id = :uid"),
+        {"uid": str(user_id)})).mappings().first() or {}
+    return _PROFESSION.get(row.get("account_type", "FARMER"), "farmer"), (row.get("country") or "FJ")
+
+
+async def _profession_of(db, user_id) -> str:
+    prof, _ = await _profile_of(db, user_id)
+    return prof
+
+
+async def _notify(db, recipient, actor, ntype, post_id=None, reply_id=None, body=None):
+    """Insert a notification (skips self-actions). Best-effort — never blocks the action."""
+    if not recipient or str(recipient) == str(actor):
+        return
+    try:
+        await db.execute(text("""
+            INSERT INTO community.feed_notifications
+                (user_id, actor_user_id, type, post_id, reply_id, body)
+            VALUES (:uid, :actor, :t, :pid, :rid, :body)
+        """), {"uid": str(recipient), "actor": str(actor), "t": ntype,
+               "pid": post_id, "rid": reply_id, "body": body})
+    except Exception:  # noqa: BLE001 — notifications are non-critical
+        pass
+
+
+async def _post_author(db, post_id):
+    r = (await db.execute(text(
+        "SELECT author_user_id FROM community.feed_posts WHERE post_id = :p"), {"p": post_id})).first()
+    return r[0] if r else None
 
 
 # ----------------------------------------------------------------------------- models
@@ -63,6 +108,16 @@ class PostCreate(BaseModel):
     mentions: Optional[List[str]] = []
     is_question: bool = False
     link_audit_hash: Optional[str] = None
+    reach: str = "LOCAL"          # LOCAL | GLOBAL (exporter/importer global trade)
+    kind: str = "POST"           # POST | EDU_REEL (educational reel — global reach)
+
+
+class PostEdit(BaseModel):
+    body: str
+
+
+class ReportBody(BaseModel):
+    reason: str
 
 
 class ReplyCreate(BaseModel):
@@ -95,11 +150,21 @@ async def list_feed(
 ):
     uid = str(user["user_id"])
     async with get_db() as db:
-        viewer_prof = await _profession_of(db, uid)
-        params = {"uid": uid, "limit": limit, "offset": offset, "vprof": viewer_prof}
+        viewer_prof, viewer_country = await _profile_of(db, uid)
+        params = {"uid": uid, "limit": limit, "offset": offset, "vprof": viewer_prof, "vcountry": viewer_country}
         where = ["fp.status = 'active'"]
 
-        # audience visibility
+        # country wall: same-country only, EXCEPT educational reels + exporter/importer
+        # GLOBAL posts reach every country. (Own posts always visible.)
+        where.append("""(
+            fp.author_user_id = :uid
+            OR fp.kind = 'EDU_REEL'
+            OR fp.reach = 'GLOBAL'
+            OR fp.country IS NULL
+            OR fp.country = :vcountry
+        )""")
+
+        # audience visibility (NOT follow-gated — profession/everyone within country)
         where.append("""(
             fp.author_user_id = :uid
             OR fp.audience = 'everyone'
@@ -169,33 +234,62 @@ async def create_feed_post(body: PostCreate, user: dict = Depends(get_current_us
     if not (body.body and body.body.strip()):
         raise HTTPException(status_code=422, detail="Post body is required")
     post_id = _pid()
+    mentions = body.mentions or _MENTION_RE.findall(body.body)
+    reach = "GLOBAL" if str(body.reach).upper() == "GLOBAL" else "LOCAL"
+    kind = "EDU_REEL" if str(body.kind).upper() == "EDU_REEL" else "POST"
     async with get_rls_db(str(user["tenant_id"])) as db:
-        prof = await _profession_of(db, user["user_id"])
+        prof, country = await _profile_of(db, user["user_id"])
         await db.execute(text("""
             INSERT INTO community.feed_posts
-                (post_id, tenant_id, author_user_id, author_profession, body, post_type,
-                 is_question, audience, location, vertical, photos, mentions, link_audit_hash, audit_hash)
+                (post_id, tenant_id, author_user_id, author_profession, country, reach, kind,
+                 body, post_type, is_question, audience, location, vertical, photos, mentions,
+                 link_audit_hash, audit_hash)
             VALUES
-                (:post_id, :tenant_id, :author_user_id, :prof, :body, :post_type,
-                 :is_question, :audience, :location, :vertical, :photos, :mentions, :link, :audit_hash)
+                (:post_id, :tenant_id, :author_user_id, :prof, :country, :reach, :kind,
+                 :body, :post_type, :is_question, :audience, :location, :vertical, :photos, :mentions,
+                 :link, :audit_hash)
         """), {
             "post_id": post_id,
             "tenant_id": str(user["tenant_id"]),
             "author_user_id": str(user["user_id"]),
             "prof": prof,
+            "country": country,
+            "reach": reach,
+            "kind": kind,
             "body": body.body.strip(),
             "post_type": "QUESTION" if body.is_question else ("PHOTO" if body.photos else "UPDATE"),
             "is_question": body.is_question,
-            "audience": body.audience if body.audience in
-                ("everyone", "followers", "farmer", "buyer", "banker", "business", "service_provider") else "everyone",
+            "audience": body.audience if body.audience in _AUDIENCES else "everyone",
             "location": body.location,
             "vertical": body.vertical,
             "photos": body.photos or [],
-            "mentions": body.mentions or [],
+            "mentions": mentions,
             "link": body.link_audit_hash,
             "audit_hash": uuid.uuid4().hex[:12],
         })
+        # notify mentioned users (resolve names → user_ids)
+        for name in mentions[:10]:
+            r = (await db.execute(text(
+                "SELECT user_id FROM tenant.users WHERE full_name = :n AND is_active = TRUE LIMIT 1"),
+                {"n": name})).first()
+            if r:
+                await _notify(db, r[0], user["user_id"], "MENTION", post_id=post_id,
+                              body=f"{user.get('full_name','Someone')} mentioned you")
     return {"data": {"post_id": post_id}}
+
+
+@router.patch("/feed/{post_id}")
+async def edit_feed_post(post_id: str, body: PostEdit, user: dict = Depends(get_current_user)):
+    if not (body.body and body.body.strip()):
+        raise HTTPException(status_code=422, detail="Post body is required")
+    async with get_rls_db(str(user["tenant_id"])) as db:
+        res = await db.execute(text("""
+            UPDATE community.feed_posts SET body = :body, edited_at = now()
+            WHERE post_id = :pid AND author_user_id = :uid AND status = 'active'
+        """), {"body": body.body.strip(), "pid": post_id, "uid": str(user["user_id"])})
+        if res.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Post not found or not yours")
+    return {"data": {"post_id": post_id, "edited": True}}
 
 
 @router.delete("/feed/{post_id}")
@@ -218,6 +312,8 @@ async def like_post(post_id: str, user: dict = Depends(get_current_user)):
             INSERT INTO community.feed_likes (post_id, user_id) VALUES (:pid, :uid)
             ON CONFLICT DO NOTHING
         """), {"pid": post_id, "uid": str(user["user_id"])})
+        await _notify(db, await _post_author(db, post_id), user["user_id"], "LIKE",
+                      post_id=post_id, body=f"{user.get('full_name','Someone')} liked your post")
     return {"data": {"post_id": post_id, "liked": True}}
 
 
@@ -240,6 +336,8 @@ async def react_post(post_id: str, body: ReactBody, user: dict = Depends(get_cur
             VALUES (:uid, 'post', :pid, :rx)
             ON CONFLICT (user_id, target_type, target_id) DO UPDATE SET reaction = EXCLUDED.reaction
         """), {"uid": str(user["user_id"]), "pid": post_id, "rx": body.reaction})
+        await _notify(db, await _post_author(db, post_id), user["user_id"], "REACT",
+                      post_id=post_id, body=f"{user.get('full_name','Someone')} reacted to your post")
     return {"data": {"post_id": post_id, "reaction": body.reaction}}
 
 
@@ -270,6 +368,8 @@ async def repost(post_id: str, body: RepostBody, user: dict = Depends(get_curren
             "pid": new_id, "tid": str(user["tenant_id"]), "uid": str(user["user_id"]), "prof": prof,
             "body": (body.body or "").strip() or "Reposted", "orig": post_id, "audit_hash": uuid.uuid4().hex[:12],
         })
+        await _notify(db, await _post_author(db, post_id), user["user_id"], "REPOST",
+                      post_id=post_id, body=f"{user.get('full_name','Someone')} reposted your post")
     return {"data": {"post_id": new_id, "repost_of_id": post_id}}
 
 
@@ -306,6 +406,8 @@ async def share_post(post_id: str, body: ShareBody, user: dict = Depends(get_cur
             INSERT INTO community.feed_shares (post_id, from_user_id, to_user_id, note)
             VALUES (:pid, :from_id, :to_id, :note)
         """), {"pid": post_id, "from_id": str(user["user_id"]), "to_id": body.to_user_id, "note": body.note})
+        await _notify(db, body.to_user_id, user["user_id"], "SHARE", post_id=post_id,
+                      body=f"{user.get('full_name','Someone')} shared a post with you")
     return {"data": {"post_id": post_id, "shared_with": body.to_user_id}}
 
 
@@ -366,6 +468,9 @@ async def add_reply(post_id: str, body: ReplyCreate, user: dict = Depends(get_cu
             "tid": str(user["tenant_id"]), "uid": str(user["user_id"]), "prof": prof,
             "body": body.body.strip(), "photos": body.photos or [],
         })
+        await _notify(db, await _post_author(db, post_id), user["user_id"], "REPLY",
+                      post_id=post_id, reply_id=reply_id,
+                      body=f"{user.get('full_name','Someone')} replied to your post")
     return {"data": {"reply_id": reply_id, "post_id": post_id}}
 
 
@@ -411,6 +516,8 @@ async def follow(target_user_id: str, user: dict = Depends(get_current_user)):
             INSERT INTO community.follows (follower_user_id, followed_user_id)
             VALUES (:me, :them) ON CONFLICT DO NOTHING
         """), {"me": str(user["user_id"]), "them": target_user_id})
+        await _notify(db, target_user_id, user["user_id"], "FOLLOW",
+                      body=f"{user.get('full_name','Someone')} started following you")
     return {"data": {"following": target_user_id}}
 
 
@@ -477,3 +584,91 @@ async def unfollow_topic(topic: str, user: dict = Depends(get_current_user)):
         await db.execute(text("DELETE FROM community.topic_follows WHERE user_id=:uid AND topic=:t"),
                          {"uid": str(user["user_id"]), "t": topic})
     return {"data": {"topic": topic, "following": False}}
+
+
+# ----------------------------------------------------------------------------- notifications
+@router.get("/notifications")
+async def list_notifications(limit: int = Query(30, ge=1, le=100), user: dict = Depends(get_current_user)):
+    uid = str(user["user_id"])
+    async with get_db() as db:
+        rows = (await db.execute(text("""
+            SELECT n.notification_id, n.type, n.post_id, n.reply_id, n.body, n.read_at, n.created_at,
+                   a.full_name AS actor_name
+            FROM community.feed_notifications n
+            LEFT JOIN tenant.users a ON a.user_id = n.actor_user_id
+            WHERE n.user_id = :uid
+            ORDER BY n.created_at DESC LIMIT :lim
+        """), {"uid": uid, "lim": limit})).mappings().all()
+        unread = (await db.execute(text(
+            "SELECT count(*) FROM community.feed_notifications WHERE user_id = :uid AND read_at IS NULL"),
+            {"uid": uid})).scalar() or 0
+    return {"data": [dict(r) for r in rows], "unread": unread}
+
+
+@router.get("/notifications/count")
+async def notifications_count(user: dict = Depends(get_current_user)):
+    async with get_db() as db:
+        unread = (await db.execute(text(
+            "SELECT count(*) FROM community.feed_notifications WHERE user_id = :uid AND read_at IS NULL"),
+            {"uid": str(user["user_id"])})).scalar() or 0
+    return {"data": {"unread": unread}}
+
+
+@router.post("/notifications/read")
+async def mark_notifications_read(user: dict = Depends(get_current_user)):
+    async with get_rls_db(str(user["tenant_id"])) as db:
+        await db.execute(text(
+            "UPDATE community.feed_notifications SET read_at = now() WHERE user_id = :uid AND read_at IS NULL"),
+            {"uid": str(user["user_id"])})
+    return {"data": {"ok": True}}
+
+
+# ----------------------------------------------------------------------------- report / moderation
+@router.post("/feed/{post_id}/report")
+async def report_post(post_id: str, body: ReportBody, user: dict = Depends(get_current_user)):
+    if not (body.reason and body.reason.strip()):
+        raise HTTPException(status_code=422, detail="A reason is required")
+    async with get_rls_db(str(user["tenant_id"])) as db:
+        await db.execute(text("""
+            INSERT INTO community.feed_flags (post_id, reporter_user_id, reason)
+            VALUES (:pid, :uid, :reason)
+        """), {"pid": post_id, "uid": str(user["user_id"]), "reason": body.reason.strip()})
+    return {"data": {"post_id": post_id, "reported": True}}
+
+
+# ----------------------------------------------------------------------------- uploads
+@router.post("/uploads")
+async def upload_media(file: UploadFile = File(...), user: dict = Depends(get_current_user)):
+    """Store an image/short video and return a URL served back through this API
+    (Caddy proxies /api/* → API, so no web-server change needed)."""
+    ext = pathlib.Path(file.filename or "").suffix.lower()
+    if ext not in _ALLOWED_EXT:
+        raise HTTPException(status_code=415, detail=f"Unsupported file type {ext or '?'}")
+    name = f"{uuid.uuid4().hex}{ext}"
+    dest = MEDIA_DIR / name
+    size = 0
+    try:
+        with dest.open("wb") as out:
+            while True:
+                chunk = await file.read(1024 * 1024)
+                if not chunk:
+                    break
+                size += len(chunk)
+                if size > _MAX_BYTES:
+                    out.close()
+                    dest.unlink(missing_ok=True)
+                    raise HTTPException(status_code=413, detail="File too large (max 15 MB)")
+                out.write(chunk)
+    finally:
+        await file.close()
+    return {"data": {"url": f"/api/v1/community/uploads/{name}", "name": name, "bytes": size}}
+
+
+@router.get("/uploads/{name}")
+async def get_media(name: str):
+    """Public read of an uploaded asset."""
+    safe = pathlib.Path(name).name  # strip any path traversal
+    path = MEDIA_DIR / safe
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="Not found")
+    return FileResponse(path)

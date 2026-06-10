@@ -10,7 +10,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   Image, MapPin, HelpCircle, Link2, Send, Star, MessageSquare, Repeat2, Share2,
   Smile, MoreHorizontal, Trash2, Check, BadgeCheck, X, Leaf, ShoppingBag, Gift,
-  Droplet, BookOpen, Rss, UserPlus, UserCheck,
+  Droplet, BookOpen, Rss, UserPlus, UserCheck, Pencil, Flag,
 } from "lucide-react";
 import { getCurrentUser } from "../../utils/auth";
 
@@ -151,17 +151,51 @@ function TopicsModal({ onClose }) {
 }
 
 /* ---------------- composer ---------------- */
+async function uploadFile(f) {
+  const fd = new FormData();
+  fd.append("file", f);
+  const t = localStorage.getItem("tfos_access_token");
+  const r = await fetch(`${API}/uploads`, { method: "POST", headers: t ? { Authorization: `Bearer ${t}` } : {}, body: fd });
+  if (!r.ok) throw new Error((await r.json().catch(() => ({})))?.detail || "Upload failed");
+  return (await r.json())?.data?.url;
+}
+
+function MentionPicker({ onPick, onClose }) {
+  const [q, setQ] = useState("");
+  const [people, setPeople] = useState(null);
+  useEffect(() => { const id = setTimeout(() => getJSON(`${API}/people${q ? `?search=${encodeURIComponent(q)}` : ""}`).then((r) => setPeople(r.data || [])).catch(() => setPeople([])), 200); return () => clearTimeout(id); }, [q]);
+  return (
+    <Overlay title="Mention someone" onClose={onClose}>
+      <input style={{ ...inp, marginBottom: 10 }} placeholder="Search people…" value={q} onChange={(e) => setQ(e.target.value)} autoFocus />
+      <div style={{ maxHeight: 240, overflowY: "auto", display: "flex", flexDirection: "column", gap: 6 }}>
+        {people == null ? <div className="cm-empty">Loading…</div> : people.length === 0 ? <div className="cm-empty">No people found.</div> :
+          people.map((p) => (
+            <button key={p.user_id} className="cm-menu-item" onClick={() => onPick(p.full_name)}>
+              <span className="avatar-circle avatar-cm-reply">{initials(p.full_name)}</span>
+              <span style={{ flex: 1 }}>{p.full_name}</span>
+              <span className="cm-prof-badge">{PROF_LABEL[p.profession] || p.profession}</span>
+            </button>
+          ))}
+      </div>
+    </Overlay>
+  );
+}
+
+const BLANK_DRAFT = { body: "", audience: "everyone", photos: [], location: null, vertical: "", isQuestion: false, link: null, reach: "LOCAL", kind: "POST" };
 function Composer({ me, onPosted }) {
-  const [draft, setDraft] = useState({ body: "", audience: "everyone", photos: [], location: null, vertical: "", isQuestion: false, link: null });
+  const [draft, setDraft] = useState(BLANK_DRAFT);
   const [busy, setBusy] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [modal, setModal] = useState(null);
   const fileRef = useRef();
   const set = (k, v) => setDraft((d) => ({ ...d, [k]: v }));
-  const pickFile = (e) => {
-    const f = e.target.files?.[0]; if (!f) return;
-    const reader = new FileReader();
-    reader.onload = () => setDraft((d) => ({ ...d, photos: [...d.photos, { id: Math.random().toString(36).slice(2), dataUrl: reader.result }] }));
-    reader.readAsDataURL(f); e.target.value = "";
+  const pickFile = async (e) => {
+    const f = e.target.files?.[0]; e.target.value = ""; if (!f) return;
+    setUploading(true);
+    try {
+      const url = await uploadFile(f);
+      setDraft((d) => ({ ...d, photos: [...d.photos, { id: Math.random().toString(36).slice(2), url, video: f.type.startsWith("video") }] }));
+    } catch (err) { alert(String(err.message || err)); } finally { setUploading(false); }
   };
   const post = async () => {
     if (!draft.body.trim()) return;
@@ -169,12 +203,12 @@ function Composer({ me, onPosted }) {
     try {
       await send("POST", `${API}/feed`, {
         body: draft.body.trim(), audience: draft.audience, location: draft.location,
-        vertical: draft.vertical.trim() || null, photos: draft.photos.map((p) => p.dataUrl),
-        is_question: draft.isQuestion, link_audit_hash: draft.link,
+        vertical: draft.vertical.trim() || null, photos: draft.photos.map((p) => p.url),
+        is_question: draft.isQuestion, link_audit_hash: draft.link, reach: draft.reach, kind: draft.kind,
       });
-      setDraft({ body: "", audience: "everyone", photos: [], location: null, vertical: "", isQuestion: false, link: null });
+      setDraft(BLANK_DRAFT);
       onPosted();
-    } finally { setBusy(false); }
+    } catch (err) { alert(String(err.message || err)); } finally { setBusy(false); }
   };
   return (
     <div className="cm-composer">
@@ -183,29 +217,35 @@ function Composer({ me, onPosted }) {
         <textarea placeholder="Share with your network…" value={draft.body} onChange={(e) => set("body", e.target.value)} />
         <div className="cm-composer-extras">
           {draft.photos.map((ph) => (
-            <div className="cm-draft-thumb" key={ph.id}><img src={ph.dataUrl} alt="" /><button className="cm-draft-thumb-x" onClick={() => set("photos", draft.photos.filter((p) => p.id !== ph.id))}><X size={11} /></button></div>
+            <div className="cm-draft-thumb" key={ph.id}>{ph.video ? <video src={ph.url} muted /> : <img src={ph.url} alt="" />}<button className="cm-draft-thumb-x" onClick={() => set("photos", draft.photos.filter((p) => p.id !== ph.id))}><X size={11} /></button></div>
           ))}
           {draft.location && <span className="cm-draft-tag"><MapPin size={11} />{draft.location}<button className="cm-draft-tag-x" onClick={() => set("location", null)}><X size={10} /></button></span>}
           {draft.link && <span className="cm-draft-tag"><Link2 size={11} />Record {draft.link}<button className="cm-draft-tag-x" onClick={() => set("link", null)}><X size={10} /></button></span>}
           {draft.isQuestion && <span className="cm-draft-tag"><HelpCircle size={11} />Question<button className="cm-draft-tag-x" onClick={() => set("isQuestion", false)}><X size={10} /></button></span>}
+          {draft.kind === "EDU_REEL" && <span className="cm-draft-tag"><BookOpen size={11} />Educational reel (global)<button className="cm-draft-tag-x" onClick={() => set("kind", "POST")}><X size={10} /></button></span>}
+          {draft.reach === "GLOBAL" && <span className="cm-draft-tag">🌐 Global reach<button className="cm-draft-tag-x" onClick={() => set("reach", "LOCAL")}><X size={10} /></button></span>}
         </div>
         <div className="cm-composer-foot">
           <div className="cm-composer-tools">
-            <button className="cm-tool-btn" onClick={() => fileRef.current?.click()}><Image size={13} />Photo / Video</button>
-            <input ref={fileRef} type="file" accept="image/*" hidden onChange={pickFile} />
+            <button className="cm-tool-btn" onClick={() => fileRef.current?.click()} disabled={uploading}><Image size={13} />{uploading ? "Uploading…" : "Photo / Video"}</button>
+            <input ref={fileRef} type="file" accept="image/*,video/*" hidden onChange={pickFile} />
             <button className="cm-tool-btn" onClick={() => setModal("place")}><MapPin size={13} />Place</button>
             <button className={`cm-tool-btn ${draft.isQuestion ? "cm-tool-active" : ""}`} onClick={() => set("isQuestion", !draft.isQuestion)}><HelpCircle size={13} />Ask</button>
+            <button className="cm-tool-btn" onClick={() => setModal("mention")}><UserPlus size={13} />Mention</button>
             <button className="cm-tool-btn" onClick={() => setModal("link")}><Link2 size={13} />Link record</button>
+            <button className={`cm-tool-btn ${draft.kind === "EDU_REEL" ? "cm-tool-active" : ""}`} onClick={() => set("kind", draft.kind === "EDU_REEL" ? "POST" : "EDU_REEL")}><BookOpen size={13} />Reel</button>
+            <button className={`cm-tool-btn ${draft.reach === "GLOBAL" ? "cm-tool-active" : ""}`} onClick={() => set("reach", draft.reach === "GLOBAL" ? "LOCAL" : "GLOBAL")} title="Global reach (exporters/importers)">🌐</button>
             <select className="cm-audience-select" value={draft.audience} onChange={(e) => set("audience", e.target.value)}>
               {AUDIENCES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
             </select>
           </div>
-          <button className="btn btn-primary" disabled={busy || !draft.body.trim()} onClick={post}><Send size={13} />{busy ? "Posting…" : "Post"}</button>
+          <button className="btn btn-primary" disabled={busy || uploading || !draft.body.trim()} onClick={post}><Send size={13} />{busy ? "Posting…" : "Post"}</button>
         </div>
-        <div className="cm-composer-hint">Posts are public to your followers. Use @[Name] to mention. Reports go to Cody as moderator.</div>
+        <div className="cm-composer-hint">Seen by your country's {draft.audience === "everyone" ? "whole network" : draft.audience} (global if Reel/🌐). Use Mention to tag people. Reports go to Cody as moderator.</div>
       </div>
       {modal === "place" && <PlaceModal onClose={() => setModal(null)} onPick={(v) => { set("location", v); setModal(null); }} />}
       {modal === "link" && <LinkRecordModal onClose={() => setModal(null)} onPick={(v) => { set("link", v); setModal(null); }} />}
+      {modal === "mention" && <MentionPicker onClose={() => setModal(null)} onPick={(name) => { set("body", `${draft.body}${draft.body && !draft.body.endsWith(" ") ? " " : ""}@[${name}] `); setModal(null); }} />}
     </div>
   );
 }
@@ -281,7 +321,17 @@ function PostCard({ post, me, onChange, onRemoved }) {
   const [showTray, setShowTray] = useState(false);
   const [menu, setMenu] = useState(false);
   const [share, setShare] = useState(false);
-  useEffect(() => setP(post), [post]);
+  const [editing, setEditing] = useState(false);
+  const [editText, setEditText] = useState(post.body);
+  const [reporting, setReporting] = useState(false);
+  useEffect(() => { setP(post); setEditText(post.body); }, [post]);
+  const mine = p.author_user_id === me?.user_id;
+
+  const saveEdit = async () => {
+    if (!editText.trim()) return;
+    try { await send("PATCH", `${API}/feed/${p.post_id}`, { body: editText.trim() }); setP({ ...p, body: editText.trim(), edited_at: new Date().toISOString() }); setEditing(false); }
+    catch (e) { alert(String(e.message || e)); }
+  };
 
   const toggleLike = async () => {
     const liked = !p.liked;
@@ -322,11 +372,18 @@ function PostCard({ post, me, onChange, onRemoved }) {
           <div className="cm-post-meta">{fmtTime(p.created_at)}{p.location ? ` · ${p.location}` : ""}{p.vertical ? ` · ${p.vertical}` : ""}</div>
         </div>
         <div className="cm-post-head-actions">
-          {p.author_user_id === me?.user_id && (
-            <>
-              <button className="cm-post-menu-btn" onClick={() => setMenu(!menu)}><MoreHorizontal size={16} /></button>
-              {menu && <div className="cm-post-menu-modal"><button className="cm-menu-item cm-menu-danger" onClick={del}><Trash2 size={14} />Delete post</button></div>}
-            </>
+          <button className="cm-post-menu-btn" onClick={() => setMenu(!menu)}><MoreHorizontal size={16} /></button>
+          {menu && (
+            <div className="cm-post-menu-modal">
+              {mine ? (
+                <>
+                  <button className="cm-menu-item" onClick={() => { setMenu(false); setEditing(true); }}><Pencil size={14} />Edit post</button>
+                  <button className="cm-menu-item cm-menu-danger" onClick={del}><Trash2 size={14} />Delete post</button>
+                </>
+              ) : (
+                <button className="cm-menu-item cm-menu-danger" onClick={() => { setMenu(false); setReporting(true); }}><Flag size={14} />Report post</button>
+              )}
+            </div>
           )}
         </div>
       </div>
@@ -338,13 +395,23 @@ function PostCard({ post, me, onChange, onRemoved }) {
         </div>
       )}
 
-      <div className="cm-post-body">{renderBody(p.body)}</div>
+      {editing ? (
+        <div style={{ marginBottom: 10 }}>
+          <textarea className="cm-edit-area" value={editText} onChange={(e) => setEditText(e.target.value)} style={{ width: "100%", minHeight: 60, padding: 8, border: "1px solid var(--line)", borderRadius: 6, fontFamily: "inherit", fontSize: 13.5, boxSizing: "border-box" }} />
+          <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
+            <button className="btn btn-sm btn-primary" onClick={saveEdit}>Save</button>
+            <button className="btn btn-sm btn-secondary" onClick={() => { setEditing(false); setEditText(p.body); }}>Cancel</button>
+          </div>
+        </div>
+      ) : (
+        <div className="cm-post-body">{renderBody(p.body)}{p.edited_at && <span style={{ fontSize: 10.5, color: "var(--muted)" }}> · edited</span>}</div>
+      )}
 
       {p.link_audit_hash && (
         <a className="cm-link-record" href={`/verify/${p.link_audit_hash}`} target="_blank" rel="noreferrer"><Link2 size={12} />Linked record · {p.link_audit_hash}</a>
       )}
       {p.photos?.length > 0 && (
-        <div className="cm-post-photos">{p.photos.map((src, i) => <img key={i} src={src} alt="" />)}</div>
+        <div className="cm-post-photos">{p.photos.map((src, i) => (/\.(mp4|webm|mov)$/i.test(src) ? <video key={i} src={src} controls /> : <img key={i} src={src} alt="" />))}</div>
       )}
 
       {summaryKeys.length > 0 && (
@@ -371,7 +438,31 @@ function PostCard({ post, me, onChange, onRemoved }) {
       {showReplies && <Replies post={p} me={me} onCount={(n) => setP((pp) => ({ ...pp, reply_count: n }))} />}
 
       {share && <ShareModal post={p} onClose={() => setShare(false)} onShared={(u) => { setShare(false); }} />}
+      {reporting && <ReportModal post={p} onClose={() => setReporting(false)} />}
     </div>
+  );
+}
+
+function ReportModal({ post, onClose }) {
+  const [reason, setReason] = useState("");
+  const [busy, setBusy] = useState(false); const [done, setDone] = useState(false);
+  const submit = async () => {
+    if (!reason.trim()) return;
+    setBusy(true);
+    try { await send("POST", `${API}/feed/${post.post_id}/report`, { reason: reason.trim() }); setDone(true); }
+    catch (e) { alert(String(e.message || e)); setBusy(false); }
+  };
+  return (
+    <Overlay title="Report post" onClose={onClose}
+      foot={done ? <button className="btn btn-primary" onClick={onClose}>Close</button> :
+        <><button className="btn btn-secondary" onClick={onClose}>Cancel</button><button className="btn btn-primary" disabled={busy || !reason.trim()} onClick={submit}>{busy ? "Sending…" : "Report"}</button></>}>
+      {done ? <div className="comm-note">Thanks — this post was reported to the moderator.</div> : (
+        <>
+          <p style={{ fontSize: 12.5, color: "var(--muted)", marginTop: 0 }}>Tell the moderator (Cody) what's wrong with this post.</p>
+          <textarea style={{ ...inp, minHeight: 70 }} placeholder="Reason (spam, abuse, false info, …)" value={reason} onChange={(e) => setReason(e.target.value)} />
+        </>
+      )}
+    </Overlay>
   );
 }
 
@@ -382,13 +473,30 @@ export default function FeedView({ initialFilter = "all" }) {
   const [verifiedOnly, setVerifiedOnly] = useState(false);
   const [posts, setPosts] = useState(null);
   const [topicsOpen, setTopicsOpen] = useState(false);
+  const [more, setMore] = useState(false);
+  const [end, setEnd] = useState(false);
+  const PAGE = 20;
 
-  const load = () => {
-    setPosts(null);
-    getJSON(`${API}/feed?filter=${filter}&verified_only=${verifiedOnly}&limit=40`)
-      .then((r) => setPosts(r.data || [])).catch(() => setPosts([]));
+  const load = (silent) => {
+    if (!silent) setPosts(null);
+    setEnd(false);
+    getJSON(`${API}/feed?filter=${filter}&verified_only=${verifiedOnly}&limit=${PAGE}&offset=0`)
+      .then((r) => { const d = r.data || []; setPosts(d); setEnd(d.length < PAGE); }).catch(() => setPosts([]));
   };
-  useEffect(() => { load(); }, [filter, verifiedOnly]);
+  const loadMore = () => {
+    setMore(true);
+    getJSON(`${API}/feed?filter=${filter}&verified_only=${verifiedOnly}&limit=${PAGE}&offset=${posts.length}`)
+      .then((r) => { const d = r.data || []; setPosts((cur) => [...cur, ...d]); setEnd(d.length < PAGE); })
+      .catch(() => {}).finally(() => setMore(false));
+  };
+  useEffect(() => { load(); /* eslint-disable-next-line */ }, [filter, verifiedOnly]);
+  // refresh when the tab/window regains focus so others' new posts appear
+  useEffect(() => {
+    const onFocus = () => load(true);
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+    /* eslint-disable-next-line */
+  }, [filter, verifiedOnly]);
 
   return (
     <div className="cm-feed">
@@ -405,7 +513,14 @@ export default function FeedView({ initialFilter = "all" }) {
 
       {posts == null ? <div className="cm-empty">Loading feed…</div> :
         posts.length === 0 ? <div className="cm-empty">No posts match your filter yet. Share the first update.</div> :
-          posts.map((p) => <PostCard key={p.post_id} post={p} me={me} onChange={load} onRemoved={(id) => setPosts((l) => l.filter((x) => x.post_id !== id))} />)}
+          <>
+            {posts.map((p) => <PostCard key={p.post_id} post={p} me={me} onChange={() => load(true)} onRemoved={(id) => setPosts((l) => l.filter((x) => x.post_id !== id))} />)}
+            {!end && (
+              <button className="btn btn-secondary" style={{ alignSelf: "center", margin: "4px auto" }} disabled={more} onClick={loadMore}>
+                {more ? "Loading…" : "Load more"}
+              </button>
+            )}
+          </>}
 
       {topicsOpen && <TopicsModal onClose={() => setTopicsOpen(false)} />}
     </div>
