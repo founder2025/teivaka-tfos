@@ -17,6 +17,8 @@ import { C, getJSON, send, card } from "./_meCommon";
 import { getCurrentUser } from "../../utils/auth";
 import { useChat } from "../../context/ChatContext";
 import { uploadMedia } from "../../utils/imageCompress";
+import AvatarCropper from "../../components/me/AvatarCropper";
+import Avatar from "../../components/ui/Avatar";
 
 // Loud, non-silent feedback — routed through the shell's Toast. Every write on
 // this page surfaces success/failure here instead of failing quietly.
@@ -96,7 +98,7 @@ function SuggestedPeople() {
           {people.map((u) => (
             <div key={u.user_id} style={{ display: "flex", alignItems: "center", gap: 10 }}>
               <button onClick={() => navigate(`/u/${u.user_id}`)} style={{ display: "flex", alignItems: "center", gap: 10, flex: 1, minWidth: 0, background: "transparent", border: "none", cursor: "pointer", textAlign: "left", padding: 0 }}>
-                <span style={{ width: 36, height: 36, flexShrink: 0, borderRadius: "50%", background: C.green, color: "#fff", fontWeight: 700, fontSize: 13, display: "flex", alignItems: "center", justifyContent: "center" }}>{initials(u.full_name)}</span>
+                <Avatar src={u.avatar_url} name={u.full_name} size={36} fontScale={0.36} />
                 <span style={{ minWidth: 0 }}>
                   <span style={{ display: "block", fontWeight: 600, color: C.soil, fontSize: 13.5, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{u.full_name}{u.verified ? <BadgeCheck size={12} style={{ display: "inline", marginLeft: 4, color: C.greenDk }} /> : null}</span>
                   <span style={{ display: "block", fontSize: 11.5, color: C.muted }}>{(PROF[u.profession] || u.profession || "Member")}{u.country ? ` · ${u.country}` : ""}</span>
@@ -201,6 +203,7 @@ export default function ProfilePage({ self = false }) {
   const [meData, setMeData] = useState(null);
   const [avatarBroken, setAvatarBroken] = useState(false);
   const [avatarPct, setAvatarPct] = useState(null); // null = idle, 0-100 uploading
+  const [cropFile, setCropFile] = useState(null);   // file awaiting crop/reposition
   const [loadFailed, setLoadFailed] = useState(false);
   const [timedOut, setTimedOut] = useState(false);
   const [retryTick, setRetryTick] = useState(0);
@@ -267,15 +270,18 @@ export default function ProfilePage({ self = false }) {
   useEffect(() => { if (tab === "records" && p?.is_you && records == null) getJSON("/api/v1/me/records").then((r) => setRecords(r.data || [])).catch(() => setRecords([])); }, [tab, p, records]);
   useEffect(() => { if (tab === "activity" && p?.is_you && activity == null && targetId) getJSON(`/api/v1/community/profile/${targetId}/activity`).then((r) => setActivity(r.data || [])).catch(() => setActivity([])); }, [tab, p, activity, targetId]);
 
-  const uploadAvatar = async (e) => {
-    const file = e.target.files?.[0]; e.target.value = ""; if (!file) return;
+  // Step 1: pick a file -> open the cropper (don't upload the raw photo).
+  const pickAvatar = (e) => { const file = e.target.files?.[0]; e.target.value = ""; if (file) setCropFile(file); };
+  // Step 2: cropper returns a neatly-framed square -> compress + upload.
+  const uploadAvatar = async (cropped) => {
+    setCropFile(null);
     setAvatarPct(0);
     try {
-      // Compresses client-side first (a 9 MB camera photo becomes ~300 KB),
-      // then uploads with real progress driving the bar under the avatar.
-      const url = await uploadMedia(file, setAvatarPct);
+      const url = await uploadMedia(cropped, setAvatarPct);
+      // Cache-bust so the new photo shows everywhere instead of a cached old one.
+      const bust = `${url}${url.includes("?") ? "&" : "?"}v=${Date.now()}`;
       setAvatarBroken(false);
-      setP((cur) => (cur ? { ...cur, avatar_url: url } : cur)); // show it immediately
+      setP((cur) => (cur ? { ...cur, avatar_url: bust } : cur)); // show it immediately
       await send("PATCH", "/api/v1/me", { avatar_url: url });
       toast("Photo updated ✓", "success");
       load();
@@ -419,7 +425,7 @@ export default function ProfilePage({ self = false }) {
             <Avatar size={72} />
             {isYou && <>
               <span style={{ position: "absolute", bottom: 0, right: 0, width: 24, height: 24, borderRadius: "50%", background: C.green, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", border: "2px solid #fff" }}><Camera size={13} /></span>
-              <input type="file" accept="image/*" hidden onChange={uploadAvatar} disabled={avatarPct != null} />
+              <input type="file" accept="image/*" hidden onChange={pickAvatar} disabled={avatarPct != null} />
               {avatarPct != null && (
                 <span style={{ position: "absolute", left: 0, right: 0, bottom: -12 }}>
                   <span style={{ display: "block", height: 5, borderRadius: 3, background: "rgba(92,64,51,0.12)", overflow: "hidden" }}>
@@ -518,6 +524,7 @@ export default function ProfilePage({ self = false }) {
         </>}
 
         {editing && <EditModal me={{ ...p, field_visibility: p.field_visibility }} onClose={() => setEditing(false)} onSaved={handleSaved} />}
+        {cropFile && <AvatarCropper file={cropFile} onCancel={() => setCropFile(null)} onCropped={uploadAvatar} />}
       </main>
     </div>
   );

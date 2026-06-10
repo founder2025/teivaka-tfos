@@ -8,6 +8,7 @@ import { X, Volume2, VolumeX, Bell } from "lucide-react";
 import { useChat } from "../../context/ChatContext";
 import { enablePush } from "../../utils/push";
 import { useIsNarrow } from "../../hooks/useIsNarrow";
+import Avatar from "../ui/Avatar";
 
 const API = "/api/v1/community";
 const tok = () => localStorage.getItem("tfos_access_token");
@@ -72,7 +73,7 @@ export default function ChatDropdown() {
             <button key={c.user_id} onClick={() => pick(c)}
               style={{ width: "100%", display: "flex", gap: 10, alignItems: "center", padding: "10px 12px", minHeight: 44, border: "none", borderBottom: `1px solid ${C.line}`, background: c.unread > 0 ? "rgba(106,168,79,0.06)" : "#fff", cursor: "pointer", textAlign: "left" }}>
               <span style={{ position: "relative", flexShrink: 0 }}>
-                <span style={{ width: 36, height: 36, borderRadius: "50%", background: C.green, color: "#fff", fontWeight: 700, fontSize: 13, display: "flex", alignItems: "center", justifyContent: "center" }}>{initials(c.full_name)}</span>
+                <Avatar src={c.avatar_url} name={c.full_name} size={36} fontScale={0.36} />
                 {c.online && <span style={{ position: "absolute", bottom: 0, right: 0, width: 11, height: 11, borderRadius: "50%", background: "#4caf50", border: "2px solid #fff" }} />}
               </span>
               <div style={{ flex: 1, minWidth: 0 }}>

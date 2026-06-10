@@ -220,8 +220,8 @@ async def list_feed(
                    fp.link_audit_hash, fp.is_repost, fp.repost_of_id, fp.pinned,
                    fp.comments_enabled,
                    fp.best_answer_reply_id, fp.audit_hash, fp.created_at, fp.edited_at,
-                   u.full_name AS author_name, COALESCE(u.email_verified, FALSE) AS author_verified,
-                   orig.body AS repost_body, ou.full_name AS repost_author_name,
+                   u.full_name AS author_name, u.avatar_url AS author_avatar, COALESCE(u.email_verified, FALSE) AS author_verified,
+                   orig.body AS repost_body, ou.full_name AS repost_author_name, ou.avatar_url AS repost_author_avatar,
                    orig.author_profession AS repost_author_profession,
                    (SELECT count(*) FROM community.feed_likes fl WHERE fl.post_id = fp.post_id) AS like_count,
                    (SELECT count(*) FROM community.feed_replies fr WHERE fr.post_id = fp.post_id AND fr.status = 'active') AS reply_count,
@@ -530,7 +530,7 @@ async def list_replies(post_id: str, user: dict = Depends(get_current_user)):
         rows = (await db.execute(text("""
             SELECT fr.reply_id, fr.post_id, fr.parent_reply_id, fr.author_user_id,
                    fr.author_profession, fr.body, fr.photos, fr.created_at,
-                   u.full_name AS author_name, COALESCE(u.email_verified, FALSE) AS author_verified,
+                   u.full_name AS author_name, u.avatar_url AS author_avatar, COALESCE(u.email_verified, FALSE) AS author_verified,
                    (SELECT count(*) FROM community.feed_reply_likes rl WHERE rl.reply_id = fr.reply_id) AS like_count,
                    EXISTS (SELECT 1 FROM community.feed_reply_likes rl WHERE rl.reply_id = fr.reply_id AND rl.user_id = :uid) AS liked
             FROM community.feed_replies fr
@@ -697,7 +697,7 @@ async def list_people(search: str = Query(None), following: bool = Query(False),
             clause += """ AND EXISTS (SELECT 1 FROM community.follows mf
                           WHERE mf.follower_user_id = :uid AND mf.followed_user_id = u.user_id)"""
         rows = (await db.execute(text(f"""
-            SELECT u.user_id, u.full_name, u.account_type, u.country,
+            SELECT u.user_id, u.full_name, u.account_type, u.country, u.avatar_url,
                    COALESCE(u.email_verified, FALSE) AS verified,
                    EXISTS (SELECT 1 FROM community.follows f
                            WHERE f.follower_user_id = :uid AND f.followed_user_id = u.user_id) AS is_following,
@@ -713,7 +713,7 @@ async def list_people(search: str = Query(None), following: bool = Query(False),
     return {"data": [{
         "user_id": str(r["user_id"]), "full_name": r["full_name"],
         "profession": (r["account_type"] or "FARMER").lower(),
-        "country": r["country"], "verified": r["verified"],
+        "country": r["country"], "verified": r["verified"], "avatar_url": r["avatar_url"],
         "is_following": r["is_following"],
         "is_connected": bool(r["is_following"] and r["follows_me"]),
     } for r in rows]}

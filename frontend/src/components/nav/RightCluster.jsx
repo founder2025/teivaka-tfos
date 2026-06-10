@@ -5,6 +5,7 @@ import MeMenu from "./MeMenu";
 import { useTisSse } from "../../hooks/useTisSse";
 import { useChat } from "../../context/ChatContext";
 import ChatDropdown from "../chat/ChatDropdown";
+import Avatar from "../ui/Avatar";
 
 const C = {
   soil:    "#5C4033",
@@ -88,7 +89,7 @@ function IconButton({ icon: Icon, label, onClick, disabled, title, badgeCount, a
   );
 }
 
-function AvatarPill({ initials, onClick, expanded }) {
+function AvatarPill({ initials, avatarUrl, name, onClick, expanded }) {
   return (
     <button
       type="button"
@@ -107,19 +108,7 @@ function AvatarPill({ initials, onClick, expanded }) {
       onMouseEnter={(e) => { e.currentTarget.style.background = "#F2ECDD"; }}
       onMouseLeave={(e) => { e.currentTarget.style.background = C.cream; }}
     >
-      <span
-        aria-hidden
-        className="rounded-full flex items-center justify-center text-white"
-        style={{
-          width: 28,
-          height: 28,
-          background: C.green,
-          fontSize: 11,
-          fontWeight: 600,
-        }}
-      >
-        {initials}
-      </span>
+      <Avatar src={avatarUrl} name={name} size={28} fontScale={0.39} style={{ pointerEvents: "none" }} />
       <ChevronDown size={14} style={{ color: C.soil }} />
     </button>
   );
@@ -195,6 +184,8 @@ export default function RightCluster() {
       <div className="relative">
         <AvatarPill
           initials={initials}
+          avatarUrl={me?.avatar_url}
+          name={displayName}
           expanded={meOpen}
           onClick={() => { setNotifOpen(false); setMeOpen((v) => !v); }}
         />

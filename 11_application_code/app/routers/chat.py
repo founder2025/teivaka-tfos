@@ -161,7 +161,7 @@ async def list_connections(user: dict = Depends(get_current_user)):
     uid = str(user["user_id"])
     async with get_db_ctx() as db:
         rows = (await db.execute(text("""
-            SELECT u.user_id, u.full_name, u.account_type, u.country,
+            SELECT u.user_id, u.full_name, u.account_type, u.country, u.avatar_url,
                    th.thread_id, th.last_message_at,
                    (SELECT count(*) FROM community.chat_messages m
                       WHERE m.thread_id = th.thread_id AND m.sender_user_id = u.user_id AND m.read_at IS NULL) AS unread,

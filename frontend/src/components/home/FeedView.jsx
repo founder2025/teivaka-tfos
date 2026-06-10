@@ -16,6 +16,7 @@ import {
 import { useNavigate } from "react-router-dom";
 import { getCurrentUser } from "../../utils/auth";
 import { useIsNarrow } from "../../hooks/useIsNarrow";
+import Avatar from "../ui/Avatar";
 
 const API = "/api/v1/community";
 // Shared wrapper (utils/api): token auto-refresh on 401 + truthful error
@@ -141,7 +142,7 @@ function ShareModal({ post, onClose, onShared }) {
           people.length === 0 ? <div className="cm-empty">No people found.</div> :
             people.map((p) => (
               <button key={p.user_id} className="cm-menu-item" style={{ borderColor: sel?.user_id === p.user_id ? "var(--green)" : "var(--line)" }} onClick={() => setSel(p)}>
-                <span className="avatar-circle avatar-cm-reply">{initials(p.full_name)}</span>
+                <Avatar src={p.avatar_url} name={p.full_name} size={30} fontScale={0.4} />
                 <span style={{ flex: 1 }}>{p.full_name} {p.verified && <BadgeCheck size={12} className="cm-verified-tick" />}</span>
                 <span className="cm-prof-badge">{PROF_LABEL[p.profession] || p.profession}</span>
               </button>
@@ -284,7 +285,7 @@ function Composer({ me, onPosted }) {
   };
   return (
     <div className="cm-composer">
-      <div className="cm-composer-avatar"><span className="avatar-circle avatar-composer">{initials(me?.full_name)}</span></div>
+      <div className="cm-composer-avatar"><Avatar src={me?.avatar_url} name={me?.full_name} size={40} /></div>
       <div className="cm-composer-body">
         <textarea placeholder="Share with your network…" value={draft.body} maxLength={BODY_MAX} onChange={(e) => set("body", e.target.value)} />
         {draft.body.length > BODY_MAX - 300 && (
@@ -380,7 +381,7 @@ function Replies({ post, me, onCount }) {
   const kids = (id) => list.filter((r) => r.parent_reply_id === id);
   const Card = ({ r, nested }) => (
     <div className={`cm-reply-card ${nested ? "cm-reply-nested" : ""} ${post.best_answer_reply_id === r.reply_id ? "cm-reply-best" : ""}`}>
-      <div className="cm-reply-avatar"><span className="avatar-circle avatar-cm-reply">{initials(r.author_name)}</span></div>
+      <div className="cm-reply-avatar"><Avatar src={r.author_avatar} name={r.author_name} size={30} fontScale={0.4} /></div>
       <div className="cm-reply-body-col">
         <div className="cm-reply-head">
           <span className="cm-reply-author">{r.author_name}</span>
@@ -504,7 +505,7 @@ function PostCard({ post, me, onChange, onRemoved }) {
         <div className="cm-repost-banner"><Repeat2 size={12} /> Reposted</div>
       )}
       <div className="cm-post-head">
-        <div className="cm-post-avatar"><span className="avatar-circle avatar-cm">{initials(p.author_name)}</span></div>
+        <div className="cm-post-avatar" onClick={() => p.author_user_id && navigate(`/u/${p.author_user_id}`)} style={{ cursor: "pointer" }}><Avatar src={p.author_avatar} name={p.author_name} size={40} /></div>
         <div className="cm-post-author-block">
           <div className="cm-post-author-row">
             <span className="cm-post-author-name" onClick={() => p.author_user_id && navigate(`/u/${p.author_user_id}`)} style={{ cursor: "pointer" }}>{p.author_name}</span>

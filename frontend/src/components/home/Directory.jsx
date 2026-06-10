@@ -5,6 +5,7 @@
  */
 import { useEffect, useState } from "react";
 import { Search, BadgeCheck, UserPlus, UserCheck } from "lucide-react";
+import Avatar from "../ui/Avatar";
 
 const API = "/api/v1/community";
 // Shared wrapper: token auto-refresh on 401 + truthful errors.
@@ -56,7 +57,7 @@ export default function Directory() {
                 <tr key={p.user_id}>
                   <td>
                     <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-                      <span className="avatar-circle" style={{ width: 30, height: 30, fontSize: 11 }}>{initials(p.full_name)}</span>
+                      <Avatar src={p.avatar_url} name={p.full_name} size={30} fontScale={0.4} />
                       <span style={{ fontWeight: 600, color: "var(--soil)" }}>{p.full_name}</span>
                       {p.verified && <BadgeCheck size={14} style={{ color: "var(--green)" }} />}
                     </span>
