@@ -20,12 +20,8 @@ function authHeaders() {
   const t = localStorage.getItem("tfos_access_token");
   return t ? { "Content-Type": "application/json", Authorization: `Bearer ${t}` } : { "Content-Type": "application/json" };
 }
-async function getJSON(u) { const r = await fetch(u, { headers: authHeaders() }); if (!r.ok) throw new Error(String(r.status)); return r.json(); }
-async function postJSON(u, body) {
-  const r = await fetch(u, { method: "POST", headers: authHeaders(), body: JSON.stringify(body) });
-  if (!r.ok) throw new Error((await r.json().catch(() => ({})))?.detail || String(r.status));
-  return r.json();
-}
+import { getJSON, send } from "../../utils/api";
+const postJSON = (u, body) => send("POST", u, body);
 const fjd = (v) => (v == null || isNaN(Number(v)) ? "—" : `FJD ${Number(v).toFixed(2)}`);
 const confClass = (c) => ({ VERY_HIGH: "high", HIGH: "high", MEDIUM: "medium", LOW: "low" }[c] || "low");
 
@@ -55,7 +51,7 @@ const inp = { width: "100%", padding: "8px 10px", border: "1px solid var(--line)
 
 function Modal({ title, onClose, onSubmit, busy, children }) {
   return (
-    <div className="overlay-backdrop" onClick={onClose}>
+    <div className="overlay-backdrop show" style={{ alignItems: "center", padding: 16 }} onClick={onClose}>
       <div className="overlay-modal" style={{ maxWidth: 520 }} onClick={(e) => e.stopPropagation()}>
         <div className="overlay-head"><span>{title}</span><button className="overlay-close" onClick={onClose}><X size={18} /></button></div>
         <div className="overlay-body">{children}</div>
