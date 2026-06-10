@@ -11,7 +11,7 @@
  *   Directory   → honest-empty (no unified directory endpoint yet)
  */
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import {
   Home, BookOpen, Tractor, Sparkles, Search, MessageSquare, Bell, ChevronDown,
   Star, Bookmark, Plus, Shield, DollarSign, ShoppingBag, Rss, Users, List as ListIcon,
@@ -82,7 +82,8 @@ function Feed({ posts, loading }) {
 
 export default function HomePillar() {
   const navigate = useNavigate();
-  const [view, setView] = useState("feed");
+  const { pathname } = useLocation();
+  const view = pathname.split("/")[2] || "feed";
   const [posts, setPosts] = useState(null);
   const [listings, setListings] = useState(null);
 
@@ -157,47 +158,16 @@ export default function HomePillar() {
     ? <button className="btn btn-primary"><Plus size={14} />New listing</button>
     : null;
 
+  // Renders inside the shared FarmerShell (top bar + left rail + bottom nav).
+  // Content-only, wrapped in .tfp so the prototype's feature styling applies.
   return (
-    <TfpShell>
-      {/* topbar */}
-      <header className="topbar">
-        <div className="brand" onClick={() => navigate("/home")} style={{ cursor: "pointer" }}>
-          <div className="brand-logo"><img src="/teivaka_logo.png" alt="" style={{ height: 24 }} /></div>
-          <div className="brand-text">teivaka</div>
+    <div className="tfp">
+      <main className="main-content">
+        <div className="main-inner">
+          <PageHead title={head[0]} sub={head[1]} action={action} />
+          {body}
         </div>
-        <div className="topbar-search"><Search size={14} /><span>Search farm, tasks, people…</span><span className="search-kbd">⌘K</span></div>
-        <div className="topbar-pillars">
-          {PILLARS.map((p) => (
-            <button key={p.id} className={`pillar-btn ${p.id === "home" ? "active" : ""}`} onClick={() => navigate(p.to)}>
-              <p.Icon size={15} />{p.label}
-            </button>
-          ))}
-        </div>
-        <div className="topbar-right">
-          <div className="status-dot" title="All systems synced" />
-          <button className="icon-btn" title="Messages"><MessageSquare size={18} /></button>
-          <button className="icon-btn" title="Notifications"><Bell size={18} /></button>
-          <button className="avatar-btn" onClick={() => navigate("/me")} title="Account"><div className="avatar-circle">UK</div><ChevronDown size={14} /></button>
-        </div>
-      </header>
-
-      {/* shell: left rail + content */}
-      <div className="shell">
-        <aside className="left-rail">
-          <div className="rail-head">home</div>
-          {HOME_NAV.map((it) => (
-            <div key={it.id} className={`rail-item ${it.id === view ? "active" : ""}`} onClick={() => setView(it.id)}>
-              <it.Icon size={16} /><span>{it.label}</span>
-            </div>
-          ))}
-        </aside>
-        <main className="main-content">
-          <div className="main-inner">
-            <PageHead title={head[0]} sub={head[1]} action={action} />
-            {body}
-          </div>
-        </main>
-      </div>
-    </TfpShell>
+      </main>
+    </div>
   );
 }

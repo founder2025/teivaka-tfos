@@ -25,17 +25,19 @@ export const PILLAR_SUB_NAV = {
     items: [
       { path: "/home",             label: "Feed",        icon: Users },
       { path: "/home/following",   label: "Following",   icon: UsersRound },
-      { path: "/home/marketplace", label: "Marketplace", icon: Store,   phase: "8" },
-      { path: "/home/directory",   label: "Directory",   icon: Contact, phase: "8" },
+      { path: "/home/marketplace", label: "Marketplace", icon: Store },
+      { path: "/home/directory",   label: "Directory",   icon: Contact },
       { path: "/home/saved",       label: "Saved",       icon: Bookmark },
     ],
   },
   "/classroom": {
     label: "Classroom",
     items: [
-      { path: "/classroom",                label: "Tracks",         icon: BookOpen },
-      { path: "/classroom/progress",       label: "Progress",       icon: TrendingUp },
-      { path: "/classroom/certifications", label: "Certifications", icon: Award },
+      { path: "/classroom",                label: "Overview",       icon: BookOpen },
+      { path: "/classroom/tracks",         label: "Tracks",         icon: LayoutGrid },
+      { path: "/classroom/progress",       label: "My progress",    icon: TrendingUp },
+      { path: "/classroom/certifications", label: "Certification",  icon: Award },
+      { path: "/classroom/bookmarks",      label: "Bookmarks",      icon: Bookmark },
     ],
   },
   "/farm": {

@@ -195,11 +195,10 @@ function ShellContent() {
   const location = useLocation();
   const { effective: effectiveMode } = useEffectiveMode();
 
-  // Mode-aware bounce: SOLO users (real or FOUNDER-overridden) land at
-  // /solo regardless of which farmer pillar they navigated to. Returns
-  // before any other shell setup so we don't pay layout work for a frame
-  // we're about to unmount.
-  if (effectiveMode === "SOLO") {
+  // Mode-aware bounce: SOLO users land at /solo for the FARM pillar only.
+  // Home (community) + Classroom now render inside this shell too and must stay
+  // reachable for SOLO users, so the bounce is scoped to /farm.
+  if (effectiveMode === "SOLO" && location.pathname.startsWith("/farm")) {
     return <Navigate to="/solo" replace />;
   }
 

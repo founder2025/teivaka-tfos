@@ -232,13 +232,14 @@ export default function App() {
           <Route path="/kb" element={
             <FarmerRoute><KnowledgeBase /></FarmerRoute>
           } />
-          {/* HOME pillar — pixel-exact rebuild with its own prototype shell, so it
-              sits OUTSIDE FarmerShell (no double chrome) but behind the onboarding guard. */}
-          <Route path="/home" element={<FarmerRoute><HomePillar /></FarmerRoute>} />
-          {/* CLASSROOM pillar — pixel-exact rebuild with its own prototype shell,
-              sits OUTSIDE FarmerShell (no double chrome), behind the onboarding guard. */}
-          <Route path="/classroom" element={<FarmerRoute><ClassroomPillar /></FarmerRoute>} />
           <Route element={<FarmerRoute><FarmerShell /></FarmerRoute>}>
+            {/* HOME + CLASSROOM render inside the shared FarmerShell so all four
+                pillars share one top bar / logo / nav. Content is .tfp-wrapped and
+                the sub-view is derived from the route. */}
+            <Route path="/home"            element={<HomePillar />} />
+            <Route path="/home/:view"      element={<HomePillar />} />
+            <Route path="/classroom"       element={<ClassroomPillar />} />
+            <Route path="/classroom/:view" element={<ClassroomPillar />} />
             <Route path="/farm"              element={<FarmDashboard />} />
             <Route path="/farm/harvest/new"  element={<HarvestNew    />} />
             <Route path="/farm/poultry/eggs/new" element={<EggsNew   />} />

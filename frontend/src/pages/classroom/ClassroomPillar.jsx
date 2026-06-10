@@ -14,7 +14,7 @@
  *   Bookmarks      → honest-empty (matches the prototype's own copy).
  */
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import {
   Home, BookOpen, Tractor, Sparkles, Search, MessageSquare, Bell, ChevronDown,
   Layers, Activity, Award, Bookmark, X, FileText, QrCode,
@@ -143,7 +143,9 @@ function LessonPlayer({ course, onClose }) {
 
 export default function ClassroomPillar() {
   const navigate = useNavigate();
-  const [view, setView] = useState("overview");
+  const { pathname } = useLocation();
+  const view = ({ overview: "overview", tracks: "tracks", progress: "my_progress",
+    certifications: "certification", bookmarks: "bookmarks" }[pathname.split("/")[2]]) || "overview";
   const [courses, setCourses] = useState(null);
   const [open, setOpen] = useState(null);
 
@@ -197,47 +199,16 @@ export default function ClassroomPillar() {
     );
   }
 
+  // Renders inside the shared FarmerShell (top bar + left rail + bottom nav).
   return (
-    <TfpShell>
-      <header className="topbar">
-        <div className="brand" onClick={() => navigate("/home")} style={{ cursor: "pointer" }}>
-          <div className="brand-logo"><img src="/teivaka_logo.png" alt="" style={{ height: 24 }} /></div>
-          <div className="brand-text">teivaka</div>
+    <div className="tfp">
+      <main className="main-content">
+        <div className="main-inner">
+          <PageHead title={head[0]} sub={head[1]} />
+          {body}
         </div>
-        <div className="topbar-search"><Search size={14} /><span>Search farm, tasks, people…</span><span className="search-kbd">⌘K</span></div>
-        <div className="topbar-pillars">
-          {PILLARS.map((p) => (
-            <button key={p.id} className={`pillar-btn ${p.id === "classroom" ? "active" : ""}`} onClick={() => navigate(p.to)}>
-              <p.Icon size={15} />{p.label}
-            </button>
-          ))}
-        </div>
-        <div className="topbar-right">
-          <div className="status-dot" title="All systems synced" />
-          <button className="icon-btn" title="Messages"><MessageSquare size={18} /></button>
-          <button className="icon-btn" title="Notifications"><Bell size={18} /></button>
-          <button className="avatar-btn" onClick={() => navigate("/me")} title="Account"><div className="avatar-circle">UK</div><ChevronDown size={14} /></button>
-        </div>
-      </header>
-
-      <div className="shell">
-        <aside className="left-rail">
-          <div className="rail-head">classroom</div>
-          {CLASSROOM_NAV.map((it) => (
-            <div key={it.id} className={`rail-item ${it.id === view ? "active" : ""}`} onClick={() => setView(it.id)}>
-              <it.Icon size={16} /><span>{it.label}</span>
-            </div>
-          ))}
-        </aside>
-        <main className="main-content">
-          <div className="main-inner">
-            <PageHead title={head[0]} sub={head[1]} />
-            {body}
-          </div>
-        </main>
-      </div>
-
+      </main>
       {open ? <LessonPlayer course={open} onClose={() => setOpen(null)} /> : null}
-    </TfpShell>
+    </div>
   );
 }
