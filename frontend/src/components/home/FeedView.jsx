@@ -64,7 +64,9 @@ function renderBody(text) {
 /* ---------------- small modals ---------------- */
 function Overlay({ title, onClose, children, foot, maxWidth = 440 }) {
   return (
-    <div className="overlay-backdrop" onClick={onClose}>
+    // "show" is required: prototype.css hides .overlay-backdrop without it
+    // (display:none) — omitting it made every composer modal open invisibly.
+    <div className="overlay-backdrop show" onClick={onClose}>
       <div className="overlay-modal" style={{ maxWidth }} onClick={(e) => e.stopPropagation()}>
         <div className="overlay-head"><span className="overlay-title">{title}</span><button className="overlay-close" onClick={onClose}><X size={16} /></button></div>
         <div className="overlay-body">{children}</div>
@@ -646,7 +648,16 @@ function ReportModal({ post, onClose }) {
 
 /* ---------------- feed ---------------- */
 export default function FeedView({ initialFilter = "all" }) {
-  const me = (() => { try { return getCurrentUser(); } catch { return null; } })();
+  // Real identity from /auth/me — the JWT payload has `sub`, NOT `user_id`,
+  // so the old getCurrentUser() comparison made `mine` always false and own
+  // posts never showed Edit/Delete/Archive. Seed instantly from the JWT
+  // (sub -> user_id) so ownership works even before the fetch lands.
+  const [me, setMe] = useState(() => {
+    try { const p = getCurrentUser(); return p ? { ...p, user_id: p.user_id || p.sub } : null; } catch { return null; }
+  });
+  useEffect(() => {
+    getJSON("/api/v1/auth/me").then((r) => { const d = r?.data ?? r; if (d?.user_id) setMe(d); }).catch(() => {});
+  }, []);
   const [filter, setFilter] = useState(initialFilter);
   const [verifiedOnly, setVerifiedOnly] = useState(false);
   const [posts, setPosts] = useState(null);
