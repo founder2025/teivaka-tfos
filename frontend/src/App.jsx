@@ -42,6 +42,7 @@ const CommunityMap  = lazy(() => import("./pages/farmer/CommunityMap"));
 const Onboarding    = lazy(() => import("./pages/farmer/Onboarding"));
 const FarmBasics    = lazy(() => import("./pages/onboarding/FarmBasics"));
 const MeSettings    = lazy(() => import("./pages/farmer/MeSettings"));
+const MeVerification = lazy(() => import("./pages/me/MeVerification"));
 const FieldEventNew = lazy(() => import("./pages/farmer/FieldEventNew"));
 const KnowledgeBase = lazy(() => import("./pages/farmer/KnowledgeBase"));
 const FarmManager   = lazy(() => import("./pages/farmer/FarmManager"));
@@ -132,6 +133,7 @@ import PrototypeSwitch from "./components/PrototypeSwitch";
 // never request or receive admin code, even if they know the URL.
 const AdminDashboard = lazy(() => import("./pages/admin/AdminDashboard"));
 const AdminUsers     = lazy(() => import("./pages/admin/AdminUsers"));
+const AdminVerifications = lazy(() => import("./pages/admin/AdminVerifications"));
 const AdminContent   = lazy(() => import("./pages/admin/AdminContent"));
 const AdminAnalytics = lazy(() => import("./pages/admin/AdminAnalytics"));
 const AdminMap       = lazy(() => import("./pages/admin/AdminMap"));
@@ -196,6 +198,9 @@ export default function App() {
           {/* not even downloaded.                                          */}
           <Route path="/admin" element={
             <AdminRoute><AdminDashboard /></AdminRoute>
+          } />
+          <Route path="/admin/verifications" element={
+            <AdminRoute><AdminVerifications /></AdminRoute>
           } />
           <Route path="/admin/users" element={
             <AdminRoute><AdminUsers /></AdminRoute>
@@ -326,6 +331,7 @@ export default function App() {
             <Route path="/tis/usage"   element={<ComingSoon title="TIS Usage"   phase="4.3" />} />
 
             <Route path="/me/settings"          element={<MeSettings />} />
+            <Route path="/me/verification"      element={<MeVerification />} />
             <Route path="/me/subscription"      element={<Subscription />} />
             <Route path="/me/referrals"         element={<Referrals />} />
             <Route path="/me/affiliate"         element={<Affiliate />} />

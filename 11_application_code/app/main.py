@@ -74,6 +74,7 @@ from app.routers import (
     feed,
     geo,
     news,
+    kyc,
     chat,
     subscriptions,
     webhooks,
@@ -337,6 +338,7 @@ app.include_router(marketplace.router,        prefix=f"{PREFIX}/marketplace",   
 app.include_router(market.router,             prefix=f"{PREFIX}/market",             tags=["Market Intelligence"])
 app.include_router(geo.router,                prefix=f"{PREFIX}/geo",                tags=["Geo"])
 app.include_router(news.router,               prefix=f"{PREFIX}/news",               tags=["News"])
+app.include_router(kyc.router,                prefix=PREFIX,                         tags=["KYC Verification"])
 
 # Platform
 app.include_router(subscriptions.router,      prefix=f"{PREFIX}/subscriptions",      tags=["Subscriptions"])

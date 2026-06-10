@@ -23,7 +23,7 @@ function SettingsSections() {
   const rows = [
     { to: "/me", Icon: Pencil, label: "Edit profile basics" },
     { to: "/me", Icon: Shield, label: "Privacy & visibility" },
-    { to: "/verify", Icon: BadgeCheck, label: "Verification" },
+    { to: "/me/verification", Icon: BadgeCheck, label: "Verification" },
     { to: "/covenant", Icon: FileText, label: "View the Data Covenant" },
     { to: "/me/data", Icon: Download, label: "Export my data" },
   ];

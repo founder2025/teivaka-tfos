@@ -83,6 +83,14 @@ async def _comments_enabled_col(db):
     return await _has(db, "comments_enabled", "SELECT 1 FROM information_schema.columns WHERE table_schema='community' AND table_name='feed_posts' AND column_name='comments_enabled'")
 
 
+async def _verified_expr(db, alias="u"):
+    """Green tick = KYC-verified (government ID + selfie, admin-reviewed) — a
+    stronger claim than email_verified. Migration-tolerant: before 097 lands
+    the expression is honest FALSE (nobody is KYC-verified yet), never a 500."""
+    has = await _has(db, "kyc_col", "SELECT 1 FROM information_schema.columns WHERE table_schema='tenant' AND table_name='users' AND column_name='kyc_verified'")
+    return f"COALESCE({alias}.kyc_verified, FALSE)" if has else "FALSE"
+
+
 async def _has_table(db, name, cols=()):
     # Existence AND permission AND required-column probe. Forensically earned,
     # twice: (1) a table created by the owner but ungranted 500s with
@@ -247,7 +255,7 @@ async def list_feed(
             params["prof"] = filter.replace("profession_", "")
 
         if verified_only:
-            where.append("u.email_verified = TRUE")
+            where.append(f"{await _verified_expr(db)} = TRUE")
         if author:
             where.append("fp.author_user_id = :author")
             params["author"] = author
@@ -262,6 +270,7 @@ async def list_feed(
             where.append("fp.author_user_id NOT IN (SELECT b1.blocked_user_id FROM community.user_blocks b1 WHERE b1.user_id = :uid)")
             where.append("NOT EXISTS (SELECT 1 FROM community.user_blocks b2 WHERE b2.user_id = fp.author_user_id AND b2.blocked_user_id = :uid)")
         comments_col = "fp.comments_enabled," if await _comments_enabled_col(db) else "TRUE AS comments_enabled,"
+        vexpr = await _verified_expr(db)
 
         rows = (await db.execute(text(f"""
             SELECT fp.post_id, fp.author_user_id, fp.author_profession, fp.body, fp.post_type,
@@ -269,7 +278,7 @@ async def list_feed(
                    fp.link_audit_hash, fp.is_repost, fp.repost_of_id, fp.pinned,
                    {comments_col}
                    fp.best_answer_reply_id, fp.audit_hash, fp.created_at, fp.edited_at,
-                   u.full_name AS author_name, u.avatar_url AS author_avatar, COALESCE(u.email_verified, FALSE) AS author_verified,
+                   u.full_name AS author_name, u.avatar_url AS author_avatar, {vexpr} AS author_verified,
                    orig.body AS repost_body, ou.full_name AS repost_author_name, ou.avatar_url AS repost_author_avatar,
                    orig.author_profession AS repost_author_profession,
                    (SELECT count(*) FROM community.feed_likes fl WHERE fl.post_id = fp.post_id) AS like_count,
@@ -576,10 +585,11 @@ async def shared_with_me(user: dict = Depends(get_current_user)):
 async def list_replies(post_id: str, user: dict = Depends(get_current_user)):
     uid = str(user["user_id"])
     async with get_db_ctx() as db:
-        rows = (await db.execute(text("""
+        vexpr = await _verified_expr(db)
+        rows = (await db.execute(text(f"""
             SELECT fr.reply_id, fr.post_id, fr.parent_reply_id, fr.author_user_id,
                    fr.author_profession, fr.body, fr.photos, fr.created_at,
-                   u.full_name AS author_name, u.avatar_url AS author_avatar, COALESCE(u.email_verified, FALSE) AS author_verified,
+                   u.full_name AS author_name, u.avatar_url AS author_avatar, {vexpr} AS author_verified,
                    (SELECT count(*) FROM community.feed_reply_likes rl WHERE rl.reply_id = fr.reply_id) AS like_count,
                    EXISTS (SELECT 1 FROM community.feed_reply_likes rl WHERE rl.reply_id = fr.reply_id AND rl.user_id = :uid) AS liked
             FROM community.feed_replies fr
@@ -751,9 +761,10 @@ async def list_people(search: str = Query(None), following: bool = Query(False),
         if following:
             clause += """ AND EXISTS (SELECT 1 FROM community.follows mf
                           WHERE mf.follower_user_id = :uid AND mf.followed_user_id = u.user_id)"""
+        vexpr = await _verified_expr(db)
         rows = (await db.execute(text(f"""
             SELECT u.user_id, u.full_name, u.account_type, u.country, u.avatar_url,
-                   COALESCE(u.email_verified, FALSE) AS verified,
+                   {vexpr} AS verified,
                    EXISTS (SELECT 1 FROM community.follows f
                            WHERE f.follower_user_id = :uid AND f.followed_user_id = u.user_id) AS is_following,
                    EXISTS (SELECT 1 FROM community.follows f2
@@ -1082,10 +1093,11 @@ async def get_profile(target_id: str, user: dict = Depends(get_current_user)):
     real stats + the viewer's follow/connection state."""
     viewer = str(user["user_id"])
     async with get_db_ctx() as db:
-        u = (await db.execute(text("""
+        vexpr = await _verified_expr(db, alias="tenant.users")
+        u = (await db.execute(text(f"""
             SELECT user_id, tenant_id, full_name, email, role, account_type, country,
                    bio, avatar_url, cover_url, whatsapp_number, field_visibility, created_at,
-                   COALESCE(email_verified, FALSE) AS verified
+                   {vexpr} AS verified
             FROM tenant.users WHERE user_id = cast(:id AS uuid) AND is_active = TRUE
         """), {"id": target_id})).mappings().first()
         if not u:
