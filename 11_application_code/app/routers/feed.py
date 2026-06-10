@@ -83,15 +83,26 @@ async def _comments_enabled_col(db):
     return await _has(db, "comments_enabled", "SELECT 1 FROM information_schema.columns WHERE table_schema='community' AND table_name='feed_posts' AND column_name='comments_enabled'")
 
 
-async def _has_table(db, name):
-    # Existence AND permission in one probe: a table created by the owner but
-    # not yet granted to the app role must count as absent — including it in a
-    # query 500s with InsufficientPrivilege (forensically reproduced: prod had
-    # feed_hidden present but ungranted, killing the whole feed).
+async def _has_table(db, name, cols=()):
+    # Existence AND permission AND required-column probe. Forensically earned,
+    # twice: (1) a table created by the owner but ungranted 500s with
+    # InsufficientPrivilege; (2) a PRE-EXISTING table with different columns
+    # (094's CREATE IF NOT EXISTS silently no-ops on it) makes an unqualified
+    # column in a subquery resolve to the OUTER query -> AmbiguousColumnError.
+    # The feature is only "on" when the table is readable AND has every column
+    # the query needs.
+    colcheck = ""
+    if cols:
+        col_list = ", ".join(f"'{c}'" for c in cols)
+        colcheck = f"""
+            AND (SELECT count(*) FROM information_schema.columns
+                 WHERE table_schema = 'community' AND table_name = '{name}'
+                   AND column_name IN ({col_list})) = {len(cols)}"""
     return await _has(db, f"tbl_{name}", f"""
         SELECT COALESCE((SELECT has_table_privilege(current_user, c.oid, 'SELECT')
                          FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
                          WHERE n.nspname = 'community' AND c.relname = '{name}'), false)
+        {colcheck}
     """)
 
 
@@ -243,13 +254,13 @@ async def list_feed(
 
         # viewer-level suppression — only if migration 094's tables exist (degrade
         # gracefully if not yet applied, rather than 500 the whole feed).
-        if await _has_table(db, "feed_hidden"):
+        if await _has_table(db, "feed_hidden", ("user_id", "post_id")):
             where.append("NOT EXISTS (SELECT 1 FROM community.feed_hidden h WHERE h.post_id = fp.post_id AND h.user_id = :uid)")
-        if await _has_table(db, "user_mutes"):
-            where.append("fp.author_user_id NOT IN (SELECT muted_user_id FROM community.user_mutes WHERE user_id = :uid)")
-        if await _has_table(db, "user_blocks"):
-            where.append("fp.author_user_id NOT IN (SELECT blocked_user_id FROM community.user_blocks WHERE user_id = :uid)")
-            where.append("NOT EXISTS (SELECT 1 FROM community.user_blocks b WHERE b.user_id = fp.author_user_id AND b.blocked_user_id = :uid)")
+        if await _has_table(db, "user_mutes", ("user_id", "muted_user_id")):
+            where.append("fp.author_user_id NOT IN (SELECT m.muted_user_id FROM community.user_mutes m WHERE m.user_id = :uid)")
+        if await _has_table(db, "user_blocks", ("user_id", "blocked_user_id")):
+            where.append("fp.author_user_id NOT IN (SELECT b1.blocked_user_id FROM community.user_blocks b1 WHERE b1.user_id = :uid)")
+            where.append("NOT EXISTS (SELECT 1 FROM community.user_blocks b2 WHERE b2.user_id = fp.author_user_id AND b2.blocked_user_id = :uid)")
         comments_col = "fp.comments_enabled," if await _comments_enabled_col(db) else "TRUE AS comments_enabled,"
 
         rows = (await db.execute(text(f"""
