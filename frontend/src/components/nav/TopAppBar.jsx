@@ -14,6 +14,11 @@ const C = {
   tint:    "#EAF3DE",
   greenDk: "#3E7B1F",
   hoverBg: "rgba(92, 64, 51, 0.06)",
+  // Prototype .topbar-search palette (pixel-exact)
+  cream2:      "#EFE8D8", // --cream-2
+  cream2hover: "#E7DFCC",
+  line2:       "#E2D8C3", // --line
+  muted:       "#7A6E5C", // --muted
 };
 
 function TeivakaLogo() {
@@ -79,6 +84,45 @@ function SearchIconButton({ onClick }) {
   );
 }
 
+// Prototype-exact full search bar (.topbar-search): fixed 280px pill with the
+// magnifying-glass icon, "Search farm, tasks, people…" placeholder and a ⌘K
+// hint chip. Desktop-only (>=1025px); collapses to SearchIconButton below that.
+// Both triggers open the same SearchPalette.
+function SearchBarFull({ onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label="Search farm, tasks, people"
+      style={{
+        flex: "0 0 280px",
+        display: "flex",
+        alignItems: "center",
+        gap: 8,
+        background: C.cream2,
+        border: `1px solid ${C.line2}`,
+        borderRadius: 20,
+        padding: "7px 14px",
+        color: C.muted,
+        cursor: "pointer",
+        textAlign: "left",
+        transition: "all 0.15s",
+      }}
+      onMouseEnter={(e) => { e.currentTarget.style.background = C.cream2hover; }}
+      onMouseLeave={(e) => { e.currentTarget.style.background = C.cream2; }}
+    >
+      <Search size={16} strokeWidth={1.75} style={{ flexShrink: 0 }} />
+      <span style={{ flex: 1, fontSize: 14, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+        Search farm, tasks, people…
+      </span>
+      <span style={{
+        marginLeft: "auto", fontSize: 11, color: C.muted, background: "#FFFFFF",
+        padding: "2px 6px", borderRadius: 3, border: `1px solid ${C.line2}`, flexShrink: 0,
+      }}>⌘K</span>
+    </button>
+  );
+}
+
 export default function TopAppBar() {
   const [searchOpen, setSearchOpen] = useState(false);
   // <=1024px the LeftRail drawer is replaced by the inline PillarSubNavStrip,
@@ -115,7 +159,9 @@ export default function TopAppBar() {
           <Link to="/home" className="flex items-center flex-shrink-0" aria-label="teivaka home">
             <TeivakaLogo />
           </Link>
-          <SearchIconButton onClick={() => setSearchOpen(true)} />
+          {narrow
+            ? <SearchIconButton onClick={() => setSearchOpen(true)} />
+            : <SearchBarFull onClick={() => setSearchOpen(true)} />}
         </div>
 
         {/* Spacer — consumes remaining space so right cluster sits at the edge */}
