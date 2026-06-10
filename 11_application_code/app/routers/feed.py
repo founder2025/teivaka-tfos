@@ -62,6 +62,31 @@ def _pid():
     return "CPST-" + uuid.uuid4().hex[:8].upper()
 
 
+# Runtime feature detection — so a not-yet-applied migration can NEVER 500 a
+# hot path again. Each flag is probed once and cached; queries include the
+# migration-dependent pieces only when the object actually exists.
+_FEAT_CACHE: dict = {}
+
+
+async def _has(db, key, check_sql) -> bool:
+    if key in _FEAT_CACHE:
+        return _FEAT_CACHE[key]
+    try:
+        v = bool((await db.execute(text(check_sql))).scalar())
+    except Exception:  # noqa: BLE001 — never let a probe break the request
+        v = False
+    _FEAT_CACHE[key] = v
+    return v
+
+
+async def _comments_enabled_col(db):
+    return await _has(db, "comments_enabled", "SELECT 1 FROM information_schema.columns WHERE table_schema='community' AND table_name='feed_posts' AND column_name='comments_enabled'")
+
+
+async def _has_table(db, name):
+    return await _has(db, f"tbl_{name}", f"SELECT to_regclass('community.{name}') IS NOT NULL")
+
+
 def _rid():
     return "CRPL-" + uuid.uuid4().hex[:8].upper()
 
@@ -208,17 +233,22 @@ async def list_feed(
             where.append("fp.author_user_id = :author")
             params["author"] = author
 
-        # viewer-level suppression: per-post hide, muted authors, two-way blocks
-        where.append("NOT EXISTS (SELECT 1 FROM community.feed_hidden h WHERE h.post_id = fp.post_id AND h.user_id = :uid)")
-        where.append("fp.author_user_id NOT IN (SELECT muted_user_id FROM community.user_mutes WHERE user_id = :uid)")
-        where.append("fp.author_user_id NOT IN (SELECT blocked_user_id FROM community.user_blocks WHERE user_id = :uid)")
-        where.append("NOT EXISTS (SELECT 1 FROM community.user_blocks b WHERE b.user_id = fp.author_user_id AND b.blocked_user_id = :uid)")
+        # viewer-level suppression — only if migration 094's tables exist (degrade
+        # gracefully if not yet applied, rather than 500 the whole feed).
+        if await _has_table(db, "feed_hidden"):
+            where.append("NOT EXISTS (SELECT 1 FROM community.feed_hidden h WHERE h.post_id = fp.post_id AND h.user_id = :uid)")
+        if await _has_table(db, "user_mutes"):
+            where.append("fp.author_user_id NOT IN (SELECT muted_user_id FROM community.user_mutes WHERE user_id = :uid)")
+        if await _has_table(db, "user_blocks"):
+            where.append("fp.author_user_id NOT IN (SELECT blocked_user_id FROM community.user_blocks WHERE user_id = :uid)")
+            where.append("NOT EXISTS (SELECT 1 FROM community.user_blocks b WHERE b.user_id = fp.author_user_id AND b.blocked_user_id = :uid)")
+        comments_col = "fp.comments_enabled," if await _comments_enabled_col(db) else "TRUE AS comments_enabled,"
 
         rows = (await db.execute(text(f"""
             SELECT fp.post_id, fp.author_user_id, fp.author_profession, fp.body, fp.post_type,
                    fp.is_question, fp.audience, fp.location, fp.vertical, fp.photos, fp.mentions,
                    fp.link_audit_hash, fp.is_repost, fp.repost_of_id, fp.pinned,
-                   fp.comments_enabled,
+                   {comments_col}
                    fp.best_answer_reply_id, fp.audit_hash, fp.created_at, fp.edited_at,
                    u.full_name AS author_name, u.avatar_url AS author_avatar, COALESCE(u.email_verified, FALSE) AS author_verified,
                    orig.body AS repost_body, ou.full_name AS repost_author_name, ou.avatar_url AS repost_author_avatar,
@@ -547,12 +577,18 @@ async def add_reply(post_id: str, body: ReplyCreate, user: dict = Depends(commun
         raise HTTPException(status_code=422, detail="Reply body is required")
     reply_id = _rid()
     async with get_rls_db(str(user["tenant_id"])) as db:
-        prow = (await db.execute(text("SELECT comments_enabled FROM community.feed_posts WHERE post_id=:pid AND status='active'"),
-                                 {"pid": post_id})).first()
-        if not prow:
-            raise HTTPException(status_code=404, detail="Post not found")
-        if prow[0] is False:
-            raise HTTPException(status_code=403, detail="Comments are turned off for this post")
+        if await _comments_enabled_col(db):
+            prow = (await db.execute(text("SELECT comments_enabled FROM community.feed_posts WHERE post_id=:pid AND status='active'"),
+                                     {"pid": post_id})).first()
+            if not prow:
+                raise HTTPException(status_code=404, detail="Post not found")
+            if prow[0] is False:
+                raise HTTPException(status_code=403, detail="Comments are turned off for this post")
+        else:
+            prow = (await db.execute(text("SELECT 1 FROM community.feed_posts WHERE post_id=:pid AND status='active'"),
+                                     {"pid": post_id})).first()
+            if not prow:
+                raise HTTPException(status_code=404, detail="Post not found")
         prof = await _profession_of(db, user["user_id"])
         await db.execute(text("""
             INSERT INTO community.feed_replies
