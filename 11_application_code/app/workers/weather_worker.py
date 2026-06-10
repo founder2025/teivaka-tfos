@@ -83,15 +83,30 @@ def fetch_all_weather():
             with conn:  # one transaction per tenant
                 with with_rls(conn, str(tid)) as cur:
                     cur.execute("""
-                        SELECT farm_id, latitude, longitude
+                        SELECT farm_id, latitude, longitude, location_island
                           FROM tenant.farms
-                         WHERE latitude IS NOT NULL AND longitude IS NOT NULL
                     """)
                     farms = cur.fetchall()
                     for f in farms:
                         cur.execute("SAVEPOINT sp_farm")
                         try:
-                            key = (round(float(f["latitude"]), 2), round(float(f["longitude"]), 2))
+                            # Resolve coordinates with a fallback chain so EVERY farm
+                            # gets weather: farm lat/lon -> island centroid -> Fiji.
+                            lat, lon = f["latitude"], f["longitude"]
+                            if lat is None or lon is None:
+                                if f.get("location_island"):
+                                    cur.execute(
+                                        "SELECT latitude, longitude FROM shared.island_centroids "
+                                        "WHERE %s ILIKE '%%' || name || '%%' "
+                                        "ORDER BY length(name) DESC LIMIT 1",
+                                        (f["location_island"],),
+                                    )
+                                    cr = cur.fetchone()
+                                    if cr:
+                                        lat, lon = cr["latitude"], cr["longitude"]
+                            if lat is None or lon is None:
+                                lat, lon = -17.8, 178.0  # Fiji national fallback
+                            key = (round(float(lat), 2), round(float(lon), 2))
                             payload = fetched.get(key) or fetched.setdefault(key, _fetch(*key))
                             rows = _rows_from(payload)
                             cur.execute(
