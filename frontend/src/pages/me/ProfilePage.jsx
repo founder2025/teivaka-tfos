@@ -200,11 +200,31 @@ export default function ProfilePage({ self = false }) {
   const [activity, setActivity] = useState(null);
   const [meData, setMeData] = useState(null);
   const [avatarBroken, setAvatarBroken] = useState(false);
+  const [avatarPct, setAvatarPct] = useState(null); // null = idle, 0-100 uploading
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [timedOut, setTimedOut] = useState(false);
+  const [retryTick, setRetryTick] = useState(0);
 
-  // resolve own user_id (for /me)
+  // resolve own user_id (for /me). THE OLD DEAD-END: if this call failed, meId
+  // stayed null, the profile fetch never fired, and the page sat on "Loading
+  // profile…" forever. Failures now surface as a retryable error state.
   useEffect(() => {
-    if (self) getJSON("/api/v1/auth/me").then((r) => { const d = r?.data ?? r; setMeData(d); setMeId(d?.user_id); }).catch(() => setMeId(null));
-  }, [self]);
+    if (self) {
+      setLoadFailed(false);
+      getJSON("/api/v1/auth/me")
+        .then((r) => { const d = r?.data ?? r; setMeData(d); setMeId(d?.user_id); })
+        .catch(() => { setMeId(null); setLoadFailed(true); });
+    }
+  }, [self, retryTick]);
+
+  // Never an infinite spinner: if nothing has rendered after 10s, offer Retry.
+  useEffect(() => {
+    if (p) return undefined;
+    const t = setTimeout(() => setTimedOut(true), 10000);
+    return () => clearTimeout(t);
+  }, [p, retryTick]);
+
+  const retry = () => { setTimedOut(false); setLoadFailed(false); setP(null); setRetryTick((n) => n + 1); };
 
   const targetId = self ? meId : routeId;
   // Fallback profile from /auth/me so the OWN profile renders even if the profile API
@@ -225,7 +245,7 @@ export default function ProfilePage({ self = false }) {
         else setP({});
       });
   };
-  useEffect(() => { load(); /* eslint-disable-next-line */ }, [targetId, meData]);
+  useEffect(() => { load(); /* eslint-disable-next-line */ }, [targetId, meData, retryTick]);
 
   // After a successful edit: merge the saved values straight into the view so
   // the change is visible instantly, refresh the authoritative /auth/me copy
@@ -241,16 +261,18 @@ export default function ProfilePage({ self = false }) {
 
   const uploadAvatar = async (e) => {
     const file = e.target.files?.[0]; e.target.value = ""; if (!file) return;
+    setAvatarPct(0);
     try {
-      toast("Uploading photo…");
-      // Compresses client-side first (a 9 MB camera photo becomes ~300 KB).
-      const url = await uploadMedia(file, (pct) => { if (pct === 100) toast("Processing…"); });
+      // Compresses client-side first (a 9 MB camera photo becomes ~300 KB),
+      // then uploads with real progress driving the bar under the avatar.
+      const url = await uploadMedia(file, setAvatarPct);
       setAvatarBroken(false);
       setP((cur) => (cur ? { ...cur, avatar_url: url } : cur)); // show it immediately
       await send("PATCH", "/api/v1/me", { avatar_url: url });
       toast("Photo updated ✓", "success");
       load();
-    } catch (err) { toast(`Couldn't update photo: ${err.message || err}`, "error"); }
+    } catch (err) { toast(`Couldn't update photo: ${err.message || err}. Tap the camera to retry.`, "error"); }
+    finally { setAvatarPct(null); }
   };
   const toggleFollow = async () => {
     setBusyFollow(true);
@@ -259,7 +281,39 @@ export default function ProfilePage({ self = false }) {
     finally { setBusyFollow(false); }
   };
 
-  if (!p) return <div style={{ maxWidth: 1040, margin: "0 auto", color: C.muted, padding: 20 }}>Loading profile…</div>;
+  if (!p) {
+    if (loadFailed || timedOut) {
+      return (
+        <div style={{ maxWidth: 480, margin: "60px auto", textAlign: "center", padding: 20 }}>
+          <div style={{ fontSize: 15, fontWeight: 700, color: C.soil, marginBottom: 6 }}>
+            {loadFailed ? "Couldn't load your profile" : "This is taking longer than usual"}
+          </div>
+          <div style={{ fontSize: 13, color: C.muted, marginBottom: 16 }}>
+            {loadFailed ? "We couldn't reach the server. Check your connection and try again." : "Slow connection or a busy server — give it another go."}
+          </div>
+          <button onClick={retry} style={{ background: C.green, color: "#fff", border: "none", borderRadius: 8, padding: "10px 22px", fontSize: 14, fontWeight: 600, cursor: "pointer", minHeight: 44 }}>Retry</button>
+        </div>
+      );
+    }
+    // Skeleton — the page's real shape while it loads, not a lone text line.
+    const sk = { background: "rgba(92,64,51,0.08)", borderRadius: 8 };
+    return (
+      <div style={{ maxWidth: 1320, margin: "0 auto", padding: "8px 0" }} aria-busy="true" aria-label="Loading profile">
+        <div style={{ display: "flex", gap: 16, alignItems: "flex-start" }}>
+          <div style={{ ...sk, width: 72, height: 72, borderRadius: "50%", flexShrink: 0 }} />
+          <div style={{ flex: 1 }}>
+            <div style={{ ...sk, height: 22, width: "40%", marginBottom: 10 }} />
+            <div style={{ ...sk, height: 13, width: "60%", marginBottom: 8 }} />
+            <div style={{ ...sk, height: 13, width: "35%" }} />
+          </div>
+        </div>
+        <div style={{ display: "flex", gap: 12, marginTop: 22, flexWrap: "wrap" }}>
+          {[0, 1, 2, 3].map((i) => <div key={i} style={{ ...sk, height: 76, flex: 1, minWidth: 120 }} />)}
+        </div>
+        <div style={{ ...sk, height: 140, marginTop: 14 }} />
+      </div>
+    );
+  }
   if (!p.user_id) return <div style={{ maxWidth: 1040, margin: "0 auto", color: C.muted, padding: 20 }}>Profile not found.</div>;
 
   const isYou = p.is_you;
@@ -357,7 +411,15 @@ export default function ProfilePage({ self = false }) {
             <Avatar size={72} />
             {isYou && <>
               <span style={{ position: "absolute", bottom: 0, right: 0, width: 24, height: 24, borderRadius: "50%", background: C.green, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", border: "2px solid #fff" }}><Camera size={13} /></span>
-              <input type="file" accept="image/*" hidden onChange={uploadAvatar} />
+              <input type="file" accept="image/*" hidden onChange={uploadAvatar} disabled={avatarPct != null} />
+              {avatarPct != null && (
+                <span style={{ position: "absolute", left: 0, right: 0, bottom: -12 }}>
+                  <span style={{ display: "block", height: 5, borderRadius: 3, background: "rgba(92,64,51,0.12)", overflow: "hidden" }}>
+                    <span style={{ display: "block", height: "100%", width: `${avatarPct}%`, background: C.green, transition: "width 200ms ease" }} />
+                  </span>
+                  <span style={{ display: "block", fontSize: 10, color: C.muted, textAlign: "center", marginTop: 2 }}>{avatarPct < 100 ? `${avatarPct}%` : "Processing…"}</span>
+                </span>
+              )}
             </>}
           </label>
           <div style={{ flex: 1, minWidth: 220 }}>

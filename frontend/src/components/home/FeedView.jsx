@@ -11,10 +11,11 @@ import {
   Image, MapPin, HelpCircle, Link2, Send, Star, MessageSquare, Repeat2, Share2,
   Smile, MoreHorizontal, Trash2, Check, BadgeCheck, X, Leaf, ShoppingBag, Gift,
   Droplet, BookOpen, Rss, UserPlus, UserCheck, Pencil, Flag,
-  Pin, Archive, Copy, EyeOff, Ban, BellOff, Bookmark, Users,
+  Pin, Archive, Copy, EyeOff, Ban, BellOff, Bookmark, Users, Camera, MailCheck,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { getCurrentUser } from "../../utils/auth";
+import { useIsNarrow } from "../../hooks/useIsNarrow";
 
 const API = "/api/v1/community";
 function authHeaders() {
@@ -190,32 +191,69 @@ function MentionPicker({ onPick, onClose }) {
 }
 
 const BLANK_DRAFT = { body: "", audience: "everyone", photos: [], location: null, vertical: "", isQuestion: false, link: null, reach: "LOCAL", kind: "POST" };
+const DRAFT_KEY = "tfos_feed_draft";
+const BODY_MAX = 2000; // backend CHECK caps body at 2000 chars
+const EMOJIS = ["🌱", "🌾", "🍌", "🥥", "🍠", "🌶️", "🍆", "🥬", "🐔", "🐐", "🐄", "🐖", "🐝", "🐟", "🚜", "🌧️", "☀️", "🌊", "💪", "🙏", "❤️", "😀", "😂", "👍", "🎉", "✅", "🔥", "🇫🇯"];
+
 function Composer({ me, onPosted }) {
-  const [draft, setDraft] = useState(BLANK_DRAFT);
+  // Draft autosave: restore an unfinished post (text + already-uploaded photos)
+  // if the user navigated away mid-compose.
+  const [draft, setDraft] = useState(() => {
+    try { const d = JSON.parse(localStorage.getItem(DRAFT_KEY) || "null"); if (d && (d.body || d.photos?.length)) return { ...BLANK_DRAFT, ...d }; } catch { /* noop */ }
+    return BLANK_DRAFT;
+  });
   const [busy, setBusy] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadPct, setUploadPct] = useState(0);
+  const [uploadNote, setUploadNote] = useState(""); // "photo 2 of 3"
   const [modal, setModal] = useState(null);
   const [canGlobal, setCanGlobal] = useState(false);
+  const [needVerify, setNeedVerify] = useState(false);
+  const [resending, setResending] = useState(false);
+  const [emojiOpen, setEmojiOpen] = useState(false);
+  const [myEmail, setMyEmail] = useState(me?.email || "");
   const fileRef = useRef();
+  const cameraRef = useRef();
+  const narrow = useIsNarrow(760);
   useEffect(() => {
     getJSON("/api/v1/auth/me").then((r) => {
-      const prof = (r?.data?.profession || r?.profession || "").toLowerCase();
+      const d = r?.data ?? r;
+      const prof = (d?.profession || "").toLowerCase();
       setCanGlobal(prof === "exporter" || prof === "importer");
+      if (d?.email) setMyEmail(d.email);
     }).catch(() => {});
   }, []);
+  useEffect(() => {
+    try {
+      if (draft.body || draft.photos?.length) localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+      else localStorage.removeItem(DRAFT_KEY);
+    } catch { /* storage full/blocked — autosave is best-effort */ }
+  }, [draft]);
   const set = (k, v) => setDraft((d) => ({ ...d, [k]: v }));
   const pickFile = async (e) => {
-    const f = e.target.files?.[0]; e.target.value = ""; if (!f) return;
-    setUploading(true); setUploadPct(0);
+    const files = Array.from(e.target.files || []); e.target.value = ""; if (!files.length) return;
+    setUploading(true);
     try {
-      const url = await uploadMedia(f, setUploadPct);
-      setDraft((d) => ({ ...d, photos: [...d.photos, { id: Math.random().toString(36).slice(2), url, video: f.type.startsWith("video") }] }));
-      toast("Photo attached ✓", "success");
-    } catch (err) { toast(`Couldn't upload: ${err.message || err}`, "error"); } finally { setUploading(false); setUploadPct(0); }
+      for (let i = 0; i < files.length; i++) {
+        const f = files[i];
+        setUploadPct(0); setUploadNote(files.length > 1 ? `photo ${i + 1} of ${files.length}` : "");
+        const url = await uploadMedia(f, setUploadPct);
+        setDraft((d) => ({ ...d, photos: [...d.photos, { id: Math.random().toString(36).slice(2), url, video: f.type.startsWith("video") }] }));
+      }
+      toast(files.length > 1 ? `${files.length} photos attached ✓` : "Photo attached ✓", "success");
+    } catch (err) { toast(`Couldn't upload: ${err.message || err}. Tap Photo/Video to retry.`, "error"); }
+    finally { setUploading(false); setUploadPct(0); setUploadNote(""); }
+  };
+  const resendVerify = async () => {
+    if (!myEmail) { toast("Couldn't find your email — re-login and try again.", "error"); return; }
+    setResending(true);
+    try {
+      await send("POST", "/api/v1/auth/resend-verification", { email: myEmail });
+      toast("Verification email sent ✓ — check your inbox.", "success");
+    } catch (e) { toast(String(e.message || e), "error"); } finally { setResending(false); }
   };
   const post = async () => {
-    if (!draft.body.trim()) return;
+    if (!draft.body.trim() || busy) return;
     setBusy(true);
     try {
       await send("POST", `${API}/feed`, {
@@ -224,14 +262,26 @@ function Composer({ me, onPosted }) {
         is_question: draft.isQuestion, link_audit_hash: draft.link, reach: draft.reach, kind: draft.kind,
       });
       setDraft(BLANK_DRAFT);
+      try { localStorage.removeItem(DRAFT_KEY); } catch { /* noop */ }
+      setNeedVerify(false);
+      toast("Posted ✓", "success");
       onPosted();
-    } catch (err) { alert(String(err.message || err)); } finally { setBusy(false); }
+    } catch (err) {
+      if (err.status === 403 && /verify/i.test(String(err.message))) setNeedVerify(true);
+      else if (err.status === 429) toast("You're posting too quickly — wait a moment and try again.", "error");
+      else toast(`Couldn't post: ${err.message || err}`, "error");
+    } finally { setBusy(false); }
   };
   return (
     <div className="cm-composer">
       <div className="cm-composer-avatar"><span className="avatar-circle avatar-composer">{initials(me?.full_name)}</span></div>
       <div className="cm-composer-body">
-        <textarea placeholder="Share with your network…" value={draft.body} onChange={(e) => set("body", e.target.value)} />
+        <textarea placeholder="Share with your network…" value={draft.body} maxLength={BODY_MAX} onChange={(e) => set("body", e.target.value)} />
+        {draft.body.length > BODY_MAX - 300 && (
+          <div style={{ textAlign: "right", fontSize: 11, color: draft.body.length >= BODY_MAX ? "#b3261e" : "var(--muted)", marginTop: 2 }}>
+            {draft.body.length.toLocaleString()} / {BODY_MAX.toLocaleString()}
+          </div>
+        )}
         <div className="cm-composer-extras">
           {draft.photos.map((ph) => (
             <div className="cm-draft-thumb" key={ph.id}>{ph.video ? <video src={ph.url} muted /> : <img src={ph.url} alt="" />}<button className="cm-draft-thumb-x" onClick={() => set("photos", draft.photos.filter((p) => p.id !== ph.id))}><X size={11} /></button></div>
@@ -242,23 +292,54 @@ function Composer({ me, onPosted }) {
           {draft.kind === "EDU_REEL" && <span className="cm-draft-tag"><BookOpen size={11} />Educational reel (global)<button className="cm-draft-tag-x" onClick={() => set("kind", "POST")}><X size={10} /></button></span>}
           {draft.reach === "GLOBAL" && <span className="cm-draft-tag">🌐 Global reach<button className="cm-draft-tag-x" onClick={() => set("reach", "LOCAL")}><X size={10} /></button></span>}
         </div>
-        <div className="cm-composer-foot">
-          <div className="cm-composer-tools">
-            <button className="cm-tool-btn" onClick={() => fileRef.current?.click()} disabled={uploading}><Image size={13} />{uploading ? `Uploading… ${uploadPct}%` : "Photo / Video"}</button>
-            <input ref={fileRef} type="file" accept="image/*,video/*" hidden onChange={pickFile} />
-            <button className="cm-tool-btn" onClick={() => setModal("place")}><MapPin size={13} />Place</button>
-            <button className={`cm-tool-btn ${draft.isQuestion ? "cm-tool-active" : ""}`} onClick={() => set("isQuestion", !draft.isQuestion)}><HelpCircle size={13} />Ask</button>
-            <button className="cm-tool-btn" onClick={() => setModal("mention")}><UserPlus size={13} />Mention</button>
-            <button className="cm-tool-btn" onClick={() => setModal("link")}><Link2 size={13} />Link record</button>
-            <button className={`cm-tool-btn ${draft.kind === "EDU_REEL" ? "cm-tool-active" : ""}`} onClick={() => set("kind", draft.kind === "EDU_REEL" ? "POST" : "EDU_REEL")}><BookOpen size={13} />Reel</button>
+        {uploading && (
+          <div style={{ margin: "8px 0 2px" }}>
+            <div style={{ height: 6, borderRadius: 3, background: "rgba(92,64,51,0.12)", overflow: "hidden" }}>
+              <div style={{ height: "100%", width: `${uploadPct}%`, background: "var(--green)", transition: "width 200ms ease" }} />
+            </div>
+            <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 3 }}>
+              {uploadPct < 100 ? `Uploading ${uploadNote || "photo"}… ${uploadPct}%` : `Processing ${uploadNote || "photo"}…`}
+            </div>
+          </div>
+        )}
+        {needVerify && (
+          <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", background: "rgba(191,144,0,0.10)", border: "1px solid rgba(191,144,0,0.45)", borderRadius: 8, padding: "10px 12px", margin: "8px 0 2px" }}>
+            <MailCheck size={16} style={{ color: "var(--amber, #bf9000)", flexShrink: 0 }} />
+            <span style={{ flex: 1, fontSize: 12.5, color: "var(--soil)", minWidth: 180 }}>
+              <strong>Verify your email to post.</strong> Check your inbox for the link{myEmail ? ` sent to ${myEmail}` : ""}.
+            </span>
+            <button className="btn btn-sm btn-secondary" disabled={resending} onClick={resendVerify} style={{ minHeight: 36 }}>{resending ? "Sending…" : "Resend email"}</button>
+          </div>
+        )}
+        <div className="cm-composer-foot" style={narrow ? { flexDirection: "column", alignItems: "stretch", gap: 8 } : undefined}>
+          <div className="cm-composer-tools" style={{ flexWrap: "wrap", rowGap: 6 }}>
+            <button className="cm-tool-btn" onClick={() => fileRef.current?.click()} disabled={uploading} style={narrow ? { minHeight: 44 } : undefined}><Image size={13} />Photo / Video</button>
+            <input ref={fileRef} type="file" accept="image/*,video/*" multiple hidden onChange={pickFile} />
+            {narrow && <>
+              <button className="cm-tool-btn" onClick={() => cameraRef.current?.click()} disabled={uploading} style={{ minHeight: 44 }}><Camera size={13} />Camera</button>
+              <input ref={cameraRef} type="file" accept="image/*" capture="environment" hidden onChange={pickFile} />
+            </>}
+            <button className="cm-tool-btn" onClick={() => setEmojiOpen((v) => !v)} style={narrow ? { minHeight: 44 } : undefined}><Smile size={13} />Emoji</button>
+            <button className="cm-tool-btn" onClick={() => setModal("place")} style={narrow ? { minHeight: 44 } : undefined}><MapPin size={13} />Place</button>
+            <button className={`cm-tool-btn ${draft.isQuestion ? "cm-tool-active" : ""}`} onClick={() => set("isQuestion", !draft.isQuestion)} style={narrow ? { minHeight: 44 } : undefined}><HelpCircle size={13} />Ask</button>
+            <button className="cm-tool-btn" onClick={() => setModal("mention")} style={narrow ? { minHeight: 44 } : undefined}><UserPlus size={13} />Mention</button>
+            {!narrow && <button className="cm-tool-btn" onClick={() => setModal("link")}><Link2 size={13} />Link record</button>}
+            <button className={`cm-tool-btn ${draft.kind === "EDU_REEL" ? "cm-tool-active" : ""}`} onClick={() => set("kind", draft.kind === "EDU_REEL" ? "POST" : "EDU_REEL")} style={narrow ? { minHeight: 44 } : undefined}><BookOpen size={13} />Reel</button>
             {canGlobal && <button className={`cm-tool-btn ${draft.reach === "GLOBAL" ? "cm-tool-active" : ""}`} onClick={() => set("reach", draft.reach === "GLOBAL" ? "LOCAL" : "GLOBAL")} title="Global reach (exporters/importers)">🌐</button>}
-            <select className="cm-audience-select" value={draft.audience} onChange={(e) => set("audience", e.target.value)}>
+            <select className="cm-audience-select" value={draft.audience} onChange={(e) => set("audience", e.target.value)} style={narrow ? { minHeight: 44 } : undefined}>
               {AUDIENCES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
             </select>
           </div>
-          <button className="btn btn-primary" disabled={busy || uploading || !draft.body.trim()} onClick={post}><Send size={13} />{busy ? "Posting…" : "Post"}</button>
+          <button className="btn btn-primary" disabled={busy || uploading || !draft.body.trim()} onClick={post} style={narrow ? { width: "100%", minHeight: 44, justifyContent: "center" } : undefined}><Send size={13} />{busy ? "Posting…" : "Post"}</button>
         </div>
-        <div className="cm-composer-hint">Seen by your country's {draft.audience === "everyone" ? "whole network" : draft.audience} (global if Reel/🌐). Use Mention to tag people. Reports go to Cody as moderator.</div>
+        {emojiOpen && (
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 4, background: "#fff", border: "1px solid var(--line)", borderRadius: 8, padding: 8, marginTop: 6 }}>
+            {EMOJIS.map((em) => (
+              <button key={em} onClick={() => { set("body", (draft.body + " " + em).trimStart().slice(0, BODY_MAX)); }} style={{ border: "none", background: "transparent", fontSize: 20, cursor: "pointer", width: 36, height: 36, lineHeight: 1 }}>{em}</button>
+            ))}
+          </div>
+        )}
+        {!narrow && <div className="cm-composer-hint">Seen by your country's {draft.audience === "everyone" ? "whole network" : draft.audience} (global if Reel/🌐). Use Mention to tag people. Reports go to Cody as moderator.</div>}
       </div>
       {modal === "place" && <PlaceModal onClose={() => setModal(null)} onPick={(v) => { set("location", v); setModal(null); }} />}
       {modal === "link" && <LinkRecordModal onClose={() => setModal(null)} onPick={(v) => { set("link", v); setModal(null); }} />}
@@ -562,7 +643,8 @@ export default function FeedView({ initialFilter = "all" }) {
     if (!silent) setPosts(null);
     setEnd(false);
     getJSON(`${API}/feed?filter=${filter}&verified_only=${verifiedOnly}&limit=${PAGE}&offset=0`)
-      .then((r) => { const d = r.data || []; setPosts(d); setEnd(d.length < PAGE); }).catch(() => setPosts([]));
+      .then((r) => { const d = r.data || []; setPosts(d); setEnd(d.length < PAGE); })
+      .catch(() => { setPosts([]); if (!silent) toast("Couldn't load the feed — check your connection and try again.", "error"); });
   };
   const loadMore = () => {
     setMore(true);
