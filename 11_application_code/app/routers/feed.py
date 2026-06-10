@@ -37,7 +37,7 @@ import uuid
 
 from app.db.session import get_db, get_rls_db, get_db_ctx
 from app.middleware.rls import get_current_user
-from app.utils.community_guard import community_write
+from app.utils.community_guard import community_write, rate_limit_only
 
 router = APIRouter()
 
@@ -599,10 +599,18 @@ async def mark_best_answer(post_id: str, reply_id: str, user: dict = Depends(get
 
 # ----------------------------------------------------------------------------- follow
 @router.post("/follow/{target_user_id}")
-async def follow(target_user_id: str, user: dict = Depends(community_write("follow", 30))):
+async def follow(target_user_id: str, user: dict = Depends(rate_limit_only("follow", 30))):
+    # Following is core social-graph, not abuse-broadcast — available to every
+    # authenticated user (verified or not), rate-limited only.
     if target_user_id == str(user["user_id"]):
         raise HTTPException(status_code=422, detail="Cannot follow yourself")
     async with get_rls_db(str(user["tenant_id"])) as db:
+        blocked = (await db.execute(text("""
+            SELECT 1 FROM community.user_blocks
+            WHERE (user_id=:me AND blocked_user_id=:them) OR (user_id=:them AND blocked_user_id=:me)
+        """), {"me": str(user["user_id"]), "them": target_user_id})).first()
+        if blocked:
+            raise HTTPException(status_code=403, detail="You can't follow this person.")
         await db.execute(text("""
             INSERT INTO community.follows (follower_user_id, followed_user_id)
             VALUES (:me, :them) ON CONFLICT DO NOTHING
@@ -681,7 +689,9 @@ async def list_people(search: str = Query(None), user: dict = Depends(get_curren
                            WHERE f2.follower_user_id = u.user_id AND f2.followed_user_id = :uid) AS follows_me
             FROM tenant.users u
             WHERE u.user_id <> :uid AND u.is_active = TRUE{clause}
-            ORDER BY u.full_name
+              AND u.user_id NOT IN (SELECT blocked_user_id FROM community.user_blocks WHERE user_id = :uid)
+              AND u.user_id NOT IN (SELECT user_id FROM community.user_blocks WHERE blocked_user_id = :uid)
+            ORDER BY follows_me DESC, u.full_name
             LIMIT 50
         """), params)).mappings().all()
     return {"data": [{

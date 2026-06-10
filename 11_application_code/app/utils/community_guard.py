@@ -74,3 +74,13 @@ def community_write(action: str, limit: int, window_seconds: int = 60):
         await rate_limit(user, action, limit, window_seconds)
         return user
     return dep
+
+
+def rate_limit_only(action: str, limit: int, window_seconds: int = 60):
+    """Rate-limit WITHOUT the email-verification gate. For low-abuse relationship
+    actions (e.g. follow) that every authenticated user should be able to do —
+    so a new/unverified user can still build their graph. Still abuse-capped."""
+    async def dep(user: dict = Depends(get_current_user)) -> dict:
+        await rate_limit(user, action, limit, window_seconds)
+        return user
+    return dep

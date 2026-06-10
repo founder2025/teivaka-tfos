@@ -12,7 +12,8 @@ function authHeaders() {
   return t ? { "Content-Type": "application/json", Authorization: `Bearer ${t}` } : { "Content-Type": "application/json" };
 }
 async function getJSON(u) { const r = await fetch(u, { headers: authHeaders() }); if (!r.ok) throw new Error(String(r.status)); return r.json(); }
-async function send(method, u) { const r = await fetch(u, { method, headers: authHeaders() }); if (!r.ok) throw new Error(String(r.status)); return r.json().catch(() => ({})); }
+async function send(method, u) { const r = await fetch(u, { method, headers: authHeaders() }); if (!r.ok) throw new Error((await r.json().catch(() => ({})))?.detail || String(r.status)); return r.json().catch(() => ({})); }
+const toast = (message, type) => { try { window.dispatchEvent(new CustomEvent("tfos:toast", { detail: { message, type } })); } catch { /* noop */ } };
 
 const PROF_LABEL = { farmer: "Farmer", buyer: "Buyer", banker: "Banker", business: "Business", service_provider: "Service Provider" };
 const initials = (name) => (name || "?").split(" ").map((s) => s[0]).slice(0, 2).join("").toUpperCase();
@@ -30,9 +31,15 @@ export default function Directory() {
   useEffect(() => { const id = setTimeout(() => load(q), 300); return () => clearTimeout(id); }, [q]);
 
   const toggleFollow = async (p) => {
-    setPeople((list) => list.map((x) => x.user_id === p.user_id ? { ...x, is_following: !x.is_following } : x));
-    try { await send(p.is_following ? "DELETE" : "POST", `${API}/follow/${p.user_id}`); }
-    catch { setPeople((list) => list.map((x) => x.user_id === p.user_id ? { ...x, is_following: p.is_following } : x)); }
+    const next = !p.is_following;
+    setPeople((list) => list.map((x) => x.user_id === p.user_id ? { ...x, is_following: next } : x));
+    try {
+      await send(next ? "POST" : "DELETE", `${API}/follow/${p.user_id}`);
+      toast(next ? `Following ${p.full_name} ✓` : `Unfollowed ${p.full_name}`, "success");
+    } catch (e) {
+      setPeople((list) => list.map((x) => x.user_id === p.user_id ? { ...x, is_following: p.is_following } : x));
+      toast(`Couldn't ${next ? "follow" : "unfollow"}: ${e.message || e}`, "error");
+    }
   };
 
   return (
