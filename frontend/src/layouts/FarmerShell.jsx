@@ -19,7 +19,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Navigate, Outlet, useLocation } from "react-router-dom";
 import { Plus, Sparkles } from "lucide-react";
 
-import TopAppBar from "../components/nav/TopAppBar";
+import PrototypeTopbar from "../components/nav/PrototypeTopbar";
 import BottomNav from "../components/nav/BottomNav";
 import LeftRail from "../components/nav/LeftRail";
 import { useUniversalLogShortcut } from "../components/nav/UniversalLogButton";
@@ -220,7 +220,7 @@ function ShellContent() {
   // Cmd/Ctrl+L — universal log shortcut (Day 3a: toast; Day 3b: open LogSheet).
   useUniversalLogShortcut();
 
-  const { open: railOpen, width: railWidth, setOpen: setRailOpen } = useLeftRail();
+  const { open: railOpen, width: railWidth, setOpen: setRailOpen, toggle: toggleRail } = useLeftRail();
   const desktop = useIsDesktop();
   const mainMarginLeft = desktop && railOpen ? railWidth : 0;
 
@@ -313,11 +313,12 @@ function ShellContent() {
         fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, 'Helvetica Neue', Arial, sans-serif",
       }}
     >
-      <TopAppBar />
+      <div className="tfp"><PrototypeTopbar onMenu={toggleRail} /></div>
       <LeftRail />
       <div
         className="flex flex-col min-h-[calc(100vh-56px)]"
         style={{
+          marginTop: 56,
           marginLeft: mainMarginLeft,
           transition: "margin-left 180ms ease",
         }}

@@ -20,6 +20,7 @@ import {
   Layers, Activity, Award, Bookmark, X, FileText, QrCode,
 } from "lucide-react";
 import TfpShell from "../../components/farm/TfpShell";
+import PrototypeTopbar from "../../components/nav/PrototypeTopbar";
 
 function authHeaders() {
   const t = localStorage.getItem("tfos_access_token");
@@ -199,26 +200,7 @@ export default function ClassroomPillar() {
 
   return (
     <TfpShell>
-      <header className="topbar">
-        <div className="brand" onClick={() => navigate("/home")} style={{ cursor: "pointer" }}>
-          <div className="brand-logo"><img src="/teivaka_logo.png" alt="" style={{ height: 24 }} /></div>
-          <div className="brand-text">teivaka</div>
-        </div>
-        <div className="topbar-search"><Search size={14} /><span>Search farm, tasks, people…</span><span className="search-kbd">⌘K</span></div>
-        <div className="topbar-pillars">
-          {PILLARS.map((p) => (
-            <button key={p.id} className={`pillar-btn ${p.id === "classroom" ? "active" : ""}`} onClick={() => navigate(p.to)}>
-              <p.Icon size={15} />{p.label}
-            </button>
-          ))}
-        </div>
-        <div className="topbar-right">
-          <div className="status-dot" title="All systems synced" />
-          <button className="icon-btn" title="Messages"><MessageSquare size={18} /></button>
-          <button className="icon-btn" title="Notifications"><Bell size={18} /></button>
-          <button className="avatar-btn" onClick={() => navigate("/me")} title="Account"><div className="avatar-circle">UK</div><ChevronDown size={14} /></button>
-        </div>
-      </header>
+      <PrototypeTopbar />
 
       <div className="shell">
         <aside className="left-rail">
