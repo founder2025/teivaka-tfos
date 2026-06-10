@@ -33,9 +33,22 @@ OBJS=$(docker exec teivaka_db psql -U teivaka -d teivaka_db -tA -c "
        + (to_regclass('community.verification_requests') IS NOT NULL)::int
        + (SELECT count(*) FROM information_schema.columns WHERE table_schema='tenant' AND table_name='users' AND column_name='kyc_verified');")
 [ "$OBJS" = "3" ] && ok "stories + verification_requests + kyc_verified all present" || bad "missing objects ($OBJS/3)"
+MKT=$(docker exec teivaka_db psql -U teivaka -d teivaka_db -tA -c "
+  SELECT (to_regclass('community.listing_saves') IS NOT NULL)::int
+       + (SELECT count(*) FROM information_schema.columns WHERE table_schema='community' AND table_name='listings' AND column_name IN ('category','sold_at','link_audit_hash'));")
+[ "$MKT" = "4" ] && ok "marketplace v2 objects present (4/4)" || bad "marketplace objects missing ($MKT/4) — paste /tmp/rb_098.out"
 
-say "4/7 Stamp alembic"
-docker exec teivaka_api alembic stamp 098_marketplace_v2 >/dev/null 2>&1 && ok "stamped 097" || echo "   (stamp will re-run after rebuild)"
+say "4/7 Run migrations AS OWNER (alembic upgrade head — the permanent fix)"
+PW=$(docker exec teivaka_db printenv POSTGRES_PASSWORD 2>/dev/null)
+APIURL=$(docker exec teivaka_api printenv DATABASE_URL 2>/dev/null)
+HOSTPART=${APIURL#*@}
+if [ -n "$PW" ] && [ -n "$HOSTPART" ]; then
+  OWNER_URL="postgresql+asyncpg://teivaka:${PW}@${HOSTPART}"
+  docker exec -e DATABASE_URL="$OWNER_URL" teivaka_api alembic upgrade head > /tmp/alembic.out 2>&1 \
+    && ok "alembic upgrade head as owner" || bad "alembic upgrade failed (see /tmp/alembic.out)"
+else
+  bad "could not resolve owner DB credentials — migrations not auto-applied"
+fi
 
 say "5/7 Frontend build"
 (cd frontend && npm run build > /tmp/fe_build.out 2>&1) && ok "frontend built" || bad "frontend build failed (see /tmp/fe_build.out)"
@@ -43,7 +56,10 @@ say "5/7 Frontend build"
 say "6/7 API rebuild (no cache — takes ~3 min)"
 $COMPOSE build --no-cache api > /tmp/api_build.out 2>&1 && ok "API image built" || bad "API build failed (see /tmp/api_build.out)"
 $COMPOSE up -d api > /tmp/api_up.out 2>&1 && ok "API container up" || bad "API up failed (see /tmp/api_up.out)"
-docker exec teivaka_api alembic stamp 098_marketplace_v2 >/dev/null 2>&1 && ok "alembic stamped 097" || bad "alembic stamp failed"
+PW2=$(docker exec teivaka_db printenv POSTGRES_PASSWORD 2>/dev/null)
+APIURL2=$(docker exec teivaka_api printenv DATABASE_URL 2>/dev/null)
+docker exec -e DATABASE_URL="postgresql+asyncpg://teivaka:${PW2}@${APIURL2#*@}" teivaka_api alembic upgrade head >/dev/null 2>&1 \
+  && ok "migrations at head (owner)" || bad "post-rebuild alembic upgrade failed (see: docker exec teivaka_api alembic current)"
 bash 04_environment/verify-deploy.sh && ok "running code matches host" || bad "verify-deploy failed — container/code drift"
 
 say "7/7 Smoke: API answers + no startup errors"

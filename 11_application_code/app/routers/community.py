@@ -65,31 +65,38 @@ async def list_community_listings(
     saved: bool = False,
     user: dict = Depends(get_current_user),
 ):
-    """Marketplace listings for every profession — produce, inputs, tools,
-    livestock, services and WANTED (buyers posting needs). Seller identity +
-    green tick included; own listings include SOLD/CLOSED for management."""
+    """Marketplace listings for every profession. Migration-tolerant by design:
+    every 098-dependent fragment (category/sold_at columns, listing_saves) is
+    probed first and degraded gracefully if absent — schema lag can slim the
+    page down but can NEVER 500 it."""
     uid = str(user["user_id"])
     async with get_db_ctx() as db:
-        has_kyc = bool((await db.execute(text(
-            "SELECT 1 FROM information_schema.columns WHERE table_schema='tenant' AND table_name='users' AND column_name='kyc_verified'"))).scalar())
+        def _col(table, col, schema="community"):
+            return f"SELECT 1 FROM information_schema.columns WHERE table_schema='{schema}' AND table_name='{table}' AND column_name='{col}'"
+        has_kyc = bool((await db.execute(text(_col("users", "kyc_verified", "tenant")))).scalar())
+        has_cat = bool((await db.execute(text(_col("listings", "category")))).scalar())
+        has_sold = bool((await db.execute(text(_col("listings", "sold_at")))).scalar())
+        has_saves = bool((await db.execute(text("SELECT to_regclass('community.listing_saves') IS NOT NULL AND has_table_privilege(current_user, 'community.listing_saves', 'SELECT')"))).scalar())
         vexpr = "COALESCE(u.kyc_verified, FALSE)" if has_kyc else "FALSE"
+        saved_expr = ("EXISTS (SELECT 1 FROM community.listing_saves ls WHERE ls.listing_id = cl.listing_id AND ls.user_id = cast(:uid AS uuid))"
+                      if has_saves else "FALSE")
         params = {"uid": uid}
         if mine:
             where = "cl.created_by = cast(:uid AS uuid)"
         else:
-            where = """cl.listing_status = 'ACTIVE' AND cl.sold_at IS NULL
-               AND (cl.available_until IS NULL OR cl.available_until >= now())"""
+            where = "cl.listing_status = 'ACTIVE' AND (cl.available_until IS NULL OR cl.available_until >= now())"
+            if has_sold:
+                where += " AND cl.sold_at IS NULL"
         q = f"""SELECT cl.*, p.production_name, p.production_category,
                        u.full_name AS seller_name, u.avatar_url AS seller_avatar,
                        {vexpr} AS seller_verified, u.created_at AS seller_since,
-                       EXISTS (SELECT 1 FROM community.listing_saves ls
-                               WHERE ls.listing_id = cl.listing_id AND ls.user_id = cast(:uid AS uuid)) AS is_saved,
+                       {saved_expr} AS is_saved,
                        (cl.created_by = cast(:uid AS uuid)) AS is_mine
                 FROM community.listings cl
                 LEFT JOIN shared.productions p ON p.production_id = cl.production_id
                 LEFT JOIN tenant.users u ON u.user_id = cl.created_by
                 WHERE {where}"""
-        if saved:
+        if saved and has_saves:
             q += " AND EXISTS (SELECT 1 FROM community.listing_saves ls2 WHERE ls2.listing_id = cl.listing_id AND ls2.user_id = cast(:uid AS uuid))"
         if production_id:
             q += " AND cl.production_id = :production_id"; params["production_id"] = production_id
@@ -97,7 +104,7 @@ async def list_community_listings(
             q += " AND cl.island = :island"; params["island"] = island
         if grade:
             q += " AND cl.grade = :grade"; params["grade"] = grade
-        if category and category.upper() != "ALL":
+        if category and category.upper() != "ALL" and has_cat:
             q += " AND cl.category = :category"; params["category"] = category.upper()
         if search:
             q += " AND (cl.listing_title ILIKE :srch OR cl.listing_description ILIKE :srch)"; params["srch"] = f"%{search}%"
