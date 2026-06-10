@@ -228,7 +228,7 @@ export default function ProfilePage({ self = false }) {
   );
 
   return (
-    <div style={{ maxWidth: 1080, margin: "0 auto", display: "flex", flexDirection: narrow ? "column" : "row", gap: narrow ? 10 : 18, alignItems: "flex-start" }}>
+    <div style={{ maxWidth: 1320, margin: "0 auto", display: "flex", flexDirection: narrow ? "column" : "row", gap: narrow ? 10 : 24, alignItems: "flex-start" }}>
       {/* left rail — desktop only; collapses to TabStrip on mobile */}
       {narrow ? <TabStrip /> : (
       <aside style={{ width: 230, flexShrink: 0, position: "sticky", top: 70 }}>
