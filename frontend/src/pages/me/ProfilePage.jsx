@@ -6,6 +6,7 @@
  * Saved/My records/Activity/Settings + Network). Real data + per-field visibility.
  */
 import { useEffect, useMemo, useState } from "react";
+import { useIsNarrow } from "../../hooks/useIsNarrow";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import {
   Eye, Layers, Play, Image as ImageIcon, Bookmark, Activity as ActivityIcon, Settings as Cog,
@@ -115,6 +116,7 @@ export default function ProfilePage({ self = false }) {
   const { id: routeId } = useParams();
   const navigate = useNavigate();
   const chat = useChat();
+  const narrow = useIsNarrow(760);
   const [meId, setMeId] = useState(null);
   const [p, setP] = useState(null);
   const [tab, setTab] = useState("overview");
@@ -205,9 +207,30 @@ export default function ProfilePage({ self = false }) {
     ));
   };
 
+  // Mobile: the left rail collapses into a horizontal scrollable tab strip
+  // above the content (cleanest social-app pattern — never overlaps the header).
+  const TabStrip = () => (
+    <nav style={{ width: "100%", display: "flex", gap: 6, overflowX: "auto", padding: "2px 0 8px", WebkitOverflowScrolling: "touch", scrollbarWidth: "none", msOverflowStyle: "none" }}>
+      {tabs.map((t) => {
+        const on = tab === t.id;
+        return (
+          <button key={t.id} onClick={() => goTab(t)} style={{ flex: "0 0 auto", display: "inline-flex", alignItems: "center", gap: 6, padding: "9px 13px", minHeight: 44, borderRadius: 999, border: `1px solid ${on ? C.green : C.line}`, background: on ? "rgba(106,168,79,0.12)" : "#fff", color: on ? C.greenDk : C.soil, fontSize: 13, fontWeight: on ? 700 : 500, whiteSpace: "nowrap", cursor: "pointer" }}>
+            <t.Icon size={15} />{t.label}
+          </button>
+        );
+      })}
+      {NETWORK.map((n) => (
+        <button key={n.label} onClick={() => navigate(n.route)} style={{ flex: "0 0 auto", display: "inline-flex", alignItems: "center", gap: 6, padding: "9px 13px", minHeight: 44, borderRadius: 999, border: `1px solid ${C.line}`, background: "#fff", color: C.muted, fontSize: 13, whiteSpace: "nowrap", cursor: "pointer" }}>
+          <n.Icon size={15} />{n.label}
+        </button>
+      ))}
+    </nav>
+  );
+
   return (
-    <div style={{ maxWidth: 1080, margin: "0 auto", display: "flex", gap: 18, alignItems: "flex-start", flexWrap: "wrap" }}>
-      {/* left rail */}
+    <div style={{ maxWidth: 1080, margin: "0 auto", display: "flex", flexDirection: narrow ? "column" : "row", gap: narrow ? 10 : 18, alignItems: "flex-start" }}>
+      {/* left rail — desktop only; collapses to TabStrip on mobile */}
+      {narrow ? <TabStrip /> : (
       <aside style={{ width: 230, flexShrink: 0, position: "sticky", top: 70 }}>
         <div style={{ ...card, padding: 14 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
@@ -227,9 +250,10 @@ export default function ProfilePage({ self = false }) {
           ))}
         </div>
       </aside>
+      )}
 
       {/* main */}
-      <main style={{ flex: 1, minWidth: 280 }}>
+      <main style={{ flex: 1, minWidth: 0, width: narrow ? "100%" : undefined }}>
         {/* header */}
         <div style={{ display: "flex", gap: 16, alignItems: "flex-start", flexWrap: "wrap" }}>
           <label style={{ position: "relative", cursor: isYou ? "pointer" : "default", flexShrink: 0 }}>
