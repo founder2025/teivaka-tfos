@@ -116,6 +116,8 @@ class AuthMiddleware:
                         u.full_name,
                         u.email,
                         u.role,
+                        u.account_type,
+                        u.country,
                         u.preferred_language,
                         u.whatsapp_number,
                         t.subscription_tier,
@@ -152,7 +154,10 @@ class AuthMiddleware:
             )
 
         # Attach user to request state for downstream access
-        request.state.user = dict(row)
+        udict = dict(row)
+        # Canonical profession = account_type lower-cased (single source of truth)
+        udict["profession"] = (udict.get("account_type") or "FARMER").lower()
+        request.state.user = udict
         request.state.tenant_id = str(row["tenant_id"])
 
         return await call_next(request)

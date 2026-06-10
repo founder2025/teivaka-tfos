@@ -145,13 +145,12 @@ def _opportunity_band(score: int) -> str:
 
 # ----------------------------------------------------------------------------- prices
 @router.get("/prices")
-async def list_prices(production_id: str = None, island: str = None):
-    """Market price board — one row per crop, computed from the last 90 days of
-    observations. Weighted price uses actual sales (Σ price*qty / Σ qty); otherwise
-    falls back to the simple average. Public, cross-tenant."""
+async def list_prices(production_id: str = None, island: str = None, user: dict = Depends(get_current_user)):
+    """Market price board — one row per crop, last 90 days, gated to the viewer's
+    country (reference rows with no country are shown to everyone)."""
     async with get_db() as db:
-        params = {}
-        where = ["pr.observed_at >= now() - interval '90 days'"]
+        params = {"vc": user.get("country") or "FJ"}
+        where = ["pr.observed_at >= now() - interval '90 days'", "(pr.country = :vc OR pr.country IS NULL)"]
         if production_id:
             where.append("pr.production_id = :pid"); params["pid"] = production_id
         if island:
@@ -278,10 +277,10 @@ async def seed_reference_prices(body: SeedReference, user: dict = Depends(get_cu
 
 # ----------------------------------------------------------------------------- demand
 @router.get("/demand")
-async def list_demand(production_id: str = None, island: str = None, status_filter: str = "OPEN"):
+async def list_demand(production_id: str = None, island: str = None, status_filter: str = "OPEN", user: dict = Depends(get_current_user)):
     async with get_db() as db:
-        params = {}
-        where = []
+        params = {"vc": user.get("country") or "FJ"}
+        where = ["(d.country = :vc OR d.country IS NULL)"]
         if status_filter and status_filter.upper() != "ALL":
             where.append("d.status = :st"); params["st"] = status_filter.upper()
         if production_id:
@@ -341,10 +340,10 @@ async def submit_demand(body: DemandSubmit, user: dict = Depends(get_current_use
 
 # ----------------------------------------------------------------------------- supply
 @router.get("/supply")
-async def list_supply(production_id: str = None, island: str = None):
+async def list_supply(production_id: str = None, island: str = None, user: dict = Depends(get_current_user)):
     async with get_db() as db:
-        params = {}
-        where = ["s.status IN ('PLANNED','GROWING')"]
+        params = {"vc": user.get("country") or "FJ"}
+        where = ["s.status IN ('PLANNED','GROWING')", "(s.country = :vc OR s.country IS NULL)"]
         if production_id:
             where.append("s.production_id = :pid"); params["pid"] = production_id
         if island:
@@ -412,16 +411,17 @@ async def submit_supply(body: SupplySubmit, user: dict = Depends(get_current_use
 
 
 # ----------------------------------------------------------------------------- signals
-async def _compute_signals(db):
+async def _compute_signals(db, country):
     """Per-crop supply index, demand index, balance, price trend and opportunity score.
     Demand recurring quantities are normalised to a monthly figure so one-off and
     recurring demand are comparable."""
+    cc = {"vc": country}
     supply = (await db.execute(text("""
         SELECT production_id, COALESCE(SUM(projected_supply_kg),0) AS supply_kg
         FROM community.supply_forecasts
-        WHERE status IN ('PLANNED','GROWING')
+        WHERE status IN ('PLANNED','GROWING') AND (country = :vc OR country IS NULL)
         GROUP BY production_id
-    """))).mappings().all()
+    """), cc)).mappings().all()
     demand = (await db.execute(text("""
         SELECT production_id,
                COALESCE(SUM(CASE frequency
@@ -431,18 +431,18 @@ async def _compute_signals(db):
                     WHEN 'RECURRING' THEN quantity_kg
                     ELSE quantity_kg END), 0) AS demand_kg
         FROM community.demand_records
-        WHERE status = 'OPEN'
+        WHERE status = 'OPEN' AND (country = :vc OR country IS NULL)
         GROUP BY production_id
-    """))).mappings().all()
+    """), cc)).mappings().all()
     trends = (await db.execute(text("""
         SELECT pr.production_id,
                AVG(price_per_kg_fjd) FILTER (WHERE observed_at >= now() - interval '14 days') AS recent_avg,
                AVG(price_per_kg_fjd) FILTER (WHERE observed_at >= now() - interval '28 days'
                                              AND observed_at < now() - interval '14 days')    AS prior_avg
         FROM community.price_records pr
-        WHERE observed_at >= now() - interval '90 days'
+        WHERE observed_at >= now() - interval '90 days' AND (pr.country = :vc OR pr.country IS NULL)
         GROUP BY pr.production_id
-    """))).mappings().all()
+    """), cc)).mappings().all()
     names = (await db.execute(text("SELECT production_id, production_name FROM shared.productions"))).mappings().all()
 
     name_map = {n["production_id"]: n["production_name"] for n in names}
@@ -481,9 +481,9 @@ async def _compute_signals(db):
 
 
 @router.get("/signals")
-async def market_signals():
+async def market_signals(user: dict = Depends(get_current_user)):
     async with get_db() as db:
-        return {"data": await _compute_signals(db)}
+        return {"data": await _compute_signals(db, user.get("country") or "FJ")}
 
 
 # ----------------------------------------------------------------------------- snapshot

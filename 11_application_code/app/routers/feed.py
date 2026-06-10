@@ -41,8 +41,9 @@ from app.middleware.rls import get_current_user
 router = APIRouter()
 
 REACTIONS = {"strong_crop", "good_harvest", "vinaka", "hoping_rain", "learning"}
-_PROFESSION = {"FARMER": "farmer", "BUYER": "buyer", "SUPPLIER": "service_provider", "OTHER": "business"}
-_AUDIENCES = ("everyone", "followers", "farmer", "buyer", "banker", "business", "service_provider")
+# Canonical profession = account_type lower-cased (8-profession taxonomy).
+_AUDIENCES = ("everyone", "followers", "farmer", "buyer", "supplier", "service_provider",
+              "banker", "business", "exporter", "importer")
 
 # Upload storage — served back through /api/v1/community/uploads/{name} (Caddy proxies
 # /api/* to the API). Mount a volume at this path in compose to survive rebuilds.
@@ -69,7 +70,7 @@ async def _profile_of(db, user_id):
     row = (await db.execute(text(
         "SELECT account_type, country FROM tenant.users WHERE user_id = :uid"),
         {"uid": str(user_id)})).mappings().first() or {}
-    return _PROFESSION.get(row.get("account_type", "FARMER"), "farmer"), (row.get("country") or "FJ")
+    return (row.get("account_type") or "FARMER").lower(), (row.get("country") or "FJ")
 
 
 async def _profession_of(db, user_id) -> str:
@@ -239,6 +240,9 @@ async def create_feed_post(body: PostCreate, user: dict = Depends(get_current_us
     kind = "EDU_REEL" if str(body.kind).upper() == "EDU_REEL" else "POST"
     async with get_rls_db(str(user["tenant_id"])) as db:
         prof, country = await _profile_of(db, user["user_id"])
+        # Global reach is reserved for exporters/importers (cross-border trade).
+        if reach == "GLOBAL" and prof not in ("exporter", "importer"):
+            reach = "LOCAL"
         await db.execute(text("""
             INSERT INTO community.feed_posts
                 (post_id, tenant_id, author_user_id, author_profession, country, reach, kind,
@@ -541,20 +545,23 @@ async def list_people(search: str = Query(None), user: dict = Depends(get_curren
             clause = " AND u.full_name ILIKE :q"
             params["q"] = f"%{search}%"
         rows = (await db.execute(text(f"""
-            SELECT u.user_id, u.full_name, u.account_type,
+            SELECT u.user_id, u.full_name, u.account_type, u.country,
                    COALESCE(u.email_verified, FALSE) AS verified,
                    EXISTS (SELECT 1 FROM community.follows f
-                           WHERE f.follower_user_id = :uid AND f.followed_user_id = u.user_id) AS is_following
+                           WHERE f.follower_user_id = :uid AND f.followed_user_id = u.user_id) AS is_following,
+                   EXISTS (SELECT 1 FROM community.follows f2
+                           WHERE f2.follower_user_id = u.user_id AND f2.followed_user_id = :uid) AS follows_me
             FROM tenant.users u
             WHERE u.user_id <> :uid AND u.is_active = TRUE{clause}
             ORDER BY u.full_name
             LIMIT 50
         """), params)).mappings().all()
-    prof = {"FARMER": "farmer", "BUYER": "buyer", "SUPPLIER": "service_provider", "OTHER": "business"}
     return {"data": [{
         "user_id": str(r["user_id"]), "full_name": r["full_name"],
-        "profession": prof.get(r["account_type"], "farmer"),
-        "verified": r["verified"], "is_following": r["is_following"],
+        "profession": (r["account_type"] or "FARMER").lower(),
+        "country": r["country"], "verified": r["verified"],
+        "is_following": r["is_following"],
+        "is_connected": bool(r["is_following"] and r["follows_me"]),
     } for r in rows]}
 
 

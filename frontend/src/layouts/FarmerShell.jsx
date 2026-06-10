@@ -25,6 +25,7 @@ import LeftRail from "../components/nav/LeftRail";
 import { useUniversalLogShortcut } from "../components/nav/UniversalLogButton";
 import TisChatPanel from "../components/tis/TisChatPanel";
 import Toast from "../components/ui/Toast";
+import ChatWidget from "../components/chat/ChatWidget";
 import LogSheet from "../components/launcher/LogSheet";
 import { LeftRailProvider, useLeftRail } from "../context/LeftRailContext";
 import { LauncherProvider, useLauncher } from "../context/LauncherContext";
@@ -346,6 +347,7 @@ function ShellContent() {
         />
       )}
       <FarmPillarLogFab />
+      <ChatWidget />
       <LauncherSheet />
       <Toast />
     </div>

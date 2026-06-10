@@ -115,8 +115,10 @@ class RegisterRequest(BaseModel):
     @field_validator("account_type")
     @classmethod
     def valid_account_type(cls, v: str) -> str:
-        allowed = {"FARMER", "SUPPLIER", "BUYER", "OTHER"}
+        allowed = {"FARMER", "BUYER", "SUPPLIER", "SERVICE_PROVIDER", "BANKER", "BUSINESS", "EXPORTER", "IMPORTER"}
         v = v.upper().strip()
+        if v == "OTHER":
+            v = "BUSINESS"
         if v not in allowed:
             raise ValueError(f"account_type must be one of: {', '.join(sorted(allowed))}")
         return v

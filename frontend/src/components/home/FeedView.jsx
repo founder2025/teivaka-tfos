@@ -187,7 +187,14 @@ function Composer({ me, onPosted }) {
   const [busy, setBusy] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [modal, setModal] = useState(null);
+  const [canGlobal, setCanGlobal] = useState(false);
   const fileRef = useRef();
+  useEffect(() => {
+    getJSON("/api/v1/auth/me").then((r) => {
+      const prof = (r?.data?.profession || r?.profession || "").toLowerCase();
+      setCanGlobal(prof === "exporter" || prof === "importer");
+    }).catch(() => {});
+  }, []);
   const set = (k, v) => setDraft((d) => ({ ...d, [k]: v }));
   const pickFile = async (e) => {
     const f = e.target.files?.[0]; e.target.value = ""; if (!f) return;
@@ -234,7 +241,7 @@ function Composer({ me, onPosted }) {
             <button className="cm-tool-btn" onClick={() => setModal("mention")}><UserPlus size={13} />Mention</button>
             <button className="cm-tool-btn" onClick={() => setModal("link")}><Link2 size={13} />Link record</button>
             <button className={`cm-tool-btn ${draft.kind === "EDU_REEL" ? "cm-tool-active" : ""}`} onClick={() => set("kind", draft.kind === "EDU_REEL" ? "POST" : "EDU_REEL")}><BookOpen size={13} />Reel</button>
-            <button className={`cm-tool-btn ${draft.reach === "GLOBAL" ? "cm-tool-active" : ""}`} onClick={() => set("reach", draft.reach === "GLOBAL" ? "LOCAL" : "GLOBAL")} title="Global reach (exporters/importers)">🌐</button>
+            {canGlobal && <button className={`cm-tool-btn ${draft.reach === "GLOBAL" ? "cm-tool-active" : ""}`} onClick={() => set("reach", draft.reach === "GLOBAL" ? "LOCAL" : "GLOBAL")} title="Global reach (exporters/importers)">🌐</button>}
             <select className="cm-audience-select" value={draft.audience} onChange={(e) => set("audience", e.target.value)}>
               {AUDIENCES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
             </select>
