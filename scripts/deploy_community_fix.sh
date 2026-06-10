@@ -18,6 +18,7 @@ $PSQL < docs/runbooks/fix_community_grants_sweep.sql        > /tmp/rb_sweep.out 
 $PSQL < docs/runbooks/094_reconcile_stray_tables.sql        > /tmp/rb_094.out  2>&1 && ok "094 reconcile" || bad "094 reconcile (see /tmp/rb_094.out)"
 $PSQL < docs/runbooks/096_stories_apply_as_owner.sql        > /tmp/rb_096.out  2>&1 && ok "096 stories"   || bad "096 stories (see /tmp/rb_096.out)"
 $PSQL < docs/runbooks/097_kyc_verification_apply_as_owner.sql > /tmp/rb_097.out 2>&1 && ok "097 kyc"      || bad "097 kyc (see /tmp/rb_097.out)"
+$PSQL < docs/runbooks/098_marketplace_v2_apply_as_owner.sql   > /tmp/rb_098.out 2>&1 && ok "098 marketplace" || bad "098 marketplace (see /tmp/rb_098.out)"
 
 say "2/7 Verify table shapes (the AmbiguousColumn culprit)"
 SHAPES=$(docker exec teivaka_db psql -U teivaka -d teivaka_db -tA -c "
@@ -34,7 +35,7 @@ OBJS=$(docker exec teivaka_db psql -U teivaka -d teivaka_db -tA -c "
 [ "$OBJS" = "3" ] && ok "stories + verification_requests + kyc_verified all present" || bad "missing objects ($OBJS/3)"
 
 say "4/7 Stamp alembic"
-docker exec teivaka_api alembic stamp 097_kyc_verification >/dev/null 2>&1 && ok "stamped 097" || echo "   (stamp will re-run after rebuild)"
+docker exec teivaka_api alembic stamp 098_marketplace_v2 >/dev/null 2>&1 && ok "stamped 097" || echo "   (stamp will re-run after rebuild)"
 
 say "5/7 Frontend build"
 (cd frontend && npm run build > /tmp/fe_build.out 2>&1) && ok "frontend built" || bad "frontend build failed (see /tmp/fe_build.out)"
@@ -42,7 +43,7 @@ say "5/7 Frontend build"
 say "6/7 API rebuild (no cache — takes ~3 min)"
 $COMPOSE build --no-cache api > /tmp/api_build.out 2>&1 && ok "API image built" || bad "API build failed (see /tmp/api_build.out)"
 $COMPOSE up -d api > /tmp/api_up.out 2>&1 && ok "API container up" || bad "API up failed (see /tmp/api_up.out)"
-docker exec teivaka_api alembic stamp 097_kyc_verification >/dev/null 2>&1 && ok "alembic stamped 097" || bad "alembic stamp failed"
+docker exec teivaka_api alembic stamp 098_marketplace_v2 >/dev/null 2>&1 && ok "alembic stamped 097" || bad "alembic stamp failed"
 bash 04_environment/verify-deploy.sh && ok "running code matches host" || bad "verify-deploy failed — container/code drift"
 
 say "7/7 Smoke: API answers + no startup errors"

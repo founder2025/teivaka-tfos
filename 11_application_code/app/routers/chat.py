@@ -42,9 +42,15 @@ async def _r():
 
 
 async def _connected(db, a, b) -> bool:
+    """Mutual follow — OR either party has an ACTIVE marketplace listing
+    (posting a listing is consent to be contacted about it; Operator-approved
+    marketplace rule, 2026-06-11)."""
     return bool((await db.execute(text("""
-        SELECT EXISTS (SELECT 1 FROM community.follows WHERE follower_user_id=:a AND followed_user_id=:b)
-           AND EXISTS (SELECT 1 FROM community.follows WHERE follower_user_id=:b AND followed_user_id=:a)
+        SELECT (EXISTS (SELECT 1 FROM community.follows WHERE follower_user_id=:a AND followed_user_id=:b)
+            AND EXISTS (SELECT 1 FROM community.follows WHERE follower_user_id=:b AND followed_user_id=:a))
+            OR EXISTS (SELECT 1 FROM community.listings cl
+                       WHERE cl.created_by IN (cast(:a AS uuid), cast(:b AS uuid))
+                         AND cl.listing_status = 'ACTIVE' AND cl.sold_at IS NULL)
     """), {"a": str(a), "b": str(b)})).scalar())
 
 

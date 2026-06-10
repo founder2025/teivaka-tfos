@@ -21,6 +21,7 @@ import MarketIntelligence from "../../components/home/MarketIntelligence";
 import FeedView from "../../components/home/FeedView";
 import WeatherStrip from "../../components/home/WeatherStrip";
 import Directory from "../../components/home/Directory";
+import Marketplace from "../../components/home/Marketplace";
 import { StoriesRow, NewsCard } from "../../components/home/FeedExtras";
 import "../../styles/feed.css";
 
@@ -120,26 +121,7 @@ export default function HomePillar() {
   } else if (view === "marketplace") {
     body = (
       <>
-        <div className="mk-lead">
-          <button className="mk-lead-btn" onClick={() => navigate("/farm/weather")}><DollarSign size={16} /><div><strong>Today's prices</strong><span>See the price before you sell</span></div></button>
-          <button className="mk-lead-btn" onClick={() => navigate("/farm/buyers")}><ShoppingBag size={16} /><div><strong>Buyer demand</strong><span>Who needs what near you</span></div></button>
-        </div>
-        {listings == null ? <div className="card" style={{ padding: 20, color: "var(--muted)" }}>Loading…</div>
-          : listings.length === 0 ? <div className="card" style={{ padding: 20, color: "var(--muted)" }}>No listings yet — produce and inputs farmers list for sale appear here.</div>
-          : (
-            <div className="marketplace-grid">
-              {listings.map((it, i) => (
-                <div className="mk-card" key={it.listing_id || i}>
-                  <div className="mk-img">{it.title || it.production_name || "Listing"}</div>
-                  <div className="mk-body">
-                    <div className="mk-title">{it.title || it.production_name || "Listing"}</div>
-                    <div className="mk-price">{fjd(it.price_fjd ?? it.unit_price_fjd ?? it.price) || "—"}</div>
-                    <div className="mk-meta">{[it.location_region || it.location_name || it.island, it.quantity_kg ? `${it.quantity_kg}kg available` : null].filter(Boolean).join(" · ")}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+        <Marketplace />
         <MarketIntelligence />
       </>
     );
@@ -152,7 +134,7 @@ export default function HomePillar() {
   const action = view === "feed"
     ? <button className="btn btn-secondary" onClick={() => navigate("/tfos")}><Shield size={13} />Why TFOS works</button>
     : view === "marketplace"
-    ? <button className="btn btn-primary"><Plus size={14} />New listing</button>
+    ? <button className="btn btn-primary" onClick={() => window.dispatchEvent(new CustomEvent("tfos:new-listing"))}><Plus size={14} />New listing</button>
     : null;
 
   // Renders inside the shared FarmerShell (top bar + left rail + bottom nav).
