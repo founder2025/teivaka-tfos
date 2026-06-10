@@ -19,6 +19,7 @@ import {
 import TfpShell from "../../components/farm/TfpShell";
 import MarketIntelligence from "../../components/home/MarketIntelligence";
 import FeedView from "../../components/home/FeedView";
+import MarketSnapshot from "../../components/home/MarketSnapshot";
 import "../../styles/feed.css";
 
 function authHeaders() {
@@ -108,7 +109,12 @@ export default function HomePillar() {
 
   let body;
   if (view === "feed") {
-    body = <FeedView initialFilter="all" />;
+    body = (
+      <>
+        <MarketSnapshot onOpenMarket={() => navigate("/home/marketplace")} />
+        <FeedView initialFilter="all" />
+      </>
+    );
   } else if (view === "following") {
     body = <FeedView initialFilter="following" />;
   } else if (view === "marketplace") {
