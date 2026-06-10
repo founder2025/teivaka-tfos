@@ -22,7 +22,7 @@ from sqlalchemy import text
 from pydantic import BaseModel
 import redis.asyncio as aioredis
 
-from app.db.session import get_db, get_rls_db
+from app.db.session import get_db, get_rls_db, get_db_ctx
 from app.middleware.rls import get_current_user
 from app.config import settings
 
@@ -159,7 +159,7 @@ async def presence_ping(user: dict = Depends(get_current_user)):
 @router.get("/connections")
 async def list_connections(user: dict = Depends(get_current_user)):
     uid = str(user["user_id"])
-    async with get_db() as db:
+    async with get_db_ctx() as db:
         rows = (await db.execute(text("""
             SELECT u.user_id, u.full_name, u.account_type, u.country,
                    th.thread_id, th.last_message_at,
@@ -272,7 +272,7 @@ async def chat_mark_read(thread_id: str, user: dict = Depends(get_current_user))
 @router.get("/chat/unread-count")
 async def chat_unread_count(user: dict = Depends(get_current_user)):
     uid = str(user["user_id"])
-    async with get_db() as db:
+    async with get_db_ctx() as db:
         n = (await db.execute(text("""
             SELECT count(*) FROM community.chat_messages m
             JOIN community.chat_threads th ON th.thread_id = m.thread_id

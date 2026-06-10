@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 from sqlalchemy import text
-from app.db.session import get_db
+from app.db.session import get_db, get_db_ctx
 import logging
 
 router = APIRouter()
@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 async def health_db():
     """Check PostgreSQL database connectivity."""
     try:
-        async with get_db() as db:
+        async with get_db_ctx() as db:
             result = await db.execute(text("SELECT 1 AS ok, now() AS server_time, current_database() AS db_name"))
             row = result.mappings().first()
             return {
@@ -70,7 +70,7 @@ async def health_all():
 
     # DB check
     try:
-        async with get_db() as db:
+        async with get_db_ctx() as db:
             await db.execute(text("SELECT 1"))
         results["db"] = "healthy"
     except Exception as e:

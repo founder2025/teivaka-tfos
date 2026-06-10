@@ -20,7 +20,7 @@ from fastapi import APIRouter, HTTPException, Query, Request
 from sqlalchemy import text
 
 from app.config import settings
-from app.db.session import get_db
+from app.db.session import get_db, get_db_ctx
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -106,7 +106,7 @@ async def whatsapp_webhook(request: Request):
         from_number = f"+{from_number}"
 
     # Look up farmer by WhatsApp number
-    async with get_db() as db:
+    async with get_db_ctx() as db:
         result = await db.execute(
             text("""
                 SELECT u.user_id, u.tenant_id, u.full_name, u.role,
@@ -192,7 +192,7 @@ async def stripe_webhook(request: Request):
                 }
                 new_tier = tier_map.get(price_id)
                 if new_tier:
-                    async with get_db() as db:
+                    async with get_db_ctx() as db:
                         await db.execute(
                             text("""
                                 UPDATE tenant.tenants
@@ -210,7 +210,7 @@ async def stripe_webhook(request: Request):
             subscription = event["data"]["object"]
             tenant_id = subscription.get("metadata", {}).get("tenant_id")
             if tenant_id:
-                async with get_db() as db:
+                async with get_db_ctx() as db:
                     await db.execute(
                         text("""
                             UPDATE tenant.tenants

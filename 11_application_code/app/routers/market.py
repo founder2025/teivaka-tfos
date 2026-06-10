@@ -27,7 +27,7 @@ from decimal import Decimal
 from datetime import date, datetime
 from typing import Optional, List
 
-from app.db.session import get_db, get_rls_db
+from app.db.session import get_db, get_rls_db, get_db_ctx
 from app.middleware.rls import get_current_user
 
 router = APIRouter()
@@ -148,7 +148,7 @@ def _opportunity_band(score: int) -> str:
 async def list_prices(production_id: str = None, island: str = None, user: dict = Depends(get_current_user)):
     """Market price board — one row per crop, last 90 days, gated to the viewer's
     country (reference rows with no country are shown to everyone)."""
-    async with get_db() as db:
+    async with get_db_ctx() as db:
         params = {"vc": user.get("country") or "FJ"}
         where = ["pr.observed_at >= now() - interval '90 days'", "(pr.country = :vc OR pr.country IS NULL)"]
         if production_id:
@@ -278,7 +278,7 @@ async def seed_reference_prices(body: SeedReference, user: dict = Depends(get_cu
 # ----------------------------------------------------------------------------- demand
 @router.get("/demand")
 async def list_demand(production_id: str = None, island: str = None, status_filter: str = "OPEN", user: dict = Depends(get_current_user)):
-    async with get_db() as db:
+    async with get_db_ctx() as db:
         params = {"vc": user.get("country") or "FJ"}
         where = ["(d.country = :vc OR d.country IS NULL)"]
         if status_filter and status_filter.upper() != "ALL":
@@ -341,7 +341,7 @@ async def submit_demand(body: DemandSubmit, user: dict = Depends(get_current_use
 # ----------------------------------------------------------------------------- supply
 @router.get("/supply")
 async def list_supply(production_id: str = None, island: str = None, user: dict = Depends(get_current_user)):
-    async with get_db() as db:
+    async with get_db_ctx() as db:
         params = {"vc": user.get("country") or "FJ"}
         where = ["s.status IN ('PLANNED','GROWING')", "(s.country = :vc OR s.country IS NULL)"]
         if production_id:
@@ -482,7 +482,7 @@ async def _compute_signals(db, country):
 
 @router.get("/signals")
 async def market_signals(user: dict = Depends(get_current_user)):
-    async with get_db() as db:
+    async with get_db_ctx() as db:
         return {"data": await _compute_signals(db, user.get("country") or "FJ")}
 
 
@@ -491,7 +491,7 @@ async def market_signals(user: dict = Depends(get_current_user)):
 async def market_snapshot():
     """Compact dashboard card: top demanded crops, top supplied crops, latest prices,
     newest buyer requests."""
-    async with get_db() as db:
+    async with get_db_ctx() as db:
         top_demand = (await db.execute(text("""
             SELECT d.production_id, p.production_name, SUM(d.quantity_kg) AS qty
             FROM community.demand_records d

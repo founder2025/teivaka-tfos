@@ -35,7 +35,7 @@ from datetime import datetime
 from typing import Optional, List
 import uuid
 
-from app.db.session import get_db, get_rls_db
+from app.db.session import get_db, get_rls_db, get_db_ctx
 from app.middleware.rls import get_current_user
 from app.utils.community_guard import community_write
 
@@ -158,7 +158,7 @@ async def list_feed(
     user: dict = Depends(get_current_user),
 ):
     uid = str(user["user_id"])
-    async with get_db() as db:
+    async with get_db_ctx() as db:
         viewer_prof, viewer_country = await _profile_of(db, uid)
         params = {"uid": uid, "limit": limit, "offset": offset, "vprof": viewer_prof, "vcountry": viewer_country}
         where = ["fp.status = 'active'"]
@@ -429,7 +429,7 @@ async def share_post(post_id: str, body: ShareBody, user: dict = Depends(communi
 @router.get("/feed/shared")
 async def shared_with_me(user: dict = Depends(get_current_user)):
     uid = str(user["user_id"])
-    async with get_db() as db:
+    async with get_db_ctx() as db:
         rows = (await db.execute(text("""
             SELECT sh.share_id, sh.note, sh.created_at, sh.from_user_id,
                    fu.full_name AS from_name, fp.post_id, fp.body, fp.author_profession,
@@ -448,7 +448,7 @@ async def shared_with_me(user: dict = Depends(get_current_user)):
 @router.get("/feed/{post_id}/replies")
 async def list_replies(post_id: str, user: dict = Depends(get_current_user)):
     uid = str(user["user_id"])
-    async with get_db() as db:
+    async with get_db_ctx() as db:
         rows = (await db.execute(text("""
             SELECT fr.reply_id, fr.post_id, fr.parent_reply_id, fr.author_user_id,
                    fr.author_profession, fr.body, fr.photos, fr.created_at,
@@ -549,7 +549,7 @@ async def unfollow(target_user_id: str, user: dict = Depends(get_current_user)):
 async def list_people(search: str = Query(None), user: dict = Depends(get_current_user)):
     """People you can follow / share to. Cross-tenant directory of active users."""
     uid = str(user["user_id"])
-    async with get_db() as db:
+    async with get_db_ctx() as db:
         params = {"uid": uid}
         clause = ""
         if search:
@@ -579,7 +579,7 @@ async def list_people(search: str = Query(None), user: dict = Depends(get_curren
 # ----------------------------------------------------------------------------- topics
 @router.get("/topics")
 async def list_topics(user: dict = Depends(get_current_user)):
-    async with get_db() as db:
+    async with get_db_ctx() as db:
         rows = (await db.execute(text("SELECT topic FROM community.topic_follows WHERE user_id=:uid ORDER BY topic"),
                                  {"uid": str(user["user_id"])})).mappings().all()
     return {"data": [r["topic"] for r in rows]}
@@ -608,7 +608,7 @@ async def unfollow_topic(topic: str, user: dict = Depends(get_current_user)):
 @router.get("/notifications")
 async def list_notifications(limit: int = Query(30, ge=1, le=100), user: dict = Depends(get_current_user)):
     uid = str(user["user_id"])
-    async with get_db() as db:
+    async with get_db_ctx() as db:
         rows = (await db.execute(text("""
             SELECT n.notification_id, n.type, n.post_id, n.reply_id, n.body, n.read_at, n.created_at,
                    a.full_name AS actor_name
@@ -625,7 +625,7 @@ async def list_notifications(limit: int = Query(30, ge=1, le=100), user: dict = 
 
 @router.get("/notifications/count")
 async def notifications_count(user: dict = Depends(get_current_user)):
-    async with get_db() as db:
+    async with get_db_ctx() as db:
         unread = (await db.execute(text(
             "SELECT count(*) FROM community.feed_notifications WHERE user_id = :uid AND read_at IS NULL"),
             {"uid": str(user["user_id"])})).scalar() or 0
@@ -701,7 +701,7 @@ async def list_flags(status_filter: str = Query("OPEN"), user: dict = Depends(ge
     """Moderation queue — admin/founder only."""
     if user.get("role") not in _ADMIN_ROLES:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Moderators only")
-    async with get_db() as db:
+    async with get_db_ctx() as db:
         params = {}
         clause = ""
         if status_filter and status_filter.upper() != "ALL":
@@ -764,7 +764,7 @@ async def get_profile(target_id: str, user: dict = Depends(get_current_user)):
     """Public-safe profile: only visibility-allowed fields + that user's visible posts +
     real stats + the viewer's follow/connection state."""
     viewer = str(user["user_id"])
-    async with get_db() as db:
+    async with get_db_ctx() as db:
         u = (await db.execute(text("""
             SELECT user_id, tenant_id, full_name, email, role, account_type, country,
                    bio, avatar_url, whatsapp_number, field_visibility, created_at,
@@ -844,7 +844,7 @@ async def profile_activity(target_id: str, user: dict = Depends(get_current_user
     """A user's own community activity (likes, reactions, replies). Private to the owner."""
     if str(user["user_id"]) != str(target_id):
         return {"data": []}  # activity is personal
-    async with get_db() as db:
+    async with get_db_ctx() as db:
         rows = (await db.execute(text("""
             SELECT kind, created_at, post_id, snippet FROM (
               SELECT 'liked' AS kind, fl.created_at, fp.post_id, left(fp.body, 120) AS snippet

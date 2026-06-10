@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.db.session import get_rls_db, get_db
+from app.db.session import get_rls_db, get_db, get_db_ctx
 from app.middleware.rls import get_current_user
 from pydantic import BaseModel
 from decimal import Decimal
@@ -62,7 +62,7 @@ async def list_community_listings(
     Public endpoint — no authentication required.
     Lists active produce availability listings from farmers across Fiji.
     """
-    async with get_db() as db:
+    async with get_db_ctx() as db:
         params = {}
         q = """SELECT cl.*, p.production_name, p.production_category
                FROM community.listings cl

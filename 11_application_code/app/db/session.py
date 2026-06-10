@@ -48,6 +48,23 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
 
 
 @asynccontextmanager
+async def get_db_ctx() -> AsyncGenerator[AsyncSession, None]:
+    """Context-manager twin of get_db, for `async with get_db_ctx() as db:` call
+    sites (community.* has no RLS; shared-schema reads). get_db itself is a
+    FastAPI dependency generator and cannot be used with `async with` directly —
+    use this when you need an explicit session block. Caller manages commit().
+    """
+    async with AsyncSessionLocal() as session:
+        try:
+            yield session
+        except Exception:
+            await session.rollback()
+            raise
+        finally:
+            await session.close()
+
+
+@asynccontextmanager
 async def get_rls_db(tenant_id: str) -> AsyncGenerator[AsyncSession, None]:
     """
     Context manager that yields a session with PostgreSQL RLS enforced.
