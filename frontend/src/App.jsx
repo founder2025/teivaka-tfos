@@ -108,7 +108,7 @@ const FarmGallery   = lazy(() => import("./pages/farmer/Gallery"));
 const FarmPartnerships = lazy(() => import("./pages/farmer/Partnerships"));
 const FarmSettings  = lazy(() => import("./pages/farmer/FarmSettings"));
 const InventoryList = lazy(() => import("./pages/farmer/InventoryList"));
-const Me            = lazy(() => import("./pages/me/MeProfile"));
+const Me            = lazy(() => import("./pages/me/ProfilePage"));
 const Subscription  = lazy(() => import("./pages/me/Subscription"));
 const Referrals     = lazy(() => import("./pages/me/Referrals"));
 const Affiliate     = lazy(() => import("./pages/me/Affiliate"));
@@ -284,7 +284,8 @@ export default function App() {
             <Route path="/farm/poultry/supplies/received" element={<SuppliesReceivedNew  />} />
             <Route path="/farm/poultry" element={<PoultryDashboard  />} />
             <Route path="/farm/poultry/bank-evidence" element={<PoultryBankEvidence  />} />
-            <Route path="/me"                element={<Me            />} />
+            <Route path="/me"                element={<Me self />} />
+            <Route path="/u/:id"             element={<Me />} />
             <Route path="/me/library"        element={<LibrarySettings   />} />
             <Route path="/tis"               element={<TIS           />} />
 

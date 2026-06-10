@@ -135,3 +135,52 @@ async def export_my_data(
             "community_posts": _ser(posts),
         }
     }
+
+
+from pydantic import BaseModel  # noqa: E402
+
+
+class ProfilePatch(BaseModel):
+    full_name: str | None = None
+    whatsapp_number: str | None = None
+    country: str | None = None
+    preferred_language: str | None = None
+    account_type: str | None = None
+    bio: str | None = None
+    avatar_url: str | None = None
+    field_visibility: dict | None = None
+
+
+_EDITABLE = ("full_name", "whatsapp_number", "country", "preferred_language", "account_type", "bio", "avatar_url")
+_ACCOUNT_TYPES = {"FARMER", "BUYER", "SUPPLIER", "SERVICE_PROVIDER", "BANKER", "BUSINESS", "EXPORTER", "IMPORTER"}
+
+
+@router.patch("")
+async def update_me(
+    body: ProfilePatch,
+    user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Update the caller's own editable profile fields."""
+    sets, params = [], {"uid": str(user["user_id"])}
+    data = body.model_dump(exclude_unset=True)
+    for k in _EDITABLE:
+        if k in data and data[k] is not None:
+            v = data[k]
+            if k == "account_type":
+                v = str(v).upper().strip()
+                if v == "OTHER":
+                    v = "BUSINESS"
+                if v not in _ACCOUNT_TYPES:
+                    continue
+            if k == "country":
+                v = str(v).upper().strip()[:2]
+            sets.append(f"{k} = :{k}"); params[k] = v
+    if "field_visibility" in data and isinstance(data["field_visibility"], dict):
+        import json
+        sets.append("field_visibility = cast(:fv AS jsonb)"); params["fv"] = json.dumps(data["field_visibility"])
+    if not sets:
+        return {"data": {"updated": 0}}
+    await db.execute(text(f"UPDATE tenant.users SET {', '.join(sets)} WHERE user_id = :uid"), params)
+    await db.commit()
+    return {"data": {"updated": len(sets)}}

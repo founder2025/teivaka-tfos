@@ -83,13 +83,7 @@ export default function SearchPalette({ onClose }) {
     setRecent(next); try { localStorage.setItem(LS_RECENT, JSON.stringify(next)); } catch { /* ignore */ }
   };
   const goNav = (n) => { rememberNav({ path: n.path, label: n.label, group: n.group }); onClose(); navigate(n.path); };
-  const onPerson = async (p) => {
-    if (p.is_connected) { chat.openWith(p); chat.setDropdownOpen(false); onClose(); }
-    else {
-      try { await send(p.is_following ? "DELETE" : "POST", `${API}/follow/${p.user_id}`); } catch { /* ignore */ }
-      setPeople((list) => list.map((x) => x.user_id === p.user_id ? { ...x, is_following: !x.is_following } : x));
-    }
-  };
+  const onPerson = (p) => { onClose(); navigate(`/u/${p.user_id}`); };
   const choose = (entry) => { if (!entry) return; entry.kind === "nav" ? goNav(entry.item) : onPerson(entry.item); };
 
   const onKey = (e) => {

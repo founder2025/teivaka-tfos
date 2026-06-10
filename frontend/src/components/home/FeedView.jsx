@@ -12,6 +12,7 @@ import {
   Smile, MoreHorizontal, Trash2, Check, BadgeCheck, X, Leaf, ShoppingBag, Gift,
   Droplet, BookOpen, Rss, UserPlus, UserCheck, Pencil, Flag,
 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { getCurrentUser } from "../../utils/auth";
 
 const API = "/api/v1/community";
@@ -323,6 +324,7 @@ function Replies({ post, me, onCount }) {
 
 /* ---------------- post card ---------------- */
 function PostCard({ post, me, onChange, onRemoved }) {
+  const navigate = useNavigate();
   const [p, setP] = useState(post);
   const [showReplies, setShowReplies] = useState(false);
   const [showTray, setShowTray] = useState(false);
@@ -371,7 +373,7 @@ function PostCard({ post, me, onChange, onRemoved }) {
         <div className="cm-post-avatar"><span className="avatar-circle avatar-cm">{initials(p.author_name)}</span></div>
         <div className="cm-post-author-block">
           <div className="cm-post-author-row">
-            <span className="cm-post-author-name">{p.author_name}</span>
+            <span className="cm-post-author-name" onClick={() => p.author_user_id && navigate(`/u/${p.author_user_id}`)} style={{ cursor: "pointer" }}>{p.author_name}</span>
             {p.author_verified && <BadgeCheck size={13} className="cm-verified-tick" />}
             <span className="cm-prof-badge">{PROF_LABEL[p.author_profession] || p.author_profession}</span>
             {p.is_question && <span className="cm-prof-badge" style={{ background: "rgba(191,144,0,0.14)", color: "var(--amber,#bf9000)" }}><HelpCircle size={10} /> Question</span>}
