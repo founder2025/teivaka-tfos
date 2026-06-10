@@ -6,7 +6,7 @@
  * Connection = mutual follow. Backend: /api/v1/community/{presence,connections,chat}.
  */
 import { useEffect, useRef, useState } from "react";
-import { MessageCircle, X, Send, Video, Volume2, VolumeX, Minus } from "lucide-react";
+import { MessageCircle, X, Send, Video, Volume2, VolumeX, Minus, Bell } from "lucide-react";
 
 const API = "/api/v1/community";
 const MAX_OPEN = 3;
@@ -111,6 +111,7 @@ export default function ChatWidget() {
   const [unread, setUnread] = useState(0);
   const [muted, setMuted] = useState(isMuted());
   const [toasts, setToasts] = useState([]);
+  const [notifPerm, setNotifPerm] = useState(typeof Notification !== "undefined" ? Notification.permission : "unsupported");
   const prevUnread = useRef(null);
   const openIds = useRef(new Set());
 
@@ -160,8 +161,12 @@ export default function ChatWidget() {
     return () => clearTimeout(id);
   }, [toasts]);
 
+  const enableAlerts = () => {
+    if (!("Notification" in window)) return;
+    Notification.requestPermission().then((p) => setNotifPerm(p)).catch(() => {});
+  };
   const openChat = (c) => {
-    if ("Notification" in window && Notification.permission === "default") Notification.requestPermission().catch(() => {});
+    if ("Notification" in window && Notification.permission === "default") Notification.requestPermission().then((p) => setNotifPerm(p)).catch(() => {});
     setOpenChats((cur) => {
       if (cur.find((x) => x.user_id === c.user_id)) return cur;
       const nextArr = [...cur, c];
@@ -199,6 +204,12 @@ export default function ChatWidget() {
               <button onClick={() => setListOpen(false)} style={{ border: "none", background: "transparent", cursor: "pointer", color: C.muted }}><X size={18} /></button>
             </span>
           </div>
+          {notifPerm === "default" && (
+            <button onClick={enableAlerts}
+              style={{ display: "flex", gap: 8, alignItems: "center", width: "100%", textAlign: "left", border: "none", borderBottom: `1px solid ${C.line}`, background: "rgba(106,168,79,0.10)", color: C.greenDk, cursor: "pointer", padding: "9px 14px", fontSize: 12 }}>
+              <Bell size={15} /><span><strong>Enable alerts</strong> — get a pop-up + sound when a message arrives, even in another tab.</span>
+            </button>
+          )}
           <div style={{ flex: 1, overflowY: "auto" }}>
             {conns == null ? <div style={{ color: C.muted, fontSize: 12, padding: 20, textAlign: "center" }}>Loading…</div>
               : conns.length === 0 ? (
