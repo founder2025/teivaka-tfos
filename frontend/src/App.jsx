@@ -273,14 +273,10 @@ export default function App() {
             <Route path="/me/library"        element={<LibrarySettings   />} />
             <Route path="/tis"               element={<TIS           />} />
 
-            {/* Nav v2.1 structural stubs — every sub-nav path resolves */}
-            <Route path="/home/following"        element={<ComingSoon title="Following"     phase="4.3" />} />
-            <Route path="/home/marketplace"      element={<ComingSoon title="Marketplace"   phase="8"   />} />
-            <Route path="/home/directory"        element={<ComingSoon title="Directory"     phase="8"   />} />
-            <Route path="/home/saved"            element={<ComingSoon title="Saved"         phase="4.3" />} />
-
-            <Route path="/classroom/progress"       element={<ComingSoon title="Progress"       phase="4.3" />} />
-            <Route path="/classroom/certifications" element={<ComingSoon title="Certifications" phase="6"   />} />
+            {/* Home + Classroom sub-views are served by the /home/:view and
+                /classroom/:view routes above (HomePillar / ClassroomPillar). No
+                stubs here — Following/Marketplace/Directory/Saved + Progress/
+                Certification/Bookmarks all render real surfaces. */}
 
             <Route path="/farm/tasks"        element={<FarmTasks />} />
             <Route path="/farm/cycles"       element={<CycleList />} />
