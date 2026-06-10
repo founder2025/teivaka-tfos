@@ -7,12 +7,8 @@ import { useEffect, useState } from "react";
 import { Search, BadgeCheck, UserPlus, UserCheck } from "lucide-react";
 
 const API = "/api/v1/community";
-function authHeaders() {
-  const t = localStorage.getItem("tfos_access_token");
-  return t ? { "Content-Type": "application/json", Authorization: `Bearer ${t}` } : { "Content-Type": "application/json" };
-}
-async function getJSON(u) { const r = await fetch(u, { headers: authHeaders() }); if (!r.ok) throw new Error(String(r.status)); return r.json(); }
-async function send(method, u) { const r = await fetch(u, { method, headers: authHeaders() }); if (!r.ok) throw new Error((await r.json().catch(() => ({})))?.detail || String(r.status)); return r.json().catch(() => ({})); }
+// Shared wrapper: token auto-refresh on 401 + truthful errors.
+import { getJSON, send } from "../../utils/api";
 const toast = (message, type) => { try { window.dispatchEvent(new CustomEvent("tfos:toast", { detail: { message, type } })); } catch { /* noop */ } };
 
 const PROF_LABEL = { farmer: "Farmer", buyer: "Buyer", banker: "Banker", business: "Business", service_provider: "Service Provider" };

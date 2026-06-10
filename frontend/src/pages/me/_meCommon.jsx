@@ -6,8 +6,8 @@ import { ArrowLeft } from "lucide-react";
 export const C = { soil: "#5C4033", green: "#6AA84F", greenDk: "#3E7B1F", line: "#E8E2D4", cream: "#F8F3E9", muted: "#8A7B6F", amber: "#BF9000" };
 export const tok = () => localStorage.getItem("tfos_access_token");
 export const authHeaders = () => { const t = tok(); return t ? { "Content-Type": "application/json", Authorization: `Bearer ${t}` } : { "Content-Type": "application/json" }; };
-export async function getJSON(u) { const r = await fetch(u, { headers: authHeaders() }); if (!r.ok) throw new Error(String(r.status)); return r.json(); }
-export async function send(method, u, body) { const r = await fetch(u, { method, headers: authHeaders(), body: body ? JSON.stringify(body) : undefined }); if (!r.ok) throw new Error((await r.json().catch(() => ({})))?.detail || String(r.status)); return r.json().catch(() => ({})); }
+// Shared wrapper: token auto-refresh on 401 + truthful error classification.
+export { getJSON, send } from "../../utils/api";
 
 export function MeShell({ title, subtitle, children, back = "/me" }) {
   return (

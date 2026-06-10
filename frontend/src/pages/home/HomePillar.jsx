@@ -23,11 +23,8 @@ import WeatherStrip from "../../components/home/WeatherStrip";
 import Directory from "../../components/home/Directory";
 import "../../styles/feed.css";
 
-function authHeaders() {
-  const t = localStorage.getItem("tfos_access_token");
-  return t ? { "Content-Type": "application/json", Authorization: `Bearer ${t}` } : { "Content-Type": "application/json" };
-}
-async function getJSON(u) { const r = await fetch(u, { headers: authHeaders() }); if (!r.ok) throw new Error(String(r.status)); return r.json(); }
+// Shared wrapper: token auto-refresh on 401 + truthful errors.
+import { getJSON } from "../../utils/api";
 function timeAgo(iso) {
   if (!iso) return "";
   const s = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);

@@ -683,8 +683,9 @@ async def unblock_user(target_user_id: str, user: dict = Depends(get_current_use
 
 # ----------------------------------------------------------------------------- people
 @router.get("/people")
-async def list_people(search: str = Query(None), user: dict = Depends(get_current_user)):
-    """People you can follow / share to. Cross-tenant directory of active users."""
+async def list_people(search: str = Query(None), following: bool = Query(False), user: dict = Depends(get_current_user)):
+    """People you can follow / share to. Cross-tenant directory of active users.
+    following=true restricts to people YOU follow (the mention/tag set)."""
     uid = str(user["user_id"])
     async with get_db_ctx() as db:
         params = {"uid": uid}
@@ -692,6 +693,9 @@ async def list_people(search: str = Query(None), user: dict = Depends(get_curren
         if search:
             clause = " AND u.full_name ILIKE :q"
             params["q"] = f"%{search}%"
+        if following:
+            clause += """ AND EXISTS (SELECT 1 FROM community.follows mf
+                          WHERE mf.follower_user_id = :uid AND mf.followed_user_id = u.user_id)"""
         rows = (await db.execute(text(f"""
             SELECT u.user_id, u.full_name, u.account_type, u.country,
                    COALESCE(u.email_verified, FALSE) AS verified,

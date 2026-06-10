@@ -18,21 +18,9 @@ import { getCurrentUser } from "../../utils/auth";
 import { useIsNarrow } from "../../hooks/useIsNarrow";
 
 const API = "/api/v1/community";
-function authHeaders() {
-  const t = localStorage.getItem("tfos_access_token");
-  return t ? { "Content-Type": "application/json", Authorization: `Bearer ${t}` } : { "Content-Type": "application/json" };
-}
-async function getJSON(u) { const r = await fetch(u, { headers: authHeaders() }); if (!r.ok) throw new Error(String(r.status)); return r.json(); }
-async function send(method, u, body) {
-  const r = await fetch(u, { method, headers: authHeaders(), body: body ? JSON.stringify(body) : undefined });
-  if (!r.ok) {
-    const detail = (await r.json().catch(() => ({})))?.detail;
-    const err = new Error(detail || String(r.status));
-    err.status = r.status;
-    throw err;
-  }
-  return r.json().catch(() => ({}));
-}
+// Shared wrapper (utils/api): token auto-refresh on 401 + truthful error
+// classification (err.kind network|server|client, err.userMessage).
+import { getJSON, send } from "../../utils/api";
 // Loud feedback — routed through the shell Toast. No silent failures.
 const toast = (message, type) => {
   try { window.dispatchEvent(new CustomEvent("tfos:toast", { detail: { message, type } })); }
@@ -87,13 +75,34 @@ const inp = { width: "100%", padding: "8px 10px", border: "1px solid var(--line)
 
 function PlaceModal({ onPick, onClose }) {
   const [v, setV] = useState("");
-  const chips = ["Save-A-Lot, Serua", "Viyasiyasi, Kadavu", "Sigatoka", "Suva", "Rakiraki", "Nausori"];
+  const [gps, setGps] = useState(null);        // null=asking, []=unavailable, [...names]
+  const [farms, setFarms] = useState([]);
+  // Real suggestions only: GPS reverse-geocode (server proxy — CSP-safe) + my farms.
+  useEffect(() => {
+    getJSON("/api/v1/farms").then((r) => {
+      const list = r?.data?.farms || r?.data || [];
+      setFarms([...new Set(list.flatMap((f) => [f.farm_name, f.location_island]).filter(Boolean))].slice(0, 4));
+    }).catch(() => setFarms([]));
+    if (!navigator.geolocation) { setGps([]); return; }
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        getJSON(`/api/v1/geo/reverse?lat=${pos.coords.latitude}&lon=${pos.coords.longitude}`)
+          .then((r) => setGps(r?.data?.places || []))
+          .catch(() => setGps([]));
+      },
+      () => setGps([]), // permission denied / unavailable — fall back to typing
+      { timeout: 8000, maximumAge: 600000 },
+    );
+  }, []);
+  const chips = [...new Set([...(gps || []), ...farms])];
   return (
     <Overlay title="Tag a place" onClose={onClose}
       foot={<><button className="btn btn-secondary" onClick={onClose}>Cancel</button><button className="btn btn-primary" onClick={() => v.trim() && onPick(v.trim())}>Add place</button></>}>
-      <p style={{ fontSize: 12.5, color: "var(--muted)", marginTop: 0 }}>Tag where this is about. Pick a place, or type one.</p>
+      <p style={{ fontSize: 12.5, color: "var(--muted)", marginTop: 0 }}>
+        {gps == null ? "Finding places near you…" : chips.length ? "Near you and your farms — tap one, or type a place." : "Location unavailable — type a place."}
+      </p>
       <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
-        {chips.map((c) => <button key={c} className="cm-tool-btn" onClick={() => onPick(c)}><MapPin size={11} />{c}</button>)}
+        {chips.map((c) => <button key={c} className="cm-tool-btn" style={{ minHeight: 40 }} onClick={() => onPick(c)}><MapPin size={11} />{c}</button>)}
       </div>
       <input style={inp} placeholder="Or type a place — village, town, block" maxLength={60} value={v} onChange={(e) => setV(e.target.value)} />
     </Overlay>
@@ -172,12 +181,13 @@ import { uploadMedia } from "../../utils/imageCompress";
 function MentionPicker({ onPick, onClose }) {
   const [q, setQ] = useState("");
   const [people, setPeople] = useState(null);
-  useEffect(() => { const id = setTimeout(() => getJSON(`${API}/people${q ? `?search=${encodeURIComponent(q)}` : ""}`).then((r) => setPeople(r.data || [])).catch(() => setPeople([])), 200); return () => clearTimeout(id); }, [q]);
+  // Mention set = people YOU follow (incl. mutual connections) — not strangers.
+  useEffect(() => { const id = setTimeout(() => getJSON(`${API}/people?following=true${q ? `&search=${encodeURIComponent(q)}` : ""}`).then((r) => setPeople(r.data || [])).catch(() => setPeople([])), 200); return () => clearTimeout(id); }, [q]);
   return (
-    <Overlay title="Mention someone" onClose={onClose}>
-      <input style={{ ...inp, marginBottom: 10 }} placeholder="Search people…" value={q} onChange={(e) => setQ(e.target.value)} autoFocus />
+    <Overlay title="Mention someone you follow" onClose={onClose}>
+      <input style={{ ...inp, marginBottom: 10 }} placeholder="Search people you follow…" value={q} onChange={(e) => setQ(e.target.value)} autoFocus />
       <div style={{ maxHeight: 240, overflowY: "auto", display: "flex", flexDirection: "column", gap: 6 }}>
-        {people == null ? <div className="cm-empty">Loading…</div> : people.length === 0 ? <div className="cm-empty">No people found.</div> :
+        {people == null ? <div className="cm-empty">Loading…</div> : people.length === 0 ? <div className="cm-empty">{q ? "No one you follow matches that." : "You can mention people once you follow them — find people in Directory."}</div> :
           people.map((p) => (
             <button key={p.user_id} className="cm-menu-item" onClick={() => onPick(p.full_name)}>
               <span className="avatar-circle avatar-cm-reply">{initials(p.full_name)}</span>
@@ -644,7 +654,7 @@ export default function FeedView({ initialFilter = "all" }) {
     setEnd(false);
     getJSON(`${API}/feed?filter=${filter}&verified_only=${verifiedOnly}&limit=${PAGE}&offset=0`)
       .then((r) => { const d = r.data || []; setPosts(d); setEnd(d.length < PAGE); })
-      .catch(() => { setPosts([]); if (!silent) toast("Couldn't load the feed — check your connection and try again.", "error"); });
+      .catch((e) => { setPosts([]); if (!silent) toast(`Couldn't load the feed: ${e.userMessage || e.message || e}`, "error"); });
   };
   const loadMore = () => {
     setMore(true);

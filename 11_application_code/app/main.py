@@ -72,6 +72,7 @@ from app.routers import (
     marketplace,
     market,
     feed,
+    geo,
     chat,
     subscriptions,
     webhooks,
@@ -333,6 +334,7 @@ app.include_router(feed.router,               prefix=f"{PREFIX}/community",     
 app.include_router(chat.router,               prefix=f"{PREFIX}/community",          tags=["Community Chat"])
 app.include_router(marketplace.router,        prefix=f"{PREFIX}/marketplace",        tags=["Marketplace"])
 app.include_router(market.router,             prefix=f"{PREFIX}/market",             tags=["Market Intelligence"])
+app.include_router(geo.router,                prefix=f"{PREFIX}/geo",                tags=["Geo"])
 
 # Platform
 app.include_router(subscriptions.router,      prefix=f"{PREFIX}/subscriptions",      tags=["Subscriptions"])

@@ -246,6 +246,14 @@ export default function ProfilePage({ self = false }) {
       });
   };
   useEffect(() => { load(); /* eslint-disable-next-line */ }, [targetId, meData, retryTick]);
+  // Stats (Posts count etc.) stay fresh: refetch when the tab regains focus —
+  // e.g. after posting on Home and coming back here.
+  useEffect(() => {
+    const onFocus = () => { if (targetId) load(); };
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+    /* eslint-disable-next-line */
+  }, [targetId, meData]);
 
   // After a successful edit: merge the saved values straight into the view so
   // the change is visible instantly, refresh the authoritative /auth/me copy
