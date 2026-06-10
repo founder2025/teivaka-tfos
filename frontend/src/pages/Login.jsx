@@ -5,8 +5,9 @@
  * On success:
  *   - Stores access + refresh tokens in localStorage
  *   - Redirects admin  → /admin
- *   - Redirects farmer (onboarded)     → /community
- *   - Redirects farmer (not onboarded) → /onboarding
+ *   - Redirects farmer (onboarded, SOLO mode) → /solo
+ *   - Redirects farmer (onboarded, other)     → /me  (own profile first)
+ *   - Redirects farmer (not onboarded)        → /onboarding
  */
 
 import { useState } from "react";
@@ -107,8 +108,10 @@ export default function Login() {
       }
 
       // Mode-aware default: SOLO mode lands at /solo (no chrome, single
-      // task card per MBI Part 19). Everyone else lands at /home. Deep-link
-      // intent ("from") wins over the mode default if present.
+      // task card per MBI Part 19). Every other onboarded user lands on their
+      // OWN profile (/me) so they can review/complete it before entering the
+      // platform (Operator-directed 2026-06-10). Deep-link intent ("from")
+      // wins, and not-yet-onboarded users still go through onboarding first.
       let destination;
       if (from && from !== "/login" && from !== "/register") {
         destination = from;
@@ -117,7 +120,7 @@ export default function Login() {
       } else if (data.mode === "SOLO") {
         destination = "/solo";
       } else {
-        destination = "/home";
+        destination = "/me";
       }
 
       navigate(destination, { replace: true });

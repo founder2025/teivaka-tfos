@@ -17,10 +17,19 @@ import { C, getJSON, send, card } from "./_meCommon";
 import { getCurrentUser } from "../../utils/auth";
 import { useChat } from "../../context/ChatContext";
 
+// Loud, non-silent feedback — routed through the shell's Toast. Every write on
+// this page surfaces success/failure here instead of failing quietly.
+const toast = (message, type) => {
+  try { window.dispatchEvent(new CustomEvent("tfos:toast", { detail: { message, type } })); }
+  catch { /* noop */ }
+};
+
 const initials = (n) => (n || "?").split(" ").map((s) => s[0]).slice(0, 2).join("").toUpperCase();
 const PROF = { farmer: "Farmer", buyer: "Buyer", supplier: "Supplier", service_provider: "Service Provider", banker: "Banker", business: "Business", exporter: "Exporter", importer: "Importer" };
-const fmtDate = (iso) => { try { return new Date(iso).toLocaleDateString(undefined, { year: "numeric", month: "2-digit", day: "2-digit" }); } catch { return ""; } };
-const monthsSince = (iso) => { try { const d = new Date(iso); const m = Math.max(0, Math.round((Date.now() - d) / (30.44 * 864e5))); return `${m} month${m === 1 ? "" : "s"}`; } catch { return ""; } };
+// Guard against null/epoch dates: an unset created_at must read "—", never "01/01/1970".
+const isRealDate = (d) => d instanceof Date && !isNaN(d) && d.getFullYear() > 1971;
+const fmtDate = (iso) => { if (!iso) return "—"; const d = new Date(iso); return isRealDate(d) ? d.toLocaleDateString(undefined, { year: "numeric", month: "2-digit", day: "2-digit" }) : "—"; };
+const monthsSince = (iso) => { if (!iso) return ""; const d = new Date(iso); if (!isRealDate(d)) return ""; const m = Math.max(0, Math.round((Date.now() - d) / (30.44 * 864e5))); return `${m} month${m === 1 ? "" : "s"}`; };
 const fmtPost = (iso) => { try { return new Date(iso).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }); } catch { return ""; } };
 const isVideo = (s) => /\.(mp4|webm|mov)$/i.test(s || "");
 
@@ -50,6 +59,59 @@ function Stat({ n, label, onClick }) {
   );
 }
 
+// Suggested members — real existing users from /community/people, with working
+// Follow. New users land on /me first, so this is their discovery entry point.
+// Honest-empty when the platform genuinely has no one else to suggest yet.
+function SuggestedPeople() {
+  const navigate = useNavigate();
+  const [people, setPeople] = useState(null);
+  const [busy, setBusy] = useState({});
+  useEffect(() => {
+    getJSON("/api/v1/community/people")
+      .then((r) => setPeople(((r.data || r) || []).filter((x) => !x.is_following).slice(0, 6)))
+      .catch(() => setPeople([]));
+  }, []);
+  const follow = async (u) => {
+    setBusy((b) => ({ ...b, [u.user_id]: true }));
+    try {
+      await send("POST", `/api/v1/community/follow/${u.user_id}`);
+      toast(`Following ${u.full_name} ✓`, "success");
+      setPeople((list) => (list || []).filter((x) => x.user_id !== u.user_id));
+    } catch (e) {
+      toast(`Couldn't follow: ${e.message || e}`, "error");
+    } finally { setBusy((b) => ({ ...b, [u.user_id]: false })); }
+  };
+  if (people == null) return <div style={{ ...card, color: C.muted }}>Loading suggestions…</div>;
+  return (
+    <div style={card}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+        <strong style={{ color: C.soil }}>Suggested for you</strong>
+        <Link to="/home/directory" style={{ fontSize: 12.5, color: C.greenDk, textDecoration: "none" }}>See all</Link>
+      </div>
+      {people.length === 0 ? (
+        <div style={{ color: C.muted, fontSize: 13 }}>No suggestions yet — as more farmers, buyers and suppliers join, they'll appear here.</div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {people.map((u) => (
+            <div key={u.user_id} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <button onClick={() => navigate(`/u/${u.user_id}`)} style={{ display: "flex", alignItems: "center", gap: 10, flex: 1, minWidth: 0, background: "transparent", border: "none", cursor: "pointer", textAlign: "left", padding: 0 }}>
+                <span style={{ width: 36, height: 36, flexShrink: 0, borderRadius: "50%", background: C.green, color: "#fff", fontWeight: 700, fontSize: 13, display: "flex", alignItems: "center", justifyContent: "center" }}>{initials(u.full_name)}</span>
+                <span style={{ minWidth: 0 }}>
+                  <span style={{ display: "block", fontWeight: 600, color: C.soil, fontSize: 13.5, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{u.full_name}{u.verified ? <BadgeCheck size={12} style={{ display: "inline", marginLeft: 4, color: C.greenDk }} /> : null}</span>
+                  <span style={{ display: "block", fontSize: 11.5, color: C.muted }}>{(PROF[u.profession] || u.profession || "Member")}{u.country ? ` · ${u.country}` : ""}</span>
+                </span>
+              </button>
+              <button onClick={() => follow(u)} disabled={busy[u.user_id]} style={{ flexShrink: 0, display: "inline-flex", alignItems: "center", gap: 5, background: C.green, color: "#fff", border: "none", borderRadius: 8, padding: "7px 12px", fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}>
+                <UserPlus size={13} />{busy[u.user_id] ? "…" : "Follow"}
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function EditModal({ me, onClose, onSaved }) {
   const [f, setF] = useState({
     full_name: me.full_name || "", bio: me.bio || "", whatsapp_number: me.phone || me.whatsapp_number || "",
@@ -67,13 +129,23 @@ function EditModal({ me, onClose, onSaved }) {
   const VIS_FIELDS = [["phone", "Phone"], ["joined", "Joined date"], ["location", "Location / country"], ["bio", "Bio"], ["records", "Records logged"]];
   const save = async () => {
     setBusy(true);
+    const merged = { ...fv, ...vis };
     try {
       await send("PATCH", "/api/v1/me", {
         full_name: f.full_name, bio: f.bio, whatsapp_number: f.whatsapp_number,
         country: f.country, account_type: f.account_type,
-        field_visibility: { ...fv, ...vis },
+        field_visibility: merged,
       });
-      onSaved();
+      toast("Profile saved ✓", "success");
+      // Hand the saved values back so the page reflects them immediately, even
+      // if the heavier profile reload is slow or fails.
+      onSaved({
+        full_name: f.full_name, bio: f.bio, phone: f.whatsapp_number,
+        country: f.country, profession: (f.account_type || "").toLowerCase(),
+        field_visibility: merged,
+      });
+    } catch (e) {
+      toast(`Couldn't save profile: ${e.message || e}`, "error");
     } finally { setBusy(false); }
   };
   return (
@@ -145,9 +217,23 @@ export default function ProfilePage({ self = false }) {
   const load = () => {
     if (!targetId) return;
     getJSON(`/api/v1/community/profile/${targetId}`).then((r) => setP(r.data || r))
-      .catch(() => setP(self ? selfFallback() : {}));
+      .catch(() => {
+        // Don't silently mask a backend failure as an empty-but-fine profile.
+        if (self) { setP(selfFallback()); toast("Couldn't reach the profile service — showing limited info from your account.", "error"); }
+        else setP({});
+      });
   };
   useEffect(() => { load(); /* eslint-disable-next-line */ }, [targetId, meData]);
+
+  // After a successful edit: merge the saved values straight into the view so
+  // the change is visible instantly, refresh the authoritative /auth/me copy
+  // (keeps the fallback fresh), then reconcile against the server.
+  const handleSaved = (vals) => {
+    setEditing(false);
+    if (vals) setP((cur) => (cur ? { ...cur, ...vals } : cur));
+    if (self) getJSON("/api/v1/auth/me").then((r) => { const d = r?.data ?? r; setMeData(d); }).catch(() => {});
+    load();
+  };
   useEffect(() => { if (tab === "records" && p?.is_you && records == null) getJSON("/api/v1/me/records").then((r) => setRecords(r.data || [])).catch(() => setRecords([])); }, [tab, p, records]);
   useEffect(() => { if (tab === "activity" && p?.is_you && activity == null && targetId) getJSON(`/api/v1/community/profile/${targetId}/activity`).then((r) => setActivity(r.data || [])).catch(() => setActivity([])); }, [tab, p, activity, targetId]);
 
@@ -157,13 +243,20 @@ export default function ProfilePage({ self = false }) {
       const fd = new FormData(); fd.append("file", file);
       const t = localStorage.getItem("tfos_access_token");
       const up = await fetch("/api/v1/community/uploads", { method: "POST", headers: t ? { Authorization: `Bearer ${t}` } : {}, body: fd });
+      if (!up.ok) throw new Error((await up.json().catch(() => ({})))?.detail || `Upload failed (${up.status})`);
       const url = (await up.json())?.data?.url;
-      if (url) { await send("PATCH", "/api/v1/me", { avatar_url: url }); load(); }
-    } catch (err) { alert(String(err.message || err)); }
+      if (!url) throw new Error("Upload returned no URL");
+      setP((cur) => (cur ? { ...cur, avatar_url: url } : cur)); // show it immediately
+      await send("PATCH", "/api/v1/me", { avatar_url: url });
+      toast("Photo updated ✓", "success");
+      load();
+    } catch (err) { toast(`Couldn't update photo: ${err.message || err}`, "error"); }
   };
   const toggleFollow = async () => {
     setBusyFollow(true);
-    try { await send(p.is_following ? "DELETE" : "POST", `/api/v1/community/follow/${targetId}`); load(); } finally { setBusyFollow(false); }
+    try { await send(p.is_following ? "DELETE" : "POST", `/api/v1/community/follow/${targetId}`); load(); }
+    catch (e) { toast(`Couldn't update follow: ${e.message || e}`, "error"); }
+    finally { setBusyFollow(false); }
   };
 
   if (!p) return <div style={{ maxWidth: 1040, margin: "0 auto", color: C.muted, padding: 20 }}>Loading profile…</div>;
@@ -317,6 +410,7 @@ export default function ProfilePage({ self = false }) {
               </div>
             ))}
           </div>
+          {isYou && <SuggestedPeople />}
         </>}
         {tab === "posts" && <PostList kind="posts" />}
         {tab === "reels" && <PostList kind="reels" />}
@@ -349,7 +443,7 @@ export default function ProfilePage({ self = false }) {
             ))}
         </>}
 
-        {editing && <EditModal me={{ ...p, field_visibility: p.field_visibility }} onClose={() => setEditing(false)} onSaved={() => { setEditing(false); load(); }} />}
+        {editing && <EditModal me={{ ...p, field_visibility: p.field_visibility }} onClose={() => setEditing(false)} onSaved={handleSaved} />}
       </main>
     </div>
   );
