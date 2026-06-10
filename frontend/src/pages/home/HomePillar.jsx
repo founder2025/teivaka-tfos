@@ -20,6 +20,8 @@ import TfpShell from "../../components/farm/TfpShell";
 import MarketIntelligence from "../../components/home/MarketIntelligence";
 import FeedView from "../../components/home/FeedView";
 import MarketSnapshot from "../../components/home/MarketSnapshot";
+import WeatherStrip from "../../components/home/WeatherStrip";
+import Directory from "../../components/home/Directory";
 import "../../styles/feed.css";
 
 function authHeaders() {
@@ -111,6 +113,7 @@ export default function HomePillar() {
   if (view === "feed") {
     body = (
       <>
+        <WeatherStrip />
         <MarketSnapshot onOpenMarket={() => navigate("/home/marketplace")} />
         <FeedView initialFilter="all" />
       </>
@@ -144,16 +147,7 @@ export default function HomePillar() {
       </>
     );
   } else if (view === "directory") {
-    body = (
-      <div className="card">
-        <table className="data-table">
-          <tbody>
-            <tr><th>Type</th><th>Name</th><th>Location</th><th></th></tr>
-            <tr><td colSpan={4} style={{ color: "var(--muted)", padding: "14px 8px" }}>The cross-Fiji directory (farmers, buyers, suppliers, ferries, extension) appears here once the directory service is connected — not shown until it's real.</td></tr>
-          </tbody>
-        </table>
-      </div>
-    );
+    body = <Directory />;
   } else {
     body = <FeedView initialFilter="saved" />;
   }
