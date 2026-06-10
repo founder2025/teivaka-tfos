@@ -8,6 +8,7 @@
  * window event. Real endpoints only; honest empty states.
  */
 import { useEffect, useRef, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { Search, MapPin, BadgeCheck, MessageCircle, Bookmark, Share2, X, ChevronLeft, ChevronRight, Tag, CheckCircle2, RotateCcw, Image as ImageIcon } from "lucide-react";
 import { getJSON, send } from "../../utils/api";
 import { uploadMedia } from "../../utils/imageCompress";
@@ -272,6 +273,11 @@ function ListingDetail({ l, onClose, onChanged }) {
 
 /* ---------------- marketplace ---------------- */
 export default function Marketplace() {
+  const location = useLocation();
+  const navigate = useNavigate();
+  // Directory -> Marketplace bridge: /home/marketplace?seller=<user_id>
+  const seller = new URLSearchParams(location.search).get("seller");
+  const [sellerName, setSellerName] = useState(null);
   const [cat, setCat] = useState("ALL");
   const [island, setIsland] = useState("");
   const [q, setQ] = useState("");
@@ -287,10 +293,11 @@ export default function Marketplace() {
     if (q.trim()) p.set("search", q.trim());
     if (view === "mine") p.set("mine", "true");
     if (view === "saved") p.set("saved", "true");
-    getJSON(`${API}/listings?${p.toString()}`).then((r) => setItems(r.data || []))
+    if (seller) p.set("seller", seller);
+    getJSON(`${API}/listings?${p.toString()}`).then((r) => { setItems(r.data || []); if (seller && r.data?.length) setSellerName(r.data[0].seller_name); })
       .catch((e) => { setItems([]); toast(`Couldn't load listings: ${e.userMessage || e.message}`, "error"); });
   };
-  useEffect(() => { load(); /* eslint-disable-next-line */ }, [cat, island, view]);
+  useEffect(() => { load(); /* eslint-disable-next-line */ }, [cat, island, view, seller]);
   useEffect(() => { const id = setTimeout(load, 350); return () => clearTimeout(id); /* eslint-disable-next-line */ }, [q]);
   // HomePillar's "New listing" header button dispatches this event.
   useEffect(() => {
@@ -301,6 +308,12 @@ export default function Marketplace() {
 
   return (
     <div>
+      {seller && (
+        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 13px", marginBottom: 10, border: "1px solid var(--green)", borderRadius: 10, background: "rgba(106,168,79,0.07)", fontSize: 13, color: "var(--soil)" }}>
+          Showing listings by <strong>{sellerName || "this member"}</strong>
+          <button onClick={() => navigate("/home/marketplace")} style={{ marginLeft: "auto", border: "1px solid var(--line)", background: "#fff", borderRadius: 999, padding: "4px 12px", fontSize: 12, cursor: "pointer" }}>Show all</button>
+        </div>
+      )}
       {/* controls */}
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: 10 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 6, flex: 1, minWidth: 200, border: "1px solid var(--line)", borderRadius: 999, padding: "7px 12px", background: "#fff" }}>

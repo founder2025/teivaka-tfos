@@ -65,6 +65,7 @@ async def list_community_listings(
     search: str = None,
     mine: bool = False,
     saved: bool = False,
+    seller: str = None,
     user: dict = Depends(get_current_user),
 ):
     """Marketplace listings for every profession. Migration-tolerant by design:
@@ -100,6 +101,8 @@ async def list_community_listings(
                 WHERE {where}"""
         if saved and has_saves:
             q += " AND EXISTS (SELECT 1 FROM community.listing_saves ls2 WHERE ls2.listing_id = cl.listing_id AND ls2.user_id = cast(:uid AS uuid))"
+        if seller:
+            q += " AND cl.created_by = cast(:seller AS uuid)"; params["seller"] = seller
         if production_id:
             q += " AND cl.production_id = :production_id"; params["production_id"] = production_id
         if island:

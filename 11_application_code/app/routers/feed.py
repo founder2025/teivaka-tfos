@@ -748,23 +748,38 @@ async def unblock_user(target_user_id: str, user: dict = Depends(get_current_use
 
 # ----------------------------------------------------------------------------- people
 @router.get("/people")
-async def list_people(search: str = Query(None), following: bool = Query(False), user: dict = Depends(get_current_user)):
-    """People you can follow / share to. Cross-tenant directory of active users.
+async def list_people(search: str = Query(None), following: bool = Query(False),
+                      profession: str = Query(None), sort: str = Query("verified"),
+                      user: dict = Depends(get_current_user)):
+    """Directory: rich person cards — identity, tick, bio, member-since,
+    presence, and marketplace context (active listings / wanted counts).
     following=true restricts to people YOU follow (the mention/tag set)."""
     uid = str(user["user_id"])
     async with get_db_ctx() as db:
+        vexpr = await _verified_expr(db)
+        # marketplace context only if listings table is readable (probe, cached)
+        has_listings = await _has(db, "tbl_listings_dir", "SELECT COALESCE((SELECT has_table_privilege(current_user, c.oid, 'SELECT') FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='community' AND c.relname='listings'), false)")
+        lst_expr = ("""(SELECT count(*) FROM community.listings cl WHERE cl.created_by = u.user_id AND cl.listing_status='ACTIVE') AS active_listings,
+                   (SELECT count(*) FROM community.listings cw WHERE cw.created_by = u.user_id AND cw.listing_status='ACTIVE' AND cw.category='WANTED') AS wanted_count,"""
+                    if has_listings and await _has(db, "col_listings_cat", "SELECT 1 FROM information_schema.columns WHERE table_schema='community' AND table_name='listings' AND column_name='category'")
+                    else "0 AS active_listings, 0 AS wanted_count,")
         params = {"uid": uid}
         clause = ""
         if search:
-            clause = " AND u.full_name ILIKE :q"
+            clause += " AND u.full_name ILIKE :q"
             params["q"] = f"%{search}%"
+        if profession and profession.lower() != "all":
+            clause += " AND LOWER(u.account_type) = :prof"
+            params["prof"] = profession.lower()
         if following:
             clause += """ AND EXISTS (SELECT 1 FROM community.follows mf
                           WHERE mf.follower_user_id = :uid AND mf.followed_user_id = u.user_id)"""
-        vexpr = await _verified_expr(db)
+        order = "verified DESC, u.created_at DESC" if sort == "verified" else "u.created_at DESC"
         rows = (await db.execute(text(f"""
             SELECT u.user_id, u.full_name, u.account_type, u.country, u.avatar_url,
+                   u.bio, u.created_at AS member_since,
                    {vexpr} AS verified,
+                   {lst_expr}
                    EXISTS (SELECT 1 FROM community.follows f
                            WHERE f.follower_user_id = :uid AND f.followed_user_id = u.user_id) AS is_following,
                    EXISTS (SELECT 1 FROM community.follows f2
@@ -773,16 +788,33 @@ async def list_people(search: str = Query(None), following: bool = Query(False),
             WHERE u.user_id <> :uid AND u.is_active = TRUE{clause}
               AND u.user_id NOT IN (SELECT blocked_user_id FROM community.user_blocks WHERE user_id = :uid)
               AND u.user_id NOT IN (SELECT user_id FROM community.user_blocks WHERE blocked_user_id = :uid)
-            ORDER BY follows_me DESC, u.full_name
-            LIMIT 50
+            ORDER BY follows_me DESC, {order}
+            LIMIT 100
         """), params)).mappings().all()
+        totals = (await db.execute(text(f"""
+            SELECT count(*) AS members, count(*) FILTER (WHERE {vexpr}) AS verified
+            FROM tenant.users u WHERE u.is_active = TRUE
+        """))).mappings().first()
+    # presence (best-effort)
+    pres = {}
+    try:
+        from app.routers.chat import _presence_map
+        pres = await _presence_map([str(r["user_id"]) for r in rows])
+    except Exception:  # noqa: BLE001
+        pres = {}
     return {"data": [{
         "user_id": str(r["user_id"]), "full_name": r["full_name"],
         "profession": (r["account_type"] or "FARMER").lower(),
         "country": r["country"], "verified": r["verified"], "avatar_url": r["avatar_url"],
+        "bio": (r["bio"] or "")[:120] or None,
+        "member_since": r["member_since"].isoformat() if r["member_since"] else None,
+        "active_listings": int(r["active_listings"] or 0),
+        "wanted_count": int(r["wanted_count"] or 0),
+        "online": pres.get(str(r["user_id"]), {}).get("online", False),
         "is_following": r["is_following"],
         "is_connected": bool(r["is_following"] and r["follows_me"]),
-    } for r in rows]}
+    } for r in rows],
+        "meta": {"members": int(totals["members"] or 0) + 1, "verified": int(totals["verified"] or 0)}}
 
 
 # ----------------------------------------------------------------------------- topics
