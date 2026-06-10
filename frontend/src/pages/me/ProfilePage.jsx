@@ -107,6 +107,8 @@ export default function ProfilePage({ self = false }) {
   const [editing, setEditing] = useState(false);
   const [previewPublic, setPreviewPublic] = useState(false);
   const [busyFollow, setBusyFollow] = useState(false);
+  const [records, setRecords] = useState(null);
+  const [activity, setActivity] = useState(null);
 
   // resolve own user_id (for /me)
   useEffect(() => {
@@ -116,6 +118,8 @@ export default function ProfilePage({ self = false }) {
   const targetId = self ? meId : routeId;
   const load = () => { if (targetId) getJSON(`/api/v1/community/profile/${targetId}`).then((r) => setP(r.data || r)).catch(() => setP({})); };
   useEffect(() => { load(); /* eslint-disable-next-line */ }, [targetId]);
+  useEffect(() => { if (tab === "records" && p?.is_you && records == null) getJSON("/api/v1/me/records").then((r) => setRecords(r.data || [])).catch(() => setRecords([])); }, [tab, p, records]);
+  useEffect(() => { if (tab === "activity" && p?.is_you && activity == null && targetId) getJSON(`/api/v1/community/profile/${targetId}/activity`).then((r) => setActivity(r.data || [])).catch(() => setActivity([])); }, [tab, p, activity, targetId]);
 
   const uploadAvatar = async (e) => {
     const file = e.target.files?.[0]; e.target.value = ""; if (!file) return;
@@ -265,12 +269,33 @@ export default function ProfilePage({ self = false }) {
         {tab === "posts" && <PostList kind="posts" />}
         {tab === "reels" && <PostList kind="reels" />}
         {tab === "photos" && <PostList kind="photos" />}
-        {tab === "records" && <div style={{ ...card }}>
-          <div style={{ fontWeight: 700, color: C.soil }}>{p.stats?.records ?? 0} records logged</div>
-          <div style={{ fontSize: 13, color: C.muted, marginTop: 6 }}>Your hash-chained farm activity. Open the full ledger in Farm → History.</div>
-          <Link to="/farm/history" style={{ display: "inline-flex", gap: 6, alignItems: "center", marginTop: 10, color: C.greenDk }}>Open Farm History <ArrowRight size={13} /></Link>
-        </div>}
-        {tab === "activity" && <div style={{ ...card, color: C.muted }}>Your likes, comments and reactions across the community will appear here. (Activity timeline is being wired — your posts are under the Posts tab.)</div>}
+        {tab === "records" && <>
+          <div style={{ ...card, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div><strong style={{ color: C.soil }}>{p.stats?.records ?? 0} records logged</strong><div style={{ fontSize: 12, color: C.muted }}>Hash-chained, verifiable farm activity.</div></div>
+            <Link to="/farm/history" style={{ display: "inline-flex", gap: 6, alignItems: "center", color: C.greenDk, fontSize: 13 }}>Full ledger <ArrowRight size={13} /></Link>
+          </div>
+          {records == null ? <div style={{ color: C.muted, padding: 12 }}>Loading…</div>
+            : records.length === 0 ? <div style={{ ...card, color: C.muted }}>No records logged yet.</div>
+            : records.map((r, i) => (
+              <div key={i} style={{ ...card, marginBottom: 8, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontWeight: 600, color: C.soil, fontSize: 13.5 }}>{(r.event_type || "").replace(/_/g, " ")}</div>
+                  <div style={{ fontSize: 11.5, color: C.muted }}>{r.entity_type || ""}{r.occurred_at ? ` · ${fmtPost(r.occurred_at)}` : ""}</div>
+                </div>
+                {r.audit_hash && <a href={`/verify/${r.audit_hash}`} target="_blank" rel="noreferrer" style={{ fontSize: 10.5, color: C.greenDk, fontFamily: "monospace", flexShrink: 0 }}>{String(r.audit_hash).slice(0, 10)}…</a>}
+              </div>
+            ))}
+        </>}
+        {tab === "activity" && <>
+          {activity == null ? <div style={{ color: C.muted, padding: 12 }}>Loading…</div>
+            : activity.length === 0 ? <div style={{ ...card, color: C.muted }}>No activity yet. Like, react to or reply on posts and it shows here.</div>
+            : activity.map((a, i) => (
+              <div key={i} style={{ ...card, marginBottom: 8 }}>
+                <div style={{ fontSize: 12.5, color: C.greenDk, fontWeight: 600, textTransform: "capitalize" }}>{a.kind}{a.created_at ? <span style={{ color: C.muted, fontWeight: 400 }}> · {fmtPost(a.created_at)}</span> : null}</div>
+                {a.snippet && <div style={{ fontSize: 13, color: C.soil, marginTop: 4, fontStyle: "italic" }}>"{a.snippet}"</div>}
+              </div>
+            ))}
+        </>}
 
         {editing && <EditModal me={{ ...p, field_visibility: p.field_visibility }} onClose={() => setEditing(false)} onSaved={() => { setEditing(false); load(); }} />}
       </main>

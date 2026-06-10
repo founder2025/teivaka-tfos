@@ -184,3 +184,23 @@ async def update_me(
     await db.execute(text(f"UPDATE tenant.users SET {', '.join(sets)} WHERE user_id = :uid"), params)
     await db.commit()
     return {"data": {"updated": len(sets)}}
+
+
+@router.get("/records")
+async def my_records(
+    user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """The caller's hash-chained farm records (audit.events for their tenant)."""
+    rows = (await db.execute(text("""
+        SELECT event_type, entity_type, occurred_at, audit_hash
+        FROM audit.events
+        WHERE tenant_id = :tid
+        ORDER BY occurred_at DESC
+        LIMIT 60
+    """), {"tid": str(user["tenant_id"])})).mappings().all()
+    return {"data": [{
+        "event_type": r["event_type"], "entity_type": r["entity_type"],
+        "occurred_at": r["occurred_at"].isoformat() if r["occurred_at"] else None,
+        "audit_hash": r["audit_hash"],
+    } for r in rows]}

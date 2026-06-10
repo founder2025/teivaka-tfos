@@ -833,3 +833,31 @@ async def get_profile(target_id: str, user: dict = Depends(get_current_user)):
             "stats": {"posts": posts_n, "followers": followers_n, "following": following_n, "records": records_n},
             "posts": [{**dict(p), "post_id": p["post_id"], "created_at": p["created_at"].isoformat() if p["created_at"] else None} for p in posts],
         }}
+
+
+@router.get("/profile/{target_id}/activity")
+async def profile_activity(target_id: str, user: dict = Depends(get_current_user)):
+    """A user's own community activity (likes, reactions, replies). Private to the owner."""
+    if str(user["user_id"]) != str(target_id):
+        return {"data": []}  # activity is personal
+    async with get_db() as db:
+        rows = (await db.execute(text("""
+            SELECT kind, created_at, post_id, snippet FROM (
+              SELECT 'liked' AS kind, fl.created_at, fp.post_id, left(fp.body, 120) AS snippet
+                FROM community.feed_likes fl JOIN community.feed_posts fp ON fp.post_id = fl.post_id
+               WHERE fl.user_id = :id
+              UNION ALL
+              SELECT 'reacted', rx.created_at, fp2.post_id, left(fp2.body, 120)
+                FROM community.feed_reactions rx JOIN community.feed_posts fp2
+                  ON fp2.post_id = rx.target_id AND rx.target_type = 'post'
+               WHERE rx.user_id = :id
+              UNION ALL
+              SELECT 'replied', r.created_at, r.post_id, left(r.body, 120)
+                FROM community.feed_replies r
+               WHERE r.author_user_id = :id AND r.status = 'active'
+            ) a ORDER BY created_at DESC LIMIT 50
+        """), {"id": str(target_id)})).mappings().all()
+    return {"data": [{
+        "kind": r["kind"], "post_id": r["post_id"], "snippet": r["snippet"],
+        "created_at": r["created_at"].isoformat() if r["created_at"] else None,
+    } for r in rows]}
