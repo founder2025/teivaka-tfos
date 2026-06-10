@@ -1,12 +1,16 @@
 /**
- * ChatWidget.jsx — global live chat (bottom-right), connection-gated, social-media style.
- *  - See every connection's live presence at once (green dots).
- *  - Open MULTIPLE conversations at the same time (Messenger-style chat windows).
- *  - Pop-up toast + chime + (background) OS notification on new incoming messages.
- * Connection = mutual follow. Backend: /api/v1/community/{presence,connections,chat}.
+ * ChatWidget.jsx — global live chat. Opened from the TOP-BAR message icon (state via
+ * ChatContext), not a floating FAB — so it never collides with the TIS sparkles FAB.
+ *  - Desktop: connections list anchored bottom-right (above the FABs) + Messenger-style
+ *    chat windows stacked leftward (multiple at once).
+ *  - Mobile: full-screen sheet (one conversation at a time, back button), composer above
+ *    the keyboard (100dvh), above the bottom nav.
+ *  - Live presence dots, pop-up toast + chime + OS notification, "Enable alerts" nudge.
+ * Connection-gated (mutual follow). Frontend only.
  */
 import { useEffect, useRef, useState } from "react";
-import { MessageCircle, X, Send, Video, Volume2, VolumeX, Minus, Bell } from "lucide-react";
+import { X, Send, Video, Volume2, VolumeX, Minus, Bell, ArrowLeft } from "lucide-react";
+import { useChat } from "../../context/ChatContext";
 
 const API = "/api/v1/community";
 const MAX_OPEN = 3;
@@ -46,6 +50,18 @@ function osNotify(title, body) {
   } catch { /* ignore */ }
 }
 
+function useIsMobile() {
+  const get = () => typeof window !== "undefined" && window.matchMedia("(max-width: 900px)").matches;
+  const [m, setM] = useState(get);
+  useEffect(() => {
+    const mql = window.matchMedia("(max-width: 900px)");
+    const on = () => setM(mql.matches); on();
+    mql.addEventListener?.("change", on);
+    return () => mql.removeEventListener?.("change", on);
+  }, []);
+  return m;
+}
+
 function Avatar({ name, online, size = 36 }) {
   return (
     <span style={{ position: "relative", flexShrink: 0 }}>
@@ -55,7 +71,7 @@ function Avatar({ name, online, size = 36 }) {
   );
 }
 
-function ChatWindow({ conn, offset, onClose }) {
+function ChatWindow({ conn, offset = 0, fullscreen = false, onClose, onBack }) {
   const [msgs, setMsgs] = useState(null);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
@@ -70,33 +86,37 @@ function ChatWindow({ conn, offset, onClose }) {
     try { await postJSON(`${API}/chat/with/${conn.user_id}`, { body }); await load(); } catch { setText(body); } finally { setBusy(false); }
   };
   const W = 300;
+  const shell = fullscreen
+    ? { position: "fixed", inset: 0, width: "100%", height: "100dvh", borderRadius: 0, zIndex: 1300 }
+    : { position: "fixed", bottom: 24, right: 384 + offset * (W + 12), width: W, height: min ? 46 : 420, borderRadius: "12px 12px 0 0", zIndex: 49 };
   return (
-    <div style={{ position: "fixed", bottom: 24, right: 384 + offset * (W + 12), width: W, height: min ? 46 : 420, background: "#fff", border: `1px solid ${C.line}`, borderRadius: "12px 12px 0 0", boxShadow: "0 10px 30px rgba(0,0,0,0.18)", zIndex: 49, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-      <div onClick={() => setMin((m) => !m)} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", borderBottom: `1px solid ${C.line}`, cursor: "pointer", background: C.cream }}>
-        <Avatar name={conn.full_name} online={conn.online} size={28} />
+    <div style={{ ...shell, background: "#fff", border: `1px solid ${C.line}`, boxShadow: "0 10px 30px rgba(0,0,0,0.18)", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+      <div onClick={() => !fullscreen && setMin((m) => !m)} style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 12px", borderBottom: `1px solid ${C.line}`, cursor: fullscreen ? "default" : "pointer", background: C.cream }}>
+        {fullscreen && <button onClick={onBack} aria-label="Back" style={{ border: "none", background: "transparent", cursor: "pointer", color: C.soil, width: 40, height: 40, display: "flex", alignItems: "center", justifyContent: "center" }}><ArrowLeft size={20} /></button>}
+        <Avatar name={conn.full_name} online={conn.online} size={fullscreen ? 34 : 28} />
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontWeight: 700, fontSize: 13, color: C.soil, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{conn.full_name}</div>
-          <div style={{ fontSize: 10.5, color: conn.online ? C.greenDk : C.muted }}>{conn.online ? "Active now" : "Offline"}</div>
+          <div style={{ fontWeight: 700, fontSize: 13.5, color: C.soil, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{conn.full_name}</div>
+          <div style={{ fontSize: 11, color: conn.online ? C.greenDk : C.muted }}>{conn.online ? "Active now" : conn.last_seen ? `Active ${ago(conn.last_seen)} ago` : "Offline"}</div>
         </div>
-        <button title="Video (coming soon)" onClick={(e) => { e.stopPropagation(); alert("Video calling launches in a later phase."); }} style={{ border: "none", background: "transparent", cursor: "pointer", color: C.muted }}><Video size={16} /></button>
-        <button onClick={(e) => { e.stopPropagation(); setMin((m) => !m); }} style={{ border: "none", background: "transparent", cursor: "pointer", color: C.muted }}><Minus size={16} /></button>
-        <button onClick={(e) => { e.stopPropagation(); onClose(); }} style={{ border: "none", background: "transparent", cursor: "pointer", color: C.muted }}><X size={16} /></button>
+        <button title="Video (coming soon)" onClick={(e) => { e.stopPropagation(); alert("Video calling launches in a later phase."); }} style={{ border: "none", background: "transparent", cursor: "pointer", color: C.muted, width: 40, height: 40, display: "flex", alignItems: "center", justifyContent: "center" }}><Video size={18} /></button>
+        {!fullscreen && <button onClick={(e) => { e.stopPropagation(); setMin((m) => !m); }} style={{ border: "none", background: "transparent", cursor: "pointer", color: C.muted }}><Minus size={16} /></button>}
+        {!fullscreen && <button onClick={(e) => { e.stopPropagation(); onClose(); }} style={{ border: "none", background: "transparent", cursor: "pointer", color: C.muted }}><X size={16} /></button>}
       </div>
       {!min && (
         <>
-          <div style={{ flex: 1, overflowY: "auto", padding: "10px", display: "flex", flexDirection: "column", gap: 6, background: C.cream }}>
+          <div style={{ flex: 1, overflowY: "auto", padding: "10px", display: "flex", flexDirection: "column", gap: 6, background: C.cream, WebkitOverflowScrolling: "touch" }}>
             {msgs == null ? <div style={{ color: C.muted, fontSize: 12, textAlign: "center", marginTop: 16 }}>Loading…</div>
               : msgs.length === 0 ? <div style={{ color: C.muted, fontSize: 12, textAlign: "center", marginTop: 16 }}>Say hello to {conn.full_name.split(" ")[0]}.</div>
               : msgs.map((m) => (
-                <div key={m.message_id} style={{ alignSelf: m.mine ? "flex-end" : "flex-start", maxWidth: "80%", background: m.mine ? C.green : "#fff", color: m.mine ? "#fff" : C.soil, border: m.mine ? "none" : `1px solid ${C.line}`, borderRadius: 12, padding: "6px 10px", fontSize: 12.5, lineHeight: 1.4 }}>
+                <div key={m.message_id} style={{ alignSelf: m.mine ? "flex-end" : "flex-start", maxWidth: "80%", background: m.mine ? C.green : "#fff", color: m.mine ? "#fff" : C.soil, border: m.mine ? "none" : `1px solid ${C.line}`, borderRadius: 12, padding: "7px 11px", fontSize: 13, lineHeight: 1.4 }}>
                   {m.body}<div style={{ fontSize: 9, opacity: 0.7, marginTop: 2, textAlign: "right" }}>{ago(m.created_at)}</div>
                 </div>
               ))}
             <div ref={endRef} />
           </div>
-          <div style={{ display: "flex", gap: 6, padding: 8, borderTop: `1px solid ${C.line}` }}>
-            <input value={text} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => e.key === "Enter" && send()} placeholder="Message…" style={{ flex: 1, border: `1px solid ${C.line}`, borderRadius: 16, padding: "7px 11px", fontSize: 12.5, outline: "none" }} />
-            <button onClick={send} disabled={busy || !text.trim()} style={{ border: "none", background: C.green, color: "#fff", borderRadius: "50%", width: 34, height: 34, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><Send size={15} /></button>
+          <div style={{ display: "flex", gap: 8, padding: 8, borderTop: `1px solid ${C.line}`, background: "#fff" }}>
+            <input value={text} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => e.key === "Enter" && send()} placeholder="Message…" style={{ flex: 1, border: `1px solid ${C.line}`, borderRadius: 18, padding: "9px 13px", fontSize: 14, outline: "none" }} />
+            <button onClick={send} disabled={busy || !text.trim()} style={{ border: "none", background: C.green, color: "#fff", borderRadius: "50%", width: 40, height: 40, flexShrink: 0, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><Send size={16} /></button>
           </div>
         </>
       )}
@@ -105,17 +125,18 @@ function ChatWindow({ conn, offset, onClose }) {
 }
 
 export default function ChatWidget() {
-  const [listOpen, setListOpen] = useState(false);
+  const chat = useChat();
+  const mobile = useIsMobile();
   const [conns, setConns] = useState(null);
-  const [openChats, setOpenChats] = useState([]);   // array of conn objects
-  const [unread, setUnread] = useState(0);
+  const [openChats, setOpenChats] = useState([]);   // desktop windows
+  const [mobileConn, setMobileConn] = useState(null); // mobile single conversation
   const [muted, setMuted] = useState(isMuted());
   const [toasts, setToasts] = useState([]);
   const [notifPerm, setNotifPerm] = useState(typeof Notification !== "undefined" ? Notification.permission : "unsupported");
   const prevUnread = useRef(null);
   const openIds = useRef(new Set());
 
-  useEffect(() => { openIds.current = new Set(openChats.map((c) => c.user_id)); }, [openChats]);
+  useEffect(() => { openIds.current = new Set([...openChats.map((c) => c.user_id), ...(mobileConn ? [mobileConn.user_id] : [])]); }, [openChats, mobileConn]);
 
   // heartbeat presence
   useEffect(() => {
@@ -124,7 +145,7 @@ export default function ChatWidget() {
     ping(); const id = setInterval(ping, 30000); return () => clearInterval(id);
   }, []);
 
-  // single poll drives: connections list, presence, total unread, and new-message alerts
+  // single poll → list + presence + unread (pushed to context) + new-message alerts
   useEffect(() => {
     if (!tok()) return undefined;
     let alive = true;
@@ -134,8 +155,7 @@ export default function ChatWidget() {
         if (!alive) return;
         const list = r.data || [];
         setConns(list);
-        let total = 0; const next = {};
-        const fresh = [];
+        let total = 0; const next = {}; const fresh = [];
         for (const c of list) {
           const u = c.unread || 0; next[c.user_id] = u; total += u;
           const had = prevUnread.current ? (prevUnread.current[c.user_id] || 0) : 0;
@@ -144,14 +164,16 @@ export default function ChatWidget() {
         if (fresh.length) {
           chime();
           fresh.forEach((c) => {
-            osNotify(`${c.full_name}`, c.last_body || "New message");
+            osNotify(c.full_name, c.last_body || "New message");
             setToasts((t) => [...t, { id: `${c.user_id}-${Date.now()}`, conn: c }]);
           });
         }
-        prevUnread.current = next; setUnread(total);
+        prevUnread.current = next;
+        chat.setUnread(total);
       } catch { /* ignore */ }
     };
     poll(); const id = setInterval(poll, 9000); return () => { alive = false; clearInterval(id); };
+    /* eslint-disable-next-line */
   }, []);
 
   // auto-dismiss toasts
@@ -161,86 +183,88 @@ export default function ChatWidget() {
     return () => clearTimeout(id);
   }, [toasts]);
 
-  const enableAlerts = () => {
-    if (!("Notification" in window)) return;
-    Notification.requestPermission().then((p) => setNotifPerm(p)).catch(() => {});
-  };
+  // escape closes
+  useEffect(() => {
+    const onKey = (e) => { if (e.key !== "Escape") return; if (mobileConn) setMobileConn(null); else chat.setOpen(false); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    /* eslint-disable-next-line */
+  }, [mobileConn]);
+
+  const requestPerm = () => { if ("Notification" in window && Notification.permission === "default") Notification.requestPermission().then(setNotifPerm).catch(() => {}); };
+  const enableAlerts = () => { if ("Notification" in window) Notification.requestPermission().then(setNotifPerm).catch(() => {}); };
+
   const openChat = (c) => {
-    if ("Notification" in window && Notification.permission === "default") Notification.requestPermission().then((p) => setNotifPerm(p)).catch(() => {});
-    setOpenChats((cur) => {
-      if (cur.find((x) => x.user_id === c.user_id)) return cur;
-      const nextArr = [...cur, c];
-      return nextArr.slice(-MAX_OPEN);
-    });
-    setListOpen(false);
+    requestPerm();
+    if (mobile) { setMobileConn(c); chat.setOpen(true); return; }
+    setOpenChats((cur) => (cur.find((x) => x.user_id === c.user_id) ? cur : [...cur, c].slice(-MAX_OPEN)));
   };
   const closeChat = (uid) => setOpenChats((cur) => cur.filter((c) => c.user_id !== uid));
   const toggleMute = () => { const n = !muted; setMuted(n); localStorage.setItem("tfos_chat_muted", n ? "1" : "0"); };
-
   const loadConns = () => getJSON(`${API}/connections`).then((r) => setConns(r.data || [])).catch(() => setConns([]));
-  useEffect(() => { if (listOpen) loadConns(); }, [listOpen]);
+  useEffect(() => { if (chat.open) loadConns(); /* eslint-disable-next-line */ }, [chat.open]);
 
   if (!tok()) return null;
 
+  const List = ({ fullscreen }) => (
+    <div style={fullscreen
+      ? { position: "fixed", inset: 0, width: "100%", height: "100dvh", background: "#fff", zIndex: 1300, display: "flex", flexDirection: "column" }
+      : { position: "fixed", right: 24, bottom: 88, width: 320, height: 440, background: "#fff", border: `1px solid ${C.line}`, borderRadius: 12, boxShadow: "0 10px 30px rgba(0,0,0,0.18)", zIndex: 48, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 14px", borderBottom: `1px solid ${C.line}` }}>
+        <strong style={{ color: C.soil }}>Messages</strong>
+        <span style={{ display: "flex", gap: 4 }}>
+          <button onClick={toggleMute} title={muted ? "Unmute alerts" : "Mute alerts"} style={{ border: "none", background: "transparent", cursor: "pointer", color: C.muted, width: 40, height: 40, display: "flex", alignItems: "center", justifyContent: "center" }}>{muted ? <VolumeX size={18} /> : <Volume2 size={18} />}</button>
+          <button onClick={() => chat.setOpen(false)} aria-label="Close" style={{ border: "none", background: "transparent", cursor: "pointer", color: C.muted, width: 40, height: 40, display: "flex", alignItems: "center", justifyContent: "center" }}><X size={20} /></button>
+        </span>
+      </div>
+      {notifPerm === "default" && (
+        <button onClick={enableAlerts} style={{ display: "flex", gap: 8, alignItems: "center", width: "100%", textAlign: "left", border: "none", borderBottom: `1px solid ${C.line}`, background: "rgba(106,168,79,0.10)", color: C.greenDk, cursor: "pointer", padding: "10px 14px", fontSize: 12 }}>
+          <Bell size={15} /><span><strong>Enable alerts</strong> — pop-up + sound on new messages, even in another tab.</span>
+        </button>
+      )}
+      <div style={{ flex: 1, overflowY: "auto", WebkitOverflowScrolling: "touch" }}>
+        {conns == null ? <div style={{ color: C.muted, fontSize: 12, padding: 20, textAlign: "center" }}>Loading…</div>
+          : conns.length === 0 ? (
+            <div style={{ color: C.muted, fontSize: 12.5, padding: "28px 22px", textAlign: "center", lineHeight: 1.6 }}>
+              No connections yet. <strong>Chat unlocks when you and another user follow each other.</strong> Find people in Home → Directory and Follow them.
+            </div>
+          ) : conns.map((c) => (
+            <button key={c.user_id} onClick={() => openChat(c)}
+              style={{ width: "100%", display: "flex", gap: 10, alignItems: "center", padding: "11px 14px", minHeight: 44, border: "none", borderBottom: `1px solid ${C.line}`, background: c.unread > 0 ? "rgba(106,168,79,0.06)" : "#fff", cursor: "pointer", textAlign: "left" }}>
+              <Avatar name={c.full_name} online={c.online} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <span style={{ fontWeight: 700, fontSize: 13.5, color: C.soil, flex: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{c.full_name}</span>
+                  <span style={{ fontSize: 9.5, color: C.muted }}>{PROF[c.profession] || c.profession}</span>
+                </div>
+                <div style={{ fontSize: 11.5, color: C.muted, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                  {c.online ? <span style={{ color: C.greenDk }}>● Active now</span> : c.last_body || "Tap to chat"}
+                </div>
+              </div>
+              {c.unread > 0 && <span style={{ background: C.red, color: "#fff", borderRadius: 9, minWidth: 18, height: 18, padding: "0 5px", fontSize: 11, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>{c.unread}</span>}
+            </button>
+          ))}
+      </div>
+    </div>
+  );
+
   return (
     <>
-      {/* open chat windows */}
-      {openChats.map((c, i) => <ChatWindow key={c.user_id} conn={c} offset={i} onClose={() => closeChat(c.user_id)} />)}
+      {/* desktop: persistent chat windows */}
+      {!mobile && openChats.map((c, i) => <ChatWindow key={c.user_id} conn={c} offset={i} onClose={() => closeChat(c.user_id)} />)}
 
-      {/* launcher FAB */}
-      <button onClick={() => setListOpen((o) => !o)} aria-label="Chat"
-        style={{ position: "fixed", right: 88, bottom: 24, width: 56, height: 56, borderRadius: "50%", background: C.green, color: "#fff", border: "3px solid #fff", boxShadow: "0 4px 14px rgba(0,0,0,0.2)", cursor: "pointer", zIndex: 48, display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <MessageCircle size={24} />
-        {unread > 0 && <span style={{ position: "absolute", top: -2, right: -2, minWidth: 18, height: 18, padding: "0 4px", borderRadius: 9, background: C.red, color: "#fff", fontSize: 11, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>{unread > 9 ? "9+" : unread}</span>}
-      </button>
-
-      {/* connections list */}
-      {listOpen && (
-        <div style={{ position: "fixed", right: 24, bottom: 88, width: 320, height: 440, background: "#fff", border: `1px solid ${C.line}`, borderRadius: 12, boxShadow: "0 10px 30px rgba(0,0,0,0.18)", zIndex: 48, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 14px", borderBottom: `1px solid ${C.line}` }}>
-            <strong style={{ color: C.soil }}>Messages</strong>
-            <span style={{ display: "flex", gap: 4 }}>
-              <button onClick={toggleMute} title={muted ? "Unmute alerts" : "Mute alerts"} style={{ border: "none", background: "transparent", cursor: "pointer", color: C.muted }}>{muted ? <VolumeX size={17} /> : <Volume2 size={17} />}</button>
-              <button onClick={() => setListOpen(false)} style={{ border: "none", background: "transparent", cursor: "pointer", color: C.muted }}><X size={18} /></button>
-            </span>
-          </div>
-          {notifPerm === "default" && (
-            <button onClick={enableAlerts}
-              style={{ display: "flex", gap: 8, alignItems: "center", width: "100%", textAlign: "left", border: "none", borderBottom: `1px solid ${C.line}`, background: "rgba(106,168,79,0.10)", color: C.greenDk, cursor: "pointer", padding: "9px 14px", fontSize: 12 }}>
-              <Bell size={15} /><span><strong>Enable alerts</strong> — get a pop-up + sound when a message arrives, even in another tab.</span>
-            </button>
-          )}
-          <div style={{ flex: 1, overflowY: "auto" }}>
-            {conns == null ? <div style={{ color: C.muted, fontSize: 12, padding: 20, textAlign: "center" }}>Loading…</div>
-              : conns.length === 0 ? (
-                <div style={{ color: C.muted, fontSize: 12.5, padding: "28px 22px", textAlign: "center", lineHeight: 1.6 }}>
-                  No connections yet. <strong>Chat unlocks when you and another user follow each other.</strong> Find people in Home → Directory and Follow them.
-                </div>
-              ) : conns.map((c) => (
-                <button key={c.user_id} onClick={() => openChat(c)}
-                  style={{ width: "100%", display: "flex", gap: 10, alignItems: "center", padding: "10px 14px", border: "none", borderBottom: `1px solid ${C.line}`, background: c.unread > 0 ? "rgba(106,168,79,0.06)" : "#fff", cursor: "pointer", textAlign: "left" }}>
-                  <Avatar name={c.full_name} online={c.online} />
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                      <span style={{ fontWeight: 700, fontSize: 13.5, color: C.soil, flex: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{c.full_name}</span>
-                      <span style={{ fontSize: 9.5, color: C.muted }}>{PROF[c.profession] || c.profession}</span>
-                    </div>
-                    <div style={{ fontSize: 11.5, color: C.muted, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                      {c.online ? <span style={{ color: C.greenDk }}>● Active now</span> : c.last_body || "Tap to chat"}
-                    </div>
-                  </div>
-                  {c.unread > 0 && <span style={{ background: C.red, color: "#fff", borderRadius: 9, minWidth: 18, height: 18, padding: "0 5px", fontSize: 11, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>{c.unread}</span>}
-                </button>
-              ))}
-          </div>
-        </div>
-      )}
+      {/* panel (opened from the top-bar message icon) */}
+      {chat.open && (mobile
+        ? (mobileConn
+            ? <ChatWindow conn={mobileConn} fullscreen onBack={() => setMobileConn(null)} />
+            : <List fullscreen />)
+        : <List fullscreen={false} />)}
 
       {/* pop-up toasts */}
-      <div style={{ position: "fixed", top: 72, right: 16, zIndex: 60, display: "flex", flexDirection: "column", gap: 8 }}>
+      <div style={{ position: "fixed", top: 72, right: 16, zIndex: 2000, display: "flex", flexDirection: "column", gap: 8, maxWidth: "calc(100vw - 32px)" }}>
         {toasts.map((t) => (
           <button key={t.id} onClick={() => { openChat(t.conn); setToasts((x) => x.filter((y) => y.id !== t.id)); }}
-            style={{ display: "flex", gap: 10, alignItems: "center", width: 300, background: "#fff", border: `1px solid ${C.line}`, borderLeft: `4px solid ${C.green}`, borderRadius: 8, boxShadow: "0 8px 24px rgba(0,0,0,0.16)", padding: "10px 12px", cursor: "pointer", textAlign: "left" }}>
+            style={{ display: "flex", gap: 10, alignItems: "center", width: 300, maxWidth: "calc(100vw - 32px)", background: "#fff", border: `1px solid ${C.line}`, borderLeft: `4px solid ${C.green}`, borderRadius: 8, boxShadow: "0 8px 24px rgba(0,0,0,0.16)", padding: "10px 12px", cursor: "pointer", textAlign: "left" }}>
             <Avatar name={t.conn.full_name} online={t.conn.online} size={32} />
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontWeight: 700, fontSize: 13, color: C.soil }}>{t.conn.full_name}</div>

@@ -3,6 +3,7 @@ import { Bell, MessageSquare, ChevronDown } from "lucide-react";
 import NotificationsPanel from "./NotificationsPanel";
 import MeMenu from "./MeMenu";
 import { useTisSse } from "../../hooks/useTisSse";
+import { useChat } from "../../context/ChatContext";
 
 const C = {
   soil:    "#5C4033",
@@ -39,25 +40,27 @@ function StatusDot() {
   );
 }
 
-function IconButton({ icon: Icon, label, onClick, disabled, title, badgeCount }) {
+function IconButton({ icon: Icon, label, onClick, disabled, title, badgeCount, active }) {
+  const activeBg = "rgba(106, 168, 79, 0.14)";
   return (
     <button
       type="button"
       onClick={onClick}
       disabled={disabled}
       aria-label={label}
+      aria-pressed={active || undefined}
       title={title || label}
       className="relative rounded-lg flex items-center justify-center transition-colors"
       style={{
         width: 36,
         height: 36,
-        color: disabled ? "#9A8F7A" : C.soil,
+        color: disabled ? "#9A8F7A" : (active ? "#3E7B1F" : C.soil),
         cursor: disabled ? "not-allowed" : "pointer",
-        background: "transparent",
+        background: active ? activeBg : "transparent",
         borderRadius: 8,
       }}
-      onMouseEnter={(e) => { if (!disabled) e.currentTarget.style.background = C.hoverBg; }}
-      onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+      onMouseEnter={(e) => { if (!disabled && !active) e.currentTarget.style.background = C.hoverBg; }}
+      onMouseLeave={(e) => { e.currentTarget.style.background = active ? activeBg : "transparent"; }}
     >
       <Icon size={20} strokeWidth={1.75} />
       {badgeCount > 0 && (
@@ -127,6 +130,7 @@ export default function RightCluster() {
   const [me, setMe] = useState(null);
   const [communityUnread, setCommunityUnread] = useState(0);
   const { unreadCount } = useTisSse();
+  const chat = useChat();
 
   useEffect(() => {
     const token = localStorage.getItem("tfos_access_token");
@@ -169,9 +173,10 @@ export default function RightCluster() {
       <IconButton
         icon={MessageSquare}
         label="Messages"
-        disabled
-        title="In-app chat launches in Phase 8"
-        badgeCount={messagesCount}
+        title="Messages"
+        onClick={chat.toggle}
+        active={chat.open}
+        badgeCount={chat.unread}
       />
 
       <div className="relative">

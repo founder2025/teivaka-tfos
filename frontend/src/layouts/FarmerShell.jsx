@@ -26,6 +26,7 @@ import { useUniversalLogShortcut } from "../components/nav/UniversalLogButton";
 import TisChatPanel from "../components/tis/TisChatPanel";
 import Toast from "../components/ui/Toast";
 import ChatWidget from "../components/chat/ChatWidget";
+import { ChatProvider } from "../context/ChatContext";
 import LogSheet from "../components/launcher/LogSheet";
 import { LeftRailProvider, useLeftRail } from "../context/LeftRailContext";
 import { LauncherProvider, useLauncher } from "../context/LauncherContext";
@@ -366,7 +367,9 @@ export default function FarmerShell() {
   return (
     <LeftRailProvider>
       <LauncherProvider>
-        <ShellContent />
+        <ChatProvider>
+          <ShellContent />
+        </ChatProvider>
       </LauncherProvider>
     </LeftRailProvider>
   );
