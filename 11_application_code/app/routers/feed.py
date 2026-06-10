@@ -912,7 +912,7 @@ async def get_profile(target_id: str, user: dict = Depends(get_current_user)):
     async with get_db_ctx() as db:
         u = (await db.execute(text("""
             SELECT user_id, tenant_id, full_name, email, role, account_type, country,
-                   bio, avatar_url, whatsapp_number, field_visibility, created_at,
+                   bio, avatar_url, cover_url, whatsapp_number, field_visibility, created_at,
                    COALESCE(email_verified, FALSE) AS verified
             FROM tenant.users WHERE user_id = cast(:id AS uuid) AND is_active = TRUE
         """), {"id": target_id})).mappings().first()
@@ -952,6 +952,15 @@ async def get_profile(target_id: str, user: dict = Depends(get_current_user)):
                 records_n = (await db.execute(text("SELECT count(*) FROM audit.events WHERE tenant_id = cast(:tid AS uuid)"), {"tid": str(u["tenant_id"])})).scalar() or 0
         except Exception:  # noqa: BLE001
             records_n = 0
+        # Verified-record panel stats — crop runs = production cycles; attestations
+        # has no backing table yet, so honest 0 (never faked). Savepoint-isolated.
+        crop_runs = 0
+        try:
+            async with db.begin_nested():
+                crop_runs = (await db.execute(text("SELECT count(*) FROM tenant.production_cycles WHERE tenant_id = cast(:tid AS uuid)"), {"tid": str(u["tenant_id"])})).scalar() or 0
+        except Exception:  # noqa: BLE001
+            crop_runs = 0
+        attestations = 0
 
         # visible posts
         vprof, _ = await _profile_of(db, viewer)
@@ -978,13 +987,14 @@ async def get_profile(target_id: str, user: dict = Depends(get_current_user)):
             "profession": prof, "role": u["role"],
             "country": (u["country"] if allowed("location") else None),
             "bio": (u["bio"] if allowed("bio") else None),
-            "avatar_url": u["avatar_url"], "verified": u["verified"],
+            "avatar_url": u["avatar_url"], "cover_url": u["cover_url"], "verified": u["verified"],
             "joined": (u["created_at"].isoformat() if (u["created_at"] and allowed("joined")) else None),
             "phone": (u["whatsapp_number"] if allowed("phone") else None),
             "is_you": is_you, "is_following": i_follow, "is_connected": connected,
             "field_visibility": (vis if is_you else None),
             "stats": {"posts": posts_n, "followers": followers_n, "following": following_n,
-                      "records": (records_n if allowed("records") else None)},
+                      "records": (records_n if allowed("records") else None),
+                      "crop_runs": crop_runs, "attestations": attestations},
             "posts": [{**dict(p), "post_id": p["post_id"], "created_at": p["created_at"].isoformat() if p["created_at"] else None} for p in posts],
         }}
 

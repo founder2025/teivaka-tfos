@@ -204,6 +204,7 @@ export default function ProfilePage({ self = false }) {
   const [avatarBroken, setAvatarBroken] = useState(false);
   const [avatarPct, setAvatarPct] = useState(null); // null = idle, 0-100 uploading
   const [cropFile, setCropFile] = useState(null);   // file awaiting crop/reposition
+  const [coverPct, setCoverPct] = useState(null);   // cover upload progress
   const [loadFailed, setLoadFailed] = useState(false);
   const [timedOut, setTimedOut] = useState(false);
   const [retryTick, setRetryTick] = useState(0);
@@ -287,6 +288,19 @@ export default function ProfilePage({ self = false }) {
       load();
     } catch (err) { toast(`Couldn't update photo: ${err.message || err}. Tap the camera to retry.`, "error"); }
     finally { setAvatarPct(null); }
+  };
+  const uploadCover = async (e) => {
+    const file = e.target.files?.[0]; e.target.value = ""; if (!file) return;
+    setCoverPct(0);
+    try {
+      const url = await uploadMedia(file, setCoverPct);
+      const bust = `${url}${url.includes("?") ? "&" : "?"}v=${Date.now()}`;
+      setP((cur) => (cur ? { ...cur, cover_url: bust } : cur));
+      await send("PATCH", "/api/v1/me", { cover_url: url });
+      toast("Cover photo updated ✓", "success");
+      load();
+    } catch (err) { toast(`Couldn't update cover: ${err.message || err}`, "error"); }
+    finally { setCoverPct(null); }
   };
   const toggleFollow = async () => {
     setBusyFollow(true);
@@ -400,6 +414,16 @@ export default function ProfilePage({ self = false }) {
 
       {/* main */}
       <main style={{ width: "100%", minWidth: 0 }}>
+        {/* cover banner */}
+        <div style={{ position: "relative", height: 150, borderRadius: 12, marginBottom: 14, overflow: "hidden", background: p.cover_url ? "#000" : "linear-gradient(120deg, rgba(106,168,79,0.25), rgba(62,123,31,0.35))", border: `1px solid ${C.line}` }}>
+          {p.cover_url && <img src={p.cover_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} onError={(e) => { e.currentTarget.style.display = "none"; }} />}
+          {isYou && !pub && (
+            <label style={{ position: "absolute", right: 10, bottom: 10, display: "inline-flex", alignItems: "center", gap: 6, background: "rgba(255,255,255,0.92)", color: C.soil, border: `1px solid ${C.line}`, borderRadius: 8, padding: "6px 11px", fontSize: 12.5, cursor: "pointer" }}>
+              <Camera size={13} />{coverPct != null ? `${coverPct}%` : (p.cover_url ? "Change cover" : "Add cover")}
+              <input type="file" accept="image/*" hidden onChange={uploadCover} disabled={coverPct != null} />
+            </label>
+          )}
+        </div>
         {/* header */}
         <div style={{ display: "flex", gap: 16, alignItems: "flex-start", flexWrap: "wrap" }}>
           <label style={{ position: "relative", cursor: isYou ? "pointer" : "default", flexShrink: 0 }}>
@@ -452,6 +476,28 @@ export default function ProfilePage({ self = false }) {
 
         {/* tab body */}
         {tab === "overview" && <>
+          {isYou && (() => {
+            const checks = [["Photo", !!p.avatar_url], ["Cover", !!p.cover_url], ["Bio", !!p.bio], ["Phone", !!p.phone], ["Location", !!p.country], ["First post", (p.stats?.posts || 0) > 0]];
+            const done = checks.filter((c) => c[1]).length;
+            const pct = Math.round((done / checks.length) * 100);
+            if (pct >= 100) return null;
+            return (
+              <div style={{ ...card, marginBottom: 14 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                  <strong style={{ color: C.soil }}>Complete your profile</strong>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: C.greenDk }}>{pct}%</span>
+                </div>
+                <div style={{ height: 8, borderRadius: 4, background: "rgba(92,64,51,0.1)", overflow: "hidden", marginBottom: 10 }}>
+                  <div style={{ height: "100%", width: `${pct}%`, background: C.green, transition: "width 250ms ease" }} />
+                </div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                  {checks.filter((c) => !c[1]).map(([label]) => (
+                    <button key={label} onClick={() => setEditing(true)} style={{ fontSize: 11.5, color: C.soil, background: "rgba(92,64,51,0.06)", border: `1px solid ${C.line}`, borderRadius: 999, padding: "4px 10px", cursor: "pointer" }}>+ {label}</button>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
           <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 14 }}>
             <Stat n={p.stats?.posts ?? 0} label="Posts" onClick={() => setTab("posts")} />
             <Stat n={p.stats?.followers ?? 0} label="Followers" />
@@ -464,6 +510,26 @@ export default function ProfilePage({ self = false }) {
             <div style={{ fontSize: 12.5, color: C.muted, marginTop: 4 }}>{p.verified ? "Identity and farm verified. Buyers and lenders can trust this record." : "Verification pending — records remain hash-chained and auditable."}</div>
             <a href="/verify" style={{ display: "inline-flex", gap: 6, alignItems: "center", marginTop: 12, border: `1px solid ${C.line}`, borderRadius: 8, padding: "7px 14px", color: C.soil, textDecoration: "none", fontSize: 13 }}>View</a>
           </div>
+
+          {/* Verified record — what this farmer has built (prototype parity). */}
+          <div style={{ ...card, border: `1px solid ${C.green}`, background: "rgba(106,168,79,0.05)" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+              <Shield size={16} style={{ color: C.greenDk }} />
+              <strong style={{ color: C.greenDk }}>Verified record</strong>
+            </div>
+            <div style={{ fontSize: 12.5, color: C.muted, marginBottom: 12 }}>What this farmer has built — a record buyers and lenders can check.</div>
+            <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+              {[["Logged actions", p.stats?.records ?? 0], ["Crop runs", p.stats?.crop_runs ?? 0], ["Attestations", p.stats?.attestations ?? 0]].map(([k, v]) => (
+                <div key={k} style={{ flex: 1, minWidth: 110, background: "#fff", border: `1px solid ${C.line}`, borderRadius: 10, padding: "12px 14px" }}>
+                  <div style={{ fontSize: 24, fontWeight: 800, color: C.soil }}>{v}</div>
+                  <div style={{ fontSize: 12, color: C.muted }}>{k}</div>
+                </div>
+              ))}
+            </div>
+            <div style={{ fontSize: 12, color: C.muted, margin: "12px 0" }}>✓ Activity is recorded as it happens and can be independently verified.</div>
+            <a href="/verify" style={{ display: "inline-flex", gap: 6, alignItems: "center", background: C.green, color: "#fff", borderRadius: 8, padding: "9px 16px", textDecoration: "none", fontSize: 13.5, fontWeight: 600 }}><Shield size={14} />Verify this record</a>
+          </div>
+
           <div style={card}>
             {[["Farm", p.country ? "All farms" : "All farms"], ["Role", p.role], ["Member since", fmtDate(p.joined)], ["Last active", isYou ? "just now" : "recently"]].map(([k, v]) => (
               <div key={k} style={{ display: "flex", justifyContent: "space-between", padding: "11px 2px", borderBottom: `1px solid ${C.line}`, fontSize: 13.5 }}>

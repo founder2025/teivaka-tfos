@@ -150,10 +150,17 @@ class ProfilePatch(BaseModel):
     account_type: str | None = None
     bio: str | None = None
     avatar_url: str | None = None
+    cover_url: str | None = None
+    unit_mode: str | None = None
+    pref_currency: str | None = None
+    pref_weight: str | None = None
+    pref_area: str | None = None
+    pref_temp: str | None = None
     field_visibility: dict | None = None
 
 
-_EDITABLE = ("full_name", "whatsapp_number", "country", "preferred_language", "account_type", "bio", "avatar_url")
+_EDITABLE = ("full_name", "whatsapp_number", "country", "preferred_language", "account_type", "bio",
+             "avatar_url", "cover_url", "unit_mode", "pref_currency", "pref_weight", "pref_area", "pref_temp")
 _ACCOUNT_TYPES = {"FARMER", "BUYER", "SUPPLIER", "SERVICE_PROVIDER", "BANKER", "BUSINESS", "EXPORTER", "IMPORTER"}
 
 

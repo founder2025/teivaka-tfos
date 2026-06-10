@@ -9,7 +9,92 @@
  * operators get a farm picker in a later phase (filed: Sprint 6+).
  */
 import React, { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
+import { Pencil, Shield, BadgeCheck, FileText, Download, Coins } from "lucide-react";
 import GroupCatalogSection from "../../components/settings/GroupCatalogSection";
+import { getJSON, send } from "../../utils/api";
+
+const toast = (message, type) => { try { window.dispatchEvent(new CustomEvent("tfos:toast", { detail: { message, type } })); } catch { /* noop */ } };
+
+// Prototype "Settings" section links + Money & units (3-mode + per-field selects),
+// persisted to tenant.users via PATCH /me (unit_mode, pref_*).
+function SettingsSections() {
+  const G = { soil: "#5C4033", muted: "#8A8678", line: "#E6E1D6", green: "#3F7427" };
+  const rows = [
+    { to: "/me", Icon: Pencil, label: "Edit profile basics" },
+    { to: "/me", Icon: Shield, label: "Privacy & visibility" },
+    { to: "/verify", Icon: BadgeCheck, label: "Verification" },
+    { to: "/covenant", Icon: FileText, label: "View the Data Covenant" },
+    { to: "/me/data", Icon: Download, label: "Export my data" },
+  ];
+  return (
+    <section style={{ margin: "12px 20px", background: "white", border: `1px solid ${G.line}`, borderRadius: 12, overflow: "hidden" }}>
+      {rows.map((r, i) => (
+        <Link key={r.label} to={r.to} style={{ display: "flex", alignItems: "center", gap: 10, padding: "13px 14px", color: G.soil, textDecoration: "none", borderTop: i ? `1px solid ${G.line}` : "none", fontSize: 14, minHeight: 44 }}>
+          <r.Icon size={16} style={{ color: G.muted }} /> {r.label}
+        </Link>
+      ))}
+    </section>
+  );
+}
+
+const UNIT_OPTS = {
+  pref_currency: [["FJD", "FJD"], ["USD", "USD"], ["AUD", "AUD"], ["NZD", "NZD"], ["PGK", "PGK"], ["WST", "WST"], ["TOP", "TOP"], ["SBD", "SBD"], ["VUV", "VUV"]],
+  pref_weight: [["kg", "Kilograms (kg)"], ["lb", "Pounds (lb)"], ["t", "Tonnes (t)"]],
+  pref_area: [["ha", "Hectares (ha)"], ["ac", "Acres (ac)"], ["m2", "Square metres (m²)"]],
+  pref_temp: [["C", "Celsius (°C)"], ["F", "Fahrenheit (°F)"]],
+};
+
+function MoneyUnits() {
+  const G = { soil: "#5C4033", muted: "#8A8678", line: "#E6E1D6", green: "#6AA84F", greenDk: "#3F7427" };
+  const [mode, setMode] = useState("country");
+  const [vals, setVals] = useState({ pref_currency: "FJD", pref_weight: "kg", pref_area: "ha", pref_temp: "C" });
+  const [loaded, setLoaded] = useState(false);
+  useEffect(() => {
+    getJSON("/api/v1/auth/me").then((r) => {
+      const d = r?.data ?? r;
+      setMode(d.unit_mode || "country");
+      setVals({ pref_currency: d.pref_currency || "FJD", pref_weight: d.pref_weight || "kg", pref_area: d.pref_area || "ha", pref_temp: d.pref_temp || "C" });
+    }).catch(() => {}).finally(() => setLoaded(true));
+  }, []);
+  const saveMode = async (m) => {
+    setMode(m);
+    try { await send("PATCH", "/api/v1/me", { unit_mode: m }); toast("Saved ✓", "success"); }
+    catch (e) { toast(`Couldn't save: ${e.userMessage || e.message}`, "error"); }
+  };
+  const saveField = async (k, v) => {
+    setVals((s) => ({ ...s, [k]: v }));
+    try { await send("PATCH", "/api/v1/me", { [k]: v }); toast("Saved ✓", "success"); }
+    catch (e) { toast(`Couldn't save: ${e.userMessage || e.message}`, "error"); }
+  };
+  const pill = (m, label) => (
+    <button onClick={() => saveMode(m)} style={{ border: `1px solid ${mode === m ? G.greenDk : G.line}`, background: mode === m ? G.green : "#fff", color: mode === m ? "#fff" : G.soil, borderRadius: 999, padding: "7px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer", minHeight: 40 }}>{label}</button>
+  );
+  const sel = { padding: "7px 9px", border: `1px solid ${G.line}`, borderRadius: 8, fontSize: 13.5, minWidth: 150 };
+  return (
+    <section style={{ margin: "12px 20px", background: "white", border: `1px solid ${G.line}`, borderRadius: 12, padding: 16 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}><Coins size={16} style={{ color: G.muted }} /><strong style={{ color: G.soil }}>Money & units</strong></div>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
+        {pill("country", "My country")}{pill("choice", "My choice")}{pill("universal", "Universal")}
+      </div>
+      {mode === "choice" && loaded && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {[["pref_currency", "Money"], ["pref_weight", "Weight"], ["pref_area", "Area"], ["pref_temp", "Temperature"]].map(([k, label]) => (
+            <div key={k} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+              <span style={{ fontSize: 13.5, color: G.soil }}>{label}</span>
+              <select value={vals[k]} onChange={(e) => saveField(k, e.target.value)} style={sel}>
+                {UNIT_OPTS[k].map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+              </select>
+            </div>
+          ))}
+        </div>
+      )}
+      <div style={{ fontSize: 11.5, color: G.muted, marginTop: 12 }}>
+        {mode === "country" ? "Showing your country's defaults." : mode === "universal" ? "Showing universal units (kg · ha · °C)." : "Your chosen units."} Converted money is indicative, not a live exchange rate.
+      </div>
+    </section>
+  );
+}
 
 const C = {
   cream:   "#F8F3E9",
@@ -130,6 +215,8 @@ export default function MeSettings() {
       </header>
 
       <main style={{ padding: "12px 0 80px" }}>
+        <SettingsSections />
+        <MoneyUnits />
         {farmsError && (
           <div style={{
             margin: "12px 20px", padding: 12,
