@@ -151,6 +151,7 @@ class ShareBody(BaseModel):
 async def list_feed(
     filter: str = Query("all"),
     verified_only: bool = Query(False),
+    author: str = Query(None),
     limit: int = Query(30, ge=1, le=100),
     offset: int = Query(0, ge=0),
     user: dict = Depends(get_current_user),
@@ -196,6 +197,9 @@ async def list_feed(
 
         if verified_only:
             where.append("u.email_verified = TRUE")
+        if author:
+            where.append("fp.author_user_id = :author")
+            params["author"] = author
 
         rows = (await db.execute(text(f"""
             SELECT fp.post_id, fp.author_user_id, fp.author_profession, fp.body, fp.post_type,

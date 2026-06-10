@@ -108,7 +108,15 @@ const FarmGallery   = lazy(() => import("./pages/farmer/Gallery"));
 const FarmPartnerships = lazy(() => import("./pages/farmer/Partnerships"));
 const FarmSettings  = lazy(() => import("./pages/farmer/FarmSettings"));
 const InventoryList = lazy(() => import("./pages/farmer/InventoryList"));
-const Me            = lazy(() => import("./pages/farmer/Me"));
+const Me            = lazy(() => import("./pages/me/MeProfile"));
+const Subscription  = lazy(() => import("./pages/me/Subscription"));
+const Referrals     = lazy(() => import("./pages/me/Referrals"));
+const Affiliate     = lazy(() => import("./pages/me/Affiliate"));
+const AffiliateConsole = lazy(() => import("./pages/me/AffiliateConsole"));
+const Team          = lazy(() => import("./pages/me/Team"));
+const ExportData    = lazy(() => import("./pages/me/ExportData"));
+const Covenant      = lazy(() => import("./pages/Covenant"));
+const ControlRoom   = lazy(() => import("./pages/admin/ControlRoom"));
 
 // ── Phase A1 — Solo mode surface (MBI Part 19) ────────────────────────────────
 const SoloShell    = lazy(() => import("./layouts/SoloShell"));
@@ -209,6 +217,9 @@ export default function App() {
           } />
           <Route path="/admin/moderation" element={
             <AdminRoute><Moderation /></AdminRoute>
+          } />
+          <Route path="/admin/control-room" element={
+            <AdminRoute><ControlRoom /></AdminRoute>
           } />
           <Route path="/admin/dev/inputs-sandbox" element={
             <AdminRoute><InputsSandbox /></AdminRoute>
@@ -313,12 +324,14 @@ export default function App() {
             <Route path="/tis/voice"   element={<ComingSoon title="TIS Voice"   phase="5"   />} />
             <Route path="/tis/usage"   element={<ComingSoon title="TIS Usage"   phase="4.3" />} />
 
-            <Route path="/me/settings"      element={<MeSettings />} />
-            <Route path="/me/settings/mode" element={<ComingSoon title="Switch mode"  phase="4.3" />} />
-            <Route path="/me/subscription"  element={<ComingSoon title="Subscription" phase="4.3" />} />
-            <Route path="/me/referrals"     element={<ComingSoon title="Referrals"    phase="4.3" />} />
-            <Route path="/me/team"          element={<ComingSoon title="Team"         phase="4.3" />} />
-            <Route path="/me/data"          element={<ComingSoon title="Export data"  phase="4.3" />} />
+            <Route path="/me/settings"          element={<MeSettings />} />
+            <Route path="/me/subscription"      element={<Subscription />} />
+            <Route path="/me/referrals"         element={<Referrals />} />
+            <Route path="/me/affiliate"         element={<Affiliate />} />
+            <Route path="/me/affiliate/console" element={<AffiliateConsole />} />
+            <Route path="/me/team"              element={<Team />} />
+            <Route path="/me/data"              element={<ExportData />} />
+            <Route path="/covenant"             element={<Covenant />} />
 
             <Route path="/stub/phase-:phaseNum" element={<ComingSoon dynamic />} />
           </Route>

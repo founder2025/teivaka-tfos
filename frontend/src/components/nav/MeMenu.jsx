@@ -79,6 +79,21 @@ export default function MeMenu({ onClose }) {
 
   async function handleSignOut() {
     const token = localStorage.getItem("tfos_access_token");
+    // Best-effort: drop the Web Push subscription so a signed-out device stops receiving pushes.
+    try {
+      if ("serviceWorker" in navigator) {
+        const reg = await navigator.serviceWorker.getRegistration();
+        const sub = reg && (await reg.pushManager.getSubscription());
+        if (sub) {
+          await fetch("/api/v1/community/push/subscribe", {
+            method: "DELETE",
+            headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+            body: JSON.stringify({ endpoint: sub.endpoint, keys: {} }),
+          }).catch(() => {});
+          await sub.unsubscribe().catch(() => {});
+        }
+      }
+    } catch { /* non-critical */ }
     try {
       await fetch("/api/v1/auth/logout", {
         method: "POST",
@@ -164,47 +179,37 @@ export default function MeMenu({ onClose }) {
         {showAdminLink && (
           <li role="none">
             <Link
-              to="/admin"
+              to="/admin/control-room"
               role="menuitem"
               onClick={onClose}
               className="flex items-center gap-3 text-sm"
-              style={{
-                height: 36,
-                padding: "8px 12px",
-                color: C.soil,
-                background: "transparent",
-              }}
+              style={{ height: 36, padding: "8px 12px", color: C.soil, background: "transparent" }}
               onMouseEnter={(e) => { e.currentTarget.style.background = C.hoverBg; }}
               onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
             >
               <Shield size={16} strokeWidth={1.75} />
-              <span className="flex-1">Admin Panel</span>
+              <span className="flex-1">Control Room</span>
             </Link>
           </li>
         )}
-        {ME_MENU_ITEMS.map((item) => {
+        {ME_MENU_ITEMS.filter((it) => !it.gate || (it.gate === "admin" && showAdminLink)).map((item) => {
           const Icon = item.icon;
-          const href = item.phase ? `/stub/phase-${item.phase}` : item.path;
+          const rowStyle = { height: 36, padding: "8px 12px", color: C.soil, background: "transparent" };
+          const hov = {
+            onMouseEnter: (e) => { e.currentTarget.style.background = C.hoverBg; },
+            onMouseLeave: (e) => { e.currentTarget.style.background = "transparent"; },
+          };
           return (
             <li key={item.path} role="none">
-              <Link
-                to={href}
-                role="menuitem"
-                onClick={onClose}
-                className="flex items-center gap-3 text-sm"
-                style={{
-                  height: 36,
-                  padding: "8px 12px",
-                  color: C.soil,
-                  background: "transparent",
-                }}
-                onMouseEnter={(e) => { e.currentTarget.style.background = C.hoverBg; }}
-                onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
-              >
-                <Icon size={16} strokeWidth={1.75} />
-                <span className="flex-1">{item.label}</span>
-                {item.phase && <Lock size={12} style={{ opacity: 0.6 }} />}
-              </Link>
+              {item.external ? (
+                <a href={item.path} role="menuitem" onClick={onClose} className="flex items-center gap-3 text-sm" style={rowStyle} {...hov}>
+                  <Icon size={16} strokeWidth={1.75} /><span className="flex-1">{item.label}</span>
+                </a>
+              ) : (
+                <Link to={item.path} role="menuitem" onClick={onClose} className="flex items-center gap-3 text-sm" style={rowStyle} {...hov}>
+                  <Icon size={16} strokeWidth={1.75} /><span className="flex-1">{item.label}</span>
+                </Link>
+              )}
             </li>
           );
         })}

@@ -16,6 +16,7 @@ import { clearStoredTokens, getCurrentUser } from "../../utils/auth";
 
 const ADMIN_TABS = [
   { path: "/admin",           label: "Dashboard",        icon: "📊" },
+  { path: "/admin/control-room", label: "Control Room",  icon: "🛡️" },
   { path: "/admin/users",     label: "Users",            icon: "👥" },
   { path: "/admin/content",   label: "Content",          icon: "📋" },
   { path: "/admin/analytics", label: "Analytics",        icon: "📈" },

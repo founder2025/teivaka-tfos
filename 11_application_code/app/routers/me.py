@@ -69,3 +69,69 @@ async def get_my_referral(
         "referred_count": int(referred_count),
         "rewards_earned_months": 0,  # placeholder for Phase 3.5b
     }
+
+
+@router.get("/team")
+async def my_team(
+    user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Members on the caller's tenant (real team). Invites land in the workers phase."""
+    rows = (await db.execute(text("""
+        SELECT user_id, full_name, email, role, account_type,
+               COALESCE(is_active, true) AS is_active, created_at
+        FROM tenant.users
+        WHERE tenant_id = :tid
+        ORDER BY created_at ASC
+    """), {"tid": str(user["tenant_id"])})).mappings().all()
+    return {"data": [{
+        "user_id": str(r["user_id"]), "full_name": r["full_name"], "email": r["email"],
+        "role": r["role"], "account_type": r["account_type"], "is_active": r["is_active"],
+        "is_you": str(r["user_id"]) == str(user["user_id"]),
+    } for r in rows]}
+
+
+@router.get("/export")
+async def export_my_data(
+    user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Real, on-demand export of the caller's own data (profile + farms + posts)."""
+    from datetime import datetime, timezone
+    uid = str(user["user_id"])
+    profile = (await db.execute(text("""
+        SELECT user_id, full_name, email, role, account_type, country,
+               preferred_language, whatsapp_number, referral_code, created_at
+        FROM tenant.users WHERE user_id = :uid
+    """), {"uid": uid})).mappings().first()
+    farms = (await db.execute(text("""
+        SELECT farm_id, farm_name, location_island, latitude, longitude, created_at
+        FROM tenant.farms WHERE tenant_id = :tid ORDER BY created_at
+    """), {"tid": str(user["tenant_id"])})).mappings().all()
+    posts = (await db.execute(text("""
+        SELECT post_id, body, audience, created_at
+        FROM community.feed_posts
+        WHERE author_user_id = :uid AND status = 'active'
+        ORDER BY created_at DESC LIMIT 500
+    """), {"uid": uid})).mappings().all()
+
+    def _ser(rows):
+        out = []
+        for r in rows:
+            d = dict(r)
+            for k, v in d.items():
+                if hasattr(v, "isoformat"):
+                    d[k] = v.isoformat()
+                else:
+                    d[k] = str(v) if v is not None and not isinstance(v, (int, float, bool, str)) else v
+            out.append(d)
+        return out
+
+    return {
+        "data": {
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "profile": (_ser([profile])[0] if profile else None),
+            "farms": _ser(farms),
+            "community_posts": _ser(posts),
+        }
+    }

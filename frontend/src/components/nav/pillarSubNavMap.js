@@ -77,12 +77,18 @@ export const PILLAR_SUB_NAV = {
   },
 };
 
+// Avatar dropdown — parity with the prototype. `gate:"admin"` hides from non-admins;
+// `external:true` is a full-page (non-SPA) link. Control Room lives under /admin.
 export const ME_MENU_ITEMS = [
-  { path: "/me",               label: "Profile",      icon: User },
-  { path: "/me/settings",      label: "Settings",     icon: Settings },
-  { path: "/me/settings/mode", label: "Switch mode",  icon: RefreshCw },
-  { path: "/me/subscription",  label: "Subscription", icon: CreditCard },
-  { path: "/me/referrals",     label: "Referrals",    icon: Gift },
-  { path: "/me/team",          label: "Team",         icon: UsersRound, phase: "4.3" },
-  { path: "/me/data",          label: "Export data",  icon: Download },
+  { path: "/me",                   label: "Profile",          icon: User },
+  { path: "/me/settings",          label: "Settings",         icon: Settings },
+  { path: "/me/subscription",      label: "Subscription tier", icon: CreditCard },
+  { path: "/me/referrals",         label: "Referrals",        icon: Gift },
+  { path: "/me/affiliate",         label: "Affiliate program", icon: Award, gate: "admin" },
+  { path: "/me/affiliate/console", label: "Affiliate console", icon: BarChart3, gate: "admin" },
+  { path: "/me/team",              label: "Team",             icon: UsersRound },
+  { path: "/home/saved",           label: "Saved posts",      icon: Bookmark },
+  { path: "/covenant",             label: "View Covenant",    icon: Shield },
+  { path: "/verify",               label: "Verify a record",  icon: CheckSquare, external: true },
+  { path: "/me/data",              label: "Export data",      icon: Download },
 ];
