@@ -66,7 +66,7 @@ function Overlay({ title, onClose, children, foot, maxWidth = 440 }) {
   return (
     // "show" is required: prototype.css hides .overlay-backdrop without it
     // (display:none) — omitting it made every composer modal open invisibly.
-    <div className="overlay-backdrop show" onClick={onClose}>
+    <div className="overlay-backdrop show" style={{ alignItems: "center", padding: 16 }} onClick={onClose}>
       <div className="overlay-modal" style={{ maxWidth }} onClick={(e) => e.stopPropagation()}>
         <div className="overlay-head"><span className="overlay-title">{title}</span><button className="overlay-close" onClick={onClose}><X size={16} /></button></div>
         <div className="overlay-body">{children}</div>

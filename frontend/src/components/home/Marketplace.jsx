@@ -70,7 +70,7 @@ function NewListingModal({ onClose, onCreated }) {
     finally { setBusy(false); }
   };
   return (
-    <div className="overlay-backdrop show" onClick={onClose}>
+    <div className="overlay-backdrop show" style={{ alignItems: "center", padding: 16 }} onClick={onClose}>
       <div className="overlay-modal" style={{ maxWidth: 560, maxHeight: "90vh", overflowY: "auto" }} onClick={(e) => e.stopPropagation()}>
         <div className="overlay-head"><span className="overlay-title">New listing</span><button className="overlay-close" onClick={onClose}><X size={16} /></button></div>
         <div className="overlay-body" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -152,7 +152,7 @@ function ListingDetail({ l, onClose, onChanged }) {
     onClose();
   };
   return (
-    <div className="overlay-backdrop show" onClick={onClose}>
+    <div className="overlay-backdrop show" style={{ alignItems: "center", padding: 16 }} onClick={onClose}>
       <div className="overlay-modal" style={{ maxWidth: 620, maxHeight: "92vh", overflowY: "auto" }} onClick={(e) => e.stopPropagation()}>
         <div className="overlay-head"><span className="overlay-title">{l.listing_title}</span><button className="overlay-close" onClick={onClose}><X size={16} /></button></div>
         <div className="overlay-body">
