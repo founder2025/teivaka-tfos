@@ -34,14 +34,34 @@ echo "   B GET /farms/F001-A0EE/dashboard => HTTP $(code "$TB" /api/v1/farms/F00
 echo "5) ISOLATION — B's cash/tasks/cycles are empty (their own tenant only)"
 echo "   B /tasks => $(authget "$TB" "/api/v1/tasks?limit=3" | head -c 120)"
 
-echo "6) SOCIAL — B posts; A should see it in the country feed"
-PID=$(curl -s -X POST "$BASE/api/v1/community/feed" -H "Authorization: Bearer $TB" -H "Content-Type: application/json" -d '{"body":"Isolation test post from B","audience":"everyone"}' | jqget "['data']['post_id']")
-echo "   B post_id: $PID"
-echo "   A feed contains it? $(authget "$TA" "/api/v1/community/feed?limit=20" | grep -c "$PID") (1 = yes)"
+echo "6) VERIFICATION GATING — fresh accounts are UNVERIFIED; community writes must 403"
+echo "   B POST /community/feed (unverified) => HTTP $(curl -s -o /dev/null -w '%{http_code}' -X POST "$BASE/api/v1/community/feed" -H "Authorization: Bearer $TB" -H "Content-Type: application/json" -d '{"body":"should be blocked - unverified","audience":"everyone"}')"
+echo "   B POST /community/follow/self (unverified) => HTTP $(curl -s -o /dev/null -w '%{http_code}' -X POST "$BASE/api/v1/community/follow/whoever" -H "Authorization: Bearer $TB")"
+echo "   (expect 403 on both — verification gating active. Reads stay open.)"
+echo "   B can STILL read the feed (open) => HTTP $(code "$TB" "/api/v1/community/feed?limit=5")"
 
 echo "7) SOCIAL — chat is connection-gated: B->A before mutual follow should 403"
 AID=$(authget "$TA" /api/v1/auth/me | jqget "['data']['user_id']")
 echo "   B GET chat with A (pre-connect) => HTTP $(code "$TB" "/api/v1/community/chat/with/$AID")"
 echo "   (expect 403 until A and B follow each other)"
 
-echo "DONE. Review: steps 3-5 must show NO operator/other-tenant data; step 6 must show 1; step 7 must be 403."
+echo "8) ACCOUNT DELETION — register C, delete with password, then login must fail"
+C="iso.c.$TS@demo.tv"; reg Cara "$C" FARMER; sleep 1
+TC=$(login "$C")
+echo "   C delete (correct pw) => HTTP $(curl -s -o /dev/null -w '%{http_code}' -X DELETE "$BASE/api/v1/me" -H "Authorization: Bearer $TC" -H "Content-Type: application/json" -d "{\"password\":\"$PW\",\"confirm\":true}")"
+echo "   C re-login after delete (expect EMPTY) => '$(login "$C")'"
+echo "   (expect HTTP 200 on delete, empty token on re-login = account disabled.)"
+
+echo "9) RATE LIMIT — needs a VERIFIED token (gating runs before the limiter)."
+if [ -n "$VTOKEN" ]; then
+  hits=""
+  for i in $(seq 1 12); do
+    hits="$hits$(curl -s -o /dev/null -w '%{http_code} ' -X POST "$BASE/api/v1/community/feed" -H "Authorization: Bearer $VTOKEN" -H "Content-Type: application/json" -d '{"body":"rate-limit probe","audience":"everyone"}')"
+  done
+  echo "   12 rapid posts => $hits"
+  echo "   (expect a 429 once over the 10/min cap.)"
+else
+  echo "   skipped — set VTOKEN=<verified user's access token> to run. 12 rapid posts should yield >=1 HTTP 429."
+fi
+
+echo "DONE. Review: steps 3-5 = NO other-tenant data; step 6 = 403 on writes + 200 on read; step 7 = 403; step 8 = 200 then empty; step 9 = a 429 with VTOKEN."

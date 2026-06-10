@@ -1,5 +1,6 @@
 """Authenticated /me/* endpoints (referral, etc.)."""
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
+from passlib.context import CryptContext
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -7,6 +8,7 @@ from app.db.session import get_db
 from app.middleware.rls import get_current_user
 
 router = APIRouter()
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 LANDING_BASE = "https://teivaka.com"
 
@@ -184,6 +186,63 @@ async def update_me(
     await db.execute(text(f"UPDATE tenant.users SET {', '.join(sets)} WHERE user_id = :uid"), params)
     await db.commit()
     return {"data": {"updated": len(sets)}}
+
+
+class DeleteAccountBody(BaseModel):
+    password: str
+    confirm: bool = False
+
+
+@router.delete("")
+async def delete_my_account(
+    body: DeleteAccountBody,
+    user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Permanently close the caller's account (Covenant / app-store right-to-delete).
+
+    Re-authenticates with the password, then: anonymises all personal data in
+    tenant.users, disables login (is_active=false), and soft-deletes the user's
+    community content. The hash-chained audit ledger (audit.events) is RETAINED —
+    deleting it would break the chain that makes farm records bank-verifiable;
+    those records are de-identified by the user anonymisation above. Farm/tenant
+    business data is out of scope of a single-user deletion.
+    """
+    if not body.confirm:
+        raise HTTPException(status_code=400, detail="Account deletion must be confirmed (confirm=true).")
+    uid = str(user["user_id"])
+    row = (await db.execute(
+        text("SELECT password_hash FROM tenant.users WHERE user_id = :uid"), {"uid": uid},
+    )).first()
+    if not row or not row[0] or not pwd_context.verify(body.password, row[0]):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Password is incorrect.")
+
+    # 1) Anonymise PII + disable login. Email gets a unique tombstone so the
+    #    UNIQUE(email) constraint holds and the address can never be re-used.
+    await db.execute(text("""
+        UPDATE tenant.users SET
+            full_name = 'Deleted user',
+            email = 'deleted+' || :uid || '@deleted.invalid',
+            whatsapp_number = NULL,
+            bio = NULL,
+            avatar_url = NULL,
+            field_visibility = NULL,
+            email_verified = false,
+            is_active = false,
+            password_hash = 'DELETED_ACCOUNT_NO_LOGIN'
+        WHERE user_id = :uid
+    """), {"uid": uid})
+    # 2) Soft-delete community content + sever the social graph (best-effort).
+    await db.execute(text("""
+        UPDATE community.feed_posts SET status = 'deleted', deleted_at = now()
+        WHERE author_user_id = :uid AND status = 'active'
+    """), {"uid": uid})
+    await db.execute(text("""
+        DELETE FROM community.follows
+        WHERE follower_user_id = :uid OR followed_user_id = :uid
+    """), {"uid": uid})
+    await db.commit()
+    return {"data": {"deleted": True}}
 
 
 @router.get("/records")

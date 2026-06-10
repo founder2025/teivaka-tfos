@@ -121,6 +121,7 @@ class AuthMiddleware:
                         u.bio,
                         u.avatar_url,
                         u.field_visibility,
+                        u.email_verified,
                         u.preferred_language,
                         u.whatsapp_number,
                         t.subscription_tier,

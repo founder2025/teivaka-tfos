@@ -37,6 +37,7 @@ import uuid
 
 from app.db.session import get_db, get_rls_db
 from app.middleware.rls import get_current_user
+from app.utils.community_guard import community_write
 
 router = APIRouter()
 
@@ -241,7 +242,7 @@ async def list_feed(
 
 # ----------------------------------------------------------------------------- create / delete
 @router.post("/feed")
-async def create_feed_post(body: PostCreate, user: dict = Depends(get_current_user)):
+async def create_feed_post(body: PostCreate, user: dict = Depends(community_write("post", 10))):
     if not (body.body and body.body.strip()):
         raise HTTPException(status_code=422, detail="Post body is required")
     post_id = _pid()
@@ -365,7 +366,7 @@ async def unreact_post(post_id: str, user: dict = Depends(get_current_user)):
 
 # ----------------------------------------------------------------------------- repost
 @router.post("/feed/{post_id}/repost")
-async def repost(post_id: str, body: RepostBody, user: dict = Depends(get_current_user)):
+async def repost(post_id: str, body: RepostBody, user: dict = Depends(community_write("repost", 10))):
     async with get_rls_db(str(user["tenant_id"])) as db:
         orig = (await db.execute(text("SELECT post_id FROM community.feed_posts WHERE post_id=:pid AND status='active'"),
                                  {"pid": post_id})).first()
@@ -406,7 +407,7 @@ async def unsave_post(post_id: str, user: dict = Depends(get_current_user)):
 
 # ----------------------------------------------------------------------------- share
 @router.post("/feed/{post_id}/share")
-async def share_post(post_id: str, body: ShareBody, user: dict = Depends(get_current_user)):
+async def share_post(post_id: str, body: ShareBody, user: dict = Depends(community_write("share", 15))):
     async with get_rls_db(str(user["tenant_id"])) as db:
         ok = (await db.execute(text("SELECT 1 FROM community.feed_posts WHERE post_id=:pid AND status='active'"),
                                {"pid": post_id})).first()
@@ -463,7 +464,7 @@ async def list_replies(post_id: str, user: dict = Depends(get_current_user)):
 
 
 @router.post("/feed/{post_id}/replies")
-async def add_reply(post_id: str, body: ReplyCreate, user: dict = Depends(get_current_user)):
+async def add_reply(post_id: str, body: ReplyCreate, user: dict = Depends(community_write("reply", 20))):
     if not (body.body and body.body.strip()):
         raise HTTPException(status_code=422, detail="Reply body is required")
     reply_id = _rid()
@@ -522,7 +523,7 @@ async def mark_best_answer(post_id: str, reply_id: str, user: dict = Depends(get
 
 # ----------------------------------------------------------------------------- follow
 @router.post("/follow/{target_user_id}")
-async def follow(target_user_id: str, user: dict = Depends(get_current_user)):
+async def follow(target_user_id: str, user: dict = Depends(community_write("follow", 30))):
     if target_user_id == str(user["user_id"]):
         raise HTTPException(status_code=422, detail="Cannot follow yourself")
     async with get_rls_db(str(user["tenant_id"])) as db:
@@ -655,7 +656,7 @@ async def report_post(post_id: str, body: ReportBody, user: dict = Depends(get_c
 
 # ----------------------------------------------------------------------------- uploads
 @router.post("/uploads")
-async def upload_media(file: UploadFile = File(...), user: dict = Depends(get_current_user)):
+async def upload_media(file: UploadFile = File(...), user: dict = Depends(community_write("upload", 20))):
     """Store an image/short video and return a URL served back through this API
     (Caddy proxies /api/* → API, so no web-server change needed)."""
     ext = pathlib.Path(file.filename or "").suffix.lower()
