@@ -16,6 +16,7 @@ import {
 import { C, getJSON, send, card } from "./_meCommon";
 import { getCurrentUser } from "../../utils/auth";
 import { useChat } from "../../context/ChatContext";
+import { uploadMedia } from "../../utils/imageCompress";
 
 // Loud, non-silent feedback — routed through the shell's Toast. Every write on
 // this page surfaces success/failure here instead of failing quietly.
@@ -198,6 +199,7 @@ export default function ProfilePage({ self = false }) {
   const [records, setRecords] = useState(null);
   const [activity, setActivity] = useState(null);
   const [meData, setMeData] = useState(null);
+  const [avatarBroken, setAvatarBroken] = useState(false);
 
   // resolve own user_id (for /me)
   useEffect(() => {
@@ -240,12 +242,10 @@ export default function ProfilePage({ self = false }) {
   const uploadAvatar = async (e) => {
     const file = e.target.files?.[0]; e.target.value = ""; if (!file) return;
     try {
-      const fd = new FormData(); fd.append("file", file);
-      const t = localStorage.getItem("tfos_access_token");
-      const up = await fetch("/api/v1/community/uploads", { method: "POST", headers: t ? { Authorization: `Bearer ${t}` } : {}, body: fd });
-      if (!up.ok) throw new Error((await up.json().catch(() => ({})))?.detail || `Upload failed (${up.status})`);
-      const url = (await up.json())?.data?.url;
-      if (!url) throw new Error("Upload returned no URL");
+      toast("Uploading photo…");
+      // Compresses client-side first (a 9 MB camera photo becomes ~300 KB).
+      const url = await uploadMedia(file, (pct) => { if (pct === 100) toast("Processing…"); });
+      setAvatarBroken(false);
       setP((cur) => (cur ? { ...cur, avatar_url: url } : cur)); // show it immediately
       await send("PATCH", "/api/v1/me", { avatar_url: url });
       toast("Photo updated ✓", "success");
@@ -264,8 +264,12 @@ export default function ProfilePage({ self = false }) {
 
   const isYou = p.is_you;
   const pub = previewPublic; // own-profile public preview
+  // If the stored avatar URL is dead (e.g. an upload that failed server-side
+  // before the file was written), fall back to the initials circle instead of
+  // the browser's broken-image icon.
   const Avatar = ({ size }) => (
-    p.avatar_url ? <img src={p.avatar_url} alt="" style={{ width: size, height: size, borderRadius: "50%", objectFit: "cover" }} />
+    p.avatar_url && !avatarBroken
+      ? <img src={p.avatar_url} alt="" onError={() => setAvatarBroken(true)} style={{ width: size, height: size, borderRadius: "50%", objectFit: "cover" }} />
       : <span style={{ width: size, height: size, borderRadius: "50%", background: C.green, color: "#fff", fontWeight: 700, fontSize: size * 0.36, display: "flex", alignItems: "center", justifyContent: "center" }}>{initials(p.full_name)}</span>
   );
 
@@ -285,8 +289,8 @@ export default function ProfilePage({ self = false }) {
     if (kind === "photos" || kind === "reels") {
       return <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(150px,1fr))", gap: 8 }}>
         {list.flatMap((x) => (x.photos || []).filter((s) => kind === "reels" ? isVideo(s) : !isVideo(s)).map((s, i) => (
-          kind === "reels" ? <video key={x.post_id + i} src={s} controls style={{ width: "100%", borderRadius: 10, background: "#000" }} />
-            : <img key={x.post_id + i} src={s} alt="" style={{ width: "100%", aspectRatio: "1", objectFit: "cover", borderRadius: 10 }} />
+          kind === "reels" ? <video key={x.post_id + i} src={s} controls preload="metadata" style={{ width: "100%", borderRadius: 10, background: "#000" }} />
+            : <img key={x.post_id + i} src={s} alt="" loading="lazy" decoding="async" style={{ width: "100%", aspectRatio: "1", objectFit: "cover", borderRadius: 10 }} />
         )))}
       </div>;
     }
@@ -294,7 +298,7 @@ export default function ProfilePage({ self = false }) {
       <div style={card} key={x.post_id}>
         <div style={{ fontSize: 11, color: C.muted, marginBottom: 6 }}>{fmtPost(x.created_at)}{x.is_repost ? " · reposted" : ""}{x.audience && x.audience !== "everyone" ? ` · ${x.audience}` : ""}</div>
         <div style={{ fontSize: 14, color: C.soil, lineHeight: 1.55, whiteSpace: "pre-wrap" }}>{x.body}</div>
-        {(x.photos || []).length > 0 && <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(110px,1fr))", gap: 6, marginTop: 8 }}>{x.photos.map((s, i) => isVideo(s) ? <video key={i} src={s} controls style={{ width: "100%", borderRadius: 8 }} /> : <img key={i} src={s} alt="" style={{ width: "100%", borderRadius: 8 }} />)}</div>}
+        {(x.photos || []).length > 0 && <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(110px,1fr))", gap: 6, marginTop: 8 }}>{x.photos.map((s, i) => isVideo(s) ? <video key={i} src={s} controls preload="metadata" style={{ width: "100%", borderRadius: 8 }} /> : <img key={i} src={s} alt="" loading="lazy" decoding="async" style={{ width: "100%", borderRadius: 8 }} />)}</div>}
         <div style={{ fontSize: 11.5, color: C.muted, marginTop: 8 }}>♥ {x.like_count || 0} · 💬 {x.reply_count || 0}</div>
       </div>
     ));

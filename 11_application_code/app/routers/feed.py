@@ -823,12 +823,14 @@ async def upload_media(file: UploadFile = File(...), user: dict = Depends(commun
 
 @router.get("/uploads/{name}")
 async def get_media(name: str):
-    """Public read of an uploaded asset."""
+    """Public read of an uploaded asset. Names are uuid-unique and content never
+    changes at a name, so aggressive immutable caching is safe — repeat views
+    cost zero bytes on Pacific connections."""
     safe = pathlib.Path(name).name  # strip any path traversal
     path = MEDIA_DIR / safe
     if not path.exists():
         raise HTTPException(status_code=404, detail="Not found")
-    return FileResponse(path)
+    return FileResponse(path, headers={"Cache-Control": "public, max-age=31536000, immutable"})
 
 
 # ----------------------------------------------------------------------------- moderation (admin)

@@ -164,14 +164,9 @@ function TopicsModal({ onClose }) {
 }
 
 /* ---------------- composer ---------------- */
-async function uploadFile(f) {
-  const fd = new FormData();
-  fd.append("file", f);
-  const t = localStorage.getItem("tfos_access_token");
-  const r = await fetch(`${API}/uploads`, { method: "POST", headers: t ? { Authorization: `Bearer ${t}` } : {}, body: fd });
-  if (!r.ok) throw new Error((await r.json().catch(() => ({})))?.detail || "Upload failed");
-  return (await r.json())?.data?.url;
-}
+// Upload pipeline: client-side compression + XHR progress (utils/imageCompress).
+// A 9 MB phone photo becomes ~300 KB before it touches the wire.
+import { uploadMedia } from "../../utils/imageCompress";
 
 function MentionPicker({ onPick, onClose }) {
   const [q, setQ] = useState("");
@@ -199,6 +194,7 @@ function Composer({ me, onPosted }) {
   const [draft, setDraft] = useState(BLANK_DRAFT);
   const [busy, setBusy] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [uploadPct, setUploadPct] = useState(0);
   const [modal, setModal] = useState(null);
   const [canGlobal, setCanGlobal] = useState(false);
   const fileRef = useRef();
@@ -211,11 +207,12 @@ function Composer({ me, onPosted }) {
   const set = (k, v) => setDraft((d) => ({ ...d, [k]: v }));
   const pickFile = async (e) => {
     const f = e.target.files?.[0]; e.target.value = ""; if (!f) return;
-    setUploading(true);
+    setUploading(true); setUploadPct(0);
     try {
-      const url = await uploadFile(f);
+      const url = await uploadMedia(f, setUploadPct);
       setDraft((d) => ({ ...d, photos: [...d.photos, { id: Math.random().toString(36).slice(2), url, video: f.type.startsWith("video") }] }));
-    } catch (err) { alert(String(err.message || err)); } finally { setUploading(false); }
+      toast("Photo attached ✓", "success");
+    } catch (err) { toast(`Couldn't upload: ${err.message || err}`, "error"); } finally { setUploading(false); setUploadPct(0); }
   };
   const post = async () => {
     if (!draft.body.trim()) return;
@@ -247,7 +244,7 @@ function Composer({ me, onPosted }) {
         </div>
         <div className="cm-composer-foot">
           <div className="cm-composer-tools">
-            <button className="cm-tool-btn" onClick={() => fileRef.current?.click()} disabled={uploading}><Image size={13} />{uploading ? "Uploading…" : "Photo / Video"}</button>
+            <button className="cm-tool-btn" onClick={() => fileRef.current?.click()} disabled={uploading}><Image size={13} />{uploading ? `Uploading… ${uploadPct}%` : "Photo / Video"}</button>
             <input ref={fileRef} type="file" accept="image/*,video/*" hidden onChange={pickFile} />
             <button className="cm-tool-btn" onClick={() => setModal("place")}><MapPin size={13} />Place</button>
             <button className={`cm-tool-btn ${draft.isQuestion ? "cm-tool-active" : ""}`} onClick={() => set("isQuestion", !draft.isQuestion)}><HelpCircle size={13} />Ask</button>
@@ -481,7 +478,7 @@ function PostCard({ post, me, onChange, onRemoved }) {
         <a className="cm-link-record" href={`/verify/${p.link_audit_hash}`} target="_blank" rel="noreferrer"><Link2 size={12} />Linked record · {p.link_audit_hash}</a>
       )}
       {p.photos?.length > 0 && (
-        <div className="cm-post-photos">{p.photos.map((src, i) => (/\.(mp4|webm|mov)$/i.test(src) ? <video key={i} src={src} controls /> : <img key={i} src={src} alt="" />))}</div>
+        <div className="cm-post-photos">{p.photos.map((src, i) => (/\.(mp4|webm|mov)$/i.test(src) ? <video key={i} src={src} controls preload="metadata" /> : <img key={i} src={src} alt="" loading="lazy" decoding="async" />))}</div>
       )}
 
       {summaryKeys.length > 0 && (
