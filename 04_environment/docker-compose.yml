@@ -67,6 +67,8 @@ services:
     volumes:
       # Mount logs directory for persistent access log storage
       - ../logs:/app/logs
+      # Persist community feed uploads (images/video) across container rebuilds
+      - ../uploads:/app/uploads
     networks:
       - teivaka-network
     depends_on:
