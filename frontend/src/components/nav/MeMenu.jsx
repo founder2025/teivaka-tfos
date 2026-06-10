@@ -4,6 +4,7 @@ import { Lock, LogOut, Shield } from "lucide-react";
 import { ME_MENU_ITEMS } from "./pillarSubNavMap";
 import { getCurrentUser } from "../../utils/auth";
 import { hasRole } from "../../utils/roles";
+import Avatar from "../ui/Avatar";
 
 const C = {
   soil:    "#5C4033",
@@ -135,13 +136,7 @@ export default function MeMenu({ onClose }) {
         className="flex items-center gap-3 px-3 py-3 border-b"
         style={{ borderColor: C.border, background: C.cream }}
       >
-        <span
-          aria-hidden
-          className="rounded-full flex items-center justify-center text-white flex-shrink-0"
-          style={{ width: 40, height: 40, background: C.green, fontSize: 14, fontWeight: 600 }}
-        >
-          {initials}
-        </span>
+        <Avatar src={me?.avatar_url} name={displayName} size={40} fontScale={0.35} />
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             <span className="text-sm font-semibold truncate" style={{ color: C.soil }}>

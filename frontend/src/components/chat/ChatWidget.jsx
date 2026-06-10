@@ -51,10 +51,12 @@ function useIsMobile() {
   return m;
 }
 
-function Avatar({ name, online, size = 36 }) {
+function Avatar({ name, src, online, size = 36 }) {
   return (
     <span style={{ position: "relative", flexShrink: 0 }}>
-      <span style={{ width: size, height: size, borderRadius: "50%", background: C.green, color: "#fff", fontWeight: 700, fontSize: size * 0.36, display: "flex", alignItems: "center", justifyContent: "center" }}>{initials(name)}</span>
+      {src
+        ? <img src={src} alt="" onError={(e) => { e.currentTarget.style.display = "none"; }} style={{ width: size, height: size, borderRadius: "50%", objectFit: "cover" }} />
+        : <span style={{ width: size, height: size, borderRadius: "50%", background: C.green, color: "#fff", fontWeight: 700, fontSize: size * 0.36, display: "flex", alignItems: "center", justifyContent: "center" }}>{initials(name)}</span>}
       {online && <span style={{ position: "absolute", bottom: 0, right: 0, width: size * 0.28, height: size * 0.28, borderRadius: "50%", background: "#4caf50", border: "2px solid #fff" }} />}
     </span>
   );
@@ -144,7 +146,7 @@ function FloatingChat({ conn, index, onClose }) {
     return (
       <div onPointerDown={onDown} title={conn.full_name}
         style={{ position: "fixed", left: st.x, top: st.y, width: 60, height: 60, zIndex: 1200, cursor: "grab", touchAction: "none", userSelect: "none" }}>
-        <Avatar name={conn.full_name} online={conn.online} size={60} />
+        <Avatar name={conn.full_name} src={conn.avatar_url} online={conn.online} size={60} />
         {conn.unread > 0 && <span style={{ position: "absolute", top: -2, right: -2, minWidth: 20, height: 20, padding: "0 5px", borderRadius: 10, background: C.red, color: "#fff", fontSize: 11, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", border: "2px solid #fff" }}>{conn.unread > 9 ? "9+" : conn.unread}</span>}
         <button onClick={(e) => { e.stopPropagation(); onClose(); }} aria-label="Close" style={{ position: "absolute", bottom: -2, right: -2, width: 20, height: 20, borderRadius: "50%", background: "#fff", border: `1px solid ${C.line}`, color: C.muted, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><X size={12} /></button>
       </div>
@@ -153,7 +155,7 @@ function FloatingChat({ conn, index, onClose }) {
   return (
     <div style={{ position: "fixed", left: st.x, top: st.y, width: 320, height: 440, zIndex: 1200, background: "#fff", border: `1px solid ${C.line}`, borderRadius: "12px 12px 8px 8px", boxShadow: "0 12px 34px rgba(0,0,0,0.2)", display: "flex", flexDirection: "column", overflow: "hidden" }}>
       <div onPointerDown={onDown} style={{ display: "flex", alignItems: "center", gap: 8, padding: "9px 10px", borderBottom: `1px solid ${C.line}`, background: C.cream, cursor: "grab", touchAction: "none", userSelect: "none" }}>
-        <Avatar name={conn.full_name} online={conn.online} size={30} />
+        <Avatar name={conn.full_name} src={conn.avatar_url} online={conn.online} size={30} />
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontWeight: 700, fontSize: 13, color: C.soil, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{conn.full_name}</div>
           <div style={{ fontSize: 10.5, color: conn.online ? C.greenDk : C.muted }}>{conn.online ? "Active now" : "Offline"}</div>
@@ -176,7 +178,7 @@ function MobileBubble({ conn, index, onTap, onClose }) {
   const onDown = (e) => { drag.current = { sx: e.clientX, sy: e.clientY, px: p.x, py: p.y, moved: false }; window.addEventListener("pointermove", onMove); window.addEventListener("pointerup", onUp); e.preventDefault(); };
   return (
     <div onPointerDown={onDown} style={{ position: "fixed", left: p.x, top: p.y, width: 60, height: 60, zIndex: 1200, touchAction: "none", userSelect: "none" }}>
-      <Avatar name={conn.full_name} online={conn.online} size={60} />
+      <Avatar name={conn.full_name} src={conn.avatar_url} online={conn.online} size={60} />
       {conn.unread > 0 && <span style={{ position: "absolute", top: -2, right: -2, minWidth: 20, height: 20, padding: "0 5px", borderRadius: 10, background: C.red, color: "#fff", fontSize: 11, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", border: "2px solid #fff" }}>{conn.unread > 9 ? "9+" : conn.unread}</span>}
       <button onClick={(e) => { e.stopPropagation(); onClose(); }} aria-label="Close" style={{ position: "absolute", bottom: -2, right: -2, width: 22, height: 22, borderRadius: "50%", background: "#fff", border: `1px solid ${C.line}`, color: C.muted, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><X size={13} /></button>
     </div>
@@ -256,7 +258,7 @@ export default function ChatWidget() {
         {toasts.map((t) => (
           <button key={t.id} onClick={() => { chat.openWith(t.conn); if (mobile) setMobileExpanded(t.conn.user_id); setToasts((x) => x.filter((y) => y.id !== t.id)); }}
             style={{ display: "flex", gap: 10, alignItems: "center", width: 300, maxWidth: "calc(100vw - 32px)", background: "#fff", border: `1px solid ${C.line}`, borderLeft: `4px solid ${C.green}`, borderRadius: 8, boxShadow: "0 8px 24px rgba(0,0,0,0.16)", padding: "10px 12px", cursor: "pointer", textAlign: "left" }}>
-            <Avatar name={t.conn.full_name} online={t.conn.online} size={32} />
+            <Avatar name={t.conn.full_name} src={t.conn.avatar_url} online={t.conn.online} size={32} />
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontWeight: 700, fontSize: 13, color: C.soil }}>{t.conn.full_name}</div>
               <div style={{ fontSize: 12, color: C.muted, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{t.conn.last_body || "sent you a message"}</div>

@@ -191,7 +191,7 @@ function MentionPicker({ onPick, onClose }) {
         {people == null ? <div className="cm-empty">Loading…</div> : people.length === 0 ? <div className="cm-empty">{q ? "No one you follow matches that." : "You can mention people once you follow them — find people in Directory."}</div> :
           people.map((p) => (
             <button key={p.user_id} className="cm-menu-item" onClick={() => onPick(p.full_name)}>
-              <span className="avatar-circle avatar-cm-reply">{initials(p.full_name)}</span>
+              <Avatar src={p.avatar_url} name={p.full_name} size={30} fontScale={0.4} />
               <span style={{ flex: 1 }}>{p.full_name}</span>
               <span className="cm-prof-badge">{PROF_LABEL[p.profession] || p.profession}</span>
             </button>

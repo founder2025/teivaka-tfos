@@ -10,6 +10,7 @@ import { useNavigate } from "react-router-dom";
 import { Search, X, CornerDownLeft, MessageCircle, UserPlus, UserCheck, BadgeCheck, ArrowRight } from "lucide-react";
 import { PILLAR_SUB_NAV } from "../nav/pillarSubNavMap";
 import { useChat } from "../../context/ChatContext";
+import Avatar from "../ui/Avatar";
 
 const API = "/api/v1/community";
 const tok = () => localStorage.getItem("tfos_access_token");
@@ -153,7 +154,7 @@ export default function SearchPalette({ onClose }) {
     return (
       <Row entry={{ kind: "person", item: p }}>
         <span style={{ position: "relative", flexShrink: 0 }}>
-          <span style={{ width: 32, height: 32, borderRadius: "50%", background: C.green, color: "#fff", fontWeight: 700, fontSize: 12, display: "flex", alignItems: "center", justifyContent: "center" }}>{initials(p.full_name)}</span>
+          <Avatar src={p.avatar_url} name={p.full_name} size={32} fontScale={0.38} />
           {p.online && <span style={{ position: "absolute", bottom: 0, right: 0, width: 10, height: 10, borderRadius: "50%", background: "#4caf50", border: "2px solid #fff" }} />}
         </span>
         <span style={{ flex: 1, minWidth: 0 }}>

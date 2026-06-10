@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { BadgeCheck, MapPin } from "lucide-react";
 import { C, getJSON, card } from "./_meCommon";
+import Avatar from "../../components/ui/Avatar";
 
 const initials = (n) => (n || "?").split(" ").map((s) => s[0]).slice(0, 2).join("").toUpperCase();
 const PROF = { farmer: "Farmer", buyer: "Buyer", supplier: "Supplier", service_provider: "Service Provider", banker: "Banker", business: "Business", exporter: "Exporter", importer: "Importer" };
@@ -25,7 +26,7 @@ export default function MeProfile() {
   return (
     <div style={{ maxWidth: 760, margin: "0 auto", padding: "4px 0" }}>
       <div style={{ ...card, display: "flex", gap: 16, alignItems: "center" }}>
-        <span style={{ width: 64, height: 64, borderRadius: "50%", background: C.green, color: "#fff", fontWeight: 700, fontSize: 24, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{initials(name)}</span>
+        <Avatar src={me?.avatar_url} name={name} size={64} fontScale={0.375} />
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
             <h1 style={{ margin: 0, fontSize: 20, color: C.soil }}>{name}</h1>
