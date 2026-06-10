@@ -91,6 +91,12 @@ async def _notify(db, recipient, actor, ntype, post_id=None, reply_id=None, body
                "pid": post_id, "rid": reply_id, "body": body})
     except Exception:  # noqa: BLE001 — notifications are non-critical
         pass
+    # Web Push for the same event (best-effort; no-op until VAPID configured)
+    try:
+        from app.routers.chat import push_to_user
+        await push_to_user(db, recipient, "Teivaka", body or "New activity", url="/home")
+    except Exception:  # noqa: BLE001
+        pass
 
 
 async def _post_author(db, post_id):
