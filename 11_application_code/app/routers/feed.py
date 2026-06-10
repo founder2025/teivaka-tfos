@@ -824,13 +824,16 @@ async def get_profile(target_id: str, user: dict = Depends(get_current_user)):
         prof = (u["account_type"] or "FARMER").lower()
         return {"data": {
             "user_id": str(u["user_id"]), "full_name": u["full_name"],
-            "profession": prof, "role": u["role"], "country": u["country"],
-            "bio": u["bio"], "avatar_url": u["avatar_url"], "verified": u["verified"],
-            "joined": u["created_at"].isoformat() if u["created_at"] else None,
+            "profession": prof, "role": u["role"],
+            "country": (u["country"] if allowed("location") else None),
+            "bio": (u["bio"] if allowed("bio") else None),
+            "avatar_url": u["avatar_url"], "verified": u["verified"],
+            "joined": (u["created_at"].isoformat() if (u["created_at"] and allowed("joined")) else None),
             "phone": (u["whatsapp_number"] if allowed("phone") else None),
             "is_you": is_you, "is_following": i_follow, "is_connected": connected,
             "field_visibility": (vis if is_you else None),
-            "stats": {"posts": posts_n, "followers": followers_n, "following": following_n, "records": records_n},
+            "stats": {"posts": posts_n, "followers": followers_n, "following": following_n,
+                      "records": (records_n if allowed("records") else None)},
             "posts": [{**dict(p), "post_id": p["post_id"], "created_at": p["created_at"].isoformat() if p["created_at"] else None} for p in posts],
         }}
 

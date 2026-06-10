@@ -53,25 +53,31 @@ function EditModal({ me, onClose, onSaved }) {
   const [f, setF] = useState({
     full_name: me.full_name || "", bio: me.bio || "", whatsapp_number: me.phone || me.whatsapp_number || "",
     country: me.country || "", account_type: (me.profession || "farmer").toUpperCase(),
-    phone_vis: (me.field_visibility?.phone) || "connections",
+  });
+  const fv = me.field_visibility || {};
+  const [vis, setVis] = useState({
+    phone: fv.phone || "connections", joined: fv.joined || "public",
+    location: fv.location || "public", bio: fv.bio || "public", records: fv.records || "public",
   });
   const [busy, setBusy] = useState(false);
   const set = (k, v) => setF({ ...f, [k]: v });
+  const setV = (k, v) => setVis({ ...vis, [k]: v });
   const inp = { width: "100%", padding: "9px 11px", border: `1px solid ${C.line}`, borderRadius: 8, fontSize: 14, boxSizing: "border-box", marginTop: 4 };
+  const VIS_FIELDS = [["phone", "Phone"], ["joined", "Joined date"], ["location", "Location / country"], ["bio", "Bio"], ["records", "Records logged"]];
   const save = async () => {
     setBusy(true);
     try {
       await send("PATCH", "/api/v1/me", {
         full_name: f.full_name, bio: f.bio, whatsapp_number: f.whatsapp_number,
         country: f.country, account_type: f.account_type,
-        field_visibility: { ...(me.field_visibility || {}), phone: f.phone_vis },
+        field_visibility: { ...fv, ...vis },
       });
       onSaved();
     } finally { setBusy(false); }
   };
   return (
     <div onMouseDown={(e) => e.target === e.currentTarget && onClose()} style={{ position: "fixed", inset: 0, zIndex: 3000, background: "rgba(40,30,20,.4)", display: "flex", justifyContent: "center", alignItems: "flex-start", paddingTop: "7vh" }}>
-      <div style={{ width: "min(520px, calc(100vw - 24px))", background: "#fff", border: `1px solid ${C.line}`, borderRadius: 12, maxHeight: "85vh", overflow: "auto" }}>
+      <div style={{ width: "min(540px, calc(100vw - 24px))", background: "#fff", border: `1px solid ${C.line}`, borderRadius: 12, maxHeight: "85vh", overflow: "auto" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 16px", borderBottom: `1px solid ${C.line}` }}>
           <strong style={{ color: C.soil }}>Edit profile</strong>
           <button onClick={onClose} style={{ border: "none", background: "transparent", cursor: "pointer", color: C.muted }}><X size={18} /></button>
@@ -83,10 +89,18 @@ function EditModal({ me, onClose, onSaved }) {
             <label style={{ fontSize: 12, color: C.muted, flex: 1 }}>Phone<input style={inp} value={f.whatsapp_number} onChange={(e) => set("whatsapp_number", e.target.value)} /></label>
             <label style={{ fontSize: 12, color: C.muted, width: 90 }}>Country<input style={inp} maxLength={2} value={f.country} onChange={(e) => set("country", e.target.value.toUpperCase())} /></label>
           </div>
-          <div style={{ display: "flex", gap: 10, marginTop: 12 }}>
-            <label style={{ fontSize: 12, color: C.muted, flex: 1 }}>Profession<select style={inp} value={f.account_type} onChange={(e) => set("account_type", e.target.value)}>{["FARMER", "BUYER", "SUPPLIER", "SERVICE_PROVIDER", "BANKER", "BUSINESS", "EXPORTER", "IMPORTER"].map((t) => <option key={t} value={t}>{PROF[t.toLowerCase()]}</option>)}</select></label>
-            <label style={{ fontSize: 12, color: C.muted, flex: 1 }}>Who can see your phone<select style={inp} value={f.phone_vis} onChange={(e) => set("phone_vis", e.target.value)}><option value="public">Everyone</option><option value="followers">Followers</option><option value="connections">Connections</option><option value="private">Only me</option></select></label>
-          </div>
+          <label style={{ fontSize: 12, color: C.muted, display: "block", marginTop: 12 }}>Profession<select style={inp} value={f.account_type} onChange={(e) => set("account_type", e.target.value)}>{["FARMER", "BUYER", "SUPPLIER", "SERVICE_PROVIDER", "BANKER", "BUSINESS", "EXPORTER", "IMPORTER"].map((t) => <option key={t} value={t}>{PROF[t.toLowerCase()]}</option>)}</select></label>
+
+          <div style={{ marginTop: 18, fontSize: 12.5, fontWeight: 700, color: C.soil }}>Privacy — who can see</div>
+          <div style={{ fontSize: 11, color: C.muted, marginBottom: 8 }}>Everyone · Followers · Connections (mutual) · Only me</div>
+          {VIS_FIELDS.map(([k, label]) => (
+            <div key={k} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+              <span style={{ flex: 1, fontSize: 13, color: C.soil }}>{label}</span>
+              <select value={vis[k]} onChange={(e) => setV(k, e.target.value)} style={{ width: 150, padding: "7px 9px", border: `1px solid ${C.line}`, borderRadius: 8, fontSize: 13 }}>
+                <option value="public">Everyone</option><option value="followers">Followers</option><option value="connections">Connections</option><option value="private">Only me</option>
+              </select>
+            </div>
+          ))}
         </div>
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, padding: "12px 16px", borderTop: `1px solid ${C.line}` }}>
           <button onClick={onClose} style={{ border: `1px solid ${C.line}`, background: "#fff", borderRadius: 8, padding: "9px 14px", cursor: "pointer" }}>Cancel</button>
@@ -250,7 +264,7 @@ export default function ProfilePage({ self = false }) {
             <Stat n={p.stats?.posts ?? 0} label="Posts" onClick={() => setTab("posts")} />
             <Stat n={p.stats?.followers ?? 0} label="Followers" />
             <Stat n={p.stats?.following ?? 0} label="Following" />
-            <Stat n={p.stats?.records ?? 0} label="Records logged" onClick={isYou ? () => setTab("records") : undefined} />
+            <Stat n={p.stats?.records ?? "—"} label="Records logged" onClick={isYou ? () => setTab("records") : undefined} />
           </div>
           <div style={{ ...card, textAlign: "center", padding: "22px 16px" }}>
             <Shield size={26} style={{ color: p.verified ? C.green : C.muted }} />
