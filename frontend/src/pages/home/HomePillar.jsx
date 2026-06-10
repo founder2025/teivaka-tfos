@@ -19,7 +19,6 @@ import {
 import TfpShell from "../../components/farm/TfpShell";
 import MarketIntelligence from "../../components/home/MarketIntelligence";
 import FeedView from "../../components/home/FeedView";
-import MarketSnapshot from "../../components/home/MarketSnapshot";
 import WeatherStrip from "../../components/home/WeatherStrip";
 import Directory from "../../components/home/Directory";
 import "../../styles/feed.css";
@@ -114,7 +113,6 @@ export default function HomePillar() {
     body = (
       <>
         <WeatherStrip />
-        <MarketSnapshot onOpenMarket={() => navigate("/home/marketplace")} />
         <FeedView initialFilter="all" />
       </>
     );
