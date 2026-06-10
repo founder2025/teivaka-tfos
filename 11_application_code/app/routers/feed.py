@@ -121,7 +121,9 @@ class PostCreate(BaseModel):
 
 
 class PostEdit(BaseModel):
-    body: str
+    body: Optional[str] = None
+    audience: Optional[str] = None
+    comments_enabled: Optional[bool] = None
 
 
 class ReportBody(BaseModel):
@@ -202,10 +204,17 @@ async def list_feed(
             where.append("fp.author_user_id = :author")
             params["author"] = author
 
+        # viewer-level suppression: per-post hide, muted authors, two-way blocks
+        where.append("NOT EXISTS (SELECT 1 FROM community.feed_hidden h WHERE h.post_id = fp.post_id AND h.user_id = :uid)")
+        where.append("fp.author_user_id NOT IN (SELECT muted_user_id FROM community.user_mutes WHERE user_id = :uid)")
+        where.append("fp.author_user_id NOT IN (SELECT blocked_user_id FROM community.user_blocks WHERE user_id = :uid)")
+        where.append("NOT EXISTS (SELECT 1 FROM community.user_blocks b WHERE b.user_id = fp.author_user_id AND b.blocked_user_id = :uid)")
+
         rows = (await db.execute(text(f"""
             SELECT fp.post_id, fp.author_user_id, fp.author_profession, fp.body, fp.post_type,
                    fp.is_question, fp.audience, fp.location, fp.vertical, fp.photos, fp.mentions,
                    fp.link_audit_hash, fp.is_repost, fp.repost_of_id, fp.pinned,
+                   fp.comments_enabled,
                    fp.best_answer_reply_id, fp.audit_hash, fp.created_at, fp.edited_at,
                    u.full_name AS author_name, COALESCE(u.email_verified, FALSE) AS author_verified,
                    orig.body AS repost_body, ou.full_name AS repost_author_name,
@@ -295,16 +304,81 @@ async def create_feed_post(body: PostCreate, user: dict = Depends(community_writ
 
 @router.patch("/feed/{post_id}")
 async def edit_feed_post(post_id: str, body: PostEdit, user: dict = Depends(get_current_user)):
-    if not (body.body and body.body.strip()):
-        raise HTTPException(status_code=422, detail="Post body is required")
+    """Partial edit of own post — body, audience, and/or comments on/off."""
+    sets, params = [], {"pid": post_id, "uid": str(user["user_id"])}
+    if body.body is not None:
+        if not body.body.strip():
+            raise HTTPException(status_code=422, detail="Post body cannot be empty")
+        sets.append("body = :body"); params["body"] = body.body.strip()
+        sets.append("edited_at = now()")
+    if body.audience is not None:
+        if body.audience not in _AUDIENCES:
+            raise HTTPException(status_code=422, detail="Invalid audience")
+        sets.append("audience = :audience"); params["audience"] = body.audience
+    if body.comments_enabled is not None:
+        sets.append("comments_enabled = :ce"); params["ce"] = body.comments_enabled
+    if not sets:
+        return {"data": {"post_id": post_id, "edited": False}}
     async with get_rls_db(str(user["tenant_id"])) as db:
-        res = await db.execute(text("""
-            UPDATE community.feed_posts SET body = :body, edited_at = now()
-            WHERE post_id = :pid AND author_user_id = :uid AND status = 'active'
-        """), {"body": body.body.strip(), "pid": post_id, "uid": str(user["user_id"])})
+        res = await db.execute(text(f"""
+            UPDATE community.feed_posts SET {', '.join(sets)}
+            WHERE post_id = :pid AND author_user_id = :uid AND status IN ('active','hidden')
+        """), params)
         if res.rowcount == 0:
             raise HTTPException(status_code=404, detail="Post not found or not yours")
     return {"data": {"post_id": post_id, "edited": True}}
+
+
+@router.post("/feed/{post_id}/pin")
+async def toggle_pin(post_id: str, user: dict = Depends(get_current_user)):
+    """Pin/unpin own post (pinned posts sort first on the feed + profile)."""
+    async with get_rls_db(str(user["tenant_id"])) as db:
+        row = (await db.execute(text("""
+            UPDATE community.feed_posts SET pinned = NOT pinned
+            WHERE post_id = :pid AND author_user_id = :uid AND status = 'active'
+            RETURNING pinned
+        """), {"pid": post_id, "uid": str(user["user_id"])})).first()
+        if not row:
+            raise HTTPException(status_code=404, detail="Post not found or not yours")
+    return {"data": {"post_id": post_id, "pinned": row[0]}}
+
+
+@router.post("/feed/{post_id}/archive")
+async def archive_post(post_id: str, user: dict = Depends(get_current_user)):
+    """Hide own post from the feed without deleting it (status=hidden)."""
+    async with get_rls_db(str(user["tenant_id"])) as db:
+        res = await db.execute(text("UPDATE community.feed_posts SET status='hidden' WHERE post_id=:pid AND author_user_id=:uid AND status='active'"),
+                               {"pid": post_id, "uid": str(user["user_id"])})
+        if res.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Post not found or not yours")
+    return {"data": {"post_id": post_id, "status": "hidden"}}
+
+
+@router.post("/feed/{post_id}/unarchive")
+async def unarchive_post(post_id: str, user: dict = Depends(get_current_user)):
+    async with get_rls_db(str(user["tenant_id"])) as db:
+        res = await db.execute(text("UPDATE community.feed_posts SET status='active' WHERE post_id=:pid AND author_user_id=:uid AND status='hidden'"),
+                               {"pid": post_id, "uid": str(user["user_id"])})
+        if res.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Post not found or not yours")
+    return {"data": {"post_id": post_id, "status": "active"}}
+
+
+@router.post("/feed/{post_id}/hide-for-me")
+async def hide_for_me(post_id: str, user: dict = Depends(get_current_user)):
+    """Per-viewer hide ("show fewer like this") — removes it from MY feed only."""
+    async with get_rls_db(str(user["tenant_id"])) as db:
+        await db.execute(text("INSERT INTO community.feed_hidden (post_id, user_id) VALUES (:pid,:uid) ON CONFLICT DO NOTHING"),
+                         {"pid": post_id, "uid": str(user["user_id"])})
+    return {"data": {"post_id": post_id, "hidden": True}}
+
+
+@router.delete("/feed/{post_id}/hide-for-me")
+async def unhide_for_me(post_id: str, user: dict = Depends(get_current_user)):
+    async with get_rls_db(str(user["tenant_id"])) as db:
+        await db.execute(text("DELETE FROM community.feed_hidden WHERE post_id=:pid AND user_id=:uid"),
+                         {"pid": post_id, "uid": str(user["user_id"])})
+    return {"data": {"post_id": post_id, "hidden": False}}
 
 
 @router.delete("/feed/{post_id}")
@@ -469,10 +543,12 @@ async def add_reply(post_id: str, body: ReplyCreate, user: dict = Depends(commun
         raise HTTPException(status_code=422, detail="Reply body is required")
     reply_id = _rid()
     async with get_rls_db(str(user["tenant_id"])) as db:
-        ok = (await db.execute(text("SELECT 1 FROM community.feed_posts WHERE post_id=:pid AND status='active'"),
-                               {"pid": post_id})).first()
-        if not ok:
+        prow = (await db.execute(text("SELECT comments_enabled FROM community.feed_posts WHERE post_id=:pid AND status='active'"),
+                                 {"pid": post_id})).first()
+        if not prow:
             raise HTTPException(status_code=404, detail="Post not found")
+        if prow[0] is False:
+            raise HTTPException(status_code=403, detail="Comments are turned off for this post")
         prof = await _profession_of(db, user["user_id"])
         await db.execute(text("""
             INSERT INTO community.feed_replies
@@ -542,6 +618,47 @@ async def unfollow(target_user_id: str, user: dict = Depends(get_current_user)):
         await db.execute(text("DELETE FROM community.follows WHERE follower_user_id=:me AND followed_user_id=:them"),
                          {"me": str(user["user_id"]), "them": target_user_id})
     return {"data": {"following": None}}
+
+
+# ----------------------------------------------------------------------------- mute / block
+@router.post("/mute/{target_user_id}")
+async def mute_user(target_user_id: str, user: dict = Depends(get_current_user)):
+    """Hide an author's posts from MY feed (I stay following them)."""
+    if target_user_id == str(user["user_id"]):
+        raise HTTPException(status_code=400, detail="You can't mute yourself")
+    async with get_rls_db(str(user["tenant_id"])) as db:
+        await db.execute(text("INSERT INTO community.user_mutes (user_id, muted_user_id) VALUES (:uid,:t) ON CONFLICT DO NOTHING"),
+                         {"uid": str(user["user_id"]), "t": target_user_id})
+    return {"data": {"muted": target_user_id}}
+
+
+@router.delete("/mute/{target_user_id}")
+async def unmute_user(target_user_id: str, user: dict = Depends(get_current_user)):
+    async with get_rls_db(str(user["tenant_id"])) as db:
+        await db.execute(text("DELETE FROM community.user_mutes WHERE user_id=:uid AND muted_user_id=:t"),
+                         {"uid": str(user["user_id"]), "t": target_user_id})
+    return {"data": {"muted": None}}
+
+
+@router.post("/block/{target_user_id}")
+async def block_user(target_user_id: str, user: dict = Depends(get_current_user)):
+    """Two-way block: neither of us sees the other's posts. Also drops any follow edges."""
+    if target_user_id == str(user["user_id"]):
+        raise HTTPException(status_code=400, detail="You can't block yourself")
+    async with get_rls_db(str(user["tenant_id"])) as db:
+        await db.execute(text("INSERT INTO community.user_blocks (user_id, blocked_user_id) VALUES (:uid,:t) ON CONFLICT DO NOTHING"),
+                         {"uid": str(user["user_id"]), "t": target_user_id})
+        await db.execute(text("DELETE FROM community.follows WHERE (follower_user_id=:uid AND followed_user_id=:t) OR (follower_user_id=:t AND followed_user_id=:uid)"),
+                         {"uid": str(user["user_id"]), "t": target_user_id})
+    return {"data": {"blocked": target_user_id}}
+
+
+@router.delete("/block/{target_user_id}")
+async def unblock_user(target_user_id: str, user: dict = Depends(get_current_user)):
+    async with get_rls_db(str(user["tenant_id"])) as db:
+        await db.execute(text("DELETE FROM community.user_blocks WHERE user_id=:uid AND blocked_user_id=:t"),
+                         {"uid": str(user["user_id"]), "t": target_user_id})
+    return {"data": {"blocked": None}}
 
 
 # ----------------------------------------------------------------------------- people

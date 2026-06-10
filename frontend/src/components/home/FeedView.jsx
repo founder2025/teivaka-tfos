@@ -11,6 +11,7 @@ import {
   Image, MapPin, HelpCircle, Link2, Send, Star, MessageSquare, Repeat2, Share2,
   Smile, MoreHorizontal, Trash2, Check, BadgeCheck, X, Leaf, ShoppingBag, Gift,
   Droplet, BookOpen, Rss, UserPlus, UserCheck, Pencil, Flag,
+  Pin, Archive, Copy, EyeOff, Ban, BellOff, Bookmark, Users,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { getCurrentUser } from "../../utils/auth";
@@ -23,9 +24,20 @@ function authHeaders() {
 async function getJSON(u) { const r = await fetch(u, { headers: authHeaders() }); if (!r.ok) throw new Error(String(r.status)); return r.json(); }
 async function send(method, u, body) {
   const r = await fetch(u, { method, headers: authHeaders(), body: body ? JSON.stringify(body) : undefined });
-  if (!r.ok) throw new Error((await r.json().catch(() => ({})))?.detail || String(r.status));
+  if (!r.ok) {
+    const detail = (await r.json().catch(() => ({})))?.detail;
+    const err = new Error(detail || String(r.status));
+    err.status = r.status;
+    throw err;
+  }
   return r.json().catch(() => ({}));
 }
+// Loud feedback — routed through the shell Toast. No silent failures.
+const toast = (message, type) => {
+  try { window.dispatchEvent(new CustomEvent("tfos:toast", { detail: { message, type } })); }
+  catch { /* noop */ }
+};
+const AUDIENCE_LABELS = { everyone: "Everyone", followers: "Your followers", farmer: "Farmers", buyer: "Buyers", banker: "Bankers", business: "Business", service_provider: "Service Providers" };
 
 const REACTIONS = [
   { key: "strong_crop", label: "Strong crop", Icon: Leaf },
@@ -333,13 +345,19 @@ function PostCard({ post, me, onChange, onRemoved }) {
   const [editing, setEditing] = useState(false);
   const [editText, setEditText] = useState(post.body);
   const [reporting, setReporting] = useState(false);
+  const [audienceOpen, setAudienceOpen] = useState(false);
   useEffect(() => { setP(post); setEditText(post.body); }, [post]);
   const mine = p.author_user_id === me?.user_id;
 
   const saveEdit = async () => {
     if (!editText.trim()) return;
-    try { await send("PATCH", `${API}/feed/${p.post_id}`, { body: editText.trim() }); setP({ ...p, body: editText.trim(), edited_at: new Date().toISOString() }); setEditing(false); }
-    catch (e) { alert(String(e.message || e)); }
+    try { await send("PATCH", `${API}/feed/${p.post_id}`, { body: editText.trim() }); setP({ ...p, body: editText.trim(), edited_at: new Date().toISOString() }); setEditing(false); toast("Post updated ✓", "success"); }
+    catch (e) { toast(`Couldn't update: ${e.message || e}`, "error"); }
+  };
+  const saveAudience = async (aud) => {
+    setAudienceOpen(false);
+    try { await send("PATCH", `${API}/feed/${p.post_id}`, { audience: aud }); setP({ ...p, audience: aud }); toast("Audience updated ✓", "success"); }
+    catch (e) { toast(`Couldn't update audience: ${e.message || e}`, "error"); }
   };
 
   const toggleLike = async () => {
@@ -358,10 +376,38 @@ function PostCard({ post, me, onChange, onRemoved }) {
   };
   const toggleSave = async () => {
     const saved = !p.saved; setP({ ...p, saved });
-    try { await send(saved ? "POST" : "DELETE", `${API}/feed/${p.post_id}/save`); } catch { setP(p); }
+    try { await send(saved ? "POST" : "DELETE", `${API}/feed/${p.post_id}/save`); toast(saved ? "Saved ✓" : "Removed from saved", "success"); }
+    catch (e) { setP(p); toast(`Couldn't ${saved ? "save" : "unsave"}: ${e.message || e}`, "error"); }
   };
-  const repost = async () => { await send("POST", `${API}/feed/${p.post_id}/repost`, {}); onChange?.(); };
-  const del = async () => { setMenu(false); await send("DELETE", `${API}/feed/${p.post_id}`); onRemoved?.(p.post_id); };
+  const repost = async () => {
+    try { await send("POST", `${API}/feed/${p.post_id}/repost`, {}); toast("Reposted ✓", "success"); onChange?.(); }
+    catch (e) { toast(`Couldn't repost: ${e.message || e}`, "error"); }
+  };
+  const del = async () => {
+    setMenu(false);
+    try { await send("DELETE", `${API}/feed/${p.post_id}`); toast("Post deleted", "success"); onRemoved?.(p.post_id); }
+    catch (e) { toast(`Couldn't delete: ${e.message || e}`, "error"); }
+  };
+
+  // ---- three-dot menu actions (each loud + persists) ----
+  const closeMenu = () => setMenu(false);
+  const run = async (fn, ok, errPrefix) => {
+    try { await fn(); if (ok) toast(ok, "success"); }
+    catch (e) { toast(`${errPrefix}: ${e.message || e}`, "error"); }
+  };
+  const copyLink = () => {
+    closeMenu();
+    const url = `${window.location.origin}/home?post=${p.post_id}`;
+    if (navigator.clipboard?.writeText) navigator.clipboard.writeText(url).then(() => toast("Link copied ✓", "success")).catch(() => toast(url));
+    else toast(url);
+  };
+  const pin = () => { closeMenu(); run(async () => { const r = await send("POST", `${API}/feed/${p.post_id}/pin`); setP({ ...p, pinned: r?.data?.pinned }); }, p.pinned ? "Unpinned" : "Pinned ✓", "Couldn't pin"); };
+  const archive = () => { closeMenu(); run(async () => { await send("POST", `${API}/feed/${p.post_id}/archive`); onRemoved?.(p.post_id); }, "Post hidden from your feed", "Couldn't hide"); };
+  const toggleComments = () => { closeMenu(); const next = p.comments_enabled === false; run(async () => { await send("PATCH", `${API}/feed/${p.post_id}`, { comments_enabled: next }); setP({ ...p, comments_enabled: next }); }, next ? "Comments turned on ✓" : "Comments turned off", "Couldn't update"); };
+  const hideForMe = () => { closeMenu(); run(async () => { await send("POST", `${API}/feed/${p.post_id}/hide-for-me`); onRemoved?.(p.post_id); }, "We'll show fewer like this", "Couldn't hide"); };
+  const muteAuthor = () => { closeMenu(); run(async () => { await send("POST", `${API}/mute/${p.author_user_id}`); onRemoved?.(p.post_id); }, `Muted ${p.author_name}`, "Couldn't mute"); };
+  const blockAuthor = () => { closeMenu(); run(async () => { await send("POST", `${API}/block/${p.author_user_id}`); onRemoved?.(p.post_id); }, `Blocked ${p.author_name}`, "Couldn't block"); };
+  const saveFromMenu = () => { closeMenu(); toggleSave(); };
 
   const summaryKeys = Object.keys(p.reactions || {}).filter((k) => p.reactions[k] > 0);
   return (
@@ -378,21 +424,36 @@ function PostCard({ post, me, onChange, onRemoved }) {
             <span className="cm-prof-badge">{PROF_LABEL[p.author_profession] || p.author_profession}</span>
             {p.is_question && <span className="cm-prof-badge" style={{ background: "rgba(191,144,0,0.14)", color: "var(--amber,#bf9000)" }}><HelpCircle size={10} /> Question</span>}
           </div>
-          <div className="cm-post-meta">{fmtTime(p.created_at)}{p.location ? ` · ${p.location}` : ""}{p.vertical ? ` · ${p.vertical}` : ""}</div>
+          <div className="cm-post-meta">{fmtTime(p.created_at)}{p.location ? ` · ${p.location}` : ""}{p.vertical ? ` · ${p.vertical}` : ""}{p.pinned ? " · 📌 Pinned" : ""}</div>
         </div>
         <div className="cm-post-head-actions">
           <button className="cm-post-menu-btn" onClick={() => setMenu(!menu)}><MoreHorizontal size={16} /></button>
           {menu && (
-            <div className="cm-post-menu-modal">
-              {mine ? (
-                <>
-                  <button className="cm-menu-item" onClick={() => { setMenu(false); setEditing(true); }}><Pencil size={14} />Edit post</button>
-                  <button className="cm-menu-item cm-menu-danger" onClick={del}><Trash2 size={14} />Delete post</button>
-                </>
-              ) : (
-                <button className="cm-menu-item cm-menu-danger" onClick={() => { setMenu(false); setReporting(true); }}><Flag size={14} />Report post</button>
-              )}
-            </div>
+            <>
+              <div onClick={closeMenu} style={{ position: "fixed", inset: 0, zIndex: 40 }} aria-hidden />
+              <div className="cm-post-menu-modal" style={{ zIndex: 41 }}>
+                {mine ? (
+                  <>
+                    <button className="cm-menu-item" onClick={() => { setMenu(false); setEditing(true); }}><Pencil size={14} />Edit post</button>
+                    <button className="cm-menu-item" onClick={() => { setMenu(false); setAudienceOpen(true); }}><Users size={14} />Edit audience</button>
+                    <button className="cm-menu-item" onClick={pin}><Pin size={14} />{p.pinned ? "Unpin from profile" : "Pin to profile"}</button>
+                    <button className="cm-menu-item" onClick={toggleComments}><MessageSquare size={14} />{p.comments_enabled === false ? "Turn comments on" : "Turn comments off"}</button>
+                    <button className="cm-menu-item" onClick={copyLink}><Copy size={14} />Copy link</button>
+                    <button className="cm-menu-item" onClick={archive}><Archive size={14} />Hide from my feed</button>
+                    <button className="cm-menu-item cm-menu-danger" onClick={del}><Trash2 size={14} />Delete post</button>
+                  </>
+                ) : (
+                  <>
+                    <button className="cm-menu-item" onClick={saveFromMenu}><Bookmark size={14} />{p.saved ? "Unsave" : "Save post"}</button>
+                    <button className="cm-menu-item" onClick={copyLink}><Copy size={14} />Copy link</button>
+                    <button className="cm-menu-item" onClick={hideForMe}><EyeOff size={14} />Hide — show fewer like this</button>
+                    <button className="cm-menu-item" onClick={muteAuthor}><BellOff size={14} />Mute {p.author_name}</button>
+                    <button className="cm-menu-item cm-menu-danger" onClick={blockAuthor}><Ban size={14} />Block {p.author_name}</button>
+                    <button className="cm-menu-item cm-menu-danger" onClick={() => { setMenu(false); setReporting(true); }}><Flag size={14} />Report post</button>
+                  </>
+                )}
+              </div>
+            </>
           )}
         </div>
       </div>
@@ -431,7 +492,9 @@ function PostCard({ post, me, onChange, onRemoved }) {
 
       <div className="cm-post-actions">
         <button className={`cm-action-btn ${p.liked ? "cm-action-active" : ""}`} onClick={toggleLike}><Star size={13} />Like · {p.like_count || 0}</button>
-        <button className="cm-action-btn" onClick={() => setShowReplies(!showReplies)}><MessageSquare size={13} />Reply · {p.reply_count || 0}</button>
+        {p.comments_enabled === false
+          ? <button className="cm-action-btn" disabled title="Comments are turned off" style={{ opacity: 0.5, cursor: "default" }}><MessageSquare size={13} />Comments off</button>
+          : <button className="cm-action-btn" onClick={() => setShowReplies(!showReplies)}><MessageSquare size={13} />Reply · {p.reply_count || 0}</button>}
         <button className="cm-action-btn" onClick={repost}><Repeat2 size={13} />Repost{p.repost_count ? ` · ${p.repost_count}` : ""}</button>
         <button className="cm-action-btn" onClick={() => setShare(true)}><Share2 size={13} />Share</button>
         <button className={`cm-action-btn ${p.my_reaction ? "cm-action-active" : ""}`} onClick={() => setShowTray(!showTray)}><Smile size={13} />{p.my_reaction ? (RX[p.my_reaction]?.label || "Reacted") : "React"}</button>
@@ -448,6 +511,18 @@ function PostCard({ post, me, onChange, onRemoved }) {
 
       {share && <ShareModal post={p} onClose={() => setShare(false)} onShared={(u) => { setShare(false); }} />}
       {reporting && <ReportModal post={p} onClose={() => setReporting(false)} />}
+      {audienceOpen && (
+        <Overlay title="Edit audience" onClose={() => setAudienceOpen(false)}>
+          <p style={{ fontSize: 12.5, color: "var(--muted)", marginTop: 0 }}>Who can see this post?</p>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            {AUDIENCES.map(([v, l]) => (
+              <button key={v} className="cm-menu-item" style={{ borderColor: p.audience === v ? "var(--green)" : "var(--line)", justifyContent: "space-between" }} onClick={() => saveAudience(v)}>
+                <span>{l}</span>{p.audience === v && <Check size={14} className="cm-verified-tick" />}
+              </button>
+            ))}
+          </div>
+        </Overlay>
+      )}
     </div>
   );
 }
