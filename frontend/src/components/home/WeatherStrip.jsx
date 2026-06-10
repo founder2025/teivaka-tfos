@@ -36,6 +36,7 @@ export default function WeatherStrip() {
   const [hourly, setHourly] = useState(null);
   const [daily, setDaily] = useState(null);
   const [tab, setTab] = useState("hourly");
+  const [expanded, setExpanded] = useState(false);
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
@@ -82,7 +83,18 @@ export default function WeatherStrip() {
   );
 
   return (
-    <div className="card" style={{ marginBottom: 16 }}>
+    <div className="card" style={{ marginBottom: 16, padding: expanded ? undefined : "10px 14px" }}>
+      {/* compact card (default): one neat row — tap to expand the full forecast */}
+      {!expanded ? (
+        <button onClick={() => setExpanded(true)} style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", background: "transparent", border: "none", cursor: "pointer", textAlign: "left", padding: 0 }}>
+          {now && <now.Icon size={28} style={{ color: "var(--green-dk)", flexShrink: 0 }} />}
+          <span style={{ fontSize: 20, fontWeight: 800, color: "var(--soil)" }}>{cur ? t1(cur.temp_c) : "—"}</span>
+          <span style={{ fontSize: 12.5, color: "var(--muted)" }}>{now ? now.label : "Weather"}</span>
+          {wetWeek && <span style={{ fontSize: 11.5, color: "var(--green-dk)", fontWeight: 600, marginLeft: 4, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>☔ {Math.round(rain7)} mm this week — plan sprays</span>}
+          <span style={{ marginLeft: "auto", fontSize: 11.5, color: "var(--green-dk)", display: "inline-flex", alignItems: "center", gap: 3, flexShrink: 0 }}>Forecast <ArrowRight size={12} /></span>
+        </button>
+      ) : (
+      <>
       {/* now header */}
       <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap", marginBottom: 10 }}>
         {now && (
@@ -147,7 +159,12 @@ export default function WeatherStrip() {
           <span><strong>{Math.round(rain7)} mm rain forecast this week.</strong> Plan sprays around it — wet weather holds chemical applications and can delay harvest.</span>
         </div>
       )}
-      <div style={{ fontSize: 10, color: "var(--muted)", marginTop: 8, textAlign: "right" }}>{fetchedNote} · Open-Meteo</div>
+      <div style={{ display: "flex", alignItems: "center", marginTop: 8 }}>
+        <button onClick={() => setExpanded(false)} style={{ fontSize: 11, color: "var(--muted)", background: "transparent", border: "none", cursor: "pointer", padding: 0 }}>Collapse ▲</button>
+        <div style={{ fontSize: 10, color: "var(--muted)", marginLeft: "auto" }}>{fetchedNote} · Open-Meteo</div>
+      </div>
+      </>
+      )}
     </div>
   );
 }

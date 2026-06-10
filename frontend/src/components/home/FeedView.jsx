@@ -17,6 +17,7 @@ import { useNavigate } from "react-router-dom";
 import { getCurrentUser } from "../../utils/auth";
 import { useIsNarrow } from "../../hooks/useIsNarrow";
 import Avatar from "../ui/Avatar";
+import PhotoLightbox from "./PhotoLightbox";
 
 const API = "/api/v1/community";
 // Shared wrapper (utils/api): token auto-refresh on 401 + truthful error
@@ -39,7 +40,7 @@ const REACTIONS = [
 const RX = Object.fromEntries(REACTIONS.map((r) => [r.key, r]));
 const PROF_LABEL = { farmer: "Farmer", buyer: "Buyer", banker: "Banker", business: "Business", service_provider: "Service Provider" };
 const FILTERS = [
-  ["all", "All"], ["following", "Following"], ["saved", "Saved"], ["questions", "Questions"],
+  ["all", "All"], ["following", "Following"], ["questions", "Questions"],
   ["topics", "Topics"], ["profession_farmer", "Farmers"], ["profession_buyer", "Buyers"],
   ["profession_service_provider", "Service Providers"], ["profession_banker", "Bankers"], ["profession_business", "Business"],
 ];
@@ -435,6 +436,7 @@ function PostCard({ post, me, onChange, onRemoved }) {
   const [editText, setEditText] = useState(post.body);
   const [reporting, setReporting] = useState(false);
   const [audienceOpen, setAudienceOpen] = useState(false);
+  const [lightbox, setLightbox] = useState(null); // photo index or null
   useEffect(() => { setP(post); setEditText(post.body); }, [post]);
   const mine = p.author_user_id === me?.user_id;
 
@@ -570,7 +572,9 @@ function PostCard({ post, me, onChange, onRemoved }) {
         <a className="cm-link-record" href={`/verify/${p.link_audit_hash}`} target="_blank" rel="noreferrer"><Link2 size={12} />Linked record · {p.link_audit_hash}</a>
       )}
       {p.photos?.length > 0 && (
-        <div className="cm-post-photos">{p.photos.map((src, i) => (/\.(mp4|webm|mov)$/i.test(src) ? <video key={i} src={src} controls preload="metadata" /> : <img key={i} src={src} alt="" loading="lazy" decoding="async" />))}</div>
+        <div className="cm-post-photos">{p.photos.map((src, i) => (/\.(mp4|webm|mov)$/i.test(src)
+          ? <video key={i} src={src} controls preload="metadata" onClick={(e) => { e.preventDefault(); setLightbox(i); }} style={{ cursor: "pointer" }} />
+          : <img key={i} src={src} alt="" loading="lazy" decoding="async" onClick={() => setLightbox(i)} style={{ cursor: "pointer" }} />))}</div>
       )}
 
       {summaryKeys.length > 0 && (
@@ -600,6 +604,7 @@ function PostCard({ post, me, onChange, onRemoved }) {
 
       {share && <ShareModal post={p} onClose={() => setShare(false)} onShared={(u) => { setShare(false); }} />}
       {reporting && <ReportModal post={p} onClose={() => setReporting(false)} />}
+      {lightbox != null && <PhotoLightbox post={p} startIndex={lightbox} onClose={() => setLightbox(null)} />}
       {audienceOpen && (
         <Overlay title="Edit audience" onClose={() => setAudienceOpen(false)}>
           <p style={{ fontSize: 12.5, color: "var(--muted)", marginTop: 0 }}>Who can see this post?</p>

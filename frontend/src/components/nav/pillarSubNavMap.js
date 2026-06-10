@@ -27,7 +27,6 @@ export const PILLAR_SUB_NAV = {
       { path: "/home/following",   label: "Following",   icon: UsersRound },
       { path: "/home/marketplace", label: "Marketplace", icon: Store },
       { path: "/home/directory",   label: "Directory",   icon: Contact },
-      { path: "/home/saved",       label: "Saved",       icon: Bookmark },
     ],
   },
   "/classroom": {

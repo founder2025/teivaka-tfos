@@ -892,6 +892,123 @@ async def get_media(name: str):
     return FileResponse(path, headers={"Cache-Control": "public, max-age=31536000, immutable"})
 
 
+# ----------------------------------------------------------------------------- per-photo reactions (lightbox)
+@router.get("/feed/{post_id}/photos/reactions")
+async def photo_reactions(post_id: str, user: dict = Depends(get_current_user)):
+    """Reaction counts + my reaction per photo index (target_id = '<post_id>#<idx>')."""
+    uid = str(user["user_id"])
+    async with get_db_ctx() as db:
+        rows = (await db.execute(text("""
+            SELECT target_id, reaction, count(*) AS n,
+                   bool_or(user_id = cast(:uid AS uuid)) AS mine
+            FROM community.feed_reactions
+            WHERE target_type = 'photo' AND target_id LIKE :pfx
+            GROUP BY target_id, reaction
+        """), {"uid": uid, "pfx": f"{post_id}#%"})).mappings().all()
+    out: dict = {}
+    for r in rows:
+        idx = r["target_id"].split("#", 1)[1]
+        slot = out.setdefault(idx, {"counts": {}, "mine": None})
+        slot["counts"][r["reaction"]] = r["n"]
+        if r["mine"]:
+            slot["mine"] = r["reaction"]
+    return {"data": out}
+
+
+@router.put("/feed/{post_id}/photos/{idx}/react")
+async def react_photo(post_id: str, idx: int, body: ReactBody, user: dict = Depends(get_current_user)):
+    if body.reaction not in REACTIONS:
+        raise HTTPException(status_code=422, detail="Unknown reaction")
+    tid = f"{post_id}#{idx}"
+    async with get_rls_db(str(user["tenant_id"])) as db:
+        await db.execute(text("""
+            INSERT INTO community.feed_reactions (user_id, target_type, target_id, reaction)
+            VALUES (:uid, 'photo', :tid, :r)
+            ON CONFLICT (user_id, target_type, target_id) DO UPDATE SET reaction = EXCLUDED.reaction
+        """), {"uid": str(user["user_id"]), "tid": tid, "r": body.reaction})
+    return {"data": {"target": tid, "reaction": body.reaction}}
+
+
+@router.delete("/feed/{post_id}/photos/{idx}/react")
+async def unreact_photo(post_id: str, idx: int, user: dict = Depends(get_current_user)):
+    async with get_rls_db(str(user["tenant_id"])) as db:
+        await db.execute(text("DELETE FROM community.feed_reactions WHERE user_id=:uid AND target_type='photo' AND target_id=:tid"),
+                         {"uid": str(user["user_id"]), "tid": f"{post_id}#{idx}"})
+    return {"data": {"reaction": None}}
+
+
+# ----------------------------------------------------------------------------- stories (24h)
+class StoryCreate(BaseModel):
+    media_url: str
+    media_type: str = "image"
+    caption: Optional[str] = None
+
+
+@router.get("/stories")
+async def list_stories(user: dict = Depends(get_current_user)):
+    """Active (unexpired) stories grouped by author, own first; viewer's seen-state."""
+    uid = str(user["user_id"])
+    async with get_db_ctx() as db:
+        if not await _has_table(db, "stories", ("story_id", "author_user_id", "media_url", "expires_at")):
+            return {"data": []}  # migration 096 not applied yet — honest empty, never 500
+        rows = (await db.execute(text("""
+            SELECT s.story_id, s.author_user_id, s.media_url, s.media_type, s.caption,
+                   s.created_at, u.full_name AS author_name, u.avatar_url AS author_avatar,
+                   EXISTS (SELECT 1 FROM community.story_views v
+                           WHERE v.story_id = s.story_id AND v.viewer_user_id = :uid) AS seen
+            FROM community.stories s
+            JOIN tenant.users u ON u.user_id = s.author_user_id
+            WHERE s.expires_at > now() AND u.is_active = TRUE
+            ORDER BY (s.author_user_id = cast(:uid AS uuid)) DESC, s.created_at ASC
+        """), {"uid": uid})).mappings().all()
+    groups: dict = {}
+    for r in rows:
+        k = str(r["author_user_id"])
+        g = groups.setdefault(k, {"author_user_id": k, "author_name": r["author_name"],
+                                  "author_avatar": r["author_avatar"], "is_you": k == uid,
+                                  "all_seen": True, "stories": []})
+        g["stories"].append({"story_id": r["story_id"], "media_url": r["media_url"],
+                             "media_type": r["media_type"], "caption": r["caption"],
+                             "created_at": r["created_at"].isoformat() if r["created_at"] else None,
+                             "seen": bool(r["seen"])})
+        if not r["seen"]:
+            g["all_seen"] = False
+    return {"data": list(groups.values())}
+
+
+@router.post("/stories")
+async def create_story(body: StoryCreate, user: dict = Depends(community_write("story", 10))):
+    if not (body.media_url or "").strip():
+        raise HTTPException(status_code=422, detail="media_url is required")
+    sid = "STRY-" + uuid.uuid4().hex[:8].upper()
+    mtype = "video" if body.media_type == "video" else "image"
+    async with get_rls_db(str(user["tenant_id"])) as db:
+        await db.execute(text("""
+            INSERT INTO community.stories (story_id, tenant_id, author_user_id, media_url, media_type, caption)
+            VALUES (:sid, :tid, :uid, :url, :mt, :cap)
+        """), {"sid": sid, "tid": str(user["tenant_id"]), "uid": str(user["user_id"]),
+               "url": body.media_url.strip(), "mt": mtype, "cap": (body.caption or "").strip() or None})
+    return {"data": {"story_id": sid}}
+
+
+@router.delete("/stories/{story_id}")
+async def delete_story(story_id: str, user: dict = Depends(get_current_user)):
+    async with get_rls_db(str(user["tenant_id"])) as db:
+        res = await db.execute(text("DELETE FROM community.stories WHERE story_id=:sid AND author_user_id=:uid"),
+                               {"sid": story_id, "uid": str(user["user_id"])})
+        if res.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Story not found or not yours")
+    return {"data": {"deleted": True}}
+
+
+@router.post("/stories/{story_id}/view")
+async def view_story(story_id: str, user: dict = Depends(get_current_user)):
+    async with get_rls_db(str(user["tenant_id"])) as db:
+        await db.execute(text("INSERT INTO community.story_views (story_id, viewer_user_id) VALUES (:sid,:uid) ON CONFLICT DO NOTHING"),
+                         {"sid": story_id, "uid": str(user["user_id"])})
+    return {"data": {"seen": True}}
+
+
 # ----------------------------------------------------------------------------- moderation (admin)
 _ADMIN_ROLES = {"ADMIN", "FOUNDER"}
 

@@ -21,6 +21,7 @@ import MarketIntelligence from "../../components/home/MarketIntelligence";
 import FeedView from "../../components/home/FeedView";
 import WeatherStrip from "../../components/home/WeatherStrip";
 import Directory from "../../components/home/Directory";
+import { StoriesRow, NewsCard } from "../../components/home/FeedExtras";
 import "../../styles/feed.css";
 
 // Shared wrapper: token auto-refresh on 401 + truthful errors.
@@ -45,7 +46,6 @@ const HOME_NAV = [
   { id: "following", label: "Following", Icon: Users },
   { id: "marketplace", label: "Marketplace", Icon: ShoppingBag },
   { id: "directory", label: "Directory", Icon: ListIcon },
-  { id: "saved", label: "Saved", Icon: Bookmark },
 ];
 
 function PageHead({ title, sub, action }) {
@@ -109,7 +109,9 @@ export default function HomePillar() {
   if (view === "feed") {
     body = (
       <>
+        <NewsCard />
         <WeatherStrip />
+        <StoriesRow />
         <FeedView initialFilter="all" />
       </>
     );
