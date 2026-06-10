@@ -76,10 +76,17 @@ async def list_community_listings(
     async with get_db_ctx() as db:
         def _col(table, col, schema="community"):
             return f"SELECT 1 FROM information_schema.columns WHERE table_schema='{schema}' AND table_name='{table}' AND column_name='{col}'"
+        def _tbl(name):
+            # CASE guarantees has_table_privilege is never evaluated on a missing
+            # relation (plain AND does not short-circuit reliably in SQL).
+            return (f"SELECT CASE WHEN to_regclass('community.{name}') IS NULL THEN false "
+                    f"ELSE has_table_privilege(current_user, 'community.{name}', 'SELECT') END")
+        if not bool((await db.execute(text(_tbl("listings")))).scalar()):
+            return {"data": [], "meta": {"degraded": "listings table missing — run scripts/deploy_community_fix.sh"}}
         has_kyc = bool((await db.execute(text(_col("users", "kyc_verified", "tenant")))).scalar())
         has_cat = bool((await db.execute(text(_col("listings", "category")))).scalar())
         has_sold = bool((await db.execute(text(_col("listings", "sold_at")))).scalar())
-        has_saves = bool((await db.execute(text("SELECT to_regclass('community.listing_saves') IS NOT NULL AND has_table_privilege(current_user, 'community.listing_saves', 'SELECT')"))).scalar())
+        has_saves = bool((await db.execute(text(_tbl("listing_saves")))).scalar())
         vexpr = "COALESCE(u.kyc_verified, FALSE)" if has_kyc else "FALSE"
         saved_expr = ("EXISTS (SELECT 1 FROM community.listing_saves ls WHERE ls.listing_id = cl.listing_id AND ls.user_id = cast(:uid AS uuid))"
                       if has_saves else "FALSE")
@@ -292,7 +299,5 @@ async def create_post(body: PostCreate, user: dict = Depends(get_current_user)):
             "photos": body.photos,
             "tags": body.tags,
             "created_by": str(user["user_id"]),
-            "category": cat,
-            "link_audit_hash": (body.link_audit_hash or None),
         })
     return {"data": {"post_id": post_id, "moderation_status": "PENDING_REVIEW", "message": "Post submitted for moderation review."}}

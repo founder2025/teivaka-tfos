@@ -23,6 +23,42 @@ def _exec_each(statements):
 
 def upgrade():
     _exec_each([
+        # Forensic finding 2026-06-11: community.listings was never created by any
+        # migration — its DDL lived only in 01_architecture/COMMUNITY_PLATFORM.md,
+        # so prod (and any fresh deploy) lacked the table and every ALTER below
+        # failed. Canonical base shape from that doc; ALTERs then layer 098 cols.
+        """
+        CREATE TABLE IF NOT EXISTS community.listings (
+            listing_id              VARCHAR(20) PRIMARY KEY,
+            tenant_id               UUID NOT NULL REFERENCES tenant.tenants(tenant_id),
+            farm_id                 VARCHAR(30) NOT NULL,
+            production_id           VARCHAR(20) REFERENCES shared.productions(production_id),
+            listing_title           VARCHAR(200) NOT NULL,
+            listing_description     TEXT,
+            quantity_available_kg   NUMERIC(10,2),
+            price_per_kg_fjd        NUMERIC(8,2),
+            negotiable              BOOLEAN DEFAULT true,
+            grade                   VARCHAR(20) DEFAULT 'A' CHECK (grade IN ('A', 'B', 'C', 'ORGANIC', 'MIXED')),
+            island                  VARCHAR(50) NOT NULL,
+            pickup_location         VARCHAR(200),
+            available_from          TIMESTAMPTZ,
+            available_until         TIMESTAMPTZ,
+            contact_whatsapp        VARCHAR(20),
+            photos                  TEXT[],
+            notes                   TEXT,
+            listing_status          VARCHAR(20) DEFAULT 'ACTIVE' CHECK (listing_status IN ('ACTIVE', 'SOLD', 'CLOSED', 'ARCHIVED', 'EXPIRED')),
+            view_count              INTEGER DEFAULT 0,
+            inquiry_count           INTEGER DEFAULT 0,
+            created_by              UUID NOT NULL,
+            created_at              TIMESTAMPTZ DEFAULT now(),
+            updated_at              TIMESTAMPTZ DEFAULT now()
+        )
+        """,
+        "CREATE INDEX IF NOT EXISTS idx_community_listings_production ON community.listings(production_id)",
+        "CREATE INDEX IF NOT EXISTS idx_community_listings_island ON community.listings(island)",
+        "CREATE INDEX IF NOT EXISTS idx_community_listings_status ON community.listings(listing_status)",
+        "CREATE INDEX IF NOT EXISTS idx_community_listings_created ON community.listings(created_at DESC)",
+        "GRANT SELECT, INSERT, UPDATE, DELETE ON community.listings TO teivaka_app",
         "ALTER TABLE community.listings ADD COLUMN IF NOT EXISTS category TEXT NOT NULL DEFAULT 'PRODUCE'",
         "ALTER TABLE community.listings ADD COLUMN IF NOT EXISTS sold_at TIMESTAMPTZ",
         "ALTER TABLE community.listings ADD COLUMN IF NOT EXISTS link_audit_hash TEXT",

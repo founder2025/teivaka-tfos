@@ -43,12 +43,13 @@ OBJS=$(docker exec teivaka_db psql -U teivaka -d teivaka_db -tA -c "
        + (SELECT count(*) FROM information_schema.columns WHERE table_schema='tenant' AND table_name='users' AND column_name='kyc_verified');")
 [ "$OBJS" = "3" ] && ok "stories + verification_requests + kyc_verified all present" || bad "missing objects ($OBJS/3)"
 MKT=$(docker exec teivaka_db psql -U teivaka -d teivaka_db -tA -c "
-  SELECT (to_regclass('community.listing_saves') IS NOT NULL)::int
+  SELECT (to_regclass('community.listings') IS NOT NULL)::int
+       + (to_regclass('community.listing_saves') IS NOT NULL)::int
        + (SELECT count(*) FROM information_schema.columns WHERE table_schema='community' AND table_name='listings' AND column_name IN ('category','sold_at','link_audit_hash','price_basis','details'));")
-if [ "$MKT" = "6" ]; then ok "marketplace objects present (6/6)"; else
-  bad "marketplace objects missing ($MKT/6) — runbook output + table owners:"
-  tail -5 /tmp/rb_098.out /tmp/rb_099.out
-  docker exec teivaka_db psql -U teivaka -d teivaka_db -c "SELECT c.relname, pg_get_userbyid(c.relowner) AS owner FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='community' AND c.relname IN ('listings','listing_saves') AND c.relkind='r';"
+if [ "$MKT" = "7" ]; then ok "marketplace objects present (7/7)"; else
+  bad "marketplace objects missing ($MKT/7) — runbook output + table presence/owners:"
+  tail -n 5 /tmp/rb_098.out; tail -n 5 /tmp/rb_099.out
+  docker exec teivaka_db psql -U teivaka -d teivaka_db -c "SELECT t.tbl, to_regclass('community.'||t.tbl) IS NOT NULL AS table_exists, (SELECT pg_get_userbyid(c.relowner) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='community' AND c.relname=t.tbl AND c.relkind='r') AS owner FROM (VALUES ('listings'),('listing_saves')) AS t(tbl);"
 fi
 
 say "4/7 Run migrations (two-pass: app role + owner — covers both table ownerships)"
