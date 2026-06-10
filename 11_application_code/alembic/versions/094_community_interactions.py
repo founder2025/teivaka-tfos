@@ -65,6 +65,11 @@ def upgrade():
         # Slice 2 groundwork: allow per-photo reactions (target_id = '<post_id>#<idx>')
         "ALTER TABLE community.feed_reactions DROP CONSTRAINT IF EXISTS feed_reactions_target_type_check",
         "ALTER TABLE community.feed_reactions ADD CONSTRAINT feed_reactions_target_type_check CHECK (target_type IN ('post','reply','photo'))",
+
+        # Runtime grants for the app role (tables are owned by teivaka per Strike #123)
+        "GRANT SELECT, INSERT, UPDATE, DELETE ON community.feed_hidden TO teivaka_app",
+        "GRANT SELECT, INSERT, UPDATE, DELETE ON community.user_mutes TO teivaka_app",
+        "GRANT SELECT, INSERT, UPDATE, DELETE ON community.user_blocks TO teivaka_app",
     ])
 
 
