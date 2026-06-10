@@ -5,6 +5,7 @@ import PillarTabs from "./PillarTabs";
 import RightCluster from "./RightCluster";
 import { useLeftRail } from "../../context/LeftRailContext";
 import SearchPalette from "../search/SearchPalette";
+import { useIsNarrow } from "../../hooks/useIsNarrow";
 
 const C = {
   soil:    "#5C4033",
@@ -80,6 +81,9 @@ function SearchIconButton({ onClick }) {
 
 export default function TopAppBar() {
   const [searchOpen, setSearchOpen] = useState(false);
+  // <=1024px the LeftRail drawer is replaced by the inline PillarSubNavStrip,
+  // so the rail-toggle hamburger has nothing to open — hide it there.
+  const narrow = useIsNarrow(1024);
   // Cmd/Ctrl+K — open the global search palette.
   useEffect(() => {
     function handler(e) {
@@ -107,7 +111,7 @@ export default function TopAppBar() {
       >
         {/* Left: hamburger + brand + search-icon (universal). */}
         <div className="flex items-center flex-shrink-0" style={{ gap: 12 }}>
-          <RailToggle />
+          {!narrow && <RailToggle />}
           <Link to="/home" className="flex items-center flex-shrink-0" aria-label="teivaka home">
             <TeivakaLogo />
           </Link>

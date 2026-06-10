@@ -3,6 +3,7 @@ import { NavLink, useLocation } from "react-router-dom";
 import { Lock, X } from "lucide-react";
 import { PILLAR_SUB_NAV } from "./pillarSubNavMap";
 import { useLeftRail } from "../../context/LeftRailContext";
+import { useTaskCount } from "../../hooks/useTaskCount";
 
 const C = {
   soil:     "#5C4033",
@@ -13,20 +14,23 @@ const C = {
   hoverBg2: "rgba(92, 64, 51, 0.06)",
 };
 
-function useIsMobile() {
+// <=1024px (phones + tablets) the rail is replaced by PillarSubNavStrip, so the
+// desktop overlay rail only exists at >=1025px. Kept in sync with FarmerShell's
+// useIsDesktop and the strip's useIsNarrow(1024).
+function useIsNarrow() {
   const get = () =>
     typeof window !== "undefined" &&
-    window.matchMedia("(max-width: 900px)").matches;
-  const [mobile, setMobile] = useState(get);
+    window.matchMedia("(max-width: 1024px)").matches;
+  const [narrow, setNarrow] = useState(get);
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const mql = window.matchMedia("(max-width: 900px)");
-    const on = () => setMobile(mql.matches);
+    const mql = window.matchMedia("(max-width: 1024px)");
+    const on = () => setNarrow(mql.matches);
     on();
     mql.addEventListener?.("change", on);
     return () => mql.removeEventListener?.("change", on);
   }, []);
-  return mobile;
+  return narrow;
 }
 
 function resolveHref(item) {
@@ -37,29 +41,6 @@ function currentPillarKey(pathname) {
   return Object.keys(PILLAR_SUB_NAV).find(
     (p) => pathname === p || pathname.startsWith(`${p}/`),
   );
-}
-
-function useTaskCount() {
-  const [c, setC] = useState({ open: 0, overdue: 0 });
-  useEffect(() => {
-    let alive = true;
-    const tok = localStorage.getItem("tfos_access_token");
-    if (!tok) return;
-    async function load() {
-      try {
-        const r = await fetch("/api/v1/tasks/count", { headers: { Authorization: `Bearer ${tok}` } });
-        if (!r.ok) return;
-        const d = await r.json();
-        if (alive && d?.data) setC({ open: d.data.open || 0, overdue: d.data.overdue || 0 });
-      } catch { /* nav badge is non-critical */ }
-    }
-    load();
-    const id = setInterval(load, 60_000);
-    const onVis = () => { if (document.visibilityState === "visible") load(); };
-    document.addEventListener("visibilitychange", onVis);
-    return () => { alive = false; clearInterval(id); document.removeEventListener("visibilitychange", onVis); };
-  }, []);
-  return c;
 }
 
 function RailItem({ item, onNavigate, badge, badgeOverdue }) {
@@ -113,7 +94,7 @@ export default function LeftRail() {
   const pillarKey = currentPillarKey(pathname);
   const pillar = pillarKey ? PILLAR_SUB_NAV[pillarKey] : null;
   const { open, close, width } = useLeftRail();
-  const mobile = useIsMobile();
+  const mobile = useIsNarrow();
   const taskCount = useTaskCount();
   const panelRef = useRef(null);
 
@@ -140,9 +121,11 @@ export default function LeftRail() {
     };
   }, [open, mobile, close]);
 
-  if (!pillar || !open) return null;
+  // On phones + tablets (<=1024px) the overlay drawer is replaced by the inline
+  // PillarSubNavStrip rendered in FarmerShell — never render the drawer here.
+  if (mobile || !pillar || !open) return null;
 
-  const onNavigate = mobile ? close : undefined;
+  const onNavigate = undefined;
 
   return (
     <>

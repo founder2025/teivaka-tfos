@@ -22,6 +22,8 @@ import { Plus, Sparkles } from "lucide-react";
 import TopAppBar from "../components/nav/TopAppBar";
 import BottomNav from "../components/nav/BottomNav";
 import LeftRail from "../components/nav/LeftRail";
+import PillarSubNavStrip from "../components/nav/PillarSubNavStrip";
+import { useIsNarrow } from "../hooks/useIsNarrow";
 import { useUniversalLogShortcut } from "../components/nav/UniversalLogButton";
 import TisChatPanel from "../components/tis/TisChatPanel";
 import Toast from "../components/ui/Toast";
@@ -89,11 +91,11 @@ function parseLayer(data) {
 function useIsDesktop() {
   const get = () =>
     typeof window !== "undefined" &&
-    window.matchMedia("(min-width: 901px)").matches;
+    window.matchMedia("(min-width: 1025px)").matches;
   const [desktop, setDesktop] = useState(get);
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const mql = window.matchMedia("(min-width: 901px)");
+    const mql = window.matchMedia("(min-width: 1025px)");
     const on = () => setDesktop(mql.matches);
     on();
     mql.addEventListener?.("change", on);
@@ -223,6 +225,10 @@ function ShellContent() {
 
   const { open: railOpen, width: railWidth, setOpen: setRailOpen } = useLeftRail();
   const desktop = useIsDesktop();
+  // <=1024px (phones + tablets): the overlay LeftRail drawer is replaced by an
+  // inline horizontal PillarSubNavStrip at the top of the content. Margin only
+  // tracks the rail on true desktop, where the rail can actually show.
+  const narrow = useIsNarrow(1024);
   const mainMarginLeft = desktop && railOpen ? railWidth : 0;
 
   // Auto-open the LeftRail on pillar switch (desktop only). Mobile keeps
@@ -325,6 +331,7 @@ function ShellContent() {
       >
         <main className="flex-1 pb-24 md:pb-8">
           <div className={`${widthClass} py-5`}>
+            {narrow && <PillarSubNavStrip />}
             <Outlet />
           </div>
         </main>
