@@ -25,7 +25,15 @@ SHAPES=$(docker exec teivaka_db psql -U teivaka -d teivaka_db -tA -c "
   SELECT (SELECT count(*) FROM information_schema.columns WHERE table_schema='community' AND table_name='feed_hidden'  AND column_name IN ('user_id','post_id'))
        + (SELECT count(*) FROM information_schema.columns WHERE table_schema='community' AND table_name='user_mutes'  AND column_name IN ('user_id','muted_user_id'))
        + (SELECT count(*) FROM information_schema.columns WHERE table_schema='community' AND table_name='user_blocks' AND column_name IN ('user_id','blocked_user_id'));")
-[ "$SHAPES" = "6" ] && ok "all 3 tables have correct columns (6/6)" || bad "table shapes wrong ($SHAPES/6) — paste /tmp/rb_094.out"
+if [ "$SHAPES" = "6" ]; then ok "all 3 tables have correct columns (6/6)"; else
+  bad "table shapes wrong ($SHAPES/6) — actual shapes:"
+  docker exec teivaka_db psql -U teivaka -d teivaka_db -c "
+    SELECT table_name, string_agg(column_name, ', ' ORDER BY ordinal_position) AS columns,
+           (SELECT n_live_tup FROM pg_stat_user_tables t WHERE t.schemaname='community' AND t.relname=c.table_name) AS approx_rows
+    FROM information_schema.columns c
+    WHERE table_schema='community' AND table_name IN ('feed_hidden','user_mutes','user_blocks')
+    GROUP BY table_name ORDER BY table_name;"
+fi
 
 say "3/7 Verify stories + kyc objects"
 OBJS=$(docker exec teivaka_db psql -U teivaka -d teivaka_db -tA -c "
@@ -63,9 +71,13 @@ docker exec -e DATABASE_URL="postgresql+asyncpg://teivaka:${PW2}@${APIURL2#*@}" 
 bash 04_environment/verify-deploy.sh && ok "running code matches host" || bad "verify-deploy failed — container/code drift"
 
 say "7/7 Smoke: API answers + no startup errors"
-sleep 4
-CODE=$(curl -s -o /dev/null -w "%{http_code}" https://teivaka.com/api/v1/community/feed)
-[ "$CODE" = "401" ] && ok "feed route alive (401 unauthenticated = healthy)" || bad "feed route returned $CODE (expected 401)"
+CODE=000
+for i in $(seq 1 12); do
+  sleep 5
+  CODE=$(curl -s -o /dev/null -w "%{http_code}" https://teivaka.com/api/v1/community/feed)
+  [ "$CODE" = "401" ] && break
+done
+[ "$CODE" = "401" ] && ok "feed route alive (401 unauthenticated = healthy)" || bad "feed route returned $CODE after 60s (expected 401)"
 ERRS=$(docker logs teivaka_api --since 2m 2>&1 | grep -c "Unhandled exception" || true)
 [ "$ERRS" = "0" ] && ok "no unhandled exceptions since restart" || bad "$ERRS unhandled exception(s) — run: docker logs teivaka_api --since 3m | grep -A15 'Unhandled exception'"
 
