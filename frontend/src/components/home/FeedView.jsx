@@ -209,7 +209,7 @@ const DRAFT_KEY = "tfos_feed_draft";
 const BODY_MAX = 2000; // backend CHECK caps body at 2000 chars
 const EMOJIS = ["🌱", "🌾", "🍌", "🥥", "🍠", "🌶️", "🍆", "🥬", "🐔", "🐐", "🐄", "🐖", "🐝", "🐟", "🚜", "🌧️", "☀️", "🌊", "💪", "🙏", "❤️", "😀", "😂", "👍", "🎉", "✅", "🔥", "🇫🇯"];
 
-function Composer({ me, onPosted }) {
+function Composer({ me, onPosted, groupId }) {
   // Draft autosave: restore an unfinished post (text + already-uploaded photos)
   // if the user navigated away mid-compose.
   const [draft, setDraft] = useState(() => {
@@ -274,6 +274,7 @@ function Composer({ me, onPosted }) {
         body: draft.body.trim(), audience: draft.audience, location: draft.location,
         vertical: draft.vertical.trim() || null, photos: draft.photos.map((p) => p.url),
         is_question: draft.isQuestion, link_audit_hash: draft.link, reach: draft.reach, kind: draft.kind,
+        ...(groupId ? { group_id: groupId } : {}),
       });
       setDraft(BLANK_DRAFT);
       try { localStorage.removeItem(DRAFT_KEY); } catch { /* noop */ }
@@ -647,7 +648,7 @@ function ReportModal({ post, onClose }) {
 }
 
 /* ---------------- feed ---------------- */
-export default function FeedView({ initialFilter = "all" }) {
+export default function FeedView({ initialFilter = "all", groupId = null }) {
   // Real identity from /auth/me — the JWT payload has `sub`, NOT `user_id`,
   // so the old getCurrentUser() comparison made `mine` always false and own
   // posts never showed Edit/Delete/Archive. Seed instantly from the JWT
@@ -690,16 +691,16 @@ export default function FeedView({ initialFilter = "all" }) {
 
   return (
     <div className="cm-feed">
-      <Composer me={me} onPosted={() => { setFilter("all"); load(); }} />
+      <Composer me={me} groupId={groupId} onPosted={() => { if (!groupId) setFilter("all"); load(); }} />
 
-      <div className="cm-filter-row">
+      {!groupId && <div className="cm-filter-row">
         {FILTERS.map(([id, label]) => (
           <button key={id} className={`cm-pill ${filter === id ? "cm-pill-active" : ""}`} onClick={() => setFilter(id)}>{label}</button>
         ))}
         <div className="cm-pill-spacer" />
         <button className={`cm-pill cm-pill-verified ${verifiedOnly ? "cm-pill-active" : ""}`} onClick={() => setVerifiedOnly(!verifiedOnly)}><Check size={11} /> Verified only</button>
         <button className="cm-pill" onClick={() => setTopicsOpen(true)}><Rss size={11} /> Manage topics</button>
-      </div>
+      </div>}
 
       {posts == null ? <div className="cm-empty">Loading feed…</div> :
         posts.length === 0 ? <div className="cm-empty">No posts match your filter yet. Share the first update.</div> :

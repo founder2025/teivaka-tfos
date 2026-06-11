@@ -24,10 +24,12 @@ export const PILLAR_SUB_NAV = {
   "/home": {
     label: "Home",
     items: [
-      { path: "/home",             label: "Feed",        icon: Users },
-      { path: "/home/following",   label: "Following",   icon: UsersRound },
-      { path: "/home/marketplace", label: "Marketplace", icon: Store },
-      { path: "/home/directory",   label: "Directory",   icon: Contact },
+      { path: "/home",             label: "Feed",          icon: Users },
+      { path: "/home/following",   label: "Following",     icon: UsersRound },
+      { path: "/home/marketplace", label: "Marketplace",   icon: Store },
+      { path: "/home/prices",      label: "Market prices", icon: TrendingUp },
+      { path: "/home/directory",   label: "Directory",     icon: Contact },
+      { path: "/home/groups",      label: "Groups",        icon: Users2 },
     ],
   },
   "/classroom": {

@@ -174,6 +174,7 @@ class PostCreate(BaseModel):
     link_audit_hash: Optional[str] = None
     reach: str = "LOCAL"          # LOCAL | GLOBAL (exporter/importer global trade)
     kind: str = "POST"           # POST | EDU_REEL (educational reel — global reach)
+    group_id: Optional[str] = None  # post into a group (members only; rides full feed infra)
 
 
 class PostEdit(BaseModel):
@@ -239,6 +240,16 @@ async def list_feed(
                     WHERE f.follower_user_id = :uid AND f.followed_user_id = fp.author_user_id))
             OR fp.audience = :vprof
         )""")
+
+        has_groups_col = await _has(db, "col_fp_group", "SELECT 1 FROM information_schema.columns WHERE table_schema='community' AND table_name='feed_posts' AND column_name='group_id'")
+        if filter.startswith("group_"):
+            if not has_groups_col:
+                return {"data": []}
+            where.append("fp.group_id = :gid")
+            params["gid"] = filter.replace("group_", "", 1)
+        elif has_groups_col:
+            # group posts live ONLY inside their group view
+            where.append("fp.group_id IS NULL")
 
         if filter == "following":
             where.append("""(fp.author_user_id = :uid OR fp.author_user_id IN
@@ -325,16 +336,28 @@ async def create_feed_post(body: PostCreate, user: dict = Depends(community_writ
         # Global reach is reserved for exporters/importers (cross-border trade).
         if reach == "GLOBAL" and prof not in ("exporter", "importer"):
             reach = "LOCAL"
-        await db.execute(text("""
+        group_id = None
+        if body.group_id:
+            has_g = await _has(db, "col_fp_group", "SELECT 1 FROM information_schema.columns WHERE table_schema='community' AND table_name='feed_posts' AND column_name='group_id'")
+            if not has_g:
+                raise HTTPException(status_code=503, detail="Groups not available yet — run the deploy script")
+            from app.routers.groups import is_group_member
+            if not await is_group_member(db, body.group_id, user["user_id"]):
+                raise HTTPException(status_code=403, detail="Join the group to post in it")
+            group_id = body.group_id
+        g_col = ", group_id" if group_id else ""
+        g_val = ", :group_id" if group_id else ""
+        await db.execute(text(f"""
             INSERT INTO community.feed_posts
                 (post_id, tenant_id, author_user_id, author_profession, country, reach, kind,
                  body, post_type, is_question, audience, location, vertical, photos, mentions,
-                 link_audit_hash, audit_hash)
+                 link_audit_hash, audit_hash{g_col})
             VALUES
                 (:post_id, :tenant_id, :author_user_id, :prof, :country, :reach, :kind,
                  :body, :post_type, :is_question, :audience, :location, :vertical, :photos, :mentions,
-                 :link, :audit_hash)
+                 :link, :audit_hash{g_val})
         """), {
+            **({"group_id": group_id} if group_id else {}),
             "post_id": post_id,
             "tenant_id": str(user["tenant_id"]),
             "author_user_id": str(user["user_id"]),

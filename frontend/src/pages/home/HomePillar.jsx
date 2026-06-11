@@ -14,13 +14,14 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import {
   Home, BookOpen, Tractor, Sparkles, Search, MessageSquare, Bell, ChevronDown,
-  Star, Bookmark, Plus, Shield, DollarSign, ShoppingBag, Rss, Users, List as ListIcon,
+  Star, Bookmark, Plus, Shield, DollarSign, ShoppingBag, Rss, Users, List as ListIcon, TrendingUp,
 } from "lucide-react";
 import TfpShell from "../../components/farm/TfpShell";
 import MarketIntelligence from "../../components/home/MarketIntelligence";
 import FeedView from "../../components/home/FeedView";
 import WeatherStrip from "../../components/home/WeatherStrip";
 import Directory from "../../components/home/Directory";
+import Groups from "../../components/home/Groups";
 import Marketplace from "../../components/home/Marketplace";
 import { StoriesRow, NewsCard } from "../../components/home/FeedExtras";
 import "../../styles/feed.css";
@@ -46,7 +47,9 @@ const HOME_NAV = [
   { id: "feed", label: "Feed", Icon: Rss },
   { id: "following", label: "Following", Icon: Users },
   { id: "marketplace", label: "Marketplace", Icon: ShoppingBag },
+  { id: "prices", label: "Market prices", Icon: TrendingUp },
   { id: "directory", label: "Directory", Icon: ListIcon },
+  { id: "groups", label: "Groups", Icon: Users },
 ];
 
 function PageHead({ title, sub, action }) {
@@ -102,7 +105,9 @@ export default function HomePillar() {
     feed: ["Feed", "What farmers in Fiji are sharing"],
     following: ["Following", "People you follow"],
     marketplace: ["Marketplace", "Buy and sell produce · inputs · tools"],
+    prices: ["Market prices", "What's selling · who needs it · what to plant next"],
     directory: ["Directory", "Farmers, buyers, suppliers across Fiji"],
+    groups: ["Groups", "Your crop, your region, your people"],
     saved: ["Saved", "Your saved posts and listings"],
   }[view]), [view]);
 
@@ -125,8 +130,12 @@ export default function HomePillar() {
         <MarketIntelligence />
       </>
     );
+  } else if (view === "prices") {
+    body = <MarketIntelligence />;
   } else if (view === "directory") {
     body = <Directory />;
+  } else if (view === "groups") {
+    body = <Groups />;
   } else {
     body = <FeedView initialFilter="saved" />;
   }

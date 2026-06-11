@@ -24,6 +24,7 @@ $PSQL < docs/runbooks/100_classroom_apply_as_owner.sql        > /tmp/rb_100.out 
 $PSQL < docs/runbooks/101_classroom_v2_apply_as_owner.sql     > /tmp/rb_101.out 2>&1 && ok "101 classroom v2" || bad "101 classroom v2 (see /tmp/rb_101.out)"
 $PSQL < docs/runbooks/102_lesson_saves_apply_as_owner.sql     > /tmp/rb_102.out 2>&1 && ok "102 lesson saves" || bad "102 lesson saves (see /tmp/rb_102.out)"
 $PSQL < docs/runbooks/103_library_submissions_apply_as_owner.sql > /tmp/rb_103.out 2>&1 && ok "103 library + featured" || bad "103 library + featured (see /tmp/rb_103.out)"
+$PSQL < docs/runbooks/104_groups_apply_as_owner.sql           > /tmp/rb_104.out 2>&1 && ok "104 groups" || bad "104 groups (see /tmp/rb_104.out)"
 
 say "2/7 Verify table shapes (the AmbiguousColumn culprit)"
 SHAPES=$(docker exec teivaka_db psql -U teivaka -d teivaka_db -tA -c "
@@ -76,6 +77,8 @@ LSV=$(docker exec teivaka_db psql -U teivaka -d teivaka_db -tA -c "SELECT (to_re
 [ "$LSV" = "1" ] && ok "lesson_saves present" || { bad "lesson_saves missing — runbook tail:"; tail -n 4 /tmp/rb_102.out; }
 LIB=$(docker exec teivaka_db psql -U teivaka -d teivaka_db -tA -c "SELECT (to_regclass('community.library_submissions') IS NOT NULL)::int + (SELECT count(*) FROM information_schema.columns WHERE table_schema='community' AND table_name='courses' AND column_name='featured');")
 [ "$LIB" = "2" ] && ok "library submissions + featured present (2/2)" || { bad "library/featured missing ($LIB/2) — runbook tail:"; tail -n 4 /tmp/rb_103.out; }
+GRP=$(docker exec teivaka_db psql -U teivaka -d teivaka_db -tA -c "SELECT (to_regclass('community.groups') IS NOT NULL)::int + (to_regclass('community.group_members') IS NOT NULL)::int + (SELECT count(*) FROM information_schema.columns WHERE table_schema='community' AND table_name='feed_posts' AND column_name='group_id');")
+[ "$GRP" = "3" ] && ok "groups objects present (3/3)" || { bad "groups objects missing ($GRP/3) — runbook tail:"; tail -n 4 /tmp/rb_104.out; }
 
 say "4/7 Run migrations (two-pass: app role + owner — covers both table ownerships)"
 # Pass 1: as the app role (its own DATABASE_URL) — handles tables it owns (e.g. listings)
