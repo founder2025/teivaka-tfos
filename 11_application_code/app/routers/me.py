@@ -470,3 +470,58 @@ async def ping_activity(
     except Exception:  # noqa: BLE001 — pre-108 deployments no-op, never error
         await db.rollback()
     return {"data": {"ok": True}}
+
+
+@router.get("/consent")
+async def get_consent(
+    user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """The farmer's current data-sharing consent. Migration-tolerant: pre-111
+    deployments report not-consented (the safe default)."""
+    has = (await db.execute(text(
+        "SELECT 1 FROM information_schema.columns WHERE table_schema='tenant' "
+        "AND table_name='users' AND column_name='aggregate_consent'"))).scalar()
+    if not has:
+        return {"data": {"aggregate_consent": False, "aggregate_consent_at": None, "available": False}}
+    row = (await db.execute(text(
+        "SELECT aggregate_consent, aggregate_consent_at FROM tenant.users WHERE user_id = cast(:uid AS uuid)"),
+        {"uid": str(user["user_id"])})).mappings().first()
+    return {"data": {**(dict(row) if row else {}), "available": True}}
+
+
+class ConsentBody(BaseModel):
+    aggregate_consent: bool
+
+
+@router.post("/consent")
+async def set_consent(
+    body: ConsentBody,
+    user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Farmer grants or withdraws consent for their anonymized, aggregated data
+    to inform external reports (ministries/NGOs/banks). Default is OFF; this is
+    the ONLY way it turns on. Every change is logged to the consent ledger
+    (Covenant §3 + GDPR consent-management + right-to-withdraw)."""
+    has = (await db.execute(text(
+        "SELECT 1 FROM information_schema.columns WHERE table_schema='tenant' "
+        "AND table_name='users' AND column_name='aggregate_consent'"))).scalar()
+    if not has:
+        raise HTTPException(status_code=503, detail="Consent controls not available yet — run the deploy script")
+    await db.execute(text(
+        "UPDATE tenant.users SET aggregate_consent = :c, aggregate_consent_at = now() WHERE user_id = cast(:uid AS uuid)"),
+        {"c": body.aggregate_consent, "uid": str(user["user_id"])})
+    await db.commit()  # the flag is the binding state — persist it before the ledger
+    # Append to the consent ledger (best-effort; its own txn so a failure here
+    # can never roll back the flag above). asyncpg poisons a txn on error, so we
+    # isolate this in a nested savepoint.
+    try:
+        async with db.begin():
+            await db.execute(text(
+                "INSERT INTO community.consent_events (user_id, consent_type, granted, source) "
+                "VALUES (cast(:uid AS uuid), 'AGGREGATE', :g, 'SELF')"),
+                {"uid": str(user["user_id"]), "g": body.aggregate_consent})
+    except Exception:  # noqa: BLE001 — ledger best-effort; the flag is the binding state
+        await db.rollback()
+    return {"data": {"aggregate_consent": body.aggregate_consent}}

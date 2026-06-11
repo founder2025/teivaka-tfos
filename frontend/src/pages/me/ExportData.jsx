@@ -3,8 +3,8 @@
  *  downloading, then downloads the complete JSON (manifest + 13 categories).
  *  Covenant §1: your records are yours — no charge, no lock-in. */
 import { useEffect, useState } from "react";
-import { Download, Shield, Check } from "lucide-react";
-import { C, getJSON, card, MeShell } from "./_meCommon";
+import { Download, Shield, Check, BarChart2 } from "lucide-react";
+import { C, getJSON, send, card, MeShell } from "./_meCommon";
 
 const INVENTORY_LABELS = [
   ["profile", "Profile"],
@@ -27,9 +27,25 @@ export default function ExportData() {
   const [err, setErr] = useState(null);
   const [inv, setInv] = useState(null);
 
+  // Aggregate-data consent (Covenant §3). null = still loading; available=false
+  // when the backend hasn't shipped the consent ledger yet (migration-tolerant).
+  const [consent, setConsent] = useState(null);
+  const [conBusy, setConBusy] = useState(false);
+
   useEffect(() => {
     getJSON("/api/v1/me/export/inventory").then((r) => setInv(r.data || {})).catch(() => setInv({}));
+    getJSON("/api/v1/me/consent").then((r) => setConsent(r.data ?? r)).catch(() => setConsent({ available: false }));
   }, []);
+
+  const toggleConsent = async () => {
+    if (!consent || conBusy) return;
+    const next = !consent.aggregate_consent;
+    setConBusy(true); setErr(null);
+    try {
+      const r = await send("POST", "/api/v1/me/consent", { aggregate_consent: next });
+      setConsent({ ...(r.data ?? r), available: true });
+    } catch (e) { setErr(String(e.userMessage || e.message || e)); } finally { setConBusy(false); }
+  };
 
   const run = async () => {
     setBusy(true); setErr(null);
@@ -67,6 +83,38 @@ export default function ExportData() {
           ))
         )}
       </div>
+
+      {/* Aggregate-data consent — Covenant §3. Opt-in, default off. Only farms
+          whose owner turns this ON can ever enter an external aggregate, and even
+          then only inside a k-anonymity group (≥10 farms), never identifiable. */}
+      {consent && consent.available !== false && (
+        <div style={{ ...card }}>
+          <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+            <BarChart2 size={16} style={{ color: C.green, flexShrink: 0, marginTop: 2 }} />
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 14, fontWeight: 700, color: C.soil }}>Help build Pacific farm intelligence</div>
+              <p style={{ color: C.muted, fontSize: 12.5, lineHeight: 1.55, margin: "4px 0 0" }}>
+                When this is ON, your farm’s records may be included in <strong>anonymous, grouped</strong> statistics
+                (e.g. “average cassava cycles per island”) shared with partners like the Ministry of Agriculture.
+                Your name, location and any identifying detail are <strong>never</strong> shared, and figures only
+                appear when at least 10 farms are grouped together. OFF by default — turning it off removes your
+                farm from all future aggregates immediately. (<a href="/covenant" style={{ color: C.greenDk }}>Covenant, Section 3</a>.)
+              </p>
+            </div>
+            <button onClick={toggleConsent} disabled={conBusy} role="switch" aria-checked={!!consent.aggregate_consent}
+              title={consent.aggregate_consent ? "Sharing on — tap to turn off" : "Sharing off — tap to turn on"}
+              style={{
+                flexShrink: 0, width: 46, height: 26, borderRadius: 999, border: "none", cursor: conBusy ? "wait" : "pointer",
+                background: consent.aggregate_consent ? C.green : C.line, position: "relative", transition: "background .15s",
+              }}>
+              <span style={{
+                position: "absolute", top: 3, left: consent.aggregate_consent ? 23 : 3, width: 20, height: 20,
+                borderRadius: "50%", background: "#fff", boxShadow: "0 1px 2px rgba(0,0,0,.25)", transition: "left .15s",
+              }} />
+            </button>
+          </div>
+        </div>
+      )}
 
       <div style={{ ...card, textAlign: "center", padding: "24px 20px" }}>
         <button onClick={run} disabled={busy} style={{ display: "inline-flex", gap: 8, alignItems: "center", background: C.green, color: "#fff", border: "none", borderRadius: 8, padding: "12px 20px", cursor: "pointer", fontSize: 14, fontWeight: 700 }}>

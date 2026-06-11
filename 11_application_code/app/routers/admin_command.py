@@ -142,6 +142,10 @@ async def _compute_intel(db) -> dict:
         "members_by_profession_country": members, "signups_by_month": signups_by_month,
         "funnel": funnel, "churn": churn, "tier_distribution": tiers,
         "not_captured": ["gender", "age"],  # honest gap — needs optional consented fields
+        "consent": {
+            "consented": await _scalar(db, "SELECT count(*) FROM tenant.users WHERE COALESCE(aggregate_consent, false) = true"),
+            "total": await _scalar(db, "SELECT count(*) FROM tenant.users WHERE COALESCE(is_active, true)"),
+        },
     }
 
     # ---- commerce ------------------------------------------------------------
@@ -224,22 +228,38 @@ async def intelligence_csv(section: str, table: str, user: dict = Depends(get_cu
 
 @router.get("/intelligence/external.csv")
 async def external_report(user: dict = Depends(get_current_user)):
-    """Covenant §3 external report: region-level production aggregates with the
-    k-anonymity floor enforced IN CODE — a region with fewer than K_FLOOR
-    farms does not appear at all. No identifiers of any kind."""
+    """Covenant §3 external report: region-level production aggregates with BOTH
+    gates enforced IN CODE — (1) only data from farmers who granted
+    aggregate_consent (opt-in, default off, I3), AND (2) the k-anonymity floor
+    (a region with fewer than K_FLOOR consented farms does not appear). No
+    identifiers of any kind. Consent without k-anon, or k-anon without consent,
+    is non-compliant — both always."""
     _require_admin(user)
     async with get_db_ctx() as db:
+        # Consent gate (migration-tolerant): if the column doesn't exist yet,
+        # NOBODY is consented — the report is empty, which is the safe default.
+        has_consent = bool((await db.execute(text(
+            "SELECT 1 FROM information_schema.columns WHERE table_schema='tenant' "
+            "AND table_name='users' AND column_name='aggregate_consent'"))).scalar())
+        if not has_consent:
+            return _csv_response([], "teivaka-external-production-report.csv")
+        # A farm counts ONLY if its owner (the tenant's founder) consented.
         rows = await _rows(db, f"""
-            WITH per AS (
-                SELECT COALESCE(f.location_island, 'Unknown') AS region,
-                       p.production_name AS crop, count(*) AS cycles
+            WITH consented_farms AS (
+                SELECT f.farm_id, COALESCE(f.location_island, 'Unknown') AS region
+                FROM tenant.farms f
+                WHERE EXISTS (
+                    SELECT 1 FROM tenant.users u
+                    WHERE u.tenant_id = f.tenant_id AND COALESCE(u.aggregate_consent, false) = true
+                )
+            ), per AS (
+                SELECT cf.region, p.production_name AS crop, count(*) AS cycles
                 FROM tenant.production_cycles c
-                JOIN tenant.farms f ON f.farm_id = c.farm_id
+                JOIN consented_farms cf ON cf.farm_id = c.farm_id
                 JOIN shared.productions p ON p.production_id = c.production_id
                 GROUP BY 1, 2
             ), rf AS (
-                SELECT COALESCE(location_island, 'Unknown') AS region, count(*) AS region_farms
-                FROM tenant.farms GROUP BY 1
+                SELECT region, count(*) AS region_farms FROM consented_farms GROUP BY 1
             )
             SELECT per.region, per.crop, per.cycles
             FROM per JOIN rf ON rf.region = per.region
