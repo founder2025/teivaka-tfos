@@ -117,6 +117,60 @@ async def export_my_data(
         ORDER BY created_at DESC LIMIT 500
     """), {"uid": uid})).mappings().all()
 
+    async def _rows(sql, params, label):
+        """Best-effort export section — a missing table yields an honest empty
+        list, never a failed export (migration-tolerant like the feed)."""
+        try:
+            return (await db.execute(text(sql), params)).mappings().all()
+        except Exception:  # noqa: BLE001
+            await db.rollback()
+            return []
+
+    replies = await _rows(
+        "SELECT reply_id, post_id, body, created_at FROM community.feed_replies "
+        "WHERE author_user_id = :uid ORDER BY created_at DESC LIMIT 1000", {"uid": uid}, "replies")
+    reactions = await _rows(
+        "SELECT post_id, reaction, created_at FROM community.feed_reactions "
+        "WHERE user_id = :uid ORDER BY created_at DESC LIMIT 2000", {"uid": uid}, "reactions")
+    likes = await _rows(
+        "SELECT post_id, created_at FROM community.feed_likes "
+        "WHERE user_id = :uid ORDER BY created_at DESC LIMIT 2000", {"uid": uid}, "likes")
+    saved = await _rows(
+        "SELECT post_id, created_at FROM community.feed_saves "
+        "WHERE user_id = :uid ORDER BY created_at DESC LIMIT 1000", {"uid": uid}, "saved")
+    following = await _rows(
+        "SELECT followed_user_id, created_at FROM community.follows "
+        "WHERE follower_user_id = :uid", {"uid": uid}, "following")
+    followers = await _rows(
+        "SELECT follower_user_id, created_at FROM community.follows "
+        "WHERE followed_user_id = :uid", {"uid": uid}, "followers")
+    farm_events = await _rows(
+        "SELECT event_id, event_type, occurred_at FROM audit.events "
+        "WHERE tenant_id = cast(:tid AS uuid) ORDER BY occurred_at DESC LIMIT 2000",
+        {"tid": str(user["tenant_id"])}, "farm_events")
+    cycles = await _rows(
+        "SELECT cycle_id, production_id, cycle_status, planting_date FROM tenant.production_cycles "
+        "WHERE tenant_id = cast(:tid AS uuid) ORDER BY planting_date DESC NULLS LAST LIMIT 500",
+        {"tid": str(user["tenant_id"])}, "cycles")
+    tasks = await _rows(
+        "SELECT task_id, status, created_at FROM tenant.task_queue "
+        "WHERE tenant_id = cast(:tid AS uuid) ORDER BY created_at DESC LIMIT 1000",
+        {"tid": str(user["tenant_id"])}, "tasks")
+    lessons = await _rows(
+        "SELECT lesson_id, course_id, completed_at FROM community.lesson_progress "
+        "WHERE user_id = cast(:uid AS uuid)", {"uid": uid}, "lessons")
+
+    # best-effort audit trail of the export itself (Covenant §1 receipt)
+    try:
+        from app.core.audit_chain import emit_audit_event
+        await emit_audit_event(
+            db=db, tenant_id=user["tenant_id"], actor_user_id=user["user_id"],
+            event_type="DATA_EXPORTED", entity_type="user", entity_id=uid,
+            payload={"export_type": "personal_data_export", "format": "json"})
+        await db.commit()
+    except Exception:  # noqa: BLE001
+        await db.rollback()
+
     def _ser(rows):
         out = []
         for r in rows:
@@ -131,12 +185,68 @@ async def export_my_data(
 
     return {
         "data": {
-            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "manifest": {
+                "app": "Teivaka Farm OS",
+                "export_type": "personal_data_export",
+                "format": "json",
+                "version": 2,
+                "exported_at": datetime.now(timezone.utc).isoformat(),
+                "user_id": uid,
+                "note": ("Your records are yours. This is a copy of the data linked to "
+                         "your account, exported on request (Data Ownership Covenant, "
+                         "Section 1). Photos and videos are listed by reference; the "
+                         "original files remain retrievable from your account."),
+            },
             "profile": (_ser([profile])[0] if profile else None),
             "farms": _ser(farms),
             "community_posts": _ser(posts),
+            "replies": _ser(replies),
+            "reactions": _ser(reactions),
+            "likes": _ser(likes),
+            "saved_posts": _ser(saved),
+            "following": _ser(following),
+            "followers": _ser(followers),
+            "farm_events": _ser(farm_events),
+            "cycles": _ser(cycles),
+            "tasks": _ser(tasks),
+            "lessons_completed": _ser(lessons),
         }
     }
+
+
+@router.get("/me/export/inventory")
+async def export_inventory(
+    user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """What an export will contain — per-category counts shown before download
+    (prototype exportMyData inventory). Migration-tolerant: missing tables
+    count as 0, never error."""
+    uid = str(user["user_id"])
+    tid = str(user["tenant_id"])
+
+    async def _count(sql, params):
+        try:
+            return int((await db.execute(text(sql), params)).scalar() or 0)
+        except Exception:  # noqa: BLE001
+            await db.rollback()
+            return 0
+
+    return {"data": {
+        "profile": 1,
+        "posts": await _count("SELECT count(*) FROM community.feed_posts WHERE author_user_id = :uid AND status = 'active'", {"uid": uid}),
+        "replies": await _count("SELECT count(*) FROM community.feed_replies WHERE author_user_id = :uid", {"uid": uid}),
+        "reactions_likes": (await _count("SELECT count(*) FROM community.feed_reactions WHERE user_id = :uid", {"uid": uid}))
+                          + (await _count("SELECT count(*) FROM community.feed_likes WHERE user_id = :uid", {"uid": uid})),
+        "saved_posts": await _count("SELECT count(*) FROM community.feed_saves WHERE user_id = :uid", {"uid": uid}),
+        "following": await _count("SELECT count(*) FROM community.follows WHERE follower_user_id = :uid", {"uid": uid}),
+        "followers": await _count("SELECT count(*) FROM community.follows WHERE followed_user_id = :uid", {"uid": uid}),
+        "farm_events": await _count("SELECT count(*) FROM audit.events WHERE tenant_id = cast(:tid AS uuid)", {"tid": tid}),
+        "cycles": await _count("SELECT count(*) FROM tenant.production_cycles WHERE tenant_id = cast(:tid AS uuid)", {"tid": tid}),
+        "tasks": await _count("SELECT count(*) FROM tenant.task_queue WHERE tenant_id = cast(:tid AS uuid)", {"tid": tid}),
+        "lessons_completed": await _count("SELECT count(*) FROM community.lesson_progress WHERE user_id = cast(:uid AS uuid)", {"uid": uid}),
+        "farms": await _count("SELECT count(*) FROM tenant.farms WHERE tenant_id = cast(:tid AS uuid)", {"tid": tid}),
+    }}
 
 
 from pydantic import BaseModel  # noqa: E402

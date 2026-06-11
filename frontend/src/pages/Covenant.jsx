@@ -17,30 +17,86 @@ const COMMITMENTS = [
   ["Termination protection", "If Teivaka ceases to operate, data does not vanish: a 12-month public sunset, a successor custodian or full export to every tenant, and a verification protocol usable indefinitely without our infrastructure. A successor inherits this covenant in full. Records are never orphaned, sold without consent, or lost to corporate failure."],
 ];
 
+const PREAMBLE = [
+  "Software platforms that collect data on smallholder farmers have, historically, treated farmers as the product. Their records were sold, their behaviours profiled, their consent assumed.",
+  "Teivaka PTE LTD rejects this posture absolutely.",
+  "This covenant is the foundation on which every other Teivaka commitment is built. If this covenant is broken, the company has failed at its purpose. Every employee, contractor, partner, and successor of Teivaka inherits this commitment. There are no exceptions and no override clauses.",
+  "The covenant is binding even where it costs Teivaka revenue. It is binding even where it inconveniences institutional partners. It is binding even where the law permits otherwise.",
+];
+
+const CONSTITUTIONAL = [
+  "This covenant is not a marketing document. It is a constitutional commitment.",
+  "Amendments require board-level decision plus 30-day public notice plus per-farmer notification with right to terminate the relationship without penalty. No section of this covenant can be silently revised, weakened, or carved out.",
+  "Violations are existential. A confirmed violation is grounds for board removal of executive leadership, public disclosure under the transparency regime, and direct compensation to affected farmers. Investor returns do not override covenant integrity.",
+  "Successor liability. Any acquirer, merger partner, or successor entity of Teivaka PTE LTD inherits this covenant in full. The covenant survives change of control. Acquirers who do not accept this commitment cannot acquire Teivaka.",
+  "Audit rights. Tenants collectively retain the right to commission an independent audit of covenant adherence at any time. Findings are published in the transparency report.",
+];
+
+function SectionH({ children }) {
+  return <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "1.2px", textTransform: "uppercase", color: C.greenDk, margin: "26px 0 12px" }}>{children}</div>;
+}
+
 export default function Covenant() {
   return (
-    <div style={{ maxWidth: 820, margin: "0 auto", padding: "4px 0 40px" }}>
+    <div style={{ maxWidth: 880, margin: "0 auto", padding: "4px 0 60px" }}>
       <Link to="/me" style={{ display: "inline-flex", alignItems: "center", gap: 6, color: C.muted, fontSize: 12.5, textDecoration: "none", marginBottom: 12 }}><ArrowLeft size={14} /> Account</Link>
-      <div style={{ background: "#fff", border: `1px solid ${C.line}`, borderRadius: 12, padding: "26px 24px" }}>
-        <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", color: C.green }}>Constitutional commitment</div>
-        <h1 style={{ display: "flex", alignItems: "center", gap: 10, color: C.soil, margin: "6px 0 8px", fontSize: 26 }}><Shield size={24} style={{ color: C.green }} /> Data Ownership Covenant</h1>
-        <p style={{ color: C.muted, fontSize: 14, lineHeight: 1.6, margin: 0 }}>Teivaka PTE LTD's binding commitment to the Pacific farmers whose data flows through this platform. Nine commitments. No carve-outs.</p>
-        <div style={{ display: "flex", gap: 18, flexWrap: "wrap", margin: "14px 0 4px", fontSize: 11.5, color: C.muted }}>
+
+      {/* Hero — prototype .pub-hero */}
+      <div style={{ background: "#fff", border: `1px solid ${C.line}`, borderRadius: 12, padding: "30px 28px" }}>
+        <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "1.2px", textTransform: "uppercase", color: C.greenDk }}>Constitutional commitment</div>
+        <h1 style={{ display: "flex", alignItems: "center", gap: 10, color: C.soil, margin: "8px 0 10px", fontSize: 34, letterSpacing: "-0.5px" }}><Shield size={28} style={{ color: C.green }} /> Data Ownership Covenant</h1>
+        <p style={{ color: C.muted, fontSize: 15.5, lineHeight: 1.6, margin: 0, maxWidth: 640 }}>Teivaka PTE LTD's binding commitment to the Pacific farmers whose data flows through this platform. Nine commitments. No carve-outs. Published verbatim.</p>
+        <div style={{ display: "flex", gap: 18, flexWrap: "wrap", margin: "16px 0 0", fontSize: 11.5, color: C.muted }}>
           <span><strong>Version</strong> 1.0</span><span><strong>Effective</strong> 2026-05-29</span><span><strong>Status</strong> Locked</span><span><strong>Authority</strong> Uraia Koroi Kama, Founder</span>
         </div>
       </div>
 
+      {/* Preamble */}
+      <SectionH>Preamble</SectionH>
+      <div style={{ background: "#fff", border: `1px solid ${C.line}`, borderRadius: 12, padding: "20px 24px" }}>
+        {PREAMBLE.map((p, i) => (
+          <p key={i} style={{ color: C.soil, fontSize: 14, lineHeight: 1.7, margin: i === 0 ? 0 : "12px 0 0", fontWeight: i === 1 ? 700 : 400 }}>{p}</p>
+        ))}
+      </div>
+
+      {/* The nine commitments */}
+      <SectionH>The nine commitments</SectionH>
       {COMMITMENTS.map(([title, body], i) => (
         <div key={i} style={{ background: "#fff", border: `1px solid ${C.line}`, borderRadius: 12, padding: "18px 22px", marginTop: 12 }}>
-          <div style={{ display: "flex", gap: 12 }}>
-            <span style={{ width: 28, height: 28, borderRadius: "50%", background: "rgba(106,168,79,0.14)", color: C.greenDk, fontWeight: 700, fontSize: 13, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{i + 1}</span>
+          <div style={{ display: "grid", gridTemplateColumns: "52px 1fr", gap: 18 }}>
+            <span style={{ fontSize: 30, fontWeight: 700, color: C.green, lineHeight: 1 }}>{String(i + 1).padStart(2, "0")}</span>
             <div>
-              <h2 style={{ color: C.soil, fontSize: 16, margin: "2px 0 6px" }}>{title}</h2>
+              <h2 style={{ color: C.soil, fontSize: 17, margin: "2px 0 6px" }}>{title}</h2>
               <p style={{ color: C.soil, fontSize: 13.5, lineHeight: 1.65, margin: 0, opacity: 0.92 }}>{body}</p>
             </div>
           </div>
         </div>
       ))}
+
+      {/* Constitutional status */}
+      <div style={{ background: C.cream, border: `1px solid ${C.line}`, borderRadius: 10, padding: 28, marginTop: 26 }}>
+        <h2 style={{ color: C.soil, fontSize: 18, margin: "0 0 12px" }}>Constitutional status</h2>
+        {CONSTITUTIONAL.map((p, i) => (
+          <p key={i} style={{ color: C.soil, fontSize: 13.5, lineHeight: 1.7, margin: i === 0 ? 0 : "10px 0 0" }}>{p}</p>
+        ))}
+      </div>
+
+      {/* Signature block */}
+      <div style={{ textAlign: "center", margin: "32px 0" }}>
+        <div style={{ fontSize: 22, fontFamily: "Georgia, serif", fontStyle: "italic", color: C.soil }}>Uraia Koroi Kama</div>
+        <div style={{ fontSize: 13, color: C.muted, marginTop: 4 }}>Founder, Teivaka PTE LTD · 2026-05-29</div>
+      </div>
+
+      {/* CTA band → verify */}
+      <div style={{ background: C.soil, color: "#fff", borderRadius: 10, padding: 40, textAlign: "center" }}>
+        <h2 style={{ fontSize: 22, fontWeight: 700, color: "#fff", margin: "0 0 8px" }}>Verify a record yourself</h2>
+        <p style={{ fontSize: 14, color: "rgba(255,255,255,0.85)", margin: "0 0 18px" }}>Every record on TFOS can be verified independently. No account needed.</p>
+        <a href="/verify" style={{ display: "inline-block", background: C.green, color: "#fff", borderRadius: 8, padding: "12px 24px", fontSize: 14.5, fontWeight: 700, textDecoration: "none" }}>Open the verification tool →</a>
+      </div>
+
+      <p style={{ fontSize: 11.5, color: C.muted, lineHeight: 1.6, marginTop: 22, textAlign: "center" }}>
+        Published verbatim at teivaka.com/covenant. Amendments announced with 30-day advance notice and per-farmer notification. This page mirrors the source document maintained in Teivaka's public commitment registry.
+      </p>
     </div>
   );
 }

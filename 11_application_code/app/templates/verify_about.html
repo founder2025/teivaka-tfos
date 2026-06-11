@@ -77,9 +77,9 @@
 <body>
 <div class="wrap">
   <header>
-    <div class="brand">Teivaka Farm OS</div>
-    <div class="title">Audit Verification</div>
-    <div class="subtitle">Public real-time verification of Teivaka Farm OS Bank Evidence documents. Hash-chained, tamper-evident, lender-ready.</div>
+    <div class="brand">Independent Verification</div>
+    <div class="title">Verify a TFOS record</div>
+    <div class="subtitle">Banks, buyers, regulators, and curious citizens can verify any record on TFOS independently. No account. No paywall. No special access. The protocol is open and the math is public.</div>
   </header>
 
   <div class="stat-bar">
@@ -88,6 +88,24 @@
       <strong>{{ total_events_human }} farm events</strong>
       verified by Teivaka audit chain to date &middot; {{ tenants_human }} farms &middot; {{ chain_break_count }} chain breaks
     </div>
+  </div>
+
+  <div class="card">
+    <h2>Record ID</h2>
+    <form onsubmit="var v=document.getElementById('vh').value.trim(); if(v){window.location='/verify/'+encodeURIComponent(v);} return false;"
+          style="display:flex; gap:10px; flex-wrap:wrap;">
+      <input id="vh" type="text" placeholder="Paste the audit hash from a QR code or document footer&hellip;"
+             style="flex:1; min-width:220px; font-family:ui-monospace,'SF Mono',Menlo,monospace; font-size:13px; padding:11px 14px; border:1px solid var(--border); border-radius:8px; background:#fff; color:var(--soil);" />
+      <button type="submit"
+              style="background:var(--green); color:#fff; border:none; border-radius:8px; padding:11px 22px; font-size:14px; font-weight:700; cursor:pointer;">
+        Verify
+      </button>
+    </form>
+    {% if sample_hash %}
+    <p style="margin-top:10px; font-size:12px; color:var(--muted);">Try a real one:
+      <a href="/verify/{{ sample_hash }}" style="color:var(--green); font-family:ui-monospace,Menlo,monospace;">{{ sample_hash[:20] }}&hellip;</a>
+    </p>
+    {% endif %}
   </div>
 
   <div class="card">
@@ -130,6 +148,13 @@
       <li>The event type, timestamp, and farm context</li>
     </ul>
     <p>To alter any historical event, an attacker would need to recompute every subsequent hash for that farm. The chain is walked end-to-end at every verification request to detect breaks.</p>
+  </div>
+
+  <div class="card">
+    <h2>The open verification standard</h2>
+    <p>Verification today confirms three things about a record: that it exists in the registry, that its hash chain is intact end-to-end, and when and what type of event it was. The math is SHA256 hash-chaining — any party may re-implement the check.</p>
+    <p>The full Trust Architecture &mdash; trust dimensions (identity, evidence, attestation, behavioural, resilience) and verification levels L0&ndash;L5 &mdash; is being rolled out progressively. This page will show those scores only when they are computed from real evidence and attestations, never as decoration.</p>
+    <p style="font-size:12.5px; color:var(--muted);">The verification protocol does not require a Teivaka account. The math is open. The data is the farmer's. The protocol remains usable indefinitely, including after any change of control of Teivaka PTE LTD, per Covenant &sect;9.</p>
   </div>
 
   <div class="privacy">
