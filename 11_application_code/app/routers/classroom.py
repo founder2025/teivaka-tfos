@@ -140,6 +140,9 @@ async def list_courses(user: dict = Depends(get_current_user)):
         rating_sel = (", (SELECT round(avg(stars)::numeric, 1) FROM community.course_ratings r WHERE r.course_id = c.course_id) AS avg_rating"
                       ", (SELECT count(*) FROM community.course_ratings r WHERE r.course_id = c.course_id) AS rating_count"
                       if has_ratings else ", NULL AS avg_rating, 0 AS rating_count")
+        has_feat = bool((await db.execute(text(
+            "SELECT 1 FROM information_schema.columns WHERE table_schema='community' AND table_name='courses' AND column_name='featured'"))).scalar())
+        order = "ORDER BY c.featured DESC, c.created_at DESC" if has_feat else "ORDER BY c.created_at DESC"
         rows = (await db.execute(text(f"""
             SELECT c.*, u.full_name AS author_name,
                    (SELECT count(*) FROM community.course_lessons l
@@ -156,7 +159,7 @@ async def list_courses(user: dict = Depends(get_current_user)):
             FROM community.courses c
             LEFT JOIN tenant.users u ON u.user_id = c.author_user_id
             WHERE {vis}
-            ORDER BY c.created_at DESC
+            {order}
         """), {"uid": uid})).mappings().all()
         settings = await _settings(db)
         mine_ents = set()
@@ -524,6 +527,7 @@ class CoursePatch(BaseModel):
     pricing: Optional[str] = None        # FREE | SUBSCRIPTION | ONE_TIME
     price_fjd: Optional[float] = None
     required_tier: Optional[str] = None  # BASIC | PROFESSIONAL | ENTERPRISE
+    featured: Optional[bool] = None      # admin-only — pins the course first
 
 
 class ModuleCreate(BaseModel):
@@ -591,6 +595,8 @@ async def patch_course(course_id: str, body: CoursePatch, user: dict = Depends(g
         raise HTTPException(status_code=422, detail="Unknown subscription tier")
     if fields.get("price_fjd") is not None and fields["price_fjd"] < 0:
         raise HTTPException(status_code=422, detail="Price cannot be negative")
+    if "featured" in fields and not _is_admin(user):
+        raise HTTPException(status_code=403, detail="Only admins can feature a course")
     if not fields:
         return {"data": {"course_id": course_id}}
     async with get_db_ctx() as db:
@@ -1039,6 +1045,9 @@ async def list_instructors(user: dict = Depends(get_current_user)):
             JOIN tenant.users u ON u.user_id = c.author_user_id
             WHERE c.status = 'PUBLISHED'
             ORDER BY u.full_name, c.created_at DESC"""))).mappings().all()
+        following = {r[0] for r in (await db.execute(text(
+            "SELECT followed_user_id::text FROM community.follows WHERE follower_user_id = cast(:uid AS uuid)"),
+            {"uid": str(user["user_id"])})).all()}
         by_author = {}
         for r in rows:
             a = by_author.setdefault(str(r["user_id"]), {
@@ -1061,6 +1070,8 @@ async def list_instructors(user: dict = Depends(get_current_user)):
             a["avg_rating"] = round(a.pop("_stars") / a["_rated"], 1) if a["_rated"] else None
             a.pop("_rated", None)
             a["course_count"] = len(a["courses"])
+            a["is_following"] = a["user_id"] in following
+            a["is_me"] = a["user_id"] == str(user["user_id"])
             out.append(a)
         out.sort(key=lambda x: (-x["learners"], x["full_name"]))
         return {"data": out}
@@ -1133,3 +1144,240 @@ async def my_saved_lessons(user: dict = Depends(get_current_user)):
             WHERE ls.user_id = cast(:uid AS uuid) AND l.status = 'PUBLISHED' AND c.status = 'PUBLISHED'
             ORDER BY ls.created_at DESC"""), {"uid": str(user["user_id"])})).mappings().all()
         return {"data": [dict(r) for r in rows]}
+
+
+# -------------------------------------------------- public trust surfaces --
+
+@router.get("/users/{user_id}/certificates")
+async def user_certificates(user_id: str, user: dict = Depends(get_current_user)):
+    """Public-safe certificate list for a profile — the trust display a buyer
+    or lender checks. Only verifiable fields, nothing private."""
+    async with get_db_ctx() as db:
+        rows = (await db.execute(text(
+            "SELECT cert_id, course_title, issued_at, audit_hash FROM community.course_certificates "
+            "WHERE user_id = cast(:uid AS uuid) ORDER BY issued_at DESC"),
+            {"uid": user_id})).mappings().all()
+        return {"data": [dict(r) for r in rows]}
+
+
+@router.get("/courses/{course_id}/ratings")
+async def course_ratings(course_id: str, user: dict = Depends(get_current_user)):
+    """Reviews for a published course (or any course you manage). Reviewer
+    shown by first name only — honest social proof without exposure."""
+    async with get_db_ctx() as db:
+        c = (await db.execute(text(
+            "SELECT status, author_user_id FROM community.courses WHERE course_id = :cid"),
+            {"cid": course_id})).mappings().first()
+        if not c:
+            raise HTTPException(status_code=404, detail="Course not found")
+        manage = _is_admin(user) or str(c["author_user_id"]) == str(user["user_id"])
+        if c["status"] != "PUBLISHED" and not manage:
+            raise HTTPException(status_code=404, detail="Course not found")
+        if not await _has_table(db, "course_ratings"):
+            return {"data": []}
+        rows = (await db.execute(text(
+            "SELECT r.stars, r.review, r.created_at, split_part(u.full_name, ' ', 1) AS reviewer "
+            "FROM community.course_ratings r JOIN tenant.users u ON u.user_id = r.user_id "
+            "WHERE r.course_id = :cid ORDER BY r.created_at DESC LIMIT 100"),
+            {"cid": course_id})).mappings().all()
+        return {"data": [dict(r) for r in rows]}
+
+
+# ------------------------------------------------ library: merged + drafts --
+
+@router.get("/library")
+async def library(search: str = None, user: dict = Depends(get_current_user)):
+    """The Library, merged: curated shared.kb_articles (read-only core,
+    Inviolable #7 intact) + APPROVED partner guides from
+    community.library_submissions, labeled by source."""
+    out = []
+    async with get_db_ctx() as db:
+        params = {}
+        kq = """SELECT article_id::text AS id, title, article_type AS category,
+                       content_summary AS summary, created_at, 'TFOS' AS source, NULL AS author_name
+                FROM shared.kb_articles WHERE published = true"""
+        if search and search.strip():
+            kq += " AND (title ILIKE :srch OR content_md ILIKE :srch)"
+            params["srch"] = f"%{search.strip()}%"
+        out += [dict(r) for r in (await db.execute(text(kq + " ORDER BY created_at DESC LIMIT 50"), params)).mappings().all()]
+        if await _has_table(db, "library_submissions"):
+            pq = """SELECT s.submission_id AS id, s.title, s.category,
+                           s.summary, s.created_at, 'PARTNER' AS source, u.full_name AS author_name
+                    FROM community.library_submissions s
+                    LEFT JOIN tenant.users u ON u.user_id = s.author_user_id
+                    WHERE s.status = 'APPROVED'"""
+            if search and search.strip():
+                pq += " AND (s.title ILIKE :srch OR s.content_md ILIKE :srch)"
+            out += [dict(r) for r in (await db.execute(text(pq + " ORDER BY s.created_at DESC LIMIT 50"), params)).mappings().all()]
+    out.sort(key=lambda a: str(a["created_at"]), reverse=True)
+    return {"data": out}
+
+
+@router.get("/library/{item_id}")
+async def library_item(item_id: str, user: dict = Depends(get_current_user)):
+    async with get_db_ctx() as db:
+        if item_id.startswith("LIB-") and await _has_table(db, "library_submissions"):
+            row = (await db.execute(text(
+                "SELECT s.title, s.category, s.content_md, s.created_at, u.full_name AS author_name, 'PARTNER' AS source "
+                "FROM community.library_submissions s LEFT JOIN tenant.users u ON u.user_id = s.author_user_id "
+                "WHERE s.submission_id = :id AND s.status = 'APPROVED'"), {"id": item_id})).mappings().first()
+        else:
+            row = (await db.execute(text(
+                "SELECT title, article_type AS category, content_md, created_at, NULL AS author_name, 'TFOS' AS source "
+                "FROM shared.kb_articles WHERE article_id::text = :id AND published = true"), {"id": item_id})).mappings().first()
+        if not row:
+            raise HTTPException(status_code=404, detail="Guide not found")
+        return {"data": dict(row)}
+
+
+class LibrarySubmission(BaseModel):
+    title: str
+    category: Optional[str] = "GENERAL"
+    summary: Optional[str] = ""
+    content_md: str
+
+
+@router.post("/library/submissions")
+async def submit_library_guide(body: LibrarySubmission, user: dict = Depends(get_current_user)):
+    """Authors propose a field guide. It only appears in the Library after a
+    human admin approves it — knowledge stays reviewed, never auto-published."""
+    if not (body.title or "").strip() or not (body.content_md or "").strip():
+        raise HTTPException(status_code=422, detail="Title and content are both required")
+    async with get_db_ctx() as db:
+        if not await _is_author(db, user):
+            raise HTTPException(status_code=403, detail="Field-guide submissions are for approved authors")
+        if not await _has_table(db, "library_submissions"):
+            raise HTTPException(status_code=503, detail="Submissions not available yet — run the deploy script")
+        sid = _id("LIB")
+        await db.execute(text(
+            "INSERT INTO community.library_submissions (submission_id, author_user_id, title, category, summary, content_md) "
+            "VALUES (:sid, cast(:uid AS uuid), :t, :cat, :sum, :md)"),
+            {"sid": sid, "uid": str(user["user_id"]), "t": body.title.strip()[:200],
+             "cat": (body.category or "GENERAL").strip()[:50].upper(), "sum": (body.summary or "").strip()[:500],
+             "md": body.content_md.strip()})
+        await db.commit()
+    return {"data": {"submission_id": sid, "status": "PENDING"}}
+
+
+@router.get("/library/submissions/mine")
+async def my_library_submissions(user: dict = Depends(get_current_user)):
+    async with get_db_ctx() as db:
+        if not await _has_table(db, "library_submissions"):
+            return {"data": []}
+        rows = (await db.execute(text(
+            "SELECT submission_id, title, category, status, reason, created_at FROM community.library_submissions "
+            "WHERE author_user_id = cast(:uid AS uuid) ORDER BY created_at DESC"),
+            {"uid": str(user["user_id"])})).mappings().all()
+        return {"data": [dict(r) for r in rows]}
+
+
+@router.get("/admin/library-submissions")
+async def admin_library_submissions(status: str = "PENDING", user: dict = Depends(get_current_user)):
+    if not _is_admin(user):
+        raise HTTPException(status_code=403, detail="Admin only")
+    async with get_db_ctx() as db:
+        rows = (await db.execute(text(
+            "SELECT s.*, u.full_name, u.email FROM community.library_submissions s "
+            "JOIN tenant.users u ON u.user_id = s.author_user_id "
+            "WHERE s.status = :st ORDER BY s.created_at"), {"st": status.upper()})).mappings().all()
+        return {"data": [dict(r) for r in rows]}
+
+
+@router.post("/admin/library-submissions/{submission_id}/approve")
+async def approve_library_submission(submission_id: str, user: dict = Depends(get_current_user)):
+    if not _is_admin(user):
+        raise HTTPException(status_code=403, detail="Admin only")
+    async with get_db_ctx() as db:
+        row = (await db.execute(text(
+            "UPDATE community.library_submissions SET status = 'APPROVED', decided_at = now(), decided_by = cast(:by AS uuid) "
+            "WHERE submission_id = :sid AND status = 'PENDING' RETURNING author_user_id, title"),
+            {"sid": submission_id, "by": str(user["user_id"])})).first()
+        if not row:
+            raise HTTPException(status_code=404, detail="Submission not found or already decided")
+        try:
+            await db.execute(text(
+                "INSERT INTO community.feed_notifications (user_id, actor_user_id, type, body) "
+                "VALUES (:uid, cast(:actor AS uuid), 'GUIDE_APPROVED', :msg)"),
+                {"uid": str(row[0]), "actor": str(user["user_id"]),
+                 "msg": f"Your field guide '{row[1]}' is live in the Classroom Library."})
+        except Exception:  # noqa: BLE001 — best-effort notification
+            pass
+        await db.commit()
+    return {"data": {"submission_id": submission_id, "status": "APPROVED"}}
+
+
+@router.post("/admin/library-submissions/{submission_id}/reject")
+async def reject_library_submission(submission_id: str, body: DecisionBody = None, user: dict = Depends(get_current_user)):
+    if not _is_admin(user):
+        raise HTTPException(status_code=403, detail="Admin only")
+    async with get_db_ctx() as db:
+        row = (await db.execute(text(
+            "UPDATE community.library_submissions SET status = 'REJECTED', reason = :why, decided_at = now(), decided_by = cast(:by AS uuid) "
+            "WHERE submission_id = :sid AND status = 'PENDING' RETURNING author_user_id"),
+            {"sid": submission_id, "why": (body.reason if body else "") or "", "by": str(user["user_id"])})).first()
+        if not row:
+            raise HTTPException(status_code=404, detail="Submission not found or already decided")
+        await db.commit()
+    return {"data": {"submission_id": submission_id, "status": "REJECTED"}}
+
+
+# ------------------------------------------------- admin: entitlements/reviews --
+
+@router.get("/admin/entitlements")
+async def admin_entitlements(user: dict = Depends(get_current_user)):
+    if not _is_admin(user):
+        raise HTTPException(status_code=403, detail="Admin only")
+    async with get_db_ctx() as db:
+        if not await _has_table(db, "course_entitlements"):
+            return {"data": []}
+        rows = (await db.execute(text(
+            "SELECT e.user_id, e.course_id, e.source, e.created_at, u.full_name, u.email, c.title AS course_title "
+            "FROM community.course_entitlements e "
+            "JOIN tenant.users u ON u.user_id = e.user_id "
+            "JOIN community.courses c ON c.course_id = e.course_id "
+            "ORDER BY e.created_at DESC LIMIT 200"))).mappings().all()
+        return {"data": [dict(r) for r in rows]}
+
+
+@router.delete("/admin/entitlements/{course_id}/{user_id}")
+async def revoke_entitlement(course_id: str, user_id: str, user: dict = Depends(get_current_user)):
+    if not _is_admin(user):
+        raise HTTPException(status_code=403, detail="Admin only")
+    async with get_db_ctx() as db:
+        res = await db.execute(text(
+            "DELETE FROM community.course_entitlements WHERE course_id = :cid AND user_id = cast(:uid AS uuid)"),
+            {"cid": course_id, "uid": user_id})
+        if res.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Entitlement not found")
+        await db.commit()
+    return {"data": {"revoked": True}}
+
+
+@router.get("/admin/ratings")
+async def admin_ratings(user: dict = Depends(get_current_user)):
+    if not _is_admin(user):
+        raise HTTPException(status_code=403, detail="Admin only")
+    async with get_db_ctx() as db:
+        if not await _has_table(db, "course_ratings"):
+            return {"data": []}
+        rows = (await db.execute(text(
+            "SELECT r.user_id, r.course_id, r.stars, r.review, r.created_at, u.full_name, c.title AS course_title "
+            "FROM community.course_ratings r "
+            "JOIN tenant.users u ON u.user_id = r.user_id "
+            "JOIN community.courses c ON c.course_id = r.course_id "
+            "ORDER BY r.created_at DESC LIMIT 200"))).mappings().all()
+        return {"data": [dict(r) for r in rows]}
+
+
+@router.delete("/admin/ratings/{course_id}/{user_id}")
+async def delete_rating(course_id: str, user_id: str, user: dict = Depends(get_current_user)):
+    if not _is_admin(user):
+        raise HTTPException(status_code=403, detail="Admin only")
+    async with get_db_ctx() as db:
+        res = await db.execute(text(
+            "DELETE FROM community.course_ratings WHERE course_id = :cid AND user_id = cast(:uid AS uuid)"),
+            {"cid": course_id, "uid": user_id})
+        if res.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Rating not found")
+        await db.commit()
+    return {"data": {"deleted": True}}

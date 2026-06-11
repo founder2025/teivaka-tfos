@@ -11,7 +11,7 @@ import { useParams, useNavigate, Link } from "react-router-dom";
 import {
   Eye, Layers, Play, Image as ImageIcon, Bookmark, Activity as ActivityIcon, Settings as Cog,
   Rss, Users, Store, Contact, Camera, Pencil, Download, Shield, BadgeCheck, Phone, Calendar,
-  Clock, MapPin, MessageCircle, UserPlus, UserCheck, ArrowRight, X,
+  Clock, MapPin, MessageCircle, UserPlus, UserCheck, ArrowRight, X, Award, QrCode,
 } from "lucide-react";
 import { C, getJSON, send, card } from "./_meCommon";
 import { getCurrentUser } from "../../utils/auth";
@@ -65,6 +65,39 @@ function Stat({ n, label, onClick }) {
 // Suggested members — real existing users from /community/people, with working
 // Follow. New users land on /me first, so this is their discovery entry point.
 // Honest-empty when the platform genuinely has no one else to suggest yet.
+/** Classroom credentials — public trust display: verified, scannable certs. */
+function ProfileCertificates({ userId }) {
+  const [rows, setRows] = useState(null);
+  useEffect(() => {
+    if (!userId) return;
+    getJSON(`/api/v1/classroom/users/${userId}/certificates`).then((r) => setRows(r.data || [])).catch(() => setRows([]));
+  }, [userId]);
+  if (!rows || !rows.length) return null;   // honest: section only exists when earned
+  return (
+    <div style={card}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+        <Award size={16} style={{ color: "#BF9000" }} />
+        <strong style={{ color: C.soil }}>Classroom certificates</strong>
+        <span style={{ fontSize: 12, color: C.muted }}>· verified credentials, scannable by anyone</span>
+      </div>
+      {rows.map((c) => (
+        <div key={c.cert_id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 2px", borderBottom: `1px solid ${C.line}`, flexWrap: "wrap" }}>
+          <div style={{ flex: 1, minWidth: 160 }}>
+            <div style={{ fontWeight: 600, color: C.soil, fontSize: 13.5 }}>{c.course_title}</div>
+            <div style={{ fontSize: 11.5, color: C.muted }}>Earned {new Date(c.issued_at).toLocaleDateString()} · {c.cert_id}</div>
+          </div>
+          {c.audit_hash && (
+            <a href={`/verify/${c.audit_hash}`} target="_blank" rel="noreferrer"
+              style={{ display: "inline-flex", gap: 5, alignItems: "center", border: `1px solid ${C.line}`, borderRadius: 8, padding: "6px 12px", color: C.soil, textDecoration: "none", fontSize: 12.5 }}>
+              <QrCode size={13} />Verify
+            </a>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function SuggestedPeople() {
   const navigate = useNavigate();
   const [people, setPeople] = useState(null);
@@ -529,6 +562,8 @@ export default function ProfilePage({ self = false }) {
             <div style={{ fontSize: 12, color: C.muted, margin: "12px 0" }}>✓ Activity is recorded as it happens and can be independently verified.</div>
             <a href="/verify" style={{ display: "inline-flex", gap: 6, alignItems: "center", background: C.green, color: "#fff", borderRadius: 8, padding: "9px 16px", textDecoration: "none", fontSize: 13.5, fontWeight: 600 }}><Shield size={14} />Verify this record</a>
           </div>
+
+          <ProfileCertificates userId={p.user_id || targetId} />
 
           <div style={card}>
             {[["Farm", p.country ? "All farms" : "All farms"], ["Role", p.role], ["Member since", fmtDate(p.joined)], ["Last active", isYou ? "just now" : "recently"]].map(([k, v]) => (
