@@ -141,11 +141,10 @@ async def lifespan(app: FastAPI):
 
 
 # ─── FastAPI application ───────────────────────────────────────────────────────
-_DOCS_ON = __import__("os").getenv("TFOS_DOCS") == "1"
+# docs/redoc/openapi are disabled in production by the docs_url/redoc_url/
+# openapi_url args below (gated on settings.is_production) — that already
+# satisfies the hardening requirement; do NOT add a second docs_url here.
 app = FastAPI(
-    docs_url="/docs" if _DOCS_ON else None,
-    redoc_url="/redoc" if _DOCS_ON else None,
-    openapi_url="/openapi.json" if _DOCS_ON else None,
     title="Teivaka Agri-TOS API",
     description="""
 ## Teivaka Agricultural Transformation Operating System — API v1
