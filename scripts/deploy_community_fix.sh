@@ -33,6 +33,7 @@ $PSQL < docs/runbooks/109_platform_settings_apply_as_owner.sql > /tmp/rb_109.out
 $PSQL < docs/runbooks/110_analytics_events_apply_as_owner.sql  > /tmp/rb_110.out 2>&1 && ok "110 analytics spine" || bad "110 analytics spine (see /tmp/rb_110.out)"
 $PSQL < docs/runbooks/111_consent_ledger_apply_as_owner.sql   > /tmp/rb_111.out 2>&1 && ok "111 consent ledger" || bad "111 consent ledger (see /tmp/rb_111.out)"
 $PSQL < docs/runbooks/112_geo_regions_apply_as_owner.sql      > /tmp/rb_112.out 2>&1 && ok "112 geo registry" || bad "112 geo registry (see /tmp/rb_112.out)"
+$PSQL < docs/runbooks/113_external_feeds_apply_as_owner.sql   > /tmp/rb_113.out 2>&1 && ok "113 external feeds" || bad "113 external feeds (see /tmp/rb_113.out)"
 
 say "2/7 Verify table shapes (the AmbiguousColumn culprit)"
 SHAPES=$(docker exec teivaka_db psql -U teivaka -d teivaka_db -tA -c "
@@ -105,6 +106,8 @@ GEO=$(docker exec teivaka_db psql -U teivaka -d teivaka_db -tA -c "SELECT (to_re
 [ "$GEO" = "2" ] && ok "geo registry present (2/2)" || { bad "geo registry missing ($GEO/2) — runbook tail:"; tail -n 4 /tmp/rb_112.out; }
 GEON=$(docker exec teivaka_db psql -U teivaka -d teivaka_db -tA -c "SELECT count(*) FROM shared.geo_regions;" 2>/dev/null)
 [ "$GEON" = "19" ] && ok "geo registry seeded (19 regions: 1+4+14)" || bad "geo registry seed count is $GEON, expected 19"
+EXT=$(docker exec teivaka_db psql -U teivaka -d teivaka_db -tA -c "SELECT (to_regclass('external.weather_observations') IS NOT NULL)::int + (to_regclass('external.market_prices') IS NOT NULL)::int;")
+[ "$EXT" = "2" ] && ok "external feeds spine present (2/2)" || { bad "external feeds missing ($EXT/2) — runbook tail:"; tail -n 4 /tmp/rb_113.out; }
 
 say "4/7 Run migrations (two-pass: app role + owner — covers both table ownerships)"
 # Pass 1: as the app role (its own DATABASE_URL) — handles tables it owns (e.g. listings)

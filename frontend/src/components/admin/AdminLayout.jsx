@@ -13,6 +13,7 @@ import {
   LayoutDashboard, Shield, Users, BadgeCheck, CreditCard,
   Flag, GraduationCap, Store, BarChart3, LineChart,
   Settings, Cog, Map as MapIcon, ArrowLeft, Award, Crosshair, Globe, Bug,
+  CloudRain, Coins,
 } from "lucide-react";
 const C = { soil: "#5C4033", cream: "#F8F3E9", green: "#6AA84F", greenDk: "#3E7B1F", line: "#E5DCC9", muted: "#8A8678", gold: "#BF9000" };
 
@@ -39,6 +40,8 @@ const SECTIONS = [
     { path: "/admin/intelligence", label: "Intelligence", Icon: LineChart },
     { path: "/admin/intelligence/geo", label: "Geographic", Icon: Globe },
     { path: "/admin/intelligence/pests", label: "Pest & Disease", Icon: Bug },
+    { path: "/admin/intelligence/weather", label: "Weather", Icon: CloudRain },
+    { path: "/admin/intelligence/market", label: "Market", Icon: Coins },
     { path: "/admin/analytics", label: "Analytics", Icon: BarChart3 },
     { path: "/admin/map", label: "Farm Map", Icon: MapIcon },
   ]},

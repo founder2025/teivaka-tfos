@@ -387,6 +387,73 @@ async def pest_intelligence(user: dict = Depends(get_current_user)):
     }}
 
 
+@router.get("/intelligence/weather")
+async def weather_intelligence(user: dict = Depends(get_current_user)):
+    """Weather Intelligence dome (I7). Backend is wired and awaiting the Fiji Met
+    Service feed: external.weather_observations + ingestion runbook + this read
+    path all exist (migration 113). Until the feed lands the dome is honestly
+    empty — it reports readiness (regions wired) and names the blocker, never
+    fakes rainfall. Loading the feed is a data load, not a code change."""
+    _require_admin(user)
+    async with get_db_ctx() as db:
+        regions_ready = await _scalar(db, "SELECT count(*) FROM shared.geo_regions")
+        obs_total = await _scalar(db, "SELECT count(*) FROM external.weather_observations")
+        coverage = await _rows(db, """
+            SELECT g.name AS region,
+                   count(w.obs_id) AS observations,
+                   to_char(max(w.observed_date), 'YYYY-MM-DD') AS latest,
+                   round(avg(w.rainfall_mm)::numeric, 1) AS avg_rainfall_mm
+            FROM shared.geo_regions g
+            LEFT JOIN external.weather_observations w ON w.region_id = g.region_id
+            WHERE g.level = 'PROVINCE'
+            GROUP BY g.name ORDER BY observations DESC, g.name""")
+        date_range = await _rows(db, """
+            SELECT to_char(min(observed_date), 'YYYY-MM-DD') AS earliest,
+                   to_char(max(observed_date), 'YYYY-MM-DD') AS latest
+            FROM external.weather_observations""")
+    return {"data": {
+        "source": "external.weather_observations (Fiji Met Service feed) · shared.geo_regions",
+        "status": "LIVE" if obs_total else "AWAITING_FEED",
+        "blocker": "Fiji Met Service data feed — partnership pending. Schema, ingestion runbook and this dome are already wired; loading the feed needs no code change.",
+        "regions_ready": regions_ready,
+        "observations_total": obs_total,
+        "date_range": (date_range or [{}])[0] if date_range is not None else None,
+        "coverage": coverage,
+        "schema_fields": ["rainfall_mm", "temp_min_c", "temp_max_c", "humidity_pct", "wind_kph", "event_type"],
+    }}
+
+
+@router.get("/intelligence/market")
+async def market_intelligence(user: dict = Depends(get_current_user)):
+    """Market Intelligence dome (I6). Backend wired and awaiting the Ministry /
+    exporter price feed: external.market_prices (FARMGATE/WHOLESALE/RETAIL/EXPORT
+    tiers) + ingestion runbook + this read path exist (migration 113). Honest-
+    empty until the feed lands; compares against the crowdsourced
+    community.price_records farmers already submit."""
+    _require_admin(user)
+    async with get_db_ctx() as db:
+        prices_total = await _scalar(db, "SELECT count(*) FROM external.market_prices")
+        crowdsourced = await _scalar(db, "SELECT count(*) FROM community.price_records")
+        tiers = await _rows(db, "SELECT price_tier, count(*) AS rows FROM external.market_prices GROUP BY 1 ORDER BY 1")
+        latest = await _rows(db, """
+            SELECT m.commodity_name AS commodity, m.price_tier,
+                   COALESCE(g.name, 'National') AS region,
+                   m.price_fjd, m.unit, to_char(m.observed_at, 'YYYY-MM-DD') AS observed_at
+            FROM external.market_prices m
+            LEFT JOIN shared.geo_regions g ON g.region_id = m.region_id
+            ORDER BY m.observed_at DESC, m.commodity_name LIMIT 100""")
+    return {"data": {
+        "source": "external.market_prices (Ministry/exporter feed) · community.price_records (crowdsourced)",
+        "status": "LIVE" if prices_total else "AWAITING_FEED",
+        "blocker": "Ministry of Agriculture / exporter price feed — partnership pending. Schema, ingestion runbook and this dome are already wired.",
+        "authoritative_prices": prices_total,
+        "crowdsourced_reports": crowdsourced,
+        "price_tiers_supported": ["FARMGATE", "WHOLESALE", "RETAIL", "EXPORT"],
+        "tiers": tiers,
+        "latest": latest,
+    }}
+
+
 # --------------------------------------------------------- platform controls --
 
 class FlagPatch(BaseModel):
