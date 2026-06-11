@@ -16,10 +16,15 @@ Fixed → verified; deferred → reasoned. Standing checklist at the bottom.
 | 8 | Admin grant abuse | Grants/revokes hash-chained to audit.events; founder role immutable from the panel; self-revoke blocked |
 
 ## OPERATOR ACTIONS REQUIRED (cannot be done from code)
-1. **CRITICAL — rotate the default admin password** (`Teivaka2025!`, flagged in known-issues since launch):
-   log in as admin → change password; or via psql:
-   `UPDATE tenant.users SET password_hash = crypt('NEW_STRONG_PASSWORD', gen_salt('bf')) WHERE email = '<admin email>';`
-   (or use the app's change-password flow — preferred). Verify old password fails.
+1. **CRITICAL — rotate the default admin password** (`Teivaka2025!`, flagged in known-issues since launch).
+   ⚠️ Do NOT use psql `crypt()/gen_salt('bf')` — it depends on pgcrypto and produces a hash
+   variant that can mismatch the app's verifier (this bit us on 2026-06-11). Correct method —
+   hash with the SAME library the app uses, inside the api container:
+   ```
+   docker exec -it teivaka_api python -c "from passlib.context import CryptContext; import getpass; print(CryptContext(schemes=['bcrypt']).hash(getpass.getpass('New password: ')))"
+   docker exec teivaka_db psql -U teivaka -d teivaka_db -c "UPDATE tenant.users SET password_hash='<printed $2b$ hash>' WHERE email='<admin email>';"
+   ```
+   Then verify: old password fails, new password logs in.
 2. Confirm `SECRET_KEY` in production .env is long-random (not a default) — rotate if in doubt (invalidates sessions).
 3. Confirm DB + Redis ports are not exposed publicly (docker-compose binds / firewall).
 
