@@ -1,61 +1,34 @@
 /**
- * ClassroomPillar.jsx — /classroom — PIXEL-EXACT rebuild of the prototype's CLASSROOM pillar.
+ * ClassroomPillar.jsx — /classroom — PIXEL-EXACT prototype Classroom, wired to
+ * the real course backend (Skool model — Operator-ratified 2026-06-11).
  *
- * Reproduces the prototype's exact shell (topbar + left-rail classroom nav + main-inner)
- * and the 5 classroom views (Overview/Tracks/My progress/Certification/Bookmarks) using the
- * prototype's own DOM + classes (rendered under <TfpShell> → styles/prototype.css).
+ *   Overview/Tracks → GET /api/v1/classroom/courses — real course cards with
+ *                     covers + live progress. Authors/admins get the "New
+ *                     course" add-card and an Edit pill per own course.
+ *   My progress     → GET /api/v1/classroom/me/progress — real table.
+ *   Certification   → GET /api/v1/classroom/me/certificates — earned,
+ *                     hash-chained credentials: PDF download + /verify QR link.
+ *   Bookmarks       → prototype copy (resume guidance), unchanged.
  *
- * Real-data wiring (honest where the prototype faked it):
- *   Overview/Tracks → GET /api/v1/kb  (published shared.kb_articles → course-card grid).
- *                     Clicking a card opens the article in the prototype's two-pane
- *                     course player (cp-modal), body from GET /api/v1/kb/{id}.
- *   My progress    → honest-empty (no lesson-completion tracking backend yet).
- *   Certification  → honest-empty (prototype hardcoded a fake cert — NOT replicated).
- *   Bookmarks      → honest-empty (matches the prototype's own copy).
+ * NO preloaded content: courses exist only when an admin/partner uploads them.
  */
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
-import {
-  Home, BookOpen, Tractor, Sparkles, Search, MessageSquare, Bell, ChevronDown,
-  Layers, Activity, Award, Bookmark, X, FileText, QrCode,
-} from "lucide-react";
-import TfpShell from "../../components/farm/TfpShell";
+import { useLocation } from "react-router-dom";
+import { BookOpen, Plus, Award, QrCode, Download, Edit3 } from "lucide-react";
+import { getJSON, send } from "../../utils/api";
+import CoursePlayer from "../../components/classroom/CoursePlayer";
+import CourseBuilder from "../../components/classroom/CourseBuilder";
 
-function authHeaders() {
-  const t = localStorage.getItem("tfos_access_token");
-  return t ? { "Content-Type": "application/json", Authorization: `Bearer ${t}` } : { "Content-Type": "application/json" };
-}
-async function getJSON(u) { const r = await fetch(u, { headers: authHeaders() }); if (!r.ok) throw new Error(String(r.status)); return r.json(); }
+const API = "/api/v1/classroom";
+const toast = (message, type) => { try { window.dispatchEvent(new CustomEvent("tfos:toast", { detail: { message, type } })); } catch { /* noop */ } };
 
-const PILLARS = [
-  { id: "home", label: "Home", Icon: Home, to: "/home" },
-  { id: "classroom", label: "Classroom", Icon: BookOpen, to: "/classroom" },
-  { id: "farm", label: "Farm", Icon: Tractor, to: "/farm" },
-  { id: "tis", label: "TIS", Icon: Sparkles, to: "/tis" },
-];
-const CLASSROOM_NAV = [
-  { id: "overview", label: "Overview", Icon: BookOpen },
-  { id: "tracks", label: "Tracks", Icon: Layers },
-  { id: "my_progress", label: "My progress", Icon: Activity },
-  { id: "certification", label: "Certification", Icon: Award },
-  { id: "bookmarks", label: "Bookmarks", Icon: Bookmark },
-];
+const COVER_FALLBACK = "linear-gradient(135deg,var(--green),#4a7a33)";
 
-// Prototype's exact cover presets (courseCoverStyle) + a category fallback palette.
-const COVER_PRESET = {
-  "Watermelon Farming": "linear-gradient(135deg,var(--green),#3d6b2e)",
-  "Eggplant Farming": "linear-gradient(135deg,#7b5ea7,#4a3168)",
-  "Kava Farming": "linear-gradient(135deg,var(--amber),#7a5c00)",
-};
-function coverStyle(title) {
-  return { background: COVER_PRESET[title] || "linear-gradient(135deg,var(--green),#4a7a33)" };
-}
-
-function PageHead({ title, sub, action }) {
+function PageHead({ title, sub }) {
   return (
     <div className="page-header">
       <div><h1>{title}</h1>{sub ? <div className="subtitle">{sub}</div> : null}</div>
-      <div className="page-actions">{action}</div>
+      <div className="page-actions" />
     </div>
   );
 }
@@ -69,71 +42,73 @@ function GlobalNote() {
   );
 }
 
-function CourseGrid({ courses, loading, onOpen }) {
+function CourseGrid({ courses, loading, canAuthor, onOpen, onEdit, onNew }) {
   if (loading) return <div className="course-empty"><BookOpen size={34} /><div className="course-empty-h">Loading…</div></div>;
-  if (!courses.length) {
+  if (!courses.length && !canAuthor) {
     return (
       <div className="course-empty">
         <BookOpen size={34} />
         <div className="course-empty-h">No courses yet</div>
-        <div className="course-empty-sub">Lessons will appear here when they are ready. Check back soon.</div>
+        <div className="course-empty-sub">Courses are being prepared by our partners. Check back soon.</div>
       </div>
     );
   }
   return (
-    <div className="course-grid">
-      {courses.map((c) => (
-        <div className="course-card" key={c.kb_entry_id} onClick={() => onOpen(c)}>
-          <div className="course-cover" style={coverStyle(c.title)} />
-          <div className="course-card-body">
-            <div className="course-card-title">{c.title}</div>
-            <div className="course-card-bar"><div className="course-card-fill" style={{ width: "0%" }} /></div>
-            <div className="course-card-pct">{c.category || "Lesson"}</div>
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-/** Two-pane course player (cp-modal) — opens a single KB article as a lesson. */
-function LessonPlayer({ course, onClose }) {
-  const [body, setBody] = useState(null);
-  useEffect(() => {
-    let alive = true;
-    (async () => {
-      try {
-        const r = await getJSON(`/api/v1/kb/${course.kb_entry_id}`);
-        if (alive) setBody(r?.data || {});
-      } catch { if (alive) setBody({}); }
-    })();
-    return () => { alive = false; };
-  }, [course.kb_entry_id]);
-  const text = body == null ? "Loading…" : (body.content_md || body.content_summary || course.content_summary || "No content for this lesson yet.");
-  return (
-    <div className="overlay-backdrop" onClick={onClose}>
-      <div className="overlay-modal cp-modal" onClick={(e) => e.stopPropagation()}>
-        <div className="overlay-head"><span>Course</span><button className="overlay-close" onClick={onClose}><X size={18} /></button></div>
-        <div className="cp-shell">
-          <div className="cp-rail">
-            <button className="cp-back" onClick={onClose}><ChevronDown size={14} /> All courses</button>
-            <div className="cp-course-title">{course.title}</div>
-            <div className="cp-progress"><div className="cp-progress-fill" style={{ width: "0%" }} /></div>
-            <div className="cp-progress-meta">0% · 0 of 1 done</div>
-            <div className="cp-tree">
-              <div className="cp-mod">
-                <div className="cp-topic sel">
-                  <span className="cp-check" />
-                  <span className="cp-topic-name">{course.title}</span>
-                </div>
+    <>
+      {!courses.length && canAuthor && (
+        <div className="course-empty-admin">No published courses yet. Build the first one below.</div>
+      )}
+      <div className="course-grid">
+        {courses.map((c) => (
+          <div className="course-card" key={c.course_id} onClick={() => onOpen(c)}>
+            <div className="course-cover" style={c.cover_url ? { backgroundImage: `url(${c.cover_url})`, backgroundSize: "cover", backgroundPosition: "center" } : { background: COVER_FALLBACK }} />
+            <div className="course-card-body">
+              <div className="course-card-title">
+                {c.title}
+                {c.status === "DRAFT" && <span className="cb-badge draft" style={{ marginLeft: 6 }}>Draft</span>}
+              </div>
+              <div className="course-card-bar"><div className="course-card-fill" style={{ width: `${c.progress_pct}%` }} /></div>
+              <div className="course-card-pct" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span>{c.progress_pct}%</span>
+                <span style={{ color: "var(--muted)", fontSize: 11 }}>{c.lesson_count} lesson{c.lesson_count === 1 ? "" : "s"}{c.author_name ? ` · ${c.author_name}` : ""}</span>
+                {(c.is_mine || c.can_edit) && (
+                  <button className="cb-cover-btn" style={{ marginLeft: "auto" }} onClick={(e) => { e.stopPropagation(); onEdit(c); }}><Edit3 size={11} />Edit</button>
+                )}
               </div>
             </div>
           </div>
-          <div className="cp-main">
-            <div className="cp-topic-head">
-              <div className="cp-topic-h">{course.title}</div>
-            </div>
-            <div className="cb-lesson-body" style={{ whiteSpace: "pre-wrap" }}>{text}</div>
+        ))}
+        {canAuthor && (
+          <div className="course-card course-card-add" onClick={onNew}>
+            <Plus size={26} /><div>New course</div>
+          </div>
+        )}
+      </div>
+    </>
+  );
+}
+
+function NewCoursePrompt({ onClose, onCreated }) {
+  const [title, setTitle] = useState("");
+  const create = async () => {
+    if (!title.trim()) return;
+    try {
+      const r = await send("POST", `${API}/courses`, { title: title.trim() });
+      toast("Course created — opening the builder ✓", "success");
+      onCreated(r.data.course_id);
+    } catch (e) { toast(`Couldn't create the course: ${e.userMessage || e.message}`, "error"); }
+  };
+  return (
+    <div className="overlay-backdrop show" style={{ alignItems: "center", padding: 16 }} onClick={onClose}>
+      <div className="overlay-modal" style={{ maxWidth: 420 }} onClick={(e) => e.stopPropagation()}>
+        <div className="overlay-head"><span>New course</span></div>
+        <div style={{ padding: 18 }}>
+          <input autoFocus value={title} placeholder="Course title — e.g. Taro Farming Fundamentals" onChange={(e) => setTitle(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && create()}
+            style={{ width: "100%", border: "1px solid var(--line)", borderRadius: 8, padding: "10px 12px", fontSize: 14, marginBottom: 14 }} />
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+            <button className="btn btn-sm btn-secondary" onClick={onClose}>Cancel</button>
+            <button className="btn btn-sm btn-primary" onClick={create}>Create &amp; build</button>
           </div>
         </div>
       </div>
@@ -141,22 +116,41 @@ function LessonPlayer({ course, onClose }) {
   );
 }
 
+async function downloadPdf(certId) {
+  try {
+    const t = localStorage.getItem("tfos_access_token");
+    const r = await fetch(`${API}/certificates/${certId}/pdf`, { headers: { Authorization: `Bearer ${t}` } });
+    if (!r.ok) throw new Error(String(r.status));
+    const blob = await r.blob();
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `${certId}.pdf`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  } catch (e) { toast(`Couldn't download the certificate: ${e.message}`, "error"); }
+}
+
 export default function ClassroomPillar() {
-  const navigate = useNavigate();
   const { pathname } = useLocation();
   const view = ({ overview: "overview", tracks: "tracks", progress: "my_progress",
     certifications: "certification", bookmarks: "bookmarks" }[pathname.split("/")[2]]) || "overview";
   const [courses, setCourses] = useState(null);
-  const [open, setOpen] = useState(null);
+  const [canAuthor, setCanAuthor] = useState(false);
+  const [playing, setPlaying] = useState(null);
+  const [building, setBuilding] = useState(null);
+  const [creating, setCreating] = useState(false);
+  const [progress, setProgress] = useState(null);
+  const [certs, setCerts] = useState(null);
 
+  const load = () =>
+    getJSON(`${API}/courses`)
+      .then((r) => { setCourses(r.data || []); setCanAuthor(Boolean(r.meta?.can_author)); })
+      .catch((e) => { setCourses([]); toast(`Couldn't load the Classroom: ${e.userMessage || e.message}`, "error"); });
+  useEffect(() => { load(); }, []);
   useEffect(() => {
-    (async () => {
-      try {
-        const r = await getJSON("/api/v1/kb");
-        setCourses(r?.data || []);
-      } catch { setCourses([]); }
-    })();
-  }, []);
+    if (view === "my_progress") getJSON(`${API}/me/progress`).then((r) => setProgress(r.data || [])).catch(() => setProgress([]));
+    if (view === "certification") getJSON(`${API}/me/certificates`).then((r) => setCerts(r.data || [])).catch(() => setCerts([]));
+  }, [view]);
 
   const head = useMemo(() => ({
     overview: ["Classroom", "Learn the TFOS way · Fiji-grounded"],
@@ -171,7 +165,8 @@ export default function ClassroomPillar() {
     body = (
       <>
         {view === "overview" ? <GlobalNote /> : null}
-        <CourseGrid courses={courses || []} loading={courses == null} onOpen={setOpen} />
+        <CourseGrid courses={courses || []} loading={courses == null} canAuthor={canAuthor}
+          onOpen={(c) => setPlaying(c.course_id)} onEdit={(c) => setBuilding(c.course_id)} onNew={() => setCreating(true)} />
       </>
     );
   } else if (view === "my_progress") {
@@ -179,17 +174,49 @@ export default function ClassroomPillar() {
       <div className="card">
         <table className="data-table">
           <tbody>
-            <tr><th>Course</th><th>Progress</th></tr>
-            <tr><td colSpan={2} style={{ color: "var(--muted)" }}>Your learning activity will appear here as you complete lessons.</td></tr>
+            <tr><th>Course</th><th>Progress</th><th>Last activity</th></tr>
+            {progress == null ? (
+              <tr><td colSpan={3} style={{ color: "var(--muted)" }}>Loading…</td></tr>
+            ) : progress.length === 0 ? (
+              <tr><td colSpan={3} style={{ color: "var(--muted)" }}>Your learning activity will appear here as you complete lessons.</td></tr>
+            ) : progress.map((p) => (
+              <tr key={p.course_id} style={{ cursor: "pointer" }} onClick={() => setPlaying(p.course_id)}>
+                <td>{p.title}</td>
+                <td>{p.progress_pct}%</td>
+                <td style={{ color: "var(--muted)" }}>{p.last_activity ? new Date(p.last_activity).toLocaleDateString() : "—"}</td>
+              </tr>
+            ))}
           </tbody>
         </table>
       </div>
     );
   } else if (view === "certification") {
-    body = (
+    body = certs == null ? (
+      <div className="card"><p style={{ color: "var(--muted)" }}>Loading…</p></div>
+    ) : certs.length === 0 ? (
       <div className="card">
-        <p style={{ color: "var(--muted)" }}>No certifications yet. Complete a course and your TFOS-verified credential appears here, scannable from a QR badge.</p>
+        <p style={{ color: "var(--muted)" }}>No certifications yet. Complete a course — every lesson done and every quiz passed — and your TFOS-verified credential appears here, scannable from its QR badge.</p>
       </div>
+    ) : (
+      <>
+        {certs.map((c) => (
+          <div className="card" key={c.cert_id} style={{ marginBottom: 12 }}>
+            <div style={{ display: "flex", gap: 14, alignItems: "center", flexWrap: "wrap" }}>
+              <div className="track-icon" style={{ background: "rgba(191,144,0,0.15)", color: "var(--amber)" }}><Award size={24} /></div>
+              <div style={{ flex: 1, minWidth: 180 }}>
+                <div style={{ fontWeight: 600, color: "var(--soil)" }}>{c.course_title}</div>
+                <div style={{ color: "var(--muted)", fontSize: 12 }}>Earned {new Date(c.issued_at).toLocaleDateString()} · {c.cert_id}</div>
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button className="btn btn-secondary" onClick={() => downloadPdf(c.cert_id)}><Download size={14} />PDF</button>
+                {c.audit_hash && (
+                  <a className="btn btn-secondary" href={`/verify/${c.audit_hash}`} target="_blank" rel="noreferrer" style={{ textDecoration: "none" }}><QrCode size={14} />Verify</a>
+                )}
+              </div>
+            </div>
+          </div>
+        ))}
+      </>
     );
   } else {
     body = (
@@ -199,7 +226,6 @@ export default function ClassroomPillar() {
     );
   }
 
-  // Renders inside the shared FarmerShell (top bar + left rail + bottom nav).
   return (
     <div className="tfp">
       <main className="main-content">
@@ -208,7 +234,9 @@ export default function ClassroomPillar() {
           {body}
         </div>
       </main>
-      {open ? <LessonPlayer course={open} onClose={() => setOpen(null)} /> : null}
+      {playing && <CoursePlayer courseId={playing} onClose={() => setPlaying(null)} onChanged={load} />}
+      {building && <CourseBuilder courseId={building} onClose={() => { setBuilding(null); load(); }} onChanged={load} />}
+      {creating && <NewCoursePrompt onClose={() => setCreating(false)} onCreated={(cid) => { setCreating(false); setBuilding(cid); load(); }} />}
     </div>
   );
 }

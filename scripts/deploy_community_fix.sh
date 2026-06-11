@@ -20,6 +20,7 @@ $PSQL < docs/runbooks/096_stories_apply_as_owner.sql        > /tmp/rb_096.out  2
 $PSQL < docs/runbooks/097_kyc_verification_apply_as_owner.sql > /tmp/rb_097.out 2>&1 && ok "097 kyc"      || bad "097 kyc (see /tmp/rb_097.out)"
 $PSQL < docs/runbooks/098_marketplace_v2_apply_as_owner.sql   > /tmp/rb_098.out 2>&1 && ok "098 marketplace" || bad "098 marketplace (see /tmp/rb_098.out)"
 $PSQL < docs/runbooks/099_listing_details_apply_as_owner.sql  > /tmp/rb_099.out 2>&1 && ok "099 listing details" || bad "099 listing details (see /tmp/rb_099.out)"
+$PSQL < docs/runbooks/100_classroom_apply_as_owner.sql        > /tmp/rb_100.out 2>&1 && ok "100 classroom" || bad "100 classroom (see /tmp/rb_100.out)"
 
 say "2/7 Verify table shapes (the AmbiguousColumn culprit)"
 SHAPES=$(docker exec teivaka_db psql -U teivaka -d teivaka_db -tA -c "
@@ -50,6 +51,16 @@ if [ "$MKT" = "7" ]; then ok "marketplace objects present (7/7)"; else
   bad "marketplace objects missing ($MKT/7) — runbook output + table presence/owners:"
   tail -n 5 /tmp/rb_098.out; tail -n 5 /tmp/rb_099.out
   docker exec teivaka_db psql -U teivaka -d teivaka_db -c "SELECT t.tbl, to_regclass('community.'||t.tbl) IS NOT NULL AS table_exists, (SELECT pg_get_userbyid(c.relowner) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='community' AND c.relname=t.tbl AND c.relkind='r') AS owner FROM (VALUES ('listings'),('listing_saves')) AS t(tbl);"
+fi
+
+CLS=$(docker exec teivaka_db psql -U teivaka -d teivaka_db -tA -c "
+  SELECT (to_regclass('community.courses') IS NOT NULL)::int + (to_regclass('community.course_modules') IS NOT NULL)::int
+       + (to_regclass('community.course_lessons') IS NOT NULL)::int + (to_regclass('community.quiz_questions') IS NOT NULL)::int
+       + (to_regclass('community.lesson_progress') IS NOT NULL)::int + (to_regclass('community.quiz_attempts') IS NOT NULL)::int
+       + (to_regclass('community.course_certificates') IS NOT NULL)::int
+       + (SELECT count(*) FROM information_schema.columns WHERE table_schema='tenant' AND table_name='users' AND column_name='course_author');")
+if [ "$CLS" = "8" ]; then ok "classroom objects present (8/8)"; else
+  bad "classroom objects missing ($CLS/8) — runbook tail:"; tail -n 6 /tmp/rb_100.out
 fi
 
 say "4/7 Run migrations (two-pass: app role + owner — covers both table ownerships)"
