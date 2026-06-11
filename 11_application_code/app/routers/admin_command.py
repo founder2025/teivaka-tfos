@@ -489,3 +489,80 @@ async def admin_analytics_events(pillar: str = None, days: int = 7, user: dict =
         total = await _scalar(db, f"SELECT count(*) FROM analytics.events WHERE {where}", params)
         return {"data": {"available": True, "total": total, "by_type": by_type,
                          "by_day": by_day, "recent": recent}}
+
+
+# ============================ FOUNDER WAR ROOM (Phase I2) ============================
+# Stricter than ADMIN — FOUNDER only. Subscription/revenue/retention intelligence
+# computed from real tables (tenant.users/tenants, activity_days, analytics.events).
+
+def _require_founder(user: dict):
+    if user.get("role") != "FOUNDER":
+        raise HTTPException(status_code=403, detail="The War Room is founder-only")
+
+
+@router.get("/warroom")
+async def war_room(user: dict = Depends(get_current_user)):
+    _require_founder(user)
+    async with get_db_ctx() as db:
+        has_analytics = bool((await db.execute(text("SELECT to_regclass('analytics.events') IS NOT NULL"))).scalar())
+
+        # --- activation funnel (registered → verified → first action → retained)
+        funnel = [
+            {"step": "Registered", "n": await _scalar(db, "SELECT count(*) FROM tenant.users")},
+            {"step": "Email verified", "n": await _scalar(db, "SELECT count(*) FROM tenant.users WHERE email_verified")},
+            {"step": "First action", "n": await _scalar(db, """
+                SELECT count(DISTINCT u.user_id) FROM tenant.users u
+                WHERE EXISTS (SELECT 1 FROM community.feed_posts fp WHERE fp.author_user_id = u.user_id)
+                   OR EXISTS (SELECT 1 FROM audit.events ae WHERE ae.actor_user_id = u.user_id)""")},
+            {"step": "Active (30d)", "n": await _scalar(db, "SELECT count(*) FROM tenant.users WHERE last_login > now() - interval '30 days'")},
+            {"step": "Subscribed", "n": await _scalar(db, "SELECT count(*) FROM tenant.tenants WHERE COALESCE(subscription_tier,'FREE') <> 'FREE'")},
+        ]
+        # step-to-step conversion %
+        for i, row in enumerate(funnel):
+            prev = funnel[i - 1]["n"] if i > 0 else None
+            row["pct_of_prev"] = (round(100.0 * (row["n"] or 0) / prev, 1) if prev else 100.0)
+
+        # --- retention cohorts by signup month: % still active in last 30d
+        cohorts = await _rows(db, """
+            SELECT to_char(date_trunc('month', created_at), 'YYYY-MM') AS cohort,
+                   count(*) AS signed_up,
+                   count(*) FILTER (WHERE last_login > now() - interval '30 days') AS still_active,
+                   round(100.0 * count(*) FILTER (WHERE last_login > now() - interval '30 days') / NULLIF(count(*),0), 1) AS retention_pct
+            FROM tenant.users GROUP BY 1 ORDER BY 1 DESC LIMIT 12""")
+
+        # --- subscription distribution + churn flags
+        subs = await _rows(db, """
+            SELECT COALESCE(subscription_tier,'FREE') AS tier, count(*) AS tenants
+            FROM tenant.tenants GROUP BY 1 ORDER BY tenants DESC""")
+        churn = {
+            "active_7d": await _scalar(db, "SELECT count(*) FROM community.activity_days WHERE day > CURRENT_DATE - 7"),
+            "at_risk_14d": await _scalar(db, "SELECT count(*) FROM tenant.users WHERE last_login BETWEEN now() - interval '30 days' AND now() - interval '14 days'"),
+            "dormant_30d": await _scalar(db, "SELECT count(*) FROM tenant.users WHERE last_login < now() - interval '30 days' OR last_login IS NULL"),
+        }
+
+        # --- feature adoption (from the event spine — by event_type, last 30d)
+        adoption = None
+        if has_analytics:
+            adoption = await _rows(db, """
+                SELECT pillar, event_type, count(*) AS events, count(DISTINCT actor_user_id) AS users
+                FROM analytics.events WHERE ts > now() - interval '30 days'
+                GROUP BY 1, 2 ORDER BY users DESC NULLS LAST LIMIT 30""")
+
+        # --- ecosystem growth snapshot
+        ecosystem = {
+            "members": await _scalar(db, "SELECT count(*) FROM tenant.users WHERE COALESCE(is_active,true)"),
+            "farms": await _scalar(db, "SELECT count(*) FROM tenant.farms WHERE COALESCE(is_active,true)"),
+            "listings": await _scalar(db, "SELECT count(*) FROM community.listings WHERE listing_status='ACTIVE'"),
+            "courses": await _scalar(db, "SELECT count(*) FROM community.courses WHERE status='PUBLISHED'"),
+            "groups": await _scalar(db, "SELECT count(*) FROM community.groups WHERE status='ACTIVE'"),
+            "certificates": await _scalar(db, "SELECT count(*) FROM community.course_certificates"),
+        }
+
+        return {"data": {
+            "funnel": funnel, "cohorts": cohorts, "subscriptions": subs, "churn": churn,
+            "feature_adoption": adoption, "ecosystem": ecosystem,
+            "analytics_live": has_analytics,
+            "notes": ["Funnel + retention from tenant.users/tenants/activity_days (real today).",
+                      "Feature adoption from the analytics event spine — fills as events accrue (I1 deployed).",
+                      "Revenue/CLV land with the T1 order engine + payment rail (Transaction & Trust doc)."],
+        }}

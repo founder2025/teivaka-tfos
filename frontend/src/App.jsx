@@ -139,6 +139,7 @@ const AdminClassroom = lazy(() => import("./pages/admin/AdminClassroom"));
 const AdminIntelligence = lazy(() => import("./pages/admin/AdminIntelligence"));
 const AdminPlatform = lazy(() => import("./pages/admin/AdminPlatform"));
 const AdminRequests = lazy(() => import("./pages/admin/AdminRequests"));
+const AdminWarRoom = lazy(() => import("./pages/admin/AdminWarRoom"));
 const AdminContent   = lazy(() => import("./pages/admin/AdminContent"));
 const AdminAnalytics = lazy(() => import("./pages/admin/AdminAnalytics"));
 const AdminMap       = lazy(() => import("./pages/admin/AdminMap"));
@@ -219,6 +220,9 @@ export default function App() {
           } />
           <Route path="/admin/requests" element={
             <AdminRoute><AdminRequests /></AdminRoute>
+          } />
+          <Route path="/admin/warroom" element={
+            <AdminRoute><AdminWarRoom /></AdminRoute>
           } />
           <Route path="/admin/users" element={
             <AdminRoute><AdminUsers /></AdminRoute>

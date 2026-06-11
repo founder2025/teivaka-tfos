@@ -12,7 +12,7 @@ import { NavLink, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard, Shield, Users, BadgeCheck, CreditCard,
   Flag, GraduationCap, Store, BarChart3, LineChart,
-  Settings, Cog, Map as MapIcon, ArrowLeft, Award,
+  Settings, Cog, Map as MapIcon, ArrowLeft, Award, Crosshair,
 } from "lucide-react";
 const C = { soil: "#5C4033", cream: "#F8F3E9", green: "#6AA84F", greenDk: "#3E7B1F", line: "#E5DCC9", muted: "#8A8678", gold: "#BF9000" };
 
@@ -44,6 +44,9 @@ const SECTIONS = [
     { path: "/admin/platform", label: "Platform controls", Icon: Cog },
     { path: "/admin/task-engine", label: "Task Engine", Icon: Settings },
     { path: "/admin/settings", label: "Settings", Icon: Settings },
+  ]},
+  { label: "Founder", items: [
+    { path: "/admin/warroom", label: "War Room", Icon: Crosshair },
   ]},
 ];
 
