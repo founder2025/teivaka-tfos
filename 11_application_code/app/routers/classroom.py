@@ -1018,3 +1018,118 @@ async def set_course_author(user_id: str, enabled: bool, user: dict = Depends(ge
             raise HTTPException(status_code=404, detail="User not found")
         await db.commit()
     return {"data": {"user_id": user_id, "course_author": enabled}}
+
+
+# ------------------------------------------------------------ instructors --
+
+@router.get("/instructors")
+async def list_instructors(user: dict = Depends(get_current_user)):
+    """Public directory of verified instructors — every author with at least
+    one PUBLISHED course, with their trust signals and course list."""
+    async with get_db_ctx() as db:
+        rows = (await db.execute(text("""
+            SELECT u.user_id, u.full_name, u.avatar_url, u.profession,
+                   COALESCE(u.kyc_verified, FALSE) AS verified,
+                   c.course_id, c.title, c.level, c.pricing, c.price_fjd, c.required_tier, c.attribution,
+                   (SELECT count(DISTINCT lp.user_id) FROM community.lesson_progress lp WHERE lp.course_id = c.course_id) AS learners,
+                   (SELECT count(*) FROM community.course_certificates cc WHERE cc.course_id = c.course_id) AS completed,
+                   (SELECT round(avg(stars)::numeric, 1) FROM community.course_ratings r WHERE r.course_id = c.course_id) AS avg_rating,
+                   (SELECT count(*) FROM community.course_ratings r WHERE r.course_id = c.course_id) AS rating_count
+            FROM community.courses c
+            JOIN tenant.users u ON u.user_id = c.author_user_id
+            WHERE c.status = 'PUBLISHED'
+            ORDER BY u.full_name, c.created_at DESC"""))).mappings().all()
+        by_author = {}
+        for r in rows:
+            a = by_author.setdefault(str(r["user_id"]), {
+                "user_id": str(r["user_id"]), "full_name": r["full_name"], "avatar_url": r["avatar_url"],
+                "profession": r["profession"], "verified": bool(r["verified"]),
+                "learners": 0, "certificates": 0, "courses": [],
+                "_stars": 0.0, "_rated": 0,
+            })
+            a["learners"] += int(r["learners"] or 0)
+            a["certificates"] += int(r["completed"] or 0)
+            if r["avg_rating"] is not None:
+                a["_stars"] += float(r["avg_rating"]) * int(r["rating_count"])
+                a["_rated"] += int(r["rating_count"])
+            a["courses"].append({"course_id": r["course_id"], "title": r["title"], "level": r["level"],
+                                 "pricing": r["pricing"], "price_fjd": r["price_fjd"],
+                                 "required_tier": r["required_tier"], "attribution": r["attribution"],
+                                 "avg_rating": float(r["avg_rating"]) if r["avg_rating"] is not None else None})
+        out = []
+        for a in by_author.values():
+            a["avg_rating"] = round(a.pop("_stars") / a["_rated"], 1) if a["_rated"] else None
+            a.pop("_rated", None)
+            a["course_count"] = len(a["courses"])
+            out.append(a)
+        out.sort(key=lambda x: (-x["learners"], x["full_name"]))
+        return {"data": out}
+
+
+@router.get("/me/teaching")
+async def my_teaching(user: dict = Depends(get_current_user)):
+    """Author dashboard — my courses (drafts included) with real reach stats."""
+    async with get_db_ctx() as db:
+        if not await _is_author(db, user):
+            raise HTTPException(status_code=403, detail="Authoring access required")
+        rows = (await db.execute(text("""
+            SELECT c.course_id, c.title, c.status, c.pricing, c.price_fjd, c.required_tier, c.created_at,
+                   (SELECT count(*) FROM community.course_lessons l WHERE l.course_id = c.course_id AND l.status = 'PUBLISHED') AS published_lessons,
+                   (SELECT count(*) FROM community.course_lessons l WHERE l.course_id = c.course_id) AS total_lessons,
+                   (SELECT count(DISTINCT lp.user_id) FROM community.lesson_progress lp WHERE lp.course_id = c.course_id) AS learners,
+                   (SELECT count(*) FROM community.course_certificates cc WHERE cc.course_id = c.course_id) AS completed,
+                   (SELECT round(avg(stars)::numeric, 1) FROM community.course_ratings r WHERE r.course_id = c.course_id) AS avg_rating,
+                   (SELECT count(*) FROM community.course_ratings r WHERE r.course_id = c.course_id) AS rating_count
+            FROM community.courses c
+            WHERE c.author_user_id = cast(:uid AS uuid)
+            ORDER BY c.created_at DESC"""), {"uid": str(user["user_id"])})).mappings().all()
+        return {"data": [dict(r) for r in rows]}
+
+
+# ------------------------------------------------------------ saved lessons --
+
+@router.post("/lessons/{lesson_id}/save")
+async def save_lesson(lesson_id: str, user: dict = Depends(get_current_user)):
+    async with get_db_ctx() as db:
+        if not await _has_table(db, "lesson_saves"):
+            raise HTTPException(status_code=503, detail="Saved lessons not available yet — run the deploy script")
+        row = (await db.execute(text(
+            "SELECT course_id FROM community.course_lessons WHERE lesson_id = :lid"), {"lid": lesson_id})).first()
+        if not row:
+            raise HTTPException(status_code=404, detail="Lesson not found")
+        await db.execute(text(
+            "INSERT INTO community.lesson_saves (user_id, lesson_id, course_id) "
+            "VALUES (cast(:uid AS uuid), :lid, :cid) ON CONFLICT DO NOTHING"),
+            {"uid": str(user["user_id"]), "lid": lesson_id, "cid": row[0]})
+        await db.commit()
+    return {"data": {"saved": True}}
+
+
+@router.delete("/lessons/{lesson_id}/save")
+async def unsave_lesson(lesson_id: str, user: dict = Depends(get_current_user)):
+    async with get_db_ctx() as db:
+        if await _has_table(db, "lesson_saves"):
+            await db.execute(text(
+                "DELETE FROM community.lesson_saves WHERE user_id = cast(:uid AS uuid) AND lesson_id = :lid"),
+                {"uid": str(user["user_id"]), "lid": lesson_id})
+            await db.commit()
+    return {"data": {"saved": False}}
+
+
+@router.get("/me/saved-lessons")
+async def my_saved_lessons(user: dict = Depends(get_current_user)):
+    async with get_db_ctx() as db:
+        if not await _has_table(db, "lesson_saves"):
+            return {"data": []}
+        rows = (await db.execute(text("""
+            SELECT ls.lesson_id, ls.course_id, ls.created_at AS saved_at,
+                   l.title AS lesson_title, l.video_url, l.video_kind,
+                   c.title AS course_title, c.status AS course_status,
+                   m.title AS module_title
+            FROM community.lesson_saves ls
+            JOIN community.course_lessons l ON l.lesson_id = ls.lesson_id
+            JOIN community.course_modules m ON m.module_id = l.module_id
+            JOIN community.courses c ON c.course_id = ls.course_id
+            WHERE ls.user_id = cast(:uid AS uuid) AND l.status = 'PUBLISHED' AND c.status = 'PUBLISHED'
+            ORDER BY ls.created_at DESC"""), {"uid": str(user["user_id"])})).mappings().all()
+        return {"data": [dict(r) for r in rows]}

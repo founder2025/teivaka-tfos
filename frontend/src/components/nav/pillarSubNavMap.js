@@ -17,6 +17,7 @@ import {
   Sparkles, Clock, Mic, Activity,
   User, Settings, RefreshCw, CreditCard, Gift, Download,
   Eye, CheckSquare, LayoutGrid, DollarSign, Wrench, Map, Cloud, Image, Share2,
+  GraduationCap,
 } from "lucide-react";
 
 export const PILLAR_SUB_NAV = {
@@ -32,11 +33,13 @@ export const PILLAR_SUB_NAV = {
   "/classroom": {
     label: "Classroom",
     items: [
-      { path: "/classroom",                label: "Overview",       icon: BookOpen },
-      { path: "/classroom/tracks",         label: "Tracks",         icon: LayoutGrid },
-      { path: "/classroom/progress",       label: "My progress",    icon: TrendingUp },
-      { path: "/classroom/certifications", label: "Certification",  icon: Award },
-      { path: "/classroom/bookmarks",      label: "Bookmarks",      icon: Bookmark },
+      { path: "/classroom",               label: "Overview",     icon: BookOpen },
+      { path: "/classroom/courses",       label: "Courses",      icon: LayoutGrid },
+      { path: "/classroom/library",       label: "Library",      icon: Library },
+      { path: "/classroom/instructors",   label: "Instructors",  icon: GraduationCap },
+      { path: "/classroom/learning",      label: "My learning",  icon: TrendingUp },
+      { path: "/classroom/certificates",  label: "Certificates", icon: Award },
+      { path: "/classroom/saved",         label: "Saved",        icon: Bookmark },
     ],
   },
   "/farm": {

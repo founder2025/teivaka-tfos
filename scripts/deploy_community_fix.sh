@@ -22,6 +22,7 @@ $PSQL < docs/runbooks/098_marketplace_v2_apply_as_owner.sql   > /tmp/rb_098.out 
 $PSQL < docs/runbooks/099_listing_details_apply_as_owner.sql  > /tmp/rb_099.out 2>&1 && ok "099 listing details" || bad "099 listing details (see /tmp/rb_099.out)"
 $PSQL < docs/runbooks/100_classroom_apply_as_owner.sql        > /tmp/rb_100.out 2>&1 && ok "100 classroom" || bad "100 classroom (see /tmp/rb_100.out)"
 $PSQL < docs/runbooks/101_classroom_v2_apply_as_owner.sql     > /tmp/rb_101.out 2>&1 && ok "101 classroom v2" || bad "101 classroom v2 (see /tmp/rb_101.out)"
+$PSQL < docs/runbooks/102_lesson_saves_apply_as_owner.sql     > /tmp/rb_102.out 2>&1 && ok "102 lesson saves" || bad "102 lesson saves (see /tmp/rb_102.out)"
 
 say "2/7 Verify table shapes (the AmbiguousColumn culprit)"
 SHAPES=$(docker exec teivaka_db psql -U teivaka -d teivaka_db -tA -c "
@@ -70,6 +71,8 @@ CLS2=$(docker exec teivaka_db psql -U teivaka -d teivaka_db -tA -c "
 if [ "$CLS2" = "7" ]; then ok "classroom v2 objects present (7/7)"; else
   bad "classroom v2 objects missing ($CLS2/7) — runbook tail:"; tail -n 6 /tmp/rb_101.out
 fi
+LSV=$(docker exec teivaka_db psql -U teivaka -d teivaka_db -tA -c "SELECT (to_regclass('community.lesson_saves') IS NOT NULL)::int;")
+[ "$LSV" = "1" ] && ok "lesson_saves present" || { bad "lesson_saves missing — runbook tail:"; tail -n 4 /tmp/rb_102.out; }
 
 say "4/7 Run migrations (two-pass: app role + owner — covers both table ownerships)"
 # Pass 1: as the app role (its own DATABASE_URL) — handles tables it owns (e.g. listings)

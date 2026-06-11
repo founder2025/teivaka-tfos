@@ -13,7 +13,7 @@
  * NO preloaded content: courses exist only when an admin/partner uploads them.
  */
 import { useEffect, useMemo, useState } from "react";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { BookOpen, Plus, Award, QrCode, Download, Edit3, Lock, GraduationCap, X } from "lucide-react";
 import { getJSON, send } from "../../utils/api";
 import CoursePlayer, { Stars } from "../../components/classroom/CoursePlayer";
@@ -260,10 +260,194 @@ async function downloadPdf(certId) {
   } catch (e) { toast(`Couldn't download the certificate: ${e.message}`, "error"); }
 }
 
+/** Library — quick-reference field guides from the verified knowledge base
+ * (the same cited shared.kb_articles that ground TIS — no LLM inventions). */
+function LibraryView() {
+  const [q, setQ] = useState("");
+  const [items, setItems] = useState(null);
+  const [open, setOpen] = useState(null);
+  const [body, setBody] = useState(null);
+  const load = (search) => {
+    const p = new URLSearchParams();
+    if (search?.trim()) p.set("search", search.trim());
+    getJSON(`/api/v1/kb?${p.toString()}`).then((r) => setItems(r.data || []))
+      .catch((e) => { setItems([]); toast(`Couldn't load the library: ${e.userMessage || e.message}`, "error"); });
+  };
+  useEffect(() => { load(""); }, []);
+  useEffect(() => { const id = setTimeout(() => load(q), 300); return () => clearTimeout(id); /* eslint-disable-next-line */ }, [q]);
+  useEffect(() => {
+    if (!open) { setBody(null); return; }
+    getJSON(`/api/v1/kb/${open.kb_entry_id}`).then((r) => setBody(r.data || {})).catch(() => setBody({}));
+  }, [open]);
+  return (
+    <>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12, border: "1px solid var(--line)", borderRadius: 10, padding: "8px 12px", background: "#fff" }}>
+        <BookOpen size={15} style={{ color: "var(--muted)" }} />
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search the field guides — crops, pests, chemicals, practices…"
+          style={{ border: "none", outline: "none", flex: 1, fontSize: 14, background: "transparent", color: "var(--soil)" }} />
+      </div>
+      {items == null ? <div className="card" style={{ color: "var(--muted)" }}>Loading…</div>
+        : items.length === 0 ? (
+          <div className="card" style={{ color: "var(--muted)" }}>
+            {q ? `Nothing found for “${q}”.` : "Field guides are added by the Teivaka team and partners as they are verified — nothing here is machine-generated."}
+          </div>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {items.map((a) => (
+              <div key={a.kb_entry_id} className="card" style={{ cursor: "pointer", padding: "12px 16px" }} onClick={() => setOpen(a)}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                  <span style={{ fontWeight: 700, color: "var(--soil)", fontSize: 14 }}>{a.title}</span>
+                  {a.category && <span className="pill grey" style={{ fontSize: 10.5 }}>{a.category}</span>}
+                </div>
+                {a.content_summary && <div style={{ fontSize: 12.5, color: "var(--muted)", marginTop: 3 }}>{a.content_summary}</div>}
+              </div>
+            ))}
+          </div>
+        )}
+      {open && (
+        <div className="overlay-backdrop show" style={{ alignItems: "center", padding: 16 }} onClick={() => setOpen(null)}>
+          <div className="overlay-modal" style={{ maxWidth: 640, maxHeight: "88vh", display: "flex", flexDirection: "column" }} onClick={(e) => e.stopPropagation()}>
+            <div className="overlay-head"><span>{open.title}</span><button className="overlay-close" onClick={() => setOpen(null)}><X size={18} /></button></div>
+            <div style={{ padding: 18, overflowY: "auto", whiteSpace: "pre-wrap", fontSize: 14, color: "var(--soil)", lineHeight: 1.65 }}>
+              {body == null ? "Loading…" : (body.content_md || body.content_summary || "No content available.")}
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+/** Instructors — the verified people behind the knowledge. */
+function InstructorsView({ onOpenCourse, teachCta }) {
+  const [rows, setRows] = useState(null);
+  useEffect(() => {
+    getJSON(`${API}/instructors`).then((r) => setRows(r.data || []))
+      .catch((e) => { setRows([]); toast(`Couldn't load instructors: ${e.userMessage || e.message}`, "error"); });
+  }, []);
+  return (
+    <>
+      {rows == null ? <div className="card" style={{ color: "var(--muted)" }}>Loading…</div>
+        : rows.length === 0 ? (
+          <div className="card" style={{ color: "var(--muted)" }}>No instructors with published courses yet — be the first.</div>
+        ) : rows.map((a) => (
+          <div key={a.user_id} className="card" style={{ marginBottom: 12 }}>
+            <div style={{ display: "flex", gap: 12, alignItems: "flex-start", flexWrap: "wrap" }}>
+              <div style={{ width: 52, height: 52, borderRadius: "50%", background: coverFor(a.full_name), display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 800, fontSize: 20, flexShrink: 0, backgroundSize: "cover", backgroundPosition: "center", backgroundImage: a.avatar_url ? `url(${a.avatar_url})` : undefined }}>
+                {!a.avatar_url && (a.full_name || "?").slice(0, 1).toUpperCase()}
+              </div>
+              <div style={{ flex: 1, minWidth: 200 }}>
+                <div style={{ fontWeight: 800, color: "var(--soil)", fontSize: 15, display: "flex", alignItems: "center", gap: 6 }}>
+                  {a.full_name}
+                  {a.verified && <span className="pill" style={{ fontSize: 10, background: "rgba(106,168,79,0.15)", color: "var(--green-dk)", fontWeight: 800 }}>VERIFIED INSTRUCTOR</span>}
+                </div>
+                <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 2 }}>
+                  {a.profession || "member"} · {a.course_count} course{a.course_count === 1 ? "" : "s"}
+                  {a.learners > 0 && <> · {a.learners} learner{a.learners === 1 ? "" : "s"}</>}
+                  {a.certificates > 0 && <> · {a.certificates} certified</>}
+                  {a.avg_rating != null && <> · <Stars value={a.avg_rating} size={11} /> {a.avg_rating}</>}
+                </div>
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>
+                  {a.courses.map((c) => (
+                    <button key={c.course_id} className="cb-cover-btn" style={{ fontSize: 12 }} onClick={() => onOpenCourse(c.course_id)}>
+                      {c.title}{(c.pricing || "FREE") !== "FREE" ? " 🔒" : ""}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        ))}
+      {teachCta}
+    </>
+  );
+}
+
+/** Saved — real bookmarked lessons, resume exactly where you saved. */
+function SavedView({ onOpen }) {
+  const [rows, setRows] = useState(null);
+  const load = () => getJSON(`${API}/me/saved-lessons`).then((r) => setRows(r.data || []))
+    .catch((e) => { setRows([]); toast(`Couldn't load saved lessons: ${e.userMessage || e.message}`, "error"); });
+  useEffect(() => { load(); }, []);
+  const unsave = async (l, e) => {
+    e.stopPropagation();
+    try { await send("DELETE", `${API}/lessons/${l.lesson_id}/save`); load(); }
+    catch (err) { toast(`${err.userMessage || err.message}`, "error"); }
+  };
+  return rows == null ? <div className="card" style={{ color: "var(--muted)" }}>Loading…</div>
+    : rows.length === 0 ? (
+      <div className="card" style={{ color: "var(--muted)" }}>
+        Nothing saved yet. Tap the bookmark on any lesson and it'll wait for you here.
+      </div>
+    ) : (
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        {rows.map((l) => (
+          <div key={l.lesson_id} className="card" style={{ cursor: "pointer", padding: "12px 16px", display: "flex", alignItems: "center", gap: 10 }}
+            onClick={() => onOpen(l.course_id, l.lesson_id)}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontWeight: 700, color: "var(--soil)", fontSize: 14 }}>{l.lesson_title}</div>
+              <div style={{ fontSize: 12, color: "var(--muted)" }}>{l.course_title} · {l.module_title} · saved {new Date(l.saved_at).toLocaleDateString()}</div>
+            </div>
+            <button className="cb-cover-btn" onClick={(e) => unsave(l, e)}><X size={12} />Remove</button>
+          </div>
+        ))}
+      </div>
+    );
+}
+
+/** My teaching — the author's reach dashboard (authors/admins only). */
+function TeachingView({ onEdit, onNew }) {
+  const [rows, setRows] = useState(null);
+  const [denied, setDenied] = useState(false);
+  useEffect(() => {
+    getJSON(`${API}/me/teaching`).then((r) => setRows(r.data || []))
+      .catch((e) => { if (e.status === 403) setDenied(true); setRows([]); });
+  }, []);
+  if (denied) return <div className="card" style={{ color: "var(--muted)" }}>This page is for course authors. Apply to teach from the Classroom overview.</div>;
+  return rows == null ? <div className="card" style={{ color: "var(--muted)" }}>Loading…</div> : (
+    <>
+      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 10 }}>
+        <button className="btn btn-sm btn-primary" onClick={onNew}><Plus size={13} />New course</button>
+      </div>
+      {rows.length === 0 ? (
+        <div className="card" style={{ color: "var(--muted)" }}>You haven't built a course yet — your first one is one click away.</div>
+      ) : (
+        <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+          <table className="data-table" style={{ width: "100%" }}>
+            <tbody>
+              <tr><th>Course</th><th>Status</th><th>Lessons</th><th>Learners</th><th>Certified</th><th>Rating</th><th /></tr>
+              {rows.map((c) => (
+                <tr key={c.course_id}>
+                  <td style={{ fontWeight: 600, color: "var(--soil)" }}>{c.title}</td>
+                  <td>{c.status === "PUBLISHED" ? <span className="cb-badge pub">Live</span> : <span className="cb-badge draft">Draft</span>}</td>
+                  <td>{c.published_lessons}/{c.total_lessons}</td>
+                  <td>{c.learners}</td>
+                  <td>{c.completed}</td>
+                  <td>{c.avg_rating != null ? <><Stars value={c.avg_rating} size={11} /> {c.avg_rating} ({c.rating_count})</> : "—"}</td>
+                  <td><button className="cb-cover-btn" onClick={() => onEdit(c.course_id)}><Edit3 size={11} />Edit</button></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </>
+  );
+}
+
 export default function ClassroomPillar() {
   const { pathname } = useLocation();
-  const view = ({ overview: "overview", tracks: "tracks", progress: "my_progress",
-    certifications: "certification", bookmarks: "bookmarks" }[pathname.split("/")[2]]) || "overview";
+  const navigate = useNavigate();
+  const view = ({
+    overview: "overview",
+    courses: "courses", tracks: "courses",                      // tracks = legacy alias
+    library: "library",
+    instructors: "instructors",
+    learning: "my_learning", progress: "my_learning",           // progress = legacy alias
+    certificates: "certificates", certifications: "certificates",
+    saved: "saved", bookmarks: "saved",                         // bookmarks = legacy alias
+    teaching: "teaching",
+  }[pathname.split("/")[2]]) || "overview";
   const [courses, setCourses] = useState(null);
   const [canAuthor, setCanAuthor] = useState(false);
   const [appsOpen, setAppsOpen] = useState(false);
@@ -279,31 +463,47 @@ export default function ClassroomPillar() {
       .catch((e) => { setCourses([]); toast(`Couldn't load the Classroom: ${e.userMessage || e.message}`, "error"); });
   useEffect(() => { load(); }, []);
   useEffect(() => {
-    if (view === "my_progress") getJSON(`${API}/me/progress`).then((r) => setProgress(r.data || [])).catch(() => setProgress([]));
-    if (view === "certification") getJSON(`${API}/me/certificates`).then((r) => setCerts(r.data || [])).catch(() => setCerts([]));
+    if (view === "my_learning") getJSON(`${API}/me/progress`).then((r) => setProgress(r.data || [])).catch(() => setProgress([]));
+    if (view === "certificates") getJSON(`${API}/me/certificates`).then((r) => setCerts(r.data || [])).catch(() => setCerts([]));
   }, [view]);
 
   const head = useMemo(() => ({
     overview: ["Classroom", "Learn the TFOS way · Fiji-grounded"],
-    tracks: ["Courses", "All learning courses"],
-    my_progress: ["My progress", "Your learning activity"],
-    certification: ["Certification", "TFOS-verified credentials"],
-    bookmarks: ["Bookmarks", "Saved lessons"],
+    courses: ["Courses", "All learning courses"],
+    library: ["Library", "Quick-reference field guides — cited, verified knowledge"],
+    instructors: ["Instructors", "The verified people behind every course"],
+    my_learning: ["My learning", "Your courses, progress and resume points"],
+    certificates: ["Certificates", "TFOS-verified credentials — scannable, bankable"],
+    saved: ["Saved", "Lessons you bookmarked to come back to"],
+    teaching: ["My teaching", "Your courses and their real reach"],
   }[view]), [view]);
 
   let body;
-  if (view === "overview" || view === "tracks") {
+  if (view === "overview" || view === "courses") {
     body = (
       <>
         {view === "overview" ? <Hero courses={courses} /> : null}
         {view === "overview" ? <GlobalNote /> : null}
         {view === "overview" ? <ContinueStrip onResume={setPlaying} /> : null}
+        {canAuthor && (
+          <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
+            <button className="btn btn-sm btn-secondary" onClick={() => navigate("/classroom/teaching")}><GraduationCap size={13} />My teaching</button>
+          </div>
+        )}
         <CourseGrid courses={courses || []} loading={courses == null} canAuthor={canAuthor}
           onOpen={(c) => setPlaying(c.course_id)} onEdit={(c) => setBuilding(c.course_id)} onNew={() => setCreating(true)} />
         <TeachCard canAuthor={canAuthor} applicationsOpen={appsOpen} onChanged={load} />
       </>
     );
-  } else if (view === "my_progress") {
+  } else if (view === "library") {
+    body = <LibraryView />;
+  } else if (view === "instructors") {
+    body = <InstructorsView onOpenCourse={setPlaying} teachCta={<TeachCard canAuthor={canAuthor} applicationsOpen={appsOpen} onChanged={load} />} />;
+  } else if (view === "saved") {
+    body = <SavedView onOpen={(courseId, lessonId) => setPlaying({ courseId, lessonId })} />;
+  } else if (view === "teaching") {
+    body = <TeachingView onEdit={setBuilding} onNew={() => setCreating(true)} />;
+  } else if (view === "my_learning") {
     body = (
       <div className="card">
         <table className="data-table">
@@ -324,7 +524,7 @@ export default function ClassroomPillar() {
         </table>
       </div>
     );
-  } else if (view === "certification") {
+  } else if (view === "certificates") {
     body = certs == null ? (
       <div className="card"><p style={{ color: "var(--muted)" }}>Loading…</p></div>
     ) : certs.length === 0 ? (
@@ -368,7 +568,10 @@ export default function ClassroomPillar() {
           {body}
         </div>
       </main>
-      {playing && <CoursePlayer courseId={playing} onClose={() => setPlaying(null)} onChanged={load} />}
+      {playing && <CoursePlayer
+        courseId={typeof playing === "string" ? playing : playing.courseId}
+        initialLessonId={typeof playing === "string" ? undefined : playing.lessonId}
+        onClose={() => setPlaying(null)} onChanged={load} />}
       {building && <CourseBuilder courseId={building} onClose={() => { setBuilding(null); load(); }} onChanged={load} />}
       {creating && <NewCoursePrompt onClose={() => setCreating(false)} onCreated={(cid) => { setCreating(false); setBuilding(cid); load(); }} />}
     </div>

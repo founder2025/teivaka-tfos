@@ -10,7 +10,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   ChevronDown, Check, Play, X, FileText, Link as LinkIcon, Award, QrCode,
-  Download, Lock, Star, Share2, List as ListIcon,
+  Download, Lock, Star, Share2, List as ListIcon, Bookmark,
 } from "lucide-react";
 import { getJSON, send } from "../../utils/api";
 import "../../styles/prototype.css";
@@ -125,6 +125,21 @@ export default function CoursePlayer({ courseId, initialLessonId, onClose, onCha
   const [sel, setSel] = useState(initialLessonId ? { kind: "lesson", id: initialLessonId } : null);
   const [openMods, setOpenMods] = useState({ 0: true });
   const [pane, setPane] = useState(initialLessonId ? "main" : "tree"); // mobile only
+  const [savedSet, setSavedSet] = useState(new Set());
+
+  useEffect(() => {
+    getJSON(`${API}/me/saved-lessons`)
+      .then((r) => setSavedSet(new Set((r.data || []).map((s) => s.lesson_id))))
+      .catch(() => {});
+  }, [courseId]);
+  const toggleSave = async (lesson) => {
+    const isSaved = savedSet.has(lesson.lesson_id);
+    try {
+      await send(isSaved ? "DELETE" : "POST", `${API}/lessons/${lesson.lesson_id}/save`);
+      setSavedSet((s) => { const n = new Set(s); if (isSaved) n.delete(lesson.lesson_id); else n.add(lesson.lesson_id); return n; });
+      toast(isSaved ? "Removed from Saved" : "Saved — find it under Classroom → Saved ✓", "success");
+    } catch (e) { toast(`${e.userMessage || e.message}`, "error"); }
+  };
 
   const load = () =>
     getJSON(`${API}/courses/${courseId}`).then((r) => {
@@ -280,9 +295,14 @@ export default function CoursePlayer({ courseId, initialLessonId, onClose, onCha
               <>
                 <div className="cp-topic-head">
                   <div className="cp-topic-h">{topic.title}</div>
-                  <button className={`cp-done-btn ${topic.done ? "on" : ""}`} onClick={(e) => toggleDone(topic, e)}>
-                    <Check size={14} />{topic.done ? "Completed" : "Mark complete"}
-                  </button>
+                  <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                    <button className="cb-cover-btn" title={savedSet.has(topic.lesson_id) ? "Remove from Saved" : "Save for later"} onClick={() => toggleSave(topic)}>
+                      <Bookmark size={13} fill={savedSet.has(topic.lesson_id) ? "var(--green-dk)" : "none"} />
+                    </button>
+                    <button className={`cp-done-btn ${topic.done ? "on" : ""}`} onClick={(e) => toggleDone(topic, e)}>
+                      <Check size={14} />{topic.done ? "Completed" : "Mark complete"}
+                    </button>
+                  </div>
                 </div>
                 <VideoStage kind={topic.video_kind} url={topic.video_url} />
                 {topic.body_html && <div className="cb-lesson-body" dangerouslySetInnerHTML={{ __html: topic.body_html }} />}
