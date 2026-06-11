@@ -453,3 +453,20 @@ async def my_prefs(
         "SELECT notify_whatsapp, notify_tasks, notify_weather, preferred_language "
         "FROM tenant.users WHERE user_id = :uid"), {"uid": str(user["user_id"])})).mappings().first()
     return {"data": dict(row) if row else {}}
+
+
+@router.post("/activity")
+async def ping_activity(
+    user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Daily-active ping — the frontend fires once per session. One row per
+    user per day; the honest DAU/WAU/MAU foundation (measured app opens)."""
+    try:
+        await db.execute(text(
+            "INSERT INTO community.activity_days (user_id, day) VALUES (cast(:uid AS uuid), CURRENT_DATE) ON CONFLICT DO NOTHING"),
+            {"uid": str(user["user_id"])})
+        await db.commit()
+    except Exception:  # noqa: BLE001 — pre-108 deployments no-op, never error
+        await db.rollback()
+    return {"data": {"ok": True}}

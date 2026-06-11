@@ -70,6 +70,39 @@ function KV({ obj }) {
   );
 }
 
+/* Slide-ready growth board — the M-PAiSA-style stat tiles, every number live. */
+function GrowthBoard({ g }) {
+  if (!g) return null;
+  const k = g.kpis || {};
+  const TILES = [
+    [k.members_total, "Members"],
+    [k.dau, "Daily active users"],
+    [k.wau, "Weekly active users"],
+    [k.mau, "Monthly active users"],
+    [k.site_visits_30d, "Site visits · 30d"],
+    [k.pwa_installs_total, "App installs (PWA)"],
+    [k.active_sellers, "Active sellers"],
+    [k.active_listings, "Products & services listed"],
+    [k.signups_30d, "New signups · 30d"],
+  ];
+  return (
+    <div style={{ background: "linear-gradient(120deg,#3e7b1f,#6aa84f)", borderRadius: 14, padding: 22, marginBottom: 16, color: "#fff" }}>
+      <div style={{ fontWeight: 800, fontSize: 16, marginBottom: 12 }}>Growth KPIs — live, verifiable</div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(150px,1fr))", gap: 12 }}>
+        {TILES.map(([n, label]) => (
+          <div key={label} style={{ background: "rgba(255,255,255,0.12)", borderRadius: 10, padding: "14px 12px", textAlign: "center" }}>
+            <div style={{ fontSize: 26, fontWeight: 800 }}>{n == null ? "—" : Number(n).toLocaleString()}</div>
+            <div style={{ fontSize: 10.5, opacity: 0.9, textTransform: "uppercase", letterSpacing: "0.04em" }}>{label}</div>
+          </div>
+        ))}
+      </div>
+      <div style={{ fontSize: 11, opacity: 0.85, marginTop: 10 }}>
+        {(g.notes || []).join(" ")}
+      </div>
+    </div>
+  );
+}
+
 export default function AdminIntelligence() {
   const [data, setData] = useState(null);
   const [cached, setCached] = useState(false);
@@ -113,6 +146,13 @@ export default function AdminIntelligence() {
 
       {data == null ? <div style={card}>Loading…</div> : (
         <>
+          <GrowthBoard g={s.growth} />
+          {s.growth?.dau_trend != null && (
+            <div style={card}>
+              <h2 style={h2}>Daily active users — last 14 days</h2>
+              <Table rows={s.growth.dau_trend} section="growth" table="dau_trend" />
+            </div>
+          )}
           <div style={card}>
             <h2 style={h2}>Production — what's grown and raised, where</h2>
             {src(s.production?.source)}

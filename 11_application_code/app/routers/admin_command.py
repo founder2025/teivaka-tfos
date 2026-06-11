@@ -85,6 +85,29 @@ async def _compute_intel(db) -> dict:
         "poultry_flocks_by_region": flocks,
     }
 
+    # ---- growth: the headline KPIs (slide-ready) -----------------------------
+    growth = {
+        "members_total": await _scalar(db, "SELECT count(*) FROM tenant.users WHERE COALESCE(is_active, true)"),
+        "signups_30d": await _scalar(db, "SELECT count(*) FROM tenant.users WHERE created_at > now() - interval '30 days'"),
+        "active_sellers": await _scalar(db, "SELECT count(DISTINCT created_by) FROM community.listings WHERE listing_status = 'ACTIVE'"),
+        "active_listings": await _scalar(db, "SELECT count(*) FROM community.listings WHERE listing_status = 'ACTIVE'"),
+        "dau": await _scalar(db, "SELECT count(*) FROM community.activity_days WHERE day = CURRENT_DATE"),
+        "wau": await _scalar(db, "SELECT count(DISTINCT user_id) FROM community.activity_days WHERE day > CURRENT_DATE - 7"),
+        "mau": await _scalar(db, "SELECT count(DISTINCT user_id) FROM community.activity_days WHERE day > CURRENT_DATE - 30"),
+        "site_visits_30d": await _scalar(db, "SELECT COALESCE(sum(count), 0) FROM community.metric_events WHERE kind = 'visit' AND day > CURRENT_DATE - 30"),
+        "pwa_installs_total": await _scalar(db, "SELECT COALESCE(sum(count), 0) FROM community.metric_events WHERE kind = 'pwa_install'"),
+    }
+    dau_trend = await _rows(db, """
+        SELECT to_char(day, 'YYYY-MM-DD') AS day, count(*) AS active_users
+        FROM community.activity_days WHERE day > CURRENT_DATE - 14
+        GROUP BY day ORDER BY day DESC""")
+    out["sections"]["growth"] = {
+        "source": "community.activity_days (session pings) · community.metric_events · tenant.users · community.listings",
+        "kpis": growth, "dau_trend": dau_trend,
+        "notes": ["DAU/WAU/MAU = measured app opens (session pings), counted from deploy day — no backfill, no estimates.",
+                  "Site visits + PWA installs are anonymous counters; transactions/M-PAiSA share arrive with the T1 order engine."],
+    }
+
     # ---- people: who, where, retention --------------------------------------
     members = await _rows(db, """
         SELECT lower(COALESCE(account_type, 'FARMER')) AS profession,
@@ -251,6 +274,29 @@ async def patch_flag(body: FlagPatch, user: dict = Depends(get_current_user)):
             raise HTTPException(status_code=404, detail="Unknown flag")
         await db.commit()
     return {"data": {"flag": body.flag, "enabled": body.enabled}}
+
+
+class MetricPing(BaseModel):
+    kind: str
+
+
+@public_router.post("/metric")
+async def metric_ping(body: MetricPing):
+    """Anonymous platform counters (site visit, PWA install) — counts only,
+    zero PII. Unknown kinds rejected; pre-108 schemas no-op silently."""
+    kind = (body.kind or "").strip()
+    if kind not in ("visit", "pwa_install"):
+        raise HTTPException(status_code=422, detail="Unknown metric")
+    async with get_db_ctx() as db:
+        try:
+            await db.execute(text(
+                "INSERT INTO community.metric_events (kind, day, count) VALUES (:k, CURRENT_DATE, 1) "
+                "ON CONFLICT (kind, day) DO UPDATE SET count = community.metric_events.count + 1"),
+                {"k": kind})
+            await db.commit()
+        except Exception:  # noqa: BLE001
+            await db.rollback()
+    return {"data": {"ok": True}}
 
 
 @public_router.get("/flags")

@@ -29,6 +29,7 @@ import TisChatPanel from "../components/tis/TisChatPanel";
 import Toast from "../components/ui/Toast";
 import ChatWidget from "../components/chat/ChatWidget";
 import { ChatProvider } from "../context/ChatContext";
+import { firePings } from "../utils/useFlags.jsx";
 import LogSheet from "../components/launcher/LogSheet";
 import { LeftRailProvider, useLeftRail } from "../context/LeftRailContext";
 import { LauncherProvider, useLauncher } from "../context/LauncherContext";
@@ -371,6 +372,7 @@ function LauncherSheet() {
 }
 
 export default function FarmerShell() {
+  useEffect(() => { firePings(); }, []);
   return (
     <LeftRailProvider>
       <LauncherProvider>
