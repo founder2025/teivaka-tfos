@@ -18,12 +18,13 @@ import json
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel
 from sqlalchemy import text
 
 from app.db.session import get_db_ctx
 from app.middleware.rls import get_current_user
+from app.utils.rate_guard import rate_guard
 
 router = APIRouter()
 public_router = APIRouter()
@@ -281,7 +282,8 @@ class MetricPing(BaseModel):
 
 
 @public_router.post("/metric")
-async def metric_ping(body: MetricPing):
+async def metric_ping(body: MetricPing, request: Request):
+    rate_guard(request, "metric", limit=20, window_s=60)
     """Anonymous platform counters (site visit, PWA install) — counts only,
     zero PII. Unknown kinds rejected; pre-108 schemas no-op silently."""
     kind = (body.kind or "").strip()
@@ -355,3 +357,79 @@ async def grant_admin(body: AdminGrant, user: dict = Depends(get_current_user)):
             pass
         await db.commit()
     return {"data": {"user_email": body.user_email, "role": new_role}}
+
+
+# ------------------------------------------------------ dashboard overview --
+
+@router.get("/overview")
+async def admin_overview_dashboard(user: dict = Depends(get_current_user)):
+    """The Platform Dashboard's live numbers — every tile real, every queue
+    count clickable to its queue. Replaces the legacy placeholder dashboard."""
+    _require_admin(user)
+    async with get_db_ctx() as db:
+        tiles = {
+            "members_total": await _scalar(db, "SELECT count(*) FROM tenant.users WHERE COALESCE(is_active, true)"),
+            "dau": await _scalar(db, "SELECT count(*) FROM community.activity_days WHERE day = CURRENT_DATE"),
+            "new_today": await _scalar(db, "SELECT count(*) FROM tenant.users WHERE created_at::date = CURRENT_DATE"),
+            "posts_today": await _scalar(db, "SELECT count(*) FROM community.feed_posts WHERE created_at::date = CURRENT_DATE AND status = 'active'"),
+            "tis_queries_today": await _scalar(db, "SELECT COALESCE(sum(tis_calls_today), 0) FROM tenant.tenants"),
+            "active_farms": await _scalar(db, "SELECT count(*) FROM tenant.farms WHERE COALESCE(is_active, true)"),
+        }
+        queues = {
+            "verifications_pending": await _scalar(db, "SELECT count(*) FROM community.verification_requests WHERE status = 'PENDING'"),
+            "author_requests_pending": await _scalar(db, "SELECT count(*) FROM community.author_requests WHERE status = 'PENDING'"),
+            "tier_requests_pending": await _scalar(db, "SELECT count(*) FROM community.tier_change_requests WHERE status = 'PENDING'"),
+            "library_submissions_pending": await _scalar(db, "SELECT count(*) FROM community.library_submissions WHERE status = 'PENDING'"),
+        }
+        activity = await _rows(db, """
+            SELECT fp.created_at, u.full_name AS who, left(fp.body, 90) AS what
+            FROM community.feed_posts fp JOIN tenant.users u ON u.user_id = fp.author_user_id
+            WHERE fp.status = 'active' ORDER BY fp.created_at DESC LIMIT 10""")
+        signup_trend = await _rows(db, """
+            SELECT to_char(created_at::date, 'YYYY-MM-DD') AS day, count(*) AS signups
+            FROM tenant.users WHERE created_at > now() - interval '30 days'
+            GROUP BY 1 ORDER BY 1 DESC""")
+        top_crops = await _rows(db, """
+            SELECT p.production_name AS crop, count(*) AS cycles
+            FROM tenant.production_cycles c JOIN shared.productions p ON p.production_id = c.production_id
+            GROUP BY 1 ORDER BY cycles DESC LIMIT 6""")
+        return {"data": {"tiles": tiles, "queues": queues, "activity": activity,
+                         "signup_trend": signup_trend, "top_crops": top_crops}}
+
+
+# ----------------------------------------------------- announcement banner --
+
+class BannerBody(BaseModel):
+    banner_enabled: Optional[bool] = None
+    banner_text: Optional[str] = None
+
+
+@router.patch("/platform/banner")
+async def set_banner(body: BannerBody, user: dict = Depends(get_current_user)):
+    _require_admin(user)
+    fields = {k: v for k, v in body.model_dump().items() if v is not None}
+    async with get_db_ctx() as db:
+        if fields:
+            sets = ", ".join(f"{k} = :{k}" for k in fields)
+            await db.execute(text(
+                f"UPDATE community.platform_settings SET {sets}, updated_at = now(), updated_by = cast(:by AS uuid) WHERE id = 1"),
+                {**fields, "by": str(user["user_id"])})
+            await db.commit()
+        row = (await db.execute(text(
+            "SELECT banner_enabled, banner_text FROM community.platform_settings WHERE id = 1"))).mappings().first()
+        return {"data": dict(row) if row else {}}
+
+
+@public_router.get("/banner")
+async def public_banner(request: Request):
+    rate_guard(request, "banner", limit=60, window_s=60)
+    """Site-wide announcement banner — public read, migration-tolerant off."""
+    async with get_db_ctx() as db:
+        try:
+            row = (await db.execute(text(
+                "SELECT banner_enabled, banner_text FROM community.platform_settings WHERE id = 1"))).mappings().first()
+            d = dict(row) if row else {}
+            return {"data": d if d.get("banner_enabled") else {"banner_enabled": False}}
+        except Exception:  # noqa: BLE001
+            await db.rollback()
+            return {"data": {"banner_enabled": False}}

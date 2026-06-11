@@ -141,7 +141,11 @@ async def lifespan(app: FastAPI):
 
 
 # ─── FastAPI application ───────────────────────────────────────────────────────
+_DOCS_ON = __import__("os").getenv("TFOS_DOCS") == "1"
 app = FastAPI(
+    docs_url="/docs" if _DOCS_ON else None,
+    redoc_url="/redoc" if _DOCS_ON else None,
+    openapi_url="/openapi.json" if _DOCS_ON else None,
     title="Teivaka Agri-TOS API",
     description="""
 ## Teivaka Agricultural Transformation Operating System — API v1
@@ -348,6 +352,18 @@ app.include_router(classroom.router,          prefix=f"{PREFIX}/classroom",     
 app.include_router(groups.router,             prefix=f"{PREFIX}/community",          tags=["Groups"])
 app.include_router(team.router,               prefix=f"{PREFIX}/team",               tags=["Team"])
 app.include_router(affiliate.router,          prefix=f"{PREFIX}/affiliate",          tags=["Affiliate"])
+
+@app.middleware("http")
+async def _security_headers(request, call_next):
+    """Baseline security headers (Caddyfile is change-locked; applied app-side)."""
+    response = await call_next(request)
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    response.headers.setdefault("Permissions-Policy", "camera=(self), microphone=(self), geolocation=(self)")
+    return response
+
+
 app.include_router(admin_command.router,      prefix=f"{PREFIX}/admin",              tags=["Admin Command Center"])
 app.include_router(admin_command.public_router, prefix=f"{PREFIX}/platform",         tags=["Platform"])
 

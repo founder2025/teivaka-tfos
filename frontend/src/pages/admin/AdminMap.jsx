@@ -70,24 +70,24 @@ export default function AdminMap() {
     <AdminLayout>
       <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
         <div>
-          <h1 className="text-xl font-bold text-white">Platform Farm Map</h1>
-          <p className="text-xs text-gray-400 mt-0.5">Every farm's location across the platform · pins auto-derived from each farm's drawn/walked map</p>
+          <h1 className="text-xl font-bold text-[#5C4033]">Platform Farm Map</h1>
+          <p className="text-xs text-[#8A8678] mt-0.5">Every farm's location across the platform · pins auto-derived from each farm's drawn/walked map</p>
         </div>
-        <span className="text-sm font-semibold px-3 py-1.5 rounded-lg bg-gray-800 border border-gray-700 text-emerald-400">
+        <span className="text-sm font-semibold px-3 py-1.5 rounded-lg bg-white border border-[#E6E1D6] text-emerald-400">
           {state === "ready" ? `${count} farm${count === 1 ? "" : "s"} mapped` : state === "loading" ? "Loading…" : "—"}
         </span>
       </div>
 
-      <div className="relative rounded-xl overflow-hidden border border-gray-700" style={{ height: 600 }}>
-        <div ref={elRef} style={{ position: "absolute", inset: 0, background: "#1f2937" }} />
+      <div className="relative rounded-xl overflow-hidden border border-[#E6E1D6]" style={{ height: 600 }}>
+        <div ref={elRef} style={{ position: "absolute", inset: 0, background: "#FFFFFF" }} />
         {state === "loading" && (
-          <div className="absolute inset-0 z-[1000] flex items-center justify-center bg-gray-900/60 text-gray-300 text-sm">Loading farm pins…</div>
+          <div className="absolute inset-0 z-[1000] flex items-center justify-center bg-white/60 text-[#8A8678] text-sm">Loading farm pins…</div>
         )}
         {state === "error" && (
-          <div className="absolute inset-0 z-[1000] flex flex-col items-center justify-center bg-gray-900/80 text-center p-4">
-            <p className="text-sm font-semibold text-white">Couldn't load farm pins</p>
-            <p className="text-xs text-gray-400 mt-1">Reads /farm-map/global-pins (PARTNER+). Retry below.</p>
-            <button onClick={() => load(mapRef.current)} className="mt-3 text-xs px-3 py-1.5 rounded-lg bg-emerald-600 text-white hover:brightness-95">Retry</button>
+          <div className="absolute inset-0 z-[1000] flex flex-col items-center justify-center bg-white/80 text-center p-4">
+            <p className="text-sm font-semibold text-[#5C4033]">Couldn't load farm pins</p>
+            <p className="text-xs text-[#8A8678] mt-1">Reads /farm-map/global-pins (PARTNER+). Retry below.</p>
+            <button onClick={() => load(mapRef.current)} className="mt-3 text-xs px-3 py-1.5 rounded-lg bg-emerald-600 text-[#5C4033] hover:brightness-95">Retry</button>
           </div>
         )}
       </div>

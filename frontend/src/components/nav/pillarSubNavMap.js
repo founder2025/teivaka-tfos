@@ -90,7 +90,6 @@ export const ME_MENU_ITEMS = [
   { path: "/me/subscription",      label: "Subscription tier", icon: CreditCard },
   { path: "/me/referrals",         label: "Referrals",        icon: Gift },
   { path: "/me/affiliate",         label: "Affiliate program", icon: Award },
-  { path: "/me/affiliate/console", label: "Affiliate console", icon: BarChart3, gate: "admin" },
   { path: "/me/team",              label: "Team",             icon: UsersRound },
   { path: "/covenant",             label: "View Covenant",    icon: Shield },
   { path: "/verify",               label: "Verify a record",  icon: CheckSquare, external: true },

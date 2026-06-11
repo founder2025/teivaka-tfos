@@ -16,7 +16,8 @@ from datetime import datetime, timezone
 from typing import Optional
 from urllib.parse import quote
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
+from app.utils.rate_guard import rate_guard
 from passlib.context import CryptContext
 from pydantic import BaseModel
 from sqlalchemy import text
@@ -142,7 +143,8 @@ async def cancel_invite(invite_id: str, user: dict = Depends(get_current_user)):
 # ------------------------------------------------- public accept flow --
 
 @router.get("/invites/{token}/public")
-async def invite_public(token: str):
+async def invite_public(token: str, request: Request):
+    rate_guard(request, "invite_pub", limit=20, window_s=60)
     """Public, token-gated invite preview for the /accept/{token} page."""
     async with get_db_ctx() as db:
         row = (await db.execute(text(
@@ -166,7 +168,8 @@ class AcceptBody(BaseModel):
 
 
 @router.post("/invites/{token}/accept")
-async def accept_invite(token: str, body: AcceptBody):
+async def accept_invite(token: str, body: AcceptBody, request: Request):
+    rate_guard(request, "invite_accept", limit=10, window_s=300)
     """Create the invitee's account inside the inviter's tenant. Public,
     token-gated, single-use. New accounts only — existing accounts belong to
     their own tenant and cannot be re-homed here (data-ownership boundary)."""

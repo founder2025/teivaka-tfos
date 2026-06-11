@@ -29,6 +29,7 @@ $PSQL < docs/runbooks/105_tier_requests_prefs_apply_as_owner.sql > /tmp/rb_105.o
 $PSQL < docs/runbooks/106_team_affiliate_apply_as_owner.sql   > /tmp/rb_106.out 2>&1 && ok "106 team + affiliate" || bad "106 team + affiliate (see /tmp/rb_106.out)"
 $PSQL < docs/runbooks/107_admin_command_apply_as_owner.sql    > /tmp/rb_107.out 2>&1 && ok "107 admin command" || bad "107 admin command (see /tmp/rb_107.out)"
 $PSQL < docs/runbooks/108_growth_metrics_apply_as_owner.sql   > /tmp/rb_108.out 2>&1 && ok "108 growth metrics" || bad "108 growth metrics (see /tmp/rb_108.out)"
+$PSQL < docs/runbooks/109_platform_settings_apply_as_owner.sql > /tmp/rb_109.out 2>&1 && ok "109 platform settings" || bad "109 platform settings (see /tmp/rb_109.out)"
 
 say "2/7 Verify table shapes (the AmbiguousColumn culprit)"
 SHAPES=$(docker exec teivaka_db psql -U teivaka -d teivaka_db -tA -c "
@@ -91,6 +92,8 @@ ACC=$(docker exec teivaka_db psql -U teivaka -d teivaka_db -tA -c "SELECT (to_re
 [ "$ACC" = "2" ] && ok "admin command objects present (2/2)" || { bad "admin command missing ($ACC/2) — runbook tail:"; tail -n 4 /tmp/rb_107.out; }
 GRW=$(docker exec teivaka_db psql -U teivaka -d teivaka_db -tA -c "SELECT (to_regclass('community.activity_days') IS NOT NULL)::int + (to_regclass('community.metric_events') IS NOT NULL)::int;")
 [ "$GRW" = "2" ] && ok "growth metrics present (2/2)" || { bad "growth metrics missing ($GRW/2) — runbook tail:"; tail -n 4 /tmp/rb_108.out; }
+PLS=$(docker exec teivaka_db psql -U teivaka -d teivaka_db -tA -c "SELECT (to_regclass('community.platform_settings') IS NOT NULL)::int;")
+[ "$PLS" = "1" ] && ok "platform settings present" || { bad "platform settings missing — runbook tail:"; tail -n 4 /tmp/rb_109.out; }
 
 say "4/7 Run migrations (two-pass: app role + owner — covers both table ownerships)"
 # Pass 1: as the app role (its own DATABASE_URL) — handles tables it owns (e.g. listings)

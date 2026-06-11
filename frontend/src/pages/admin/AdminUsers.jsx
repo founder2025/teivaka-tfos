@@ -27,7 +27,7 @@ function StatusBadge({ status, verified }) {
 
 function RoleBadge({ role }) {
   return (
-    <span className="px-2 py-0.5 rounded text-xs bg-gray-700 text-gray-300 uppercase tracking-wide">
+    <span className="px-2 py-0.5 rounded text-xs bg-gray-700 text-[#8A8678] uppercase tracking-wide">
       {role}
     </span>
   );
@@ -98,10 +98,10 @@ export default function AdminUsers() {
   return (
     <AdminLayout>
       <div className="flex items-center justify-between mb-5">
-        <h1 className="text-xl font-bold text-white">Users <span className="text-gray-500 text-sm font-normal ml-1">({total.toLocaleString()})</span></h1>
+        <h1 className="text-xl font-bold text-[#5C4033]">Users <span className="text-gray-500 text-sm font-normal ml-1">({total.toLocaleString()})</span></h1>
         <button
           disabled={selected.size === 0}
-          className="text-sm px-3 py-1.5 rounded-lg border border-gray-600 text-gray-300 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed"
+          className="text-sm px-3 py-1.5 rounded-lg border border-gray-600 text-[#8A8678] hover:text-[#5C4033] disabled:opacity-40 disabled:cursor-not-allowed"
         >
           Export CSV ({selected.size})
         </button>
@@ -109,13 +109,13 @@ export default function AdminUsers() {
 
       {/* Filter + search bar */}
       <div className="flex flex-wrap gap-2 mb-4">
-        <div className="flex bg-gray-800 border border-gray-700 rounded-lg overflow-hidden">
+        <div className="flex bg-white border border-[#E6E1D6] rounded-lg overflow-hidden">
           {STATUS_FILTERS.map((f) => (
             <button
               key={f}
               onClick={() => { setFilter(f); setPage(1); }}
               className={`px-3 py-1.5 text-xs font-medium capitalize transition-colors ${
-                filter === f ? "bg-amber-500 text-amber-950" : "text-gray-400 hover:text-white"
+                filter === f ? "bg-amber-500 text-amber-950" : "text-[#8A8678] hover:text-[#5C4033]"
               }`}
             >
               {f}
@@ -127,16 +127,16 @@ export default function AdminUsers() {
           placeholder="Search name, email, phone…"
           value={search}
           onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-          className="flex-1 min-w-40 bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-amber-500"
+          className="flex-1 min-w-40 bg-white border border-[#E6E1D6] rounded-lg px-3 py-1.5 text-sm text-[#5C4033] placeholder-gray-500 focus:outline-none focus:border-amber-500"
         />
       </div>
 
       {/* Table */}
-      <div className="bg-gray-800 border border-gray-700 rounded-xl overflow-hidden">
+      <div className="bg-white border border-[#E6E1D6] rounded-xl overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-gray-700 text-gray-400 text-xs uppercase tracking-wide">
+              <tr className="border-b border-[#E6E1D6] text-[#8A8678] text-xs uppercase tracking-wide">
                 <th className="pl-4 pr-2 py-3 text-left w-8">
                   <input type="checkbox" checked={selected.size === users.length && users.length > 0}
                     onChange={selectAll} className="accent-amber-500" />
@@ -156,7 +156,7 @@ export default function AdminUsers() {
               ) : users.length === 0 ? (
                 <tr><td colSpan={8} className="text-center py-10 text-gray-500">No users found</td></tr>
               ) : users.map((u) => (
-                <tr key={u.user_id} className="border-b border-gray-700/50 hover:bg-gray-750 transition-colors">
+                <tr key={u.user_id} className="border-b border-[#E6E1D6]/50 hover:bg-gray-750 transition-colors">
                   <td className="pl-4 pr-2 py-3">
                     <input type="checkbox" checked={selected.has(u.user_id)}
                       onChange={() => toggleSelect(u.user_id)} className="accent-amber-500" />
@@ -167,17 +167,17 @@ export default function AdminUsers() {
                         {(u.first_name?.[0] || u.full_name?.[0] || "?").toUpperCase()}
                       </div>
                       <div>
-                        <p className="text-white font-medium">{u.full_name}</p>
+                        <p className="text-[#5C4033] font-medium">{u.full_name}</p>
                         <p className="text-gray-500 text-xs">{u.email}</p>
                       </div>
                     </div>
                   </td>
                   <td className="px-3 py-3"><RoleBadge role={u.role} /></td>
-                  <td className="px-3 py-3 text-gray-300">{u.country || "—"}</td>
-                  <td className="px-3 py-3 text-gray-400 text-xs">
+                  <td className="px-3 py-3 text-[#8A8678]">{u.country || "—"}</td>
+                  <td className="px-3 py-3 text-[#8A8678] text-xs">
                     {u.created_at ? new Date(u.created_at).toLocaleDateString() : "—"}
                   </td>
-                  <td className="px-3 py-3 text-gray-400 text-xs">
+                  <td className="px-3 py-3 text-[#8A8678] text-xs">
                     {u.last_login ? new Date(u.last_login).toLocaleDateString() : "Never"}
                   </td>
                   <td className="px-3 py-3">
@@ -208,16 +208,16 @@ export default function AdminUsers() {
         </div>
 
         {/* Pagination */}
-        <div className="flex items-center justify-between px-4 py-3 border-t border-gray-700 text-xs text-gray-400">
+        <div className="flex items-center justify-between px-4 py-3 border-t border-[#E6E1D6] text-xs text-[#8A8678]">
           <span>Showing {users.length} of {total.toLocaleString()} users</span>
           <div className="flex gap-2">
             <button disabled={page <= 1} onClick={() => setPage(p => p - 1)}
-              className="px-3 py-1 rounded border border-gray-700 disabled:opacity-40 hover:text-white">
+              className="px-3 py-1 rounded border border-[#E6E1D6] disabled:opacity-40 hover:text-[#5C4033]">
               ← Prev
             </button>
             <span className="px-3 py-1">Page {page} of {totalPages}</span>
             <button disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}
-              className="px-3 py-1 rounded border border-gray-700 disabled:opacity-40 hover:text-white">
+              className="px-3 py-1 rounded border border-[#E6E1D6] disabled:opacity-40 hover:text-[#5C4033]">
               Next →
             </button>
           </div>

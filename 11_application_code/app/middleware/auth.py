@@ -48,6 +48,7 @@ class AuthMiddleware:
         "/api/v1/attribution/capture",
         "/api/v1/platform/flags",
         "/api/v1/platform/metric",
+        "/api/v1/platform/banner",
         "/verify",
     })
 

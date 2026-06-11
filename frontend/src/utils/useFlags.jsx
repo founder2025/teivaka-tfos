@@ -45,3 +45,18 @@ export function firePings() {
     }
   } catch { /* never break the app for metrics */ }
 }
+
+
+/** Site-wide announcement banner (admin-set). Renders nothing when off. */
+export function AnnouncementBanner() {
+  const [b, setB] = useState(null);
+  useEffect(() => {
+    fetch("/api/v1/platform/banner").then((r) => r.json()).then((j) => setB(j?.data || null)).catch(() => {});
+  }, []);
+  if (!b?.banner_enabled || !b?.banner_text) return null;
+  return (
+    <div style={{ background: "#BF9000", color: "#fff", textAlign: "center", padding: "8px 14px", fontSize: 13, fontWeight: 600 }}>
+      {b.banner_text}
+    </div>
+  );
+}
