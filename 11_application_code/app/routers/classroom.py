@@ -43,8 +43,12 @@ _DEFAULT_SETTINGS = {
 
 
 async def _has_table(db, name: str) -> bool:
+    """Existence AND privilege — a present-but-ungranted table must degrade,
+    not 500 (the feed_hidden lesson). CASE guarantees has_table_privilege
+    never evaluates against a missing relation."""
     return bool((await db.execute(text(
-        f"SELECT to_regclass('community.{name}') IS NOT NULL"))).scalar())
+        f"SELECT CASE WHEN to_regclass('community.{name}') IS NULL THEN false "
+        f"ELSE has_table_privilege(current_user, 'community.{name}', 'SELECT') END"))).scalar())
 
 
 async def _settings(db) -> dict:
@@ -1033,21 +1037,27 @@ async def list_instructors(user: dict = Depends(get_current_user)):
     """Public directory of verified instructors — every author with at least
     one PUBLISHED course, with their trust signals and course list."""
     async with get_db_ctx() as db:
-        rows = (await db.execute(text("""
+        has_ratings = await _has_table(db, "course_ratings")
+        r_sel = (""",
+                   (SELECT round(avg(stars)::numeric, 1) FROM community.course_ratings r WHERE r.course_id = c.course_id) AS avg_rating,
+                   (SELECT count(*) FROM community.course_ratings r WHERE r.course_id = c.course_id) AS rating_count"""
+                 if has_ratings else ", NULL AS avg_rating, 0 AS rating_count")
+        rows = (await db.execute(text(f"""
             SELECT u.user_id, u.full_name, u.avatar_url, u.profession,
                    COALESCE(u.kyc_verified, FALSE) AS verified,
                    c.course_id, c.title, c.level, c.pricing, c.price_fjd, c.required_tier, c.attribution,
                    (SELECT count(DISTINCT lp.user_id) FROM community.lesson_progress lp WHERE lp.course_id = c.course_id) AS learners,
-                   (SELECT count(*) FROM community.course_certificates cc WHERE cc.course_id = c.course_id) AS completed,
-                   (SELECT round(avg(stars)::numeric, 1) FROM community.course_ratings r WHERE r.course_id = c.course_id) AS avg_rating,
-                   (SELECT count(*) FROM community.course_ratings r WHERE r.course_id = c.course_id) AS rating_count
+                   (SELECT count(*) FROM community.course_certificates cc WHERE cc.course_id = c.course_id) AS completed
+                   {r_sel}
             FROM community.courses c
             JOIN tenant.users u ON u.user_id = c.author_user_id
             WHERE c.status = 'PUBLISHED'
             ORDER BY u.full_name, c.created_at DESC"""))).mappings().all()
-        following = {r[0] for r in (await db.execute(text(
-            "SELECT followed_user_id::text FROM community.follows WHERE follower_user_id = cast(:uid AS uuid)"),
-            {"uid": str(user["user_id"])})).all()}
+        following = set()
+        if await _has_table(db, "follows"):
+            following = {r[0] for r in (await db.execute(text(
+                "SELECT followed_user_id::text FROM community.follows WHERE follower_user_id = cast(:uid AS uuid)"),
+                {"uid": str(user["user_id"])})).all()}
         by_author = {}
         for r in rows:
             a = by_author.setdefault(str(r["user_id"]), {
@@ -1083,14 +1093,18 @@ async def my_teaching(user: dict = Depends(get_current_user)):
     async with get_db_ctx() as db:
         if not await _is_author(db, user):
             raise HTTPException(status_code=403, detail="Authoring access required")
-        rows = (await db.execute(text("""
+        has_ratings = await _has_table(db, "course_ratings")
+        r_sel = (""",
+                   (SELECT round(avg(stars)::numeric, 1) FROM community.course_ratings r WHERE r.course_id = c.course_id) AS avg_rating,
+                   (SELECT count(*) FROM community.course_ratings r WHERE r.course_id = c.course_id) AS rating_count"""
+                 if has_ratings else ", NULL AS avg_rating, 0 AS rating_count")
+        rows = (await db.execute(text(f"""
             SELECT c.course_id, c.title, c.status, c.pricing, c.price_fjd, c.required_tier, c.created_at,
                    (SELECT count(*) FROM community.course_lessons l WHERE l.course_id = c.course_id AND l.status = 'PUBLISHED') AS published_lessons,
                    (SELECT count(*) FROM community.course_lessons l WHERE l.course_id = c.course_id) AS total_lessons,
                    (SELECT count(DISTINCT lp.user_id) FROM community.lesson_progress lp WHERE lp.course_id = c.course_id) AS learners,
-                   (SELECT count(*) FROM community.course_certificates cc WHERE cc.course_id = c.course_id) AS completed,
-                   (SELECT round(avg(stars)::numeric, 1) FROM community.course_ratings r WHERE r.course_id = c.course_id) AS avg_rating,
-                   (SELECT count(*) FROM community.course_ratings r WHERE r.course_id = c.course_id) AS rating_count
+                   (SELECT count(*) FROM community.course_certificates cc WHERE cc.course_id = c.course_id) AS completed
+                   {r_sel}
             FROM community.courses c
             WHERE c.author_user_id = cast(:uid AS uuid)
             ORDER BY c.created_at DESC"""), {"uid": str(user["user_id"])})).mappings().all()
