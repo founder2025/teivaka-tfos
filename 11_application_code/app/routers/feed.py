@@ -384,6 +384,12 @@ async def create_feed_post(body: PostCreate, user: dict = Depends(community_writ
             if r:
                 await _notify(db, r[0], user["user_id"], "MENTION", post_id=post_id,
                               body=f"{user.get('full_name','Someone')} mentioned you")
+        # Phase I1 — behavioural telemetry (best-effort, PII-gated in track())
+        from app.core.analytics import track
+        await track(db, pillar="home", event_type="post_created", user=user,
+                    entity_type="post", entity_id=post_id, region=country,
+                    props={"has_photo": bool(body.photos), "is_question": body.is_question,
+                           "group_id": group_id, "audience": body.audience, "reach": reach})
     return {"data": {"post_id": post_id}}
 
 

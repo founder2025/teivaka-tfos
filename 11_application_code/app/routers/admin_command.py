@@ -433,3 +433,59 @@ async def public_banner(request: Request):
         except Exception:  # noqa: BLE001
             await db.rollback()
             return {"data": {"banner_enabled": False}}
+
+
+# ============================ ANALYTICS EVENT SPINE (Phase I1) ============================
+
+class TrackBody(BaseModel):
+    pillar: str
+    event_type: str
+    entity_type: Optional[str] = None
+    entity_id: Optional[str] = None
+    props: Optional[dict] = None
+    session_id: Optional[str] = None
+
+
+@router.post("/track")
+async def track_event(body: TrackBody, request: Request, user: dict = Depends(get_current_user)):
+    """Authenticated client-side telemetry. Rate-limited, prop-whitelisted in
+    the track() helper (PII can't get in). Best-effort, always 200."""
+    rate_guard(request, "track", limit=120, window_s=60)
+    from app.core.analytics import track
+    async with get_db_ctx() as db:
+        await track(db, pillar=body.pillar, event_type=body.event_type, user=user,
+                    entity_type=body.entity_type, entity_id=body.entity_id,
+                    props=body.props, session_id=body.session_id)
+        await db.commit()
+    return {"data": {"ok": True}}
+
+
+@router.get("/analytics/events")
+async def admin_analytics_events(pillar: str = None, days: int = 7, user: dict = Depends(get_current_user)):
+    """Founder view of the event firehose — volume by type, recent stream,
+    daily trend. Migration-tolerant (empty until the spine is deployed + fed)."""
+    _require_admin(user)
+    async with get_db_ctx() as db:
+        if not bool((await db.execute(text("SELECT to_regclass('analytics.events') IS NOT NULL"))).scalar()):
+            return {"data": {"available": False, "by_type": [], "by_day": [], "recent": []}}
+        where = "ts > now() - make_interval(days => :d)"
+        params = {"d": int(days)}
+        if pillar:
+            where += " AND pillar = :p"
+            params["p"] = pillar
+        by_type = await _rows(db, f"""
+            SELECT pillar, event_type, count(*) AS events,
+                   count(DISTINCT actor_user_id) AS users
+            FROM analytics.events WHERE {where}
+            GROUP BY 1, 2 ORDER BY events DESC LIMIT 50""", params)
+        by_day = await _rows(db, f"""
+            SELECT to_char(ts::date, 'YYYY-MM-DD') AS day, count(*) AS events
+            FROM analytics.events WHERE {where}
+            GROUP BY 1 ORDER BY 1 DESC LIMIT 14""", params)
+        recent = await _rows(db, f"""
+            SELECT to_char(ts, 'YYYY-MM-DD HH24:MI') AS ts, pillar, event_type, entity_type, props
+            FROM analytics.events WHERE {where}
+            ORDER BY ts DESC LIMIT 30""", params)
+        total = await _scalar(db, f"SELECT count(*) FROM analytics.events WHERE {where}", params)
+        return {"data": {"available": True, "total": total, "by_type": by_type,
+                         "by_day": by_day, "recent": recent}}

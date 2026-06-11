@@ -60,3 +60,20 @@ export function AnnouncementBanner() {
     </div>
   );
 }
+
+
+/** track — client-side behavioural event (Phase I1). Fire-and-forget; the
+ *  server whitelists props and strips PII. Never throws into the UI. */
+export function track(pillar, event_type, props) {
+  try {
+    const t = localStorage.getItem("tfos_access_token");
+    if (!t) return;
+    let sid = sessionStorage.getItem("tfos_sid");
+    if (!sid) { sid = Math.random().toString(36).slice(2) + Date.now().toString(36); sessionStorage.setItem("tfos_sid", sid); }
+    fetch("/api/v1/admin/track", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${t}` },
+      body: JSON.stringify({ pillar, event_type, props: props || {}, session_id: sid }),
+    }).catch(() => {});
+  } catch { /* telemetry never breaks the app */ }
+}

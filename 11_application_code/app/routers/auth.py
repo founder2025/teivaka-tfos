@@ -433,6 +433,15 @@ async def register(
             outcome="SUCCESS",
             tenant_id=tenant_id, user_id=user_id,
         )
+        # Phase I1 — signup telemetry (best-effort, account_type only — no PII)
+        try:
+            from app.core.analytics import track
+            await track(db, pillar="auth", event_type="signup",
+                        user={"user_id": user_id, "tenant_id": tenant_id},
+                        entity_type="user", entity_id=user_id, region=country,
+                        props={"account_type": req.account_type})
+        except Exception:  # noqa: BLE001
+            pass
         await db.commit()
 
         # Fire-and-forget verification email. Never raises.
