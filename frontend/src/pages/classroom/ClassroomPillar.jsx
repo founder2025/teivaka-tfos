@@ -18,12 +18,31 @@ import { BookOpen, Plus, Award, QrCode, Download, Edit3, Lock, GraduationCap, X 
 import { getJSON, send } from "../../utils/api";
 import CoursePlayer, { Stars } from "../../components/classroom/CoursePlayer";
 import CourseBuilder from "../../components/classroom/CourseBuilder";
+// ROOT-CAUSE FIX: prototype.css was only imported by TfpShell — without this
+// import the whole pillar rendered UNSTYLED (no cards, no modals, no grid).
+import "../../styles/prototype.css";
 import "../../styles/classroom-fixes.css";
 
 const API = "/api/v1/classroom";
 const toast = (message, type) => { try { window.dispatchEvent(new CustomEvent("tfos:toast", { detail: { message, type } })); } catch { /* noop */ } };
 
-const COVER_FALLBACK = "linear-gradient(135deg,var(--green),#4a7a33)";
+// Deterministic farm-toned cover per course title — every card looks designed
+// even before an author uploads a cover image.
+const COVER_PALETTE = [
+  "linear-gradient(135deg,#6aa84f,#3d6b2e)",   // field green
+  "linear-gradient(135deg,#bf9000,#7a5c00)",   // harvest amber
+  "linear-gradient(135deg,#2e7d6b,#174f42)",   // taro leaf teal
+  "linear-gradient(135deg,#7b5ea7,#4a3168)",   // eggplant violet
+  "linear-gradient(135deg,#c0603a,#83402a)",   // terracotta soil
+  "linear-gradient(135deg,#3a7ca5,#235a7c)",   // lagoon blue
+  "linear-gradient(135deg,#8a8d3a,#5d6023)",   // dry-season olive
+  "linear-gradient(135deg,#a8455f,#702c3e)",   // dragonfruit
+];
+function coverFor(title) {
+  let h = 0;
+  for (const ch of String(title || "")) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return COVER_PALETTE[h % COVER_PALETTE.length];
+}
 
 function PageHead({ title, sub }) {
   return (
@@ -39,6 +58,28 @@ function GlobalNote() {
     <div className="cb-global-note">
       <BookOpen size={13} /> <strong>Open to everyone, everywhere.</strong> Every lesson is
       available to all farmers in any country — learning is never limited by region.
+    </div>
+  );
+}
+
+function Hero({ courses }) {
+  const pub = (courses || []).filter((c) => c.status === "PUBLISHED");
+  const learners = pub.reduce((n, c) => n + (c.learners_count || 0), 0);
+  const certs = pub.reduce((n, c) => n + (c.completed_count || 0), 0);
+  return (
+    <div className="cls-hero">
+      <h1>Classroom</h1>
+      <div className="cls-hero-sub">
+        Practical farming knowledge from verified instructors — short video lessons,
+        real action steps, and certificates a bank can scan and trust.
+      </div>
+      {(pub.length > 0 || learners > 0) && (
+        <div className="cls-hero-stats">
+          <div className="cls-hero-stat"><div className="n">{pub.length}</div><div className="l">course{pub.length === 1 ? "" : "s"}</div></div>
+          {learners > 0 && <div className="cls-hero-stat"><div className="n">{learners}</div><div className="l">farmers learning</div></div>}
+          {certs > 0 && <div className="cls-hero-stat"><div className="n">{certs}</div><div className="l">certificates earned</div></div>}
+        </div>
+      )}
     </div>
   );
 }
@@ -62,17 +103,16 @@ function CourseGrid({ courses, loading, canAuthor, onOpen, onEdit, onNew }) {
       <div className="course-grid">
         {courses.map((c) => (
           <div className="course-card" key={c.course_id} onClick={() => onOpen(c)}>
-            <div className="course-cover" style={c.cover_url ? { backgroundImage: `url(${c.cover_url})`, backgroundSize: "cover", backgroundPosition: "center" } : { background: COVER_FALLBACK }} />
+            <div className="course-cover" style={c.cover_url ? { backgroundImage: `url(${c.cover_url})`, backgroundSize: "cover", backgroundPosition: "center" } : { background: coverFor(c.title) }}>
+              {!c.cover_url && <span className="cls-cover-initial">{(c.title || "?").slice(0, 1).toUpperCase()}</span>}
+              {c.level && <span className="cls-cover-level">{c.level}</span>}
+              {(c.pricing || "FREE") !== "FREE" && !c.entitled && <span className="cls-cover-lock"><Lock size={10} /> {c.pricing === "ONE_TIME" ? `FJD ${Number(c.price_fjd || 0).toFixed(0)}` : c.required_tier}</span>}
+            </div>
             <div className="course-card-body">
               <div className="course-card-title">
                 {c.title}
                 {c.status === "DRAFT" && <span className="cb-badge draft" style={{ marginLeft: 6 }}>Draft</span>}
-                {(c.pricing || "FREE") !== "FREE" && (
-                  <span className="cls-price-chip" style={{ marginLeft: 6 }}>
-                    {!c.entitled && <Lock size={9} />}
-                    {c.pricing === "ONE_TIME" ? (c.price_fjd ? `FJD ${Number(c.price_fjd).toFixed(0)}` : "Paid") : (c.required_tier || "BASIC")}
-                  </span>
-                )}
+                {(c.pricing || "FREE") !== "FREE" && c.entitled && <span className="cls-price-chip" style={{ marginLeft: 6 }}>Unlocked ✓</span>}
               </div>
               <div className="course-card-bar"><div className="course-card-fill" style={{ width: `${c.progress_pct}%` }} /></div>
               <div className="course-card-pct" style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
@@ -255,6 +295,7 @@ export default function ClassroomPillar() {
   if (view === "overview" || view === "tracks") {
     body = (
       <>
+        {view === "overview" ? <Hero courses={courses} /> : null}
         {view === "overview" ? <GlobalNote /> : null}
         {view === "overview" ? <ContinueStrip onResume={setPlaying} /> : null}
         <CourseGrid courses={courses || []} loading={courses == null} canAuthor={canAuthor}
@@ -323,7 +364,7 @@ export default function ClassroomPillar() {
     <div className="tfp">
       <main className="main-content">
         <div className="main-inner">
-          <PageHead title={head[0]} sub={head[1]} />
+          {view !== "overview" && <PageHead title={head[0]} sub={head[1]} />}
           {body}
         </div>
       </main>

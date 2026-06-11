@@ -110,6 +110,76 @@
   border: 1px solid rgba(191, 144, 0, 0.4);
 }
 .tfp .cls-stars { color: #bf9000; letter-spacing: 1px; font-size: 13px; }
+
+/* ---------- Classroom hero ---------- */
+.tfp .cls-hero {
+  border-radius: 16px;
+  padding: 22px 24px;
+  margin-bottom: 16px;
+  background: linear-gradient(120deg, #3e7b1f 0%, #6aa84f 55%, #8fbf6f 100%);
+  color: #fff;
+  position: relative;
+  overflow: hidden;
+}
+.tfp .cls-hero::after {
+  content: "";
+  position: absolute;
+  right: -40px;
+  top: -40px;
+  width: 220px;
+  height: 220px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.08);
+}
+.tfp .cls-hero h1 { color: #fff; font-size: 22px; font-weight: 800; margin: 0 0 4px; }
+.tfp .cls-hero .cls-hero-sub { font-size: 13.5px; opacity: 0.92; max-width: 520px; }
+.tfp .cls-hero-stats { display: flex; gap: 22px; margin-top: 14px; flex-wrap: wrap; }
+.tfp .cls-hero-stat .n { font-size: 20px; font-weight: 800; line-height: 1.1; }
+.tfp .cls-hero-stat .l { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; opacity: 0.85; }
+
+/* ---------- richer course covers ---------- */
+.tfp .course-cover { position: relative; height: 150px; }
+.tfp .course-cover .cls-cover-initial {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 56px;
+  font-weight: 800;
+  color: rgba(255, 255, 255, 0.28);
+  letter-spacing: 0.04em;
+  user-select: none;
+}
+.tfp .course-cover .cls-cover-level {
+  position: absolute;
+  left: 10px;
+  bottom: 10px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  background: rgba(0, 0, 0, 0.35);
+  color: #fff;
+  border-radius: 999px;
+  padding: 4px 10px;
+  backdrop-filter: blur(2px);
+}
+.tfp .course-cover .cls-cover-lock {
+  position: absolute;
+  right: 10px;
+  top: 10px;
+  background: rgba(0, 0, 0, 0.4);
+  color: #ffd76a;
+  border-radius: 999px;
+  padding: 5px 10px;
+  font-size: 10.5px;
+  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.tfp .course-card-add:hover { border-color: var(--green); color: var(--green-dk); background: rgba(106, 168, 79, 0.04); }
 .tfp .cls-continue-row { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 6px; margin-bottom: 14px; }
 .tfp .cls-continue-card {
   flex: 0 0 220px;

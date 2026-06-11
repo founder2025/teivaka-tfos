@@ -13,6 +13,7 @@ import {
   Download, Lock, Star, Share2, List as ListIcon,
 } from "lucide-react";
 import { getJSON, send } from "../../utils/api";
+import "../../styles/prototype.css";
 import "../../styles/classroom-fixes.css";
 
 const API = "/api/v1/classroom";
