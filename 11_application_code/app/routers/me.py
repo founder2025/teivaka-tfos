@@ -65,12 +65,58 @@ async def get_my_referral(
         ),
     }
 
+    # The people you brought in — real attribution from registration
+    # (tenant.users.referred_by_user_id). Status is honest: verified email =
+    # active member; activity = they have posted or logged at least once.
+    referred = (await db.execute(text("""
+        SELECT u.user_id, u.full_name, u.created_at, u.email_verified,
+               EXISTS (SELECT 1 FROM community.feed_posts fp WHERE fp.author_user_id = u.user_id) AS has_posted,
+               EXISTS (SELECT 1 FROM audit.events ae WHERE ae.actor_user_id = u.user_id) AS has_logged
+        FROM tenant.users u
+        WHERE u.referred_by_user_id = :uid
+        ORDER BY u.created_at DESC LIMIT 100
+    """), {"uid": user_id})).mappings().all()
+    people = [{
+        "full_name": r["full_name"],
+        "joined_at": r["created_at"].isoformat() if r["created_at"] else None,
+        "verified": bool(r["email_verified"]),
+        "farming_now": bool(r["has_posted"] or r["has_logged"]),
+    } for r in referred]
+
     return {
         "my_code": my_code,
         "share_links": share_links,
         "referred_count": int(referred_count),
-        "rewards_earned_months": 0,  # placeholder for Phase 3.5b
+        "verified_count": sum(1 for p in people if p["verified"]),
+        "farming_count": sum(1 for p in people if p["farming_now"]),
+        "rewards_earned_months": 0,  # rewards launch with payments — never faked
+        "referred": people,
     }
+
+
+@router.get("/referral/qr")
+async def referral_qr(
+    user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """QR PNG of the caller's referral link — scan to join (prototype parity)."""
+    import io
+    import qrcode
+    import qrcode.constants
+    from fastapi import Response
+    row = (await db.execute(
+        text("SELECT referral_code FROM tenant.users WHERE user_id = :uid"),
+        {"uid": user["user_id"]},
+    )).first()
+    code = row[0] if row else None
+    url = f"{LANDING_BASE}/?ref={code}" if code else LANDING_BASE
+    qr = qrcode.QRCode(error_correction=qrcode.constants.ERROR_CORRECT_M, box_size=5, border=2)
+    qr.add_data(url)
+    qr.make(fit=True)
+    buf = io.BytesIO()
+    qr.make_image(fill_color="#3E7B1F", back_color="white").save(buf, format="PNG")
+    return Response(content=buf.getvalue(), media_type="image/png",
+                    headers={"Cache-Control": "private, max-age=3600"})
 
 
 @router.get("/team")
@@ -266,11 +312,15 @@ class ProfilePatch(BaseModel):
     pref_weight: str | None = None
     pref_area: str | None = None
     pref_temp: str | None = None
+    notify_whatsapp: bool | None = None
+    notify_tasks: bool | None = None
+    notify_weather: bool | None = None
     field_visibility: dict | None = None
 
 
 _EDITABLE = ("full_name", "whatsapp_number", "country", "preferred_language", "account_type", "bio",
-             "avatar_url", "cover_url", "unit_mode", "pref_currency", "pref_weight", "pref_area", "pref_temp")
+             "avatar_url", "cover_url", "unit_mode", "pref_currency", "pref_weight", "pref_area", "pref_temp",
+             "notify_whatsapp", "notify_tasks", "notify_weather")
 _ACCOUNT_TYPES = {"FARMER", "BUYER", "SUPPLIER", "SERVICE_PROVIDER", "BANKER", "BUSINESS", "EXPORTER", "IMPORTER"}
 
 
@@ -380,3 +430,22 @@ async def my_records(
         "occurred_at": r["occurred_at"].isoformat() if r["occurred_at"] else None,
         "audit_hash": r["audit_hash"],
     } for r in rows]}
+
+
+@router.get("/prefs")
+async def my_prefs(
+    user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Notification + language prefs for the Settings page. Migration-tolerant:
+    pre-105 deployments return defaults instead of erroring."""
+    has = (await db.execute(text(
+        "SELECT count(*) FROM information_schema.columns WHERE table_schema='tenant' "
+        "AND table_name='users' AND column_name IN ('notify_whatsapp','notify_tasks','notify_weather')"))).scalar()
+    if int(has or 0) < 3:
+        return {"data": {"notify_whatsapp": True, "notify_tasks": True, "notify_weather": True,
+                         "preferred_language": user.get("preferred_language") or "en", "degraded": True}}
+    row = (await db.execute(text(
+        "SELECT notify_whatsapp, notify_tasks, notify_weather, preferred_language "
+        "FROM tenant.users WHERE user_id = :uid"), {"uid": str(user["user_id"])})).mappings().first()
+    return {"data": dict(row) if row else {}}

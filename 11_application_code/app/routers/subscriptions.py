@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import text
-from app.db.session import get_rls_db
+from app.db.session import get_rls_db, get_db_ctx
 from app.middleware.rls import get_current_user
 from pydantic import BaseModel
 from typing import Optional
@@ -92,8 +92,8 @@ async def request_upgrade(body: UpgradeRequest, user: dict = Depends(get_current
     For Stripe payments, returns a Stripe checkout URL.
     For manual payments (FijiPay, Bank Transfer), creates a pending upgrade request.
     """
-    if user["role"] != "FOUNDER":
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only FOUNDER can upgrade subscription")
+    # Any account holder may REQUEST a tier change for their own tenant —
+    # nothing is charged in-app; an admin approves and applies the change.
 
     if body.target_tier not in TIER_DEFINITIONS:
         raise HTTPException(status_code=400, detail=f"Invalid tier. Must be one of: {list(TIER_DEFINITIONS.keys())}")
@@ -131,26 +131,113 @@ async def request_upgrade(body: UpgradeRequest, user: dict = Depends(get_current
             # Log manual upgrade request
             import uuid
             request_id = f"UPG-{uuid.uuid4().hex[:6].upper()}"
-            await db.execute(text("""
-                INSERT INTO tenant.upgrade_requests
-                    (request_id, tenant_id, current_tier, target_tier, billing_period,
-                     payment_method, status, notes, created_by)
-                VALUES
-                    (:request_id, :tenant_id, :current_tier, :target_tier, :billing_period,
-                     :payment_method, 'PENDING', :notes, :created_by)
-            """), {
-                "request_id": request_id,
-                "tenant_id": str(user["tenant_id"]),
-                "current_tier": current_tier,
-                "target_tier": body.target_tier,
-                "billing_period": body.billing_period,
-                "payment_method": body.payment_method or "MANUAL",
-                "notes": body.notes,
-                "created_by": str(user["user_id"]),
-            })
+            async with get_db_ctx() as cdb:
+                pending = (await cdb.execute(text(
+                    "SELECT 1 FROM community.tier_change_requests WHERE user_id = cast(:uid AS uuid) AND status = 'PENDING'"),
+                    {"uid": str(user["user_id"])})).scalar()
+                if pending:
+                    raise HTTPException(status_code=409, detail="You already have a tier change request under review")
+                await cdb.execute(text("""
+                    INSERT INTO community.tier_change_requests
+                        (request_id, tenant_id, user_id, current_tier, target_tier, billing_period, payment_method, notes)
+                    VALUES
+                        (:request_id, cast(:tenant_id AS uuid), cast(:uid AS uuid), :current_tier, :target_tier, :billing_period, :payment_method, :notes)
+                """), {
+                    "request_id": request_id,
+                    "tenant_id": str(user["tenant_id"]),
+                    "uid": str(user["user_id"]),
+                    "current_tier": current_tier,
+                    "target_tier": body.target_tier,
+                    "billing_period": body.billing_period,
+                    "payment_method": body.payment_method or "MPAISA_MANUAL",
+                    "notes": body.notes,
+                })
+                await cdb.commit()
             return {"data": {
                 "request_id": request_id,
                 "status": "PENDING",
-                "message": f"Upgrade request to {body.target_tier} submitted. Teivaka team will contact you within 24 hours to complete payment.",
-                "payment_method": body.payment_method or "MANUAL",
+                "message": f"Tier change request to {body.target_tier} submitted. The Teivaka team will contact you to arrange payment — nothing is charged in-app.",
+                "payment_method": body.payment_method or "MPAISA_MANUAL",
             }}
+
+
+_TIER_ADMIN_ROLES = {"ADMIN", "FOUNDER"}
+
+
+@router.get("/requests/mine")
+async def my_tier_request(user: dict = Depends(get_current_user)):
+    """The caller's latest tier change request — drives the picker's
+    'requested' state. Migration-tolerant: missing table = no request."""
+    async with get_db_ctx() as db:
+        has = (await db.execute(text(
+            "SELECT to_regclass('community.tier_change_requests') IS NOT NULL"))).scalar()
+        if not has:
+            return {"data": None}
+        row = (await db.execute(text(
+            "SELECT request_id, target_tier, status, reason, created_at FROM community.tier_change_requests "
+            "WHERE user_id = cast(:uid AS uuid) ORDER BY created_at DESC LIMIT 1"),
+            {"uid": str(user["user_id"])})).mappings().first()
+        return {"data": dict(row) if row else None}
+
+
+@router.get("/admin/requests")
+async def admin_tier_requests(status_filter: str = "PENDING", user: dict = Depends(get_current_user)):
+    if user.get("role") not in _TIER_ADMIN_ROLES:
+        raise HTTPException(status_code=403, detail="Admin only")
+    async with get_db_ctx() as db:
+        rows = (await db.execute(text(
+            "SELECT r.*, u.full_name, u.email FROM community.tier_change_requests r "
+            "JOIN tenant.users u ON u.user_id = r.user_id "
+            "WHERE r.status = :st ORDER BY r.created_at"),
+            {"st": status_filter.upper()})).mappings().all()
+        return {"data": [dict(x) for x in rows]}
+
+
+class TierDecision(BaseModel):
+    reason: Optional[str] = ""
+
+
+@router.post("/admin/requests/{request_id}/approve")
+async def approve_tier_request(request_id: str, user: dict = Depends(get_current_user)):
+    """Approve = the REAL tier change: sets tenant.tenants.subscription_tier.
+    Use after payment is confirmed out-of-band (M-PAiSA receipt etc.)."""
+    if user.get("role") not in _TIER_ADMIN_ROLES:
+        raise HTTPException(status_code=403, detail="Admin only")
+    async with get_db_ctx() as db:
+        row = (await db.execute(text(
+            "UPDATE community.tier_change_requests SET status = 'APPROVED', decided_at = now(), decided_by = cast(:by AS uuid) "
+            "WHERE request_id = :rid AND status = 'PENDING' RETURNING tenant_id, user_id, target_tier"),
+            {"rid": request_id, "by": str(user["user_id"])})).first()
+        if not row:
+            raise HTTPException(status_code=404, detail="Request not found or already decided")
+        res = await db.execute(text(
+            "UPDATE tenant.tenants SET subscription_tier = :tier WHERE tenant_id = cast(:tid AS uuid)"),
+            {"tier": row[2], "tid": str(row[0])})
+        if res.rowcount == 0:
+            # surface loudly rather than report a tier change that didn't apply
+            raise HTTPException(status_code=500, detail="Request approved but tenant tier update was blocked — apply manually via psql and investigate RLS on tenant.tenants")
+        try:
+            await db.execute(text(
+                "INSERT INTO community.feed_notifications (user_id, actor_user_id, type, body) "
+                "VALUES (cast(:uid AS uuid), cast(:actor AS uuid), 'TIER_CHANGED', :msg)"),
+                {"uid": str(row[1]), "actor": str(user["user_id"]),
+                 "msg": f"Your plan is now {row[2]} — thank you for backing Teivaka."})
+        except Exception:  # noqa: BLE001 — best-effort notification
+            pass
+        await db.commit()
+    return {"data": {"request_id": request_id, "status": "APPROVED", "new_tier": row[2]}}
+
+
+@router.post("/admin/requests/{request_id}/reject")
+async def reject_tier_request(request_id: str, body: TierDecision = None, user: dict = Depends(get_current_user)):
+    if user.get("role") not in _TIER_ADMIN_ROLES:
+        raise HTTPException(status_code=403, detail="Admin only")
+    async with get_db_ctx() as db:
+        row = (await db.execute(text(
+            "UPDATE community.tier_change_requests SET status = 'REJECTED', reason = :why, decided_at = now(), decided_by = cast(:by AS uuid) "
+            "WHERE request_id = :rid AND status = 'PENDING' RETURNING user_id"),
+            {"rid": request_id, "why": (body.reason if body else "") or "", "by": str(user["user_id"])})).first()
+        if not row:
+            raise HTTPException(status_code=404, detail="Request not found or already decided")
+        await db.commit()
+    return {"data": {"request_id": request_id, "status": "REJECTED"}}

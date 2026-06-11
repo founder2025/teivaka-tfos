@@ -10,7 +10,7 @@
  */
 import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { Pencil, Shield, BadgeCheck, FileText, Download, Coins } from "lucide-react";
+import { Pencil, Shield, BadgeCheck, FileText, Download, Coins, Home, Users, Settings as Cog, Link as LinkIcon, Plus, Check } from "lucide-react";
 import GroupCatalogSection from "../../components/settings/GroupCatalogSection";
 import { getJSON, send } from "../../utils/api";
 
@@ -35,6 +35,162 @@ function SettingsSections() {
         </Link>
       ))}
     </section>
+  );
+}
+
+const G = { soil: "#5C4033", muted: "#8A8678", line: "#E6E1D6", green: "#6AA84F", greenDk: "#3F7427" };
+
+function SettingsCard({ Icon, title, desc, children }) {
+  return (
+    <section style={{ margin: "12px 20px", background: "white", border: `1px solid ${G.line}`, borderRadius: 12, padding: 16 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <Icon size={16} style={{ color: G.muted }} />
+        <strong style={{ color: G.soil, fontSize: 15 }}>{title}</strong>
+      </div>
+      <div style={{ fontSize: 12, color: G.muted, margin: "2px 0 10px" }}>{desc}</div>
+      {children}
+    </section>
+  );
+}
+
+function Row({ label, note, children }) {
+  return (
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, padding: "11px 2px", borderBottom: `1px solid ${G.line}` }}>
+      <div>
+        <div style={{ fontSize: 13.5, color: G.soil, fontWeight: 600 }}>{label}</div>
+        {note && <div style={{ fontSize: 11.5, color: G.muted }}>{note}</div>}
+      </div>
+      <div style={{ flexShrink: 0 }}>{children}</div>
+    </div>
+  );
+}
+
+function Toggle({ on, onChange }) {
+  return (
+    <button onClick={() => onChange(!on)} aria-pressed={on}
+      style={{ width: 44, height: 24, borderRadius: 12, border: "none", cursor: "pointer", position: "relative", background: on ? G.green : G.line, transition: "background .15s" }}>
+      <span style={{ position: "absolute", top: 3, left: on ? 23 : 3, width: 18, height: 18, borderRadius: "50%", background: "#fff", transition: "left .15s" }} />
+    </button>
+  );
+}
+
+const sBtn = { border: `1px solid ${G.line}`, background: "#fff", color: G.soil, borderRadius: 8, padding: "7px 13px", fontSize: 12.5, fontWeight: 600, cursor: "pointer", textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 6 };
+
+/* Card 1 — Farm setup (prototype: farm profile + enterprises + what you run) */
+function FarmSetupCard({ farm, loading, children }) {
+  return (
+    <SettingsCard Icon={Home} title="Farm setup" desc="Your farm details and what you run">
+      <Row label="Farm profile" note={loading ? "Loading…" : farm ? `${farm.farm_name}${farm.location_island ? ` · ${farm.location_island}` : ""}` : "No farm yet"}>
+        <Link to="/farm" style={sBtn}>Open</Link>
+      </Row>
+      <Row label="Enterprises" note="What this farm runs">
+        <Link to="/farm/enterprises" style={sBtn}>Manage</Link>
+      </Row>
+      {children}
+    </SettingsCard>
+  );
+}
+
+/* Card 2 — Team */
+function TeamCard() {
+  const [team, setTeam] = useState(null);
+  useEffect(() => { getJSON("/api/v1/me/team").then((r) => setTeam(r?.data ?? r ?? [])).catch(() => setTeam([])); }, []);
+  return (
+    <SettingsCard Icon={Users} title="Team" desc="Who can use this account and what they can do">
+      <Row label="Members" note={team == null ? "Loading…" : `${team.length} on this account`}>
+        <Link to="/me/team" style={sBtn}>Manage</Link>
+      </Row>
+      <Row label="Permissions" note="Owner: full access · Worker: log events and view tasks">
+        <span style={{ fontSize: 11.5, color: G.muted }}>By role</span>
+      </Row>
+    </SettingsCard>
+  );
+}
+
+/* Preferences extras — language pills + notification toggles (real PATCH /me) */
+const LANGS = [["en", "English"], ["itaukei", "iTaukei"], ["hindi", "Hindi"]];
+
+function LanguageAndAlerts() {
+  const [prefs, setPrefs] = useState(null);
+  useEffect(() => { getJSON("/api/v1/me/prefs").then((r) => setPrefs(r?.data ?? {})).catch(() => setPrefs({})); }, []);
+  const save = async (patch) => {
+    setPrefs((p) => ({ ...p, ...patch }));
+    try { await send("PATCH", "/api/v1/me", patch); toast("Saved ✓", "success"); }
+    catch (e) { toast(`Couldn't save: ${e.userMessage || e.message}`, "error"); }
+  };
+  if (prefs == null) return <div style={{ color: G.muted, fontSize: 13, padding: "8px 0" }}>Loading…</div>;
+  const lang = prefs.preferred_language || "en";
+  return (
+    <>
+      <Row label="Language" note="TIS replies and app copy follow your choice">
+        <div style={{ display: "flex", gap: 6 }}>
+          {LANGS.map(([v, l]) => (
+            <button key={v} onClick={() => save({ preferred_language: v })}
+              style={{ border: `1px solid ${lang === v ? G.greenDk : G.line}`, background: lang === v ? G.green : "#fff", color: lang === v ? "#fff" : G.soil, borderRadius: 999, padding: "6px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>{l}</button>
+          ))}
+        </div>
+      </Row>
+      <Row label="WhatsApp alerts" note="Get alerts on WhatsApp">
+        <Toggle on={Boolean(prefs.notify_whatsapp)} onChange={(v) => save({ notify_whatsapp: v })} />
+      </Row>
+      <Row label="Task reminders" note="Reminders for due farm tasks">
+        <Toggle on={Boolean(prefs.notify_tasks)} onChange={(v) => save({ notify_tasks: v })} />
+      </Row>
+      <Row label="Weather alerts" note="Heavy rain and heat warnings">
+        <Toggle on={Boolean(prefs.notify_weather)} onChange={(v) => save({ notify_weather: v })} />
+      </Row>
+    </>
+  );
+}
+
+/* Card 4 — System (honest connection states; no fake integrations) */
+function SystemCard() {
+  const [tier, setTier] = useState(null);
+  useEffect(() => { getJSON("/api/v1/auth/me").then((r) => setTier(((r?.data ?? r)?.tier || "").toUpperCase() || null)).catch(() => {}); }, []);
+  return (
+    <SettingsCard Icon={LinkIcon} title="System" desc="Connections, billing, and security">
+      <Row label="M-PAiSA" note="Mobile money payments">
+        <span style={{ fontSize: 11.5, color: G.muted }}>Coming with payments</span>
+      </Row>
+      <Row label="WhatsApp" note="TIS advisor on WhatsApp">
+        <span style={{ fontSize: 11.5, color: G.greenDk, fontWeight: 700 }}><Check size={12} style={{ verticalAlign: "-2px" }} /> Available · +679 733 6211</span>
+      </Row>
+      <Row label="Weather service" note="Live forecasts on your Feed">
+        <span style={{ fontSize: 11.5, color: G.greenDk, fontWeight: 700 }}><Check size={12} style={{ verticalAlign: "-2px" }} /> Connected</span>
+      </Row>
+      <Row label="Billing" note={tier ? `Current plan: ${tier}` : "Current plan"}>
+        <Link to="/me/subscription" style={sBtn}>Manage plan</Link>
+      </Row>
+      <Row label="Security" note="PIN and signed-in devices">
+        <button style={sBtn} onClick={() => toast("PIN setup — coming soon", "info")}>Set up</button>
+      </Row>
+    </SettingsCard>
+  );
+}
+
+/* Card 5 — Governance (real audit tail from /me/records) */
+function GovernanceCard() {
+  const [rows, setRows] = useState(null);
+  useEffect(() => { getJSON("/api/v1/me/records").then((r) => setRows(r?.data ?? [])).catch(() => setRows([])); }, []);
+  return (
+    <SettingsCard Icon={Shield} title="Governance" desc="Your tamper-proof record of everything logged">
+      {rows == null ? <div style={{ color: G.muted, fontSize: 13, padding: "8px 0" }}>Loading…</div>
+        : rows.length === 0 ? (
+          <div style={{ color: G.muted, fontSize: 13, padding: "8px 0" }}>Your audit log builds as you log events. Every action gets a tamper-proof record here.</div>
+        ) : (
+          <>
+            {rows.slice(0, 6).map((r, i) => (
+              <Row key={i} label={(r.event_type || "").replace(/_/g, " ").toLowerCase().replace(/^./, (c) => c.toUpperCase())}
+                note={r.occurred_at ? new Date(r.occurred_at).toLocaleString() : ""}>
+                <code style={{ fontSize: 11, color: G.greenDk, fontFamily: "ui-monospace, Menlo, monospace" }}>{(r.audit_hash || "").slice(0, 10) || "—"}</code>
+              </Row>
+            ))}
+            <div style={{ fontSize: 12, color: G.muted, marginTop: 10 }}>
+              {rows.length >= 60 ? "60+" : rows.length} recent events in your chain · each one hash-linked and tamper-proof · <Link to="/farm/history" style={{ color: G.greenDk }}>full ledger</Link>
+            </div>
+          </>
+        )}
+    </SettingsCard>
   );
 }
 
@@ -167,6 +323,7 @@ function DangerZone() {
 
 export default function MeSettings() {
   const [farmId, setFarmId] = useState(null);
+  const [farm, setFarm] = useState(null);
   const [loadingFarms, setLoadingFarms] = useState(true);
   const [farmsError, setFarmsError] = useState(null);
 
@@ -188,6 +345,7 @@ export default function MeSettings() {
         if (alive) {
           if (Array.isArray(farms) && farms.length > 0) {
             setFarmId(farms[0].farm_id);
+            setFarm(farms[0]);
           } else {
             setFarmId(null);
           }
@@ -210,26 +368,37 @@ export default function MeSettings() {
       }}>
         <h1 style={{ margin: 0, color: C.soil, fontSize: 24 }}>Settings</h1>
         <p style={{ margin: "4px 0 0", color: C.muted, fontSize: 14 }}>
-          Customize your TFOS experience.
+          Your farm, your team, and how TFOS works for you.
         </p>
       </header>
 
       <main style={{ padding: "12px 0 80px" }}>
+        {/* Card 1 — Farm setup (incl. what-you-run catalog toggles) */}
+        <FarmSetupCard farm={farm} loading={loadingFarms}>
+          {farmsError && (
+            <div style={{ margin: "10px 0 0", padding: 10, background: "#FDECEA", color: "#A32D2D", borderRadius: 8, fontSize: 13 }}>
+              Couldn't load your farms: {farmsError}
+            </div>
+          )}
+        </FarmSetupCard>
+        {!loadingFarms && <GroupCatalogSection farmId={farmId} />}
+
+        {/* Card 2 — Team */}
+        <TeamCard />
+
+        {/* Card 3 — Preferences: account links + language + alerts + units */}
+        <SettingsCard Icon={Cog} title="Preferences" desc="Account, language, alerts and units">
+          <LanguageAndAlerts />
+        </SettingsCard>
         <SettingsSections />
         <MoneyUnits />
-        {farmsError && (
-          <div style={{
-            margin: "12px 20px", padding: 12,
-            background: "#FDECEA", color: "#A32D2D", borderRadius: 8, fontSize: 14,
-          }}>
-            Couldn't load your farms: {farmsError}
-          </div>
-        )}
-        {loadingFarms ? (
-          <div style={{ padding: 20, color: C.muted, fontSize: 14 }}>Loading…</div>
-        ) : (
-          <GroupCatalogSection farmId={farmId} />
-        )}
+
+        {/* Card 4 — System */}
+        <SystemCard />
+
+        {/* Card 5 — Governance */}
+        <GovernanceCard />
+
         <DangerZone />
       </main>
     </div>
