@@ -24,6 +24,7 @@ const ADMIN_TABS = [
   { path: "/admin/task-engine", label: "Task Engine",    icon: "⚙︎" },
   { path: "/admin/moderation", label: "Moderation",      icon: "🚩" },
   { path: "/admin/verifications", label: "Verifications", icon: "✅" },
+  { path: "/admin/classroom", label: "Classroom",     icon: "🎓" },
   { path: "/admin/settings",  label: "Platform Settings", icon: "⚙️"  },
 ];
 

@@ -14,10 +14,11 @@
  */
 import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "react-router-dom";
-import { BookOpen, Plus, Award, QrCode, Download, Edit3 } from "lucide-react";
+import { BookOpen, Plus, Award, QrCode, Download, Edit3, Lock, GraduationCap, X } from "lucide-react";
 import { getJSON, send } from "../../utils/api";
-import CoursePlayer from "../../components/classroom/CoursePlayer";
+import CoursePlayer, { Stars } from "../../components/classroom/CoursePlayer";
 import CourseBuilder from "../../components/classroom/CourseBuilder";
+import "../../styles/classroom-fixes.css";
 
 const API = "/api/v1/classroom";
 const toast = (message, type) => { try { window.dispatchEvent(new CustomEvent("tfos:toast", { detail: { message, type } })); } catch { /* noop */ } };
@@ -66,15 +67,27 @@ function CourseGrid({ courses, loading, canAuthor, onOpen, onEdit, onNew }) {
               <div className="course-card-title">
                 {c.title}
                 {c.status === "DRAFT" && <span className="cb-badge draft" style={{ marginLeft: 6 }}>Draft</span>}
+                {(c.pricing || "FREE") !== "FREE" && (
+                  <span className="cls-price-chip" style={{ marginLeft: 6 }}>
+                    {!c.entitled && <Lock size={9} />}
+                    {c.pricing === "ONE_TIME" ? (c.price_fjd ? `FJD ${Number(c.price_fjd).toFixed(0)}` : "Paid") : (c.required_tier || "BASIC")}
+                  </span>
+                )}
               </div>
               <div className="course-card-bar"><div className="course-card-fill" style={{ width: `${c.progress_pct}%` }} /></div>
-              <div className="course-card-pct" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <div className="course-card-pct" style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                 <span>{c.progress_pct}%</span>
                 <span style={{ color: "var(--muted)", fontSize: 11 }}>{c.lesson_count} lesson{c.lesson_count === 1 ? "" : "s"}{c.author_name ? ` · ${c.author_name}` : ""}</span>
                 {(c.is_mine || c.can_edit) && (
                   <button className="cb-cover-btn" style={{ marginLeft: "auto" }} onClick={(e) => { e.stopPropagation(); onEdit(c); }}><Edit3 size={11} />Edit</button>
                 )}
               </div>
+              {(c.avg_rating != null || c.learners_count > 0) && (
+                <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 3, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                  {c.avg_rating != null && <span><Stars value={c.avg_rating} size={11} /> {c.avg_rating}</span>}
+                  {c.learners_count > 0 && <span>{c.learners_count} learning{c.completed_count > 0 ? ` · ${c.completed_count} completed` : ""}</span>}
+                </div>
+              )}
             </div>
           </div>
         ))}
@@ -83,6 +96,83 @@ function CourseGrid({ courses, loading, canAuthor, onOpen, onEdit, onNew }) {
             <Plus size={26} /><div>New course</div>
           </div>
         )}
+      </div>
+    </>
+  );
+}
+
+/** "Teach on Teivaka" — author application for verified, experienced members. */
+function TeachCard({ canAuthor, applicationsOpen, onChanged }) {
+  const [mine, setMine] = useState(null);
+  const [open, setOpen] = useState(false);
+  const [f, setF] = useState({ expertise: "", credentials: "", topics: "" });
+  useEffect(() => { getJSON(`${API}/author-request/me`).then((r) => setMine(r.data)).catch(() => {}); }, []);
+  if (canAuthor || !applicationsOpen) return null;
+  const submit = async () => {
+    try {
+      await send("POST", `${API}/author-request`, f);
+      toast("Application submitted — we review every applicant personally ✓", "success");
+      setOpen(false);
+      setMine({ status: "PENDING" });
+      onChanged?.();
+    } catch (e) { toast(`${e.userMessage || e.message}`, "error"); }
+  };
+  const inp = { width: "100%", border: "1px solid var(--line)", borderRadius: 8, padding: "9px 11px", fontSize: 13.5, marginBottom: 10 };
+  return (
+    <>
+      <div style={{ marginTop: 14, padding: "14px 16px", border: "1px dashed var(--green)", borderRadius: 12, background: "rgba(106,168,79,0.05)", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+        <GraduationCap size={22} style={{ color: "var(--green-dk)" }} />
+        <div style={{ flex: 1, minWidth: 200 }}>
+          <div style={{ fontWeight: 700, color: "var(--soil)", fontSize: 13.5 }}>Know something other farmers need?</div>
+          <div style={{ fontSize: 12, color: "var(--muted)" }}>
+            {mine?.status === "PENDING" ? "Your application to teach is under review — we'll notify you."
+              : mine?.status === "REJECTED" ? `Previous application wasn't approved${mine.reason ? ` — ${mine.reason}` : ""}. You can apply again.`
+              : "Verified, experienced members can apply to teach. Requires the green tick."}
+          </div>
+        </div>
+        {mine?.status !== "PENDING" && (
+          <button className="btn btn-sm btn-primary" onClick={() => setOpen(true)}>Apply to teach</button>
+        )}
+      </div>
+      {open && (
+        <div className="overlay-backdrop show" style={{ alignItems: "center", padding: 16 }} onClick={() => setOpen(false)}>
+          <div className="overlay-modal" style={{ maxWidth: 460 }} onClick={(e) => e.stopPropagation()}>
+            <div className="overlay-head"><span>Teach on Teivaka</span><button className="overlay-close" onClick={() => setOpen(false)}><X size={18} /></button></div>
+            <div style={{ padding: 18 }}>
+              <div className="cb-field-lbl">Your area of expertise *</div>
+              <input style={inp} value={f.expertise} placeholder="e.g. 20 years growing watermelon on Viti Levu" onChange={(e) => setF({ ...f, expertise: e.target.value })} />
+              <div className="cb-field-lbl">Credentials &amp; experience</div>
+              <textarea style={{ ...inp, minHeight: 70 }} value={f.credentials} placeholder="Training, certifications, yields, references — anything that proves you know your craft" onChange={(e) => setF({ ...f, credentials: e.target.value })} />
+              <div className="cb-field-lbl">What would you teach?</div>
+              <input style={inp} value={f.topics} placeholder="e.g. Dry-season melons, drip irrigation on a budget" onChange={(e) => setF({ ...f, topics: e.target.value })} />
+              <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 12 }}>Requires a verified email and the identity green tick. Every application is reviewed by a human.</div>
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+                <button className="btn btn-sm btn-secondary" onClick={() => setOpen(false)}>Cancel</button>
+                <button className="btn btn-sm btn-primary" onClick={submit}>Submit application</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+function ContinueStrip({ onResume }) {
+  const [items, setItems] = useState(null);
+  useEffect(() => { getJSON(`${API}/me/progress`).then((r) => setItems((r.data || []).filter((p) => p.progress_pct > 0 && p.progress_pct < 100))).catch(() => setItems([])); }, []);
+  if (!items || !items.length) return null;
+  return (
+    <>
+      <div style={{ fontWeight: 700, fontSize: 13, color: "var(--soil)", margin: "2px 0 8px" }}>Continue learning</div>
+      <div className="cls-continue-row">
+        {items.map((p) => (
+          <div className="cls-continue-card" key={p.course_id} onClick={() => onResume(p.course_id)}>
+            <div style={{ fontWeight: 600, fontSize: 13, color: "var(--soil)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.title}</div>
+            <div className="course-card-bar" style={{ margin: "8px 0 4px" }}><div className="course-card-fill" style={{ width: `${p.progress_pct}%` }} /></div>
+            <div style={{ fontSize: 11, color: "var(--muted)" }}>{p.progress_pct}% — pick up where you left off</div>
+          </div>
+        ))}
       </div>
     </>
   );
@@ -136,6 +226,7 @@ export default function ClassroomPillar() {
     certifications: "certification", bookmarks: "bookmarks" }[pathname.split("/")[2]]) || "overview";
   const [courses, setCourses] = useState(null);
   const [canAuthor, setCanAuthor] = useState(false);
+  const [appsOpen, setAppsOpen] = useState(false);
   const [playing, setPlaying] = useState(null);
   const [building, setBuilding] = useState(null);
   const [creating, setCreating] = useState(false);
@@ -144,7 +235,7 @@ export default function ClassroomPillar() {
 
   const load = () =>
     getJSON(`${API}/courses`)
-      .then((r) => { setCourses(r.data || []); setCanAuthor(Boolean(r.meta?.can_author)); })
+      .then((r) => { setCourses(r.data || []); setCanAuthor(Boolean(r.meta?.can_author)); setAppsOpen(Boolean(r.meta?.applications_open)); })
       .catch((e) => { setCourses([]); toast(`Couldn't load the Classroom: ${e.userMessage || e.message}`, "error"); });
   useEffect(() => { load(); }, []);
   useEffect(() => {
@@ -165,8 +256,10 @@ export default function ClassroomPillar() {
     body = (
       <>
         {view === "overview" ? <GlobalNote /> : null}
+        {view === "overview" ? <ContinueStrip onResume={setPlaying} /> : null}
         <CourseGrid courses={courses || []} loading={courses == null} canAuthor={canAuthor}
           onOpen={(c) => setPlaying(c.course_id)} onEdit={(c) => setBuilding(c.course_id)} onNew={() => setCreating(true)} />
+        <TeachCard canAuthor={canAuthor} applicationsOpen={appsOpen} onChanged={load} />
       </>
     );
   } else if (view === "my_progress") {

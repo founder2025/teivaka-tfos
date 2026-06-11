@@ -27,12 +27,64 @@ from sqlalchemy import text
 
 from app.core.audit_chain import emit_audit_event
 from app.db.session import get_db_ctx, get_rls_db
-from app.middleware.rls import get_current_user
+from app.middleware.rls import get_current_user, TIER_ORDER
 
 router = APIRouter()
 
 _ADMIN_ROLES = {"ADMIN", "FOUNDER"}
 VERIFY_BASE = "https://teivaka.com/verify"
+
+_DEFAULT_SETTINGS = {
+    "applications_open": True,
+    "monetization_enabled": True,
+    "payment_instructions": ("To unlock this masterclass, pay via M-PAiSA to Teivaka PTE LTD "
+                             "and message us your receipt — access is granted within 24 hours."),
+}
+
+
+async def _has_table(db, name: str) -> bool:
+    return bool((await db.execute(text(
+        f"SELECT to_regclass('community.{name}') IS NOT NULL"))).scalar())
+
+
+async def _settings(db) -> dict:
+    """Classroom settings row, defaults if migration 101 hasn't landed."""
+    if not await _has_table(db, "classroom_settings"):
+        return dict(_DEFAULT_SETTINGS)
+    row = (await db.execute(text(
+        "SELECT applications_open, monetization_enabled, payment_instructions "
+        "FROM community.classroom_settings WHERE id = 1"))).mappings().first()
+    return dict(row) if row else dict(_DEFAULT_SETTINGS)
+
+
+async def _entitled(db, user: dict, course: dict, settings: dict | None = None) -> bool:
+    """May this user open the full course? FREE always; paid needs tier or an
+    entitlement row. Authors/admins always. Payment-rail-agnostic: any future
+    Stripe/M-PAiSA hook just inserts into course_entitlements."""
+    pricing = (course.get("pricing") or "FREE").upper()
+    if pricing == "FREE":
+        return True
+    if _is_admin(user) or str(course["author_user_id"]) == str(user["user_id"]):
+        return True
+    s = settings or await _settings(db)
+    if not s["monetization_enabled"]:
+        return True
+    if pricing == "SUBSCRIPTION":
+        mine = TIER_ORDER.get((user.get("subscription_tier") or "FREE").upper(), 0)
+        need = TIER_ORDER.get((course.get("required_tier") or "BASIC").upper(), 1)
+        if mine >= need:
+            return True
+    if not await _has_table(db, "course_entitlements"):
+        return False
+    return bool((await db.execute(text(
+        "SELECT 1 FROM community.course_entitlements WHERE user_id = cast(:uid AS uuid) AND course_id = :cid"),
+        {"uid": str(user["user_id"]), "cid": course["course_id"]})).scalar())
+
+
+def _lock_lesson(lesson: dict) -> dict:
+    """Strip paid content from a locked lesson — title stays as the teaser."""
+    return {**lesson, "video_url": None, "video_kind": None, "body_html": "",
+            "transcript": "", "resources": [], "action_step": "", "locked": True}
 
 
 def _is_admin(user: dict) -> bool:
@@ -84,6 +136,10 @@ async def list_courses(user: dict = Depends(get_current_user)):
             vis = "(c.status = 'PUBLISHED' OR c.author_user_id = cast(:uid AS uuid))"
         else:
             vis = "c.status = 'PUBLISHED'"
+        has_ratings = await _has_table(db, "course_ratings")
+        rating_sel = (", (SELECT round(avg(stars)::numeric, 1) FROM community.course_ratings r WHERE r.course_id = c.course_id) AS avg_rating"
+                      ", (SELECT count(*) FROM community.course_ratings r WHERE r.course_id = c.course_id) AS rating_count"
+                      if has_ratings else ", NULL AS avg_rating, 0 AS rating_count")
         rows = (await db.execute(text(f"""
             SELECT c.*, u.full_name AS author_name,
                    (SELECT count(*) FROM community.course_lessons l
@@ -91,20 +147,40 @@ async def list_courses(user: dict = Depends(get_current_user)):
                    (SELECT count(*) FROM community.lesson_progress lp
                      JOIN community.course_lessons pl ON pl.lesson_id = lp.lesson_id AND pl.status = 'PUBLISHED'
                     WHERE lp.course_id = c.course_id AND lp.user_id = cast(:uid AS uuid)) AS done_count,
+                   (SELECT count(DISTINCT lp2.user_id) FROM community.lesson_progress lp2
+                     WHERE lp2.course_id = c.course_id) AS learners_count,
+                   (SELECT count(*) FROM community.course_certificates cc
+                     WHERE cc.course_id = c.course_id) AS completed_count,
                    (c.author_user_id = cast(:uid AS uuid)) AS is_mine
+                   {rating_sel}
             FROM community.courses c
             LEFT JOIN tenant.users u ON u.user_id = c.author_user_id
             WHERE {vis}
             ORDER BY c.created_at DESC
         """), {"uid": uid})).mappings().all()
+        settings = await _settings(db)
+        mine_ents = set()
+        if await _has_table(db, "course_entitlements"):
+            mine_ents = {r[0] for r in (await db.execute(text(
+                "SELECT course_id FROM community.course_entitlements WHERE user_id = cast(:uid AS uuid)"),
+                {"uid": uid})).all()}
         data = []
         for r in rows:
             d = dict(r)
             n, dn = int(d.pop("lesson_count") or 0), int(d.pop("done_count") or 0)
             d["lesson_count"] = n
             d["progress_pct"] = round(dn / n * 100) if n else 0
+            d["can_edit"] = _is_admin(user) or d["is_mine"]
+            pricing = (d.get("pricing") or "FREE").upper()
+            d["entitled"] = (pricing == "FREE" or d["can_edit"] or not settings["monetization_enabled"]
+                             or d["course_id"] in mine_ents
+                             or (pricing == "SUBSCRIPTION"
+                                 and TIER_ORDER.get((user.get("subscription_tier") or "FREE").upper(), 0)
+                                 >= TIER_ORDER.get((d.get("required_tier") or "BASIC").upper(), 1)))
             data.append(d)
-        return {"data": data, "meta": {"can_author": author}}
+        return {"data": data, "meta": {"can_author": author,
+                                       "applications_open": settings["applications_open"],
+                                       "monetization_enabled": settings["monetization_enabled"]}}
 
 
 @router.get("/courses/{course_id}")
@@ -145,6 +221,18 @@ async def get_course(course_id: str, user: dict = Depends(get_current_user)):
             "WHERE user_id = cast(:uid AS uuid) AND course_id = :cid"),
             {"uid": uid, "cid": course_id})).mappings().first()
 
+        settings = await _settings(db)
+        entitled = manage or await _entitled(db, user, c, settings)
+        preview_id = None
+        if not entitled:
+            for m in mods:
+                for l in lessons:
+                    if l["module_id"] == m["module_id"] and l["status"] == "PUBLISHED":
+                        preview_id = l["lesson_id"]
+                        break
+                if preview_id:
+                    break
+
         out_mods, total, dn = [], 0, 0
         for m in mods:
             ls = []
@@ -155,6 +243,9 @@ async def get_course(course_id: str, user: dict = Depends(get_current_user)):
                     continue
                 d = dict(l)
                 d["done"] = l["lesson_id"] in done
+                d["locked"] = False
+                if not entitled and l["lesson_id"] != preview_id:
+                    d = _lock_lesson(d)
                 ls.append(d)
                 if l["status"] == "PUBLISHED":
                     total += 1
@@ -162,14 +253,52 @@ async def get_course(course_id: str, user: dict = Depends(get_current_user)):
             out_mods.append({**dict(m), "lessons": ls,
                              "has_quiz": int(nq.get(m["module_id"], 0)) > 0,
                              "question_count": int(nq.get(m["module_id"], 0)),
-                             "quiz_passed": m["module_id"] in passed})
+                             "quiz_passed": m["module_id"] in passed,
+                             "locked": not entitled})
         c["modules"] = out_mods
         c["progress_pct"] = round(dn / total * 100) if total else 0
         c["can_manage"] = manage
+        c["entitled"] = entitled
+        if not entitled:
+            c["payment_instructions"] = settings["payment_instructions"]
         c["certificate"] = dict(cert) if cert else None
         quizzed = [m for m in out_mods if m["has_quiz"] and m["quiz_pass_pct"]]
-        c["certificate_eligible"] = bool(total) and dn == total and all(m["quiz_passed"] for m in quizzed)
+        c["certificate_eligible"] = entitled and bool(total) and dn == total and all(m["quiz_passed"] for m in quizzed)
+        # ratings context (migration-tolerant)
+        c["avg_rating"], c["rating_count"], c["my_rating"] = None, 0, None
+        if await _has_table(db, "course_ratings"):
+            agg = (await db.execute(text(
+                "SELECT round(avg(stars)::numeric, 1), count(*) FROM community.course_ratings WHERE course_id = :cid"),
+                {"cid": course_id})).first()
+            c["avg_rating"] = float(agg[0]) if agg and agg[0] is not None else None
+            c["rating_count"] = int(agg[1]) if agg else 0
+            mine = (await db.execute(text(
+                "SELECT stars, review FROM community.course_ratings WHERE course_id = :cid AND user_id = cast(:uid AS uuid)"),
+                {"cid": course_id, "uid": uid})).first()
+            c["my_rating"] = {"stars": mine[0], "review": mine[1]} if mine else None
+        c["rating_allowed"] = entitled and total > 0 and (dn / total) >= 0.5
         return {"data": c}
+
+
+async def _require_unlocked(db, user: dict, course_id: str, lesson_id: str | None = None):
+    """403 unless the user may open this course's paid content (the free
+    preview lesson — first published — is exempt when lesson_id given)."""
+    course = (await db.execute(text(
+        "SELECT * FROM community.courses WHERE course_id = :cid"), {"cid": course_id})).mappings().first()
+    if not course:
+        raise HTTPException(status_code=404, detail="Course not found")
+    if await _entitled(db, user, dict(course)):
+        return
+    if lesson_id:
+        first = (await db.execute(text("""
+            SELECT l.lesson_id FROM community.course_lessons l
+            JOIN community.course_modules m ON m.module_id = l.module_id
+            WHERE l.course_id = :cid AND l.status = 'PUBLISHED'
+            ORDER BY m.position, m.module_id, l.position, l.lesson_id LIMIT 1"""),
+            {"cid": course_id})).scalar()
+        if lesson_id == first:
+            return
+    raise HTTPException(status_code=403, detail="This is a paid masterclass — unlock it to continue")
 
 
 @router.post("/lessons/{lesson_id}/complete")
@@ -180,6 +309,7 @@ async def complete_lesson(lesson_id: str, user: dict = Depends(get_current_user)
             {"lid": lesson_id})).first()
         if not row:
             raise HTTPException(status_code=404, detail="Lesson not found")
+        await _require_unlocked(db, user, row[0], lesson_id)
         await db.execute(text(
             "INSERT INTO community.lesson_progress (user_id, lesson_id, course_id) "
             "VALUES (cast(:uid AS uuid), :lid, :cid) ON CONFLICT DO NOTHING"),
@@ -233,6 +363,7 @@ async def get_quiz(module_id: str, user: dict = Depends(get_current_user)):
             {"mid": module_id})).mappings().first()
         if not m:
             raise HTTPException(status_code=404, detail="Module not found")
+        await _require_unlocked(db, user, m["course_id"])
         qs = (await db.execute(text(
             "SELECT question_id, question, options FROM community.quiz_questions "
             "WHERE module_id = :mid ORDER BY position, question_id"),
@@ -251,6 +382,7 @@ async def attempt_quiz(module_id: str, body: QuizAttempt, user: dict = Depends(g
             {"mid": module_id})).mappings().first()
         if not m:
             raise HTTPException(status_code=404, detail="Module not found")
+        await _require_unlocked(db, user, m["course_id"])
         qs = (await db.execute(text(
             "SELECT correct_index FROM community.quiz_questions WHERE module_id = :mid ORDER BY position, question_id"),
             {"mid": module_id})).all()
@@ -389,6 +521,9 @@ class CoursePatch(BaseModel):
     status: Optional[str] = None
     attribution: Optional[str] = None
     verification_status: Optional[str] = None
+    pricing: Optional[str] = None        # FREE | SUBSCRIPTION | ONE_TIME
+    price_fjd: Optional[float] = None
+    required_tier: Optional[str] = None  # BASIC | PROFESSIONAL | ENTERPRISE
 
 
 class ModuleCreate(BaseModel):
@@ -448,6 +583,14 @@ async def patch_course(course_id: str, body: CoursePatch, user: dict = Depends(g
     fields = {k: v for k, v in body.model_dump().items() if v is not None}
     if "status" in fields and fields["status"] not in ("DRAFT", "PUBLISHED"):
         raise HTTPException(status_code=422, detail="status must be DRAFT or PUBLISHED")
+    if "pricing" in fields:
+        fields["pricing"] = fields["pricing"].upper()
+        if fields["pricing"] not in ("FREE", "SUBSCRIPTION", "ONE_TIME"):
+            raise HTTPException(status_code=422, detail="pricing must be FREE, SUBSCRIPTION or ONE_TIME")
+    if "required_tier" in fields and fields["required_tier"].upper() not in TIER_ORDER:
+        raise HTTPException(status_code=422, detail="Unknown subscription tier")
+    if fields.get("price_fjd") is not None and fields["price_fjd"] < 0:
+        raise HTTPException(status_code=422, detail="Price cannot be negative")
     if not fields:
         return {"data": {"course_id": course_id}}
     async with get_db_ctx() as db:
@@ -625,6 +768,239 @@ async def delete_lesson(lesson_id: str, user: dict = Depends(get_current_user)):
         await db.execute(text("DELETE FROM community.course_lessons WHERE lesson_id = :lid"), {"lid": lesson_id})
         await db.commit()
     return {"data": {"deleted": True}}
+
+
+# ---------------------------------------------------------------- ratings --
+
+class RatingBody(BaseModel):
+    stars: int
+    review: Optional[str] = ""
+
+
+@router.post("/courses/{course_id}/rating")
+async def rate_course(course_id: str, body: RatingBody, user: dict = Depends(get_current_user)):
+    """Rate a course — gated behind 50% real completion so reviews can't be
+    gamed by people who never took the course."""
+    if not 1 <= body.stars <= 5:
+        raise HTTPException(status_code=422, detail="Stars must be 1-5")
+    uid = str(user["user_id"])
+    async with get_db_ctx() as db:
+        if not await _has_table(db, "course_ratings"):
+            raise HTTPException(status_code=503, detail="Ratings not available yet — run the deploy script")
+        await _require_unlocked(db, user, course_id)
+        n = (await db.execute(text(
+            "SELECT count(*) FROM community.course_lessons WHERE course_id = :cid AND status = 'PUBLISHED'"),
+            {"cid": course_id})).scalar() or 0
+        dn = (await db.execute(text(
+            "SELECT count(*) FROM community.lesson_progress lp JOIN community.course_lessons l "
+            "ON l.lesson_id = lp.lesson_id AND l.status = 'PUBLISHED' "
+            "WHERE lp.course_id = :cid AND lp.user_id = cast(:uid AS uuid)"),
+            {"cid": course_id, "uid": uid})).scalar() or 0
+        if not n or dn / n < 0.5:
+            raise HTTPException(status_code=409, detail="Complete at least half the course before rating it")
+        await db.execute(text(
+            "INSERT INTO community.course_ratings (user_id, course_id, stars, review) "
+            "VALUES (cast(:uid AS uuid), :cid, :stars, :review) "
+            "ON CONFLICT (user_id, course_id) DO UPDATE SET stars = :stars, review = :review, created_at = now()"),
+            {"uid": uid, "cid": course_id, "stars": body.stars, "review": (body.review or "").strip()[:500]})
+        await db.commit()
+    return {"data": {"stars": body.stars}}
+
+
+# --------------------------------------------- "Teach on Teivaka" requests --
+
+class AuthorRequestBody(BaseModel):
+    expertise: str
+    credentials: Optional[str] = ""
+    topics: Optional[str] = ""
+    evidence: Optional[list] = []
+
+
+@router.post("/author-request")
+async def submit_author_request(body: AuthorRequestBody, user: dict = Depends(get_current_user)):
+    """Apply to teach. Requirements: verified email + KYC green tick — the
+    'certified, experienced' bar is checkable, not vibes."""
+    if not (body.expertise or "").strip():
+        raise HTTPException(status_code=422, detail="Tell us your area of expertise")
+    uid = str(user["user_id"])
+    async with get_db_ctx() as db:
+        if not await _has_table(db, "author_requests"):
+            raise HTTPException(status_code=503, detail="Applications not available yet — run the deploy script")
+        s = await _settings(db)
+        if not s["applications_open"]:
+            raise HTTPException(status_code=409, detail="Author applications are closed right now")
+        row = (await db.execute(text(
+            "SELECT email_verified, COALESCE(kyc_verified, FALSE) FROM tenant.users WHERE user_id = cast(:uid AS uuid)"),
+            {"uid": uid})).first()
+        if not row or not row[0]:
+            raise HTTPException(status_code=403, detail="Verify your email first")
+        if not row[1]:
+            raise HTTPException(status_code=403, detail="Get your identity verified (green tick) first — Profile → Verification")
+        pending = (await db.execute(text(
+            "SELECT 1 FROM community.author_requests WHERE user_id = cast(:uid AS uuid) AND status = 'PENDING'"),
+            {"uid": uid})).scalar()
+        if pending:
+            raise HTTPException(status_code=409, detail="Your application is already under review")
+        rid = _id("AUTH")
+        await db.execute(text(
+            "INSERT INTO community.author_requests (request_id, user_id, expertise, credentials, topics, evidence) "
+            "VALUES (:rid, cast(:uid AS uuid), :exp, :cred, :topics, cast(:ev AS jsonb))"),
+            {"rid": rid, "uid": uid, "exp": body.expertise.strip()[:1000],
+             "cred": (body.credentials or "").strip()[:2000], "topics": (body.topics or "").strip()[:1000],
+             "ev": __import__("json").dumps(body.evidence or [])})
+        await db.commit()
+    return {"data": {"request_id": rid, "status": "PENDING"}}
+
+
+@router.get("/author-request/me")
+async def my_author_request(user: dict = Depends(get_current_user)):
+    async with get_db_ctx() as db:
+        if not await _has_table(db, "author_requests"):
+            return {"data": None}
+        row = (await db.execute(text(
+            "SELECT request_id, status, reason, created_at, decided_at FROM community.author_requests "
+            "WHERE user_id = cast(:uid AS uuid) ORDER BY created_at DESC LIMIT 1"),
+            {"uid": str(user["user_id"])})).mappings().first()
+        return {"data": dict(row) if row else None}
+
+
+@router.get("/admin/author-requests")
+async def admin_author_requests(status: str = "PENDING", user: dict = Depends(get_current_user)):
+    if not _is_admin(user):
+        raise HTTPException(status_code=403, detail="Admin only")
+    async with get_db_ctx() as db:
+        rows = (await db.execute(text(
+            "SELECT ar.*, u.full_name, u.email, u.profession, u.avatar_url, COALESCE(u.kyc_verified, FALSE) AS kyc_verified "
+            "FROM community.author_requests ar JOIN tenant.users u ON u.user_id = ar.user_id "
+            "WHERE ar.status = :st ORDER BY ar.created_at"),
+            {"st": status.upper()})).mappings().all()
+        return {"data": [dict(r) for r in rows]}
+
+
+class DecisionBody(BaseModel):
+    reason: Optional[str] = ""
+
+
+@router.post("/admin/author-requests/{request_id}/approve")
+async def approve_author_request(request_id: str, user: dict = Depends(get_current_user)):
+    if not _is_admin(user):
+        raise HTTPException(status_code=403, detail="Admin only")
+    async with get_db_ctx() as db:
+        row = (await db.execute(text(
+            "UPDATE community.author_requests SET status = 'APPROVED', decided_at = now(), decided_by = cast(:by AS uuid) "
+            "WHERE request_id = :rid AND status = 'PENDING' RETURNING user_id"),
+            {"rid": request_id, "by": str(user["user_id"])})).first()
+        if not row:
+            raise HTTPException(status_code=404, detail="Request not found or already decided")
+        await db.execute(text("UPDATE tenant.users SET course_author = TRUE WHERE user_id = :uid"), {"uid": str(row[0])})
+        try:
+            await db.execute(text(
+                "INSERT INTO community.feed_notifications (user_id, actor_user_id, type, body) "
+                "VALUES (:uid, cast(:actor AS uuid), 'AUTHOR_APPROVED', "
+                "'You are approved to teach on Teivaka — open the Classroom and build your first course.')"),
+                {"uid": str(row[0]), "actor": str(user["user_id"])})
+        except Exception:  # noqa: BLE001 — best-effort notification
+            pass
+        await db.commit()
+    return {"data": {"request_id": request_id, "status": "APPROVED"}}
+
+
+@router.post("/admin/author-requests/{request_id}/reject")
+async def reject_author_request(request_id: str, body: DecisionBody = None, user: dict = Depends(get_current_user)):
+    if not _is_admin(user):
+        raise HTTPException(status_code=403, detail="Admin only")
+    async with get_db_ctx() as db:
+        row = (await db.execute(text(
+            "UPDATE community.author_requests SET status = 'REJECTED', reason = :why, decided_at = now(), decided_by = cast(:by AS uuid) "
+            "WHERE request_id = :rid AND status = 'PENDING' RETURNING user_id"),
+            {"rid": request_id, "why": (body.reason if body else "") or "", "by": str(user["user_id"])})).first()
+        if not row:
+            raise HTTPException(status_code=404, detail="Request not found or already decided")
+        await db.commit()
+    return {"data": {"request_id": request_id, "status": "REJECTED"}}
+
+
+@router.get("/admin/authors")
+async def admin_authors(user: dict = Depends(get_current_user)):
+    if not _is_admin(user):
+        raise HTTPException(status_code=403, detail="Admin only")
+    async with get_db_ctx() as db:
+        rows = (await db.execute(text(
+            "SELECT u.user_id, u.full_name, u.email, u.profession, "
+            "(SELECT count(*) FROM community.courses c WHERE c.author_user_id = u.user_id) AS course_count "
+            "FROM tenant.users u WHERE u.course_author = TRUE ORDER BY u.full_name"))).mappings().all()
+        return {"data": [dict(r) for r in rows]}
+
+
+# ----------------------------------------------------- settings + grants --
+
+@router.get("/settings")
+async def get_settings(user: dict = Depends(get_current_user)):
+    """Learner-facing settings: can I apply to teach, is monetization on,
+    and how do I pay (shown on locked masterclasses)."""
+    async with get_db_ctx() as db:
+        return {"data": await _settings(db)}
+
+
+class SettingsPatch(BaseModel):
+    applications_open: Optional[bool] = None
+    monetization_enabled: Optional[bool] = None
+    payment_instructions: Optional[str] = None
+
+
+@router.patch("/admin/settings")
+async def patch_settings(body: SettingsPatch, user: dict = Depends(get_current_user)):
+    if not _is_admin(user):
+        raise HTTPException(status_code=403, detail="Admin only")
+    fields = {k: v for k, v in body.model_dump().items() if v is not None}
+    async with get_db_ctx() as db:
+        if not await _has_table(db, "classroom_settings"):
+            raise HTTPException(status_code=503, detail="Settings table missing — run the deploy script")
+        if fields:
+            sets = ", ".join(f"{k} = :{k}" for k in fields)
+            await db.execute(text(f"UPDATE community.classroom_settings SET {sets} WHERE id = 1"), fields)
+            await db.commit()
+        return {"data": await _settings(db)}
+
+
+class GrantBody(BaseModel):
+    course_id: str
+    user_email: Optional[str] = None
+    user_id: Optional[str] = None
+
+
+@router.post("/admin/entitlements")
+async def grant_entitlement(body: GrantBody, user: dict = Depends(get_current_user)):
+    """Admin manually unlocks a paid course for a user (the working payment
+    path until Stripe/M-PAiSA lands — same table any PSP webhook will use)."""
+    if not _is_admin(user):
+        raise HTTPException(status_code=403, detail="Admin only")
+    async with get_db_ctx() as db:
+        uid = body.user_id
+        if not uid and body.user_email:
+            uid = (await db.execute(text(
+                "SELECT user_id FROM tenant.users WHERE lower(email) = lower(:em)"),
+                {"em": body.user_email.strip()})).scalar()
+        if not uid:
+            raise HTTPException(status_code=404, detail="User not found — check the email")
+        course = (await db.execute(text(
+            "SELECT title FROM community.courses WHERE course_id = :cid"), {"cid": body.course_id})).scalar()
+        if not course:
+            raise HTTPException(status_code=404, detail="Course not found")
+        await db.execute(text(
+            "INSERT INTO community.course_entitlements (user_id, course_id, source, granted_by) "
+            "VALUES (cast(:uid AS uuid), :cid, 'ADMIN_GRANT', cast(:by AS uuid)) ON CONFLICT DO NOTHING"),
+            {"uid": str(uid), "cid": body.course_id, "by": str(user["user_id"])})
+        try:
+            await db.execute(text(
+                "INSERT INTO community.feed_notifications (user_id, actor_user_id, type, body) "
+                "VALUES (cast(:uid AS uuid), cast(:actor AS uuid), 'COURSE_UNLOCKED', :msg)"),
+                {"uid": str(uid), "actor": str(user["user_id"]),
+                 "msg": f"'{course}' is unlocked for you — open the Classroom to start."})
+        except Exception:  # noqa: BLE001 — best-effort notification
+            pass
+        await db.commit()
+    return {"data": {"user_id": str(uid), "course_id": body.course_id, "granted": True}}
 
 
 # ------------------------------------------------------- partner authors --

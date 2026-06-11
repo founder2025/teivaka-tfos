@@ -15,6 +15,7 @@ import {
 import { getJSON, send } from "../../utils/api";
 import { uploadMedia } from "../../utils/imageCompress";
 import { VideoStage, videoEmbed } from "./CoursePlayer";
+import "../../styles/classroom-fixes.css";
 
 const API = "/api/v1/classroom";
 const toast = (message, type) => { try { window.dispatchEvent(new CustomEvent("tfos:toast", { detail: { message, type } })); } catch { /* noop */ } };
@@ -95,10 +96,19 @@ function QuizEditor({ module, onClose, onSaved }) {
 }
 
 function CourseSettings({ course, onClose, onSaved }) {
-  const [f, setF] = useState({ title: course.title, description: course.description || "", level: course.level || "BEGINNER", attribution: course.attribution || "", language: course.language || "en" });
+  const [f, setF] = useState({
+    title: course.title, description: course.description || "", level: course.level || "BEGINNER",
+    attribution: course.attribution || "", language: course.language || "en",
+    pricing: (course.pricing || "FREE").toUpperCase(), price_fjd: course.price_fjd || "",
+    required_tier: course.required_tier || "BASIC",
+  });
+  const [monetize, setMonetize] = useState(true);
+  useEffect(() => { getJSON(`${API}/settings`).then((r) => setMonetize(Boolean(r.data?.monetization_enabled))).catch(() => {}); }, []);
   const save = async () => {
     try {
-      await send("PATCH", `${API}/courses/${course.course_id}`, f);
+      const payload = { ...f, price_fjd: f.pricing === "ONE_TIME" && f.price_fjd !== "" ? Number(f.price_fjd) : undefined };
+      if (payload.price_fjd === undefined) delete payload.price_fjd;
+      await send("PATCH", `${API}/courses/${course.course_id}`, payload);
       toast("Course settings saved ✓", "success");
       onSaved();
     } catch (e) { toast(`Couldn't save: ${e.userMessage || e.message}`, "error"); }
@@ -118,6 +128,32 @@ function CourseSettings({ course, onClose, onSaved }) {
       </select>
       <div className="cb-field-lbl">Source attribution (who verified this knowledge)</div>
       <input style={inp} value={f.attribution} placeholder="e.g. Fiji Ministry of Agriculture · Extension Services" onChange={(e) => setF({ ...f, attribution: e.target.value })} />
+      {monetize && (
+        <>
+          <div className="cb-field-lbl">Access &amp; pricing</div>
+          <select style={inp} value={f.pricing} onChange={(e) => setF({ ...f, pricing: e.target.value })}>
+            <option value="FREE">Free — open to every user</option>
+            <option value="SUBSCRIPTION">Masterclass — included with a subscription tier</option>
+            <option value="ONE_TIME">Masterclass — one-time payment (FJD)</option>
+          </select>
+          {f.pricing === "ONE_TIME" && (
+            <input type="number" min="0" step="1" style={inp} value={f.price_fjd} placeholder="Price in FJD, e.g. 49"
+              onChange={(e) => setF({ ...f, price_fjd: e.target.value })} />
+          )}
+          {f.pricing === "SUBSCRIPTION" && (
+            <select style={inp} value={f.required_tier} onChange={(e) => setF({ ...f, required_tier: e.target.value })}>
+              <option value="BASIC">BASIC and above</option>
+              <option value="PROFESSIONAL">PROFESSIONAL and above</option>
+              <option value="ENTERPRISE">ENTERPRISE only</option>
+            </select>
+          )}
+          {f.pricing !== "FREE" && (
+            <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 10 }}>
+              Lesson 1 stays free as a preview. Learners unlock the rest via their plan or an access grant — no fake checkout, ever.
+            </div>
+          )}
+        </>
+      )}
       <button className="btn btn-primary" onClick={save}><Check size={14} />Save settings</button>
     </div>
   );
@@ -136,6 +172,7 @@ export default function CourseBuilder({ courseId, onClose, onChanged }) {
   const [showTranscript, setShowTranscript] = useState(false);
   const [draft, setDraft] = useState(null);    // editable copy of selected lesson
   const [prompt, setPrompt] = useState(null);
+  const [mpane, setMpane] = useState("tree"); // mobile single-pane: tree | main
   const bodyRef = useRef(null);
   const fileRef = useRef(null);
   const filePick = useRef(null);               // {accept, cb}
@@ -160,7 +197,7 @@ export default function CourseBuilder({ courseId, onClose, onChanged }) {
     catch (e) { toast(`${e.userMessage || e.message}`, "error"); }
   };
 
-  const select = (l) => { setLid(l.lesson_id); setDraft({ ...l }); setShowTranscript(Boolean(l.transcript)); setPane("lesson"); setMenuLid(null); setChangeLid(null); setAddOpen(false); };
+  const select = (l) => { setLid(l.lesson_id); setDraft({ ...l }); setShowTranscript(Boolean(l.transcript)); setPane("lesson"); setMenuLid(null); setChangeLid(null); setAddOpen(false); setMpane("main"); };
   const saveLesson = async (extra = {}) => {
     if (!draft) return;
     const body_html = bodyRef.current ? bodyRef.current.innerHTML : draft.body_html;
@@ -205,7 +242,7 @@ export default function CourseBuilder({ courseId, onClose, onChanged }) {
       <input ref={fileRef} type="file" style={{ display: "none" }} onChange={onFile} />
       <div className="overlay-modal cb-modal" onClick={(e) => { e.stopPropagation(); }}>
         <div className="overlay-head"><span>Course builder</span><button className="overlay-close" onClick={onClose}><X size={18} /></button></div>
-        <div className="cb-shell">
+        <div className={`cb-shell pane-${mpane}`}>
           {/* ---------------- LEFT: tree ---------------- */}
           <div className="cb-left">
             <div className="cb-course-head">
@@ -229,7 +266,7 @@ export default function CourseBuilder({ courseId, onClose, onChanged }) {
               <div className="cb-menu cb-menu-course">
                 <button onClick={() => { setCourseMenu(false); const m = course.modules.find((mm) => mm.lessons.some((x) => x.lesson_id === lid)) || course.modules[0]; act(() => send("POST", `${API}/modules/${m.module_id}/lessons`).then((r) => setLid(r.data.lesson_id))); }}><Plus size={13} />Add page</button>
                 <button onClick={() => { setCourseMenu(false); setPrompt({ title: "Add a module", value: `Module ${course.modules.length + 1}`, okLabel: "Add", onOk: (name) => name.trim() && act(() => send("POST", `${API}/courses/${courseId}/modules`, { title: name.trim() }), "Module added ✓") }); }}><Folder size={13} />Add folder</button>
-                <button onClick={() => { setCourseMenu(false); setPane("settings"); }}><Settings size={13} />Course settings</button>
+                <button onClick={() => { setCourseMenu(false); setPane("settings"); setMpane("main"); }}><Settings size={13} />Course settings</button>
                 <button onClick={() => { setCourseMenu(false); act(() => send("PATCH", `${API}/courses/${courseId}`, { status: course.status === "PUBLISHED" ? "DRAFT" : "PUBLISHED" }), course.status === "PUBLISHED" ? "Course reverted to draft" : "Course is LIVE ✓"); }}><Eye size={13} />{course.status === "PUBLISHED" ? "Unpublish course" : "Publish course"}</button>
                 <button className="cb-del" onClick={() => { setCourseMenu(false); setPrompt({ title: "Delete course", confirm: true, message: `Delete “${course.title}” and everything in it? This cannot be undone.`, okLabel: "Delete", destructive: true, onOk: () => act(() => send("DELETE", `${API}/courses/${courseId}`).then(onClose), "Course deleted") }); }}><Trash2 size={13} />Delete course</button>
               </div>
@@ -271,7 +308,7 @@ export default function CourseBuilder({ courseId, onClose, onChanged }) {
                     ))}
                     <div style={{ display: "flex", gap: 6, padding: "4px 8px" }}>
                       <button className="cb-cover-btn" onClick={() => act(() => send("POST", `${API}/modules/${m.module_id}/lessons`).then((r) => setLid(r.data.lesson_id)))}><Plus size={11} />Page</button>
-                      <button className="cb-cover-btn" onClick={() => setPane(`quiz:${m.module_id}`)}><Award size={11} />Quiz{m.has_quiz ? ` (${m.question_count})` : ""}</button>
+                      <button className="cb-cover-btn" onClick={() => { setPane(`quiz:${m.module_id}`); setMpane("main"); }}><Award size={11} />Quiz{m.has_quiz ? ` (${m.question_count})` : ""}</button>
                       {course.modules.length > 1 && m.lessons.length === 0 && (
                         <button className="cb-cover-btn" onClick={() => act(() => send("DELETE", `${API}/modules/${m.module_id}`), "Module removed")}><Trash2 size={11} /></button>
                       )}
@@ -283,6 +320,7 @@ export default function CourseBuilder({ courseId, onClose, onChanged }) {
           </div>
           {/* ---------------- RIGHT: editor ---------------- */}
           <div className="cb-right">
+            <button className="cls-mobile-back" onClick={() => setMpane("tree")}><Folder size={14} /> Course outline</button>
             {pane === "settings" ? (
               <CourseSettings course={course} onClose={() => setPane("lesson")} onSaved={() => { setPane("lesson"); load(); onChanged?.(); }} />
             ) : pane.startsWith("quiz:") ? (

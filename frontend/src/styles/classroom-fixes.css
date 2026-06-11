@@ -1,0 +1,122 @@
+/* classroom-fixes.css — layout + responsiveness for the Classroom player
+ * (cp-modal) and builder (cb-modal). Fixes the cropped/off-centre modals:
+ * capped height, independently scrolling panes, pinned builder footer,
+ * single-pane mobile with a tree<->editor toggle. Scoped under .tfp. */
+
+.tfp .cp-modal,
+.tfp .cb-modal {
+  width: min(1100px, 96vw) !important;
+  max-width: 96vw !important;
+  height: min(860px, 92vh) !important;
+  max-height: 92vh !important;
+  display: flex !important;
+  flex-direction: column !important;
+  margin: 0 auto !important;
+  overflow: hidden !important;
+}
+.tfp .cp-shell,
+.tfp .cb-shell {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  overflow: hidden;
+}
+.tfp .cp-rail,
+.tfp .cb-left {
+  overflow-y: auto;
+  min-height: 0;
+  flex: 0 0 290px;
+  max-width: 290px;
+  -webkit-overflow-scrolling: touch;
+}
+.tfp .cp-main,
+.tfp .cb-right {
+  overflow-y: auto;
+  min-height: 0;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  -webkit-overflow-scrolling: touch;
+}
+/* builder footer always reachable */
+.tfp .cb-right .cb-foot {
+  position: sticky;
+  bottom: 0;
+  background: #fff;
+  margin-top: auto;
+  z-index: 6;
+  border-top: 1px solid var(--line);
+  padding: 10px 0 4px;
+}
+/* editor body shouldn't push the footer out of the modal */
+.tfp .cb-body-edit { min-height: 180px; }
+/* touch targets */
+.tfp .cp-topic, .tfp .cb-lesson-row { min-height: 40px; align-items: center; }
+.tfp .cb-menu button { min-height: 40px; }
+.tfp .cp-done-btn, .tfp .cb-cover-btn { min-height: 34px; }
+/* menus must not be clipped by scrolling panes */
+.tfp .cb-left, .tfp .cb-mod, .tfp .cb-lesson-row { position: relative; }
+.tfp .cb-menu { z-index: 30; }
+
+/* ---------- mobile: single pane with toggle ---------- */
+@media (max-width: 760px) {
+  .tfp .cp-modal, .tfp .cb-modal {
+    width: 100vw !important;
+    height: 100dvh !important;
+    max-height: 100dvh !important;
+    border-radius: 0 !important;
+  }
+  .tfp .cp-rail, .tfp .cb-left { flex: 1 1 auto; max-width: none; }
+  /* pane-main: show content, hide tree; pane-tree: the reverse */
+  .tfp .cp-shell.pane-main .cp-rail, .tfp .cb-shell.pane-main .cb-left { display: none; }
+  .tfp .cp-shell.pane-tree .cp-main, .tfp .cb-shell.pane-tree .cb-right { display: none; }
+  .tfp .cls-mobile-back { display: inline-flex !important; }
+}
+.tfp .cls-mobile-back {
+  display: none;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--line);
+  background: #fff;
+  border-radius: 999px;
+  padding: 7px 14px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--soil);
+  cursor: pointer;
+  margin-bottom: 10px;
+  min-height: 38px;
+  align-self: flex-start;
+}
+
+/* ---------- locked lesson + unlock panel ---------- */
+.tfp .cls-locked-panel {
+  border: 1px solid var(--amber, #bf9000);
+  background: rgba(191, 144, 0, 0.06);
+  border-radius: 12px;
+  padding: 18px;
+  margin: 8px 0;
+}
+.tfp .cls-price-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: 999px;
+  padding: 3px 10px;
+  background: rgba(191, 144, 0, 0.12);
+  color: #8a6a00;
+  border: 1px solid rgba(191, 144, 0, 0.4);
+}
+.tfp .cls-stars { color: #bf9000; letter-spacing: 1px; font-size: 13px; }
+.tfp .cls-continue-row { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 6px; margin-bottom: 14px; }
+.tfp .cls-continue-card {
+  flex: 0 0 220px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fff;
+  padding: 12px 14px;
+  cursor: pointer;
+  min-height: 44px;
+}
