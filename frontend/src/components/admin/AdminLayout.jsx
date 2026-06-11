@@ -12,10 +12,8 @@ import { NavLink, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard, Shield, Users, BadgeCheck, CreditCard,
   Flag, GraduationCap, Store, BarChart3, LineChart,
-  Settings, Cog, Map as MapIcon, LogOut, Award,
+  Settings, Cog, Map as MapIcon, ArrowLeft, Award,
 } from "lucide-react";
-import { clearStoredTokens, getCurrentUser } from "../../utils/auth";
-
 const C = { soil: "#5C4033", cream: "#F8F3E9", green: "#6AA84F", greenDk: "#3E7B1F", line: "#E5DCC9", muted: "#8A8678", gold: "#BF9000" };
 
 /* The six command sections — every admin surface lands in exactly one. */
@@ -51,13 +49,6 @@ const SECTIONS = [
 
 export default function AdminLayout({ children }) {
   const navigate = useNavigate();
-  const user = getCurrentUser();
-
-  function handleLogout() {
-    clearStoredTokens();
-    navigate("/login");
-  }
-
   return (
     <div className="min-h-screen" style={{ background: C.cream, color: C.soil }}>
       {/* ── Top bar ─────────────────────────────────────────────────────── */}
@@ -68,16 +59,10 @@ export default function AdminLayout({ children }) {
             Admin Command Center
           </span>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <div style={{ width: 32, height: 32, borderRadius: "50%", background: C.gold, color: "#fff", fontWeight: 800, fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center" }}>A</div>
-            <span style={{ fontSize: 13, color: C.soil }} className="hidden sm:block">{user?.sub?.slice(0, 8)}…</span>
-          </div>
-          <button onClick={handleLogout}
-            style={{ display: "inline-flex", gap: 6, alignItems: "center", fontSize: 12, color: C.muted, border: `1px solid ${C.line}`, background: "#fff", borderRadius: 8, padding: "6px 12px", cursor: "pointer" }}>
-            <LogOut size={13} /> Logout
-          </button>
-        </div>
+        <button onClick={() => navigate("/home")}
+          style={{ display: "inline-flex", gap: 6, alignItems: "center", fontSize: 13, fontWeight: 700, color: "#fff", border: "none", background: C.green, borderRadius: 8, padding: "9px 16px", cursor: "pointer" }}>
+          <ArrowLeft size={14} /> Back to platform
+        </button>
       </header>
 
       {/* ── Sectioned command nav ───────────────────────────────────────── */}
