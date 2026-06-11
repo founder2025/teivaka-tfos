@@ -533,6 +533,38 @@ class LandPrepPayload(BaseModel):
     notes: Optional[str] = Field(default=None, max_length=500)
 
 
+# CROPS — Scouting / observations (Phase I5: agronomic core). These are pure
+# farmer OBSERVATIONS (what was seen), never agronomic advice (Inviolable #1).
+# They back onto tenant.field_events via existing CHECK verbs PEST_OBSERVE /
+# DISEASE_OBSERVE / INSPECTION; the structured detail rides in payload_jsonb and
+# feeds the Pest/Disease Intelligence dome (I5).
+
+class PestScoutingPayload(BaseModel):
+    """Phase I5: PEST_SCOUTING — farmer-reported pest sighting. Maps to PEST_OBSERVE."""
+    production_id: str = Field(..., max_length=120)
+    pest_type: str = Field(..., max_length=120, description="Pest seen (Whitefly, Aphid, …). Observation, not advice.")
+    density: Literal['none', 'low', 'med', 'high'] = Field(...)
+    affected_area: Optional[str] = Field(default=None, max_length=200)
+    notes: Optional[str] = Field(default=None, max_length=500)
+
+
+class DiseaseScoutingPayload(BaseModel):
+    """Phase I5: DISEASE_SCOUTING — farmer-reported disease sighting. Maps to DISEASE_OBSERVE."""
+    production_id: str = Field(..., max_length=120)
+    disease_type: str = Field(..., max_length=120, description="Disease seen (Early blight, …). Observation, not advice.")
+    severity: Literal['low', 'med', 'high', 'critical'] = Field(...)
+    affected_plants: Optional[int] = Field(default=None, ge=0)
+    notes: Optional[str] = Field(default=None, max_length=500)
+
+
+class FieldObservationPayload(BaseModel):
+    """Phase I5: FIELD_OBSERVATION — general field note (incl. soil-condition
+    observations a farmer can see without a lab). Maps to INSPECTION."""
+    production_id: str = Field(..., max_length=120)
+    observation_type: Literal['GROWTH_NOTE', 'SOIL_CONDITION', 'EQUIPMENT_ISSUE', 'VISITOR', 'GENERAL'] = Field(...)
+    notes: Optional[str] = Field(default=None, max_length=500)
+
+
 EVENT_TYPE_REGISTRY: dict = {
     "EGGS_COLLECTED":         (EggsCollectedPayload,         "tenant.poultry_event_log", 1),
     "MORTALITY_LOGGED":       (MortalityLoggedPayload,       "tenant.poultry_event_log", 1),
@@ -569,6 +601,10 @@ EVENT_TYPE_REGISTRY: dict = {
     "PRUNING_TRAINING":       (PruningTrainingPayload,       "tenant.field_events", 1),
     "TRANSPLANT_LOGGED":      (TransplantLoggedPayload,      "tenant.field_events", 1),
     "LAND_PREP":              (LandPrepPayload,              "tenant.field_events", 1),
+    # CROPS — Scouting / observations (Phase I5)
+    "PEST_SCOUTING":          (PestScoutingPayload,          "tenant.field_events", 1),
+    "DISEASE_SCOUTING":       (DiseaseScoutingPayload,       "tenant.field_events", 1),
+    "FIELD_OBSERVATION":      (FieldObservationPayload,      "tenant.field_events", 1),
 }
 
 # Vocabularies (used for app-layer validation in events.py)

@@ -119,6 +119,10 @@ const EVENT_ROUTES = {
   PRUNING_TRAINING:   "/farm/field-events?type=PRUNING_TRAINING",
   TRANSPLANT_LOGGED:  "/farm/field-events?type=TRANSPLANT_LOGGED",
   LAND_PREP:          "/farm/field-events?type=LAND_PREP",
+  // Phase I5 — scouting / observations (unlock padlocked catalog tiles)
+  PEST_SCOUTING:      "/farm/field-events?type=PEST_SCOUTING",
+  DISEASE_SCOUTING:   "/farm/field-events?type=DISEASE_SCOUTING",
+  FIELD_OBSERVATION:  "/farm/field-events?type=FIELD_OBSERVATION",
   CASH_OUT:          "/farm/cash",
   CASH_IN:           "/farm/cash",
   WORKER_CHECKIN:    "/farm/labor",

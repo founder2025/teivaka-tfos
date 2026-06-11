@@ -279,7 +279,42 @@ const STRIKE_96_FIELDS = {
       { name: "equipment_used",   type: "text",   label: "Equipment used",     maxLength: 120 },
     ],
   },
+  // Phase I5 — scouting / observations (prototype PEST_SCOUTING / DISEASE_SCOUTING / FIELD_OBSERVATION)
+  PEST_SCOUTING: {
+    label: "Pest scouting",
+    fields: [
+      { name: "pest_type",     type: "select", label: "Pest type",     options: ["Whitefly","Aphid","Cutworm","Fruit fly","Caterpillar","Other"], required: true },
+      { name: "density",       type: "select", label: "Density",       options: ["none","low","med","high"], required: true },
+      { name: "affected_area", type: "text",   label: "Affected area", maxLength: 200 },
+    ],
+  },
+  DISEASE_SCOUTING: {
+    label: "Disease scouting",
+    fields: [
+      { name: "disease_type",    type: "select", label: "Disease type",          options: ["Early blight","Late blight","Powdery mildew","Bacterial wilt","Mosaic virus","Other"], required: true },
+      { name: "severity",        type: "select", label: "Severity",              options: ["low","med","high","critical"], required: true },
+      { name: "affected_plants", type: "int",    label: "Affected plants count", min: 0 },
+    ],
+  },
+  FIELD_OBSERVATION: {
+    label: "Field observation",
+    fields: [
+      { name: "observation_type", type: "select", label: "Observation type", required: true, options: [
+        { value: "GROWTH_NOTE",     label: "Growth note" },
+        { value: "SOIL_CONDITION",  label: "Soil condition" },
+        { value: "EQUIPMENT_ISSUE", label: "Equipment issue" },
+        { value: "VISITOR",         label: "Visitor/visit" },
+        { value: "GENERAL",         label: "General" },
+      ] },
+    ],
+  },
 };
+
+// Options may be plain strings or {value,label} objects (FIELD_OBSERVATION uses
+// friendly labels mapped to enum values the backend payload expects).
+function asOption(o) {
+  return typeof o === "string" ? { value: o, label: o } : o;
+}
 
 // ============================================================================
 // Strike #100 — CROPS PLANTING + TRANSPLANT_LOGGED three-dropdown form
@@ -482,7 +517,7 @@ function CropSelectionForm({ eventType, schema }) {
                   name={f.name}
                   value={values[f.name] || ""}
                   onChange={(v) => setField(f.name, v)}
-                  options={f.options.map((o) => ({ value: o, label: o }))}
+                  options={f.options.map(asOption)}
                   placeholder="Select..."
                   required={!!f.required}
                 />
@@ -689,7 +724,7 @@ function Strike96CropsForm({ eventType }) {
                   name={f.name}
                   value={values[f.name] || ""}
                   onChange={(v) => setField(f.name, v)}
-                  options={f.options.map((o) => ({ value: o, label: o }))}
+                  options={f.options.map(asOption)}
                   placeholder="Select..."
                   required={!!f.required}
                 />

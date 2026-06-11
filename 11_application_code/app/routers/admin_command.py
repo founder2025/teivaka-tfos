@@ -321,6 +321,72 @@ async def geo_intelligence(user: dict = Depends(get_current_user)):
     }}
 
 
+@router.get("/intelligence/pests")
+async def pest_intelligence(user: dict = Depends(get_current_user)):
+    """Pest & Disease Intelligence dome (I5). Aggregates farmer-reported scouting
+    sightings (tenant.field_events PEST_OBSERVE / DISEASE_OBSERVE) into pressure
+    maps by pest/disease × crop × region. Joins shared.geo_regions (I4) for the
+    region label and shared.productions for crop. Cross-tenant custodial view.
+
+    Honesty: these are OBSERVATIONS the farmer logged (never inferred, never
+    advice — Inviolable #1). Soil chemistry (pH/NPK) is NOT here — it is gated on
+    the soil-lab pipeline and surfaced as a pending gap, not faked."""
+    _require_admin(user)
+    async with get_db_ctx() as db:
+        totals = {
+            "pest_sightings": await _scalar(db, "SELECT count(*) FROM tenant.field_events WHERE event_type = 'PEST_OBSERVE'"),
+            "disease_sightings": await _scalar(db, "SELECT count(*) FROM tenant.field_events WHERE event_type = 'DISEASE_OBSERVE'"),
+            "sightings_30d": await _scalar(db, "SELECT count(*) FROM tenant.field_events WHERE event_type IN ('PEST_OBSERVE','DISEASE_OBSERVE') AND event_date > now() - interval '30 days'"),
+            "farms_reporting": await _scalar(db, "SELECT count(DISTINCT farm_id) FROM tenant.field_events WHERE event_type IN ('PEST_OBSERVE','DISEASE_OBSERVE')"),
+        }
+        pest_pressure = await _rows(db, """
+            SELECT e.payload_jsonb->>'pest_type' AS pest,
+                   COALESCE(p.production_name, 'Unknown') AS crop,
+                   COALESCE(g.name, f.location_island, 'Unknown') AS region,
+                   count(*) AS sightings,
+                   count(*) FILTER (WHERE e.payload_jsonb->>'density' = 'high') AS high_density
+            FROM tenant.field_events e
+            LEFT JOIN tenant.farms f ON f.farm_id = e.farm_id
+            LEFT JOIN shared.geo_regions g ON g.region_id = f.region_id
+            LEFT JOIN tenant.production_cycles c ON c.cycle_id = e.cycle_id
+            LEFT JOIN shared.productions p ON p.production_id = c.production_id
+            WHERE e.event_type = 'PEST_OBSERVE' AND e.payload_jsonb->>'pest_type' IS NOT NULL
+            GROUP BY 1, 2, 3 ORDER BY sightings DESC LIMIT 50""")
+        disease_pressure = await _rows(db, """
+            SELECT e.payload_jsonb->>'disease_type' AS disease,
+                   COALESCE(p.production_name, 'Unknown') AS crop,
+                   COALESCE(g.name, f.location_island, 'Unknown') AS region,
+                   count(*) AS sightings,
+                   count(*) FILTER (WHERE e.payload_jsonb->>'severity' IN ('high','critical')) AS severe
+            FROM tenant.field_events e
+            LEFT JOIN tenant.farms f ON f.farm_id = e.farm_id
+            LEFT JOIN shared.geo_regions g ON g.region_id = f.region_id
+            LEFT JOIN tenant.production_cycles c ON c.cycle_id = e.cycle_id
+            LEFT JOIN shared.productions p ON p.production_id = c.production_id
+            WHERE e.event_type = 'DISEASE_OBSERVE' AND e.payload_jsonb->>'disease_type' IS NOT NULL
+            GROUP BY 1, 2, 3 ORDER BY sightings DESC LIMIT 50""")
+        recent = await _rows(db, """
+            SELECT to_char(e.event_date, 'YYYY-MM-DD') AS date,
+                   CASE e.event_type WHEN 'PEST_OBSERVE' THEN 'pest' ELSE 'disease' END AS kind,
+                   COALESCE(e.payload_jsonb->>'pest_type', e.payload_jsonb->>'disease_type') AS subject,
+                   COALESCE(e.payload_jsonb->>'density', e.payload_jsonb->>'severity') AS level,
+                   COALESCE(g.name, f.location_island, 'Unknown') AS region
+            FROM tenant.field_events e
+            LEFT JOIN tenant.farms f ON f.farm_id = e.farm_id
+            LEFT JOIN shared.geo_regions g ON g.region_id = f.region_id
+            WHERE e.event_type IN ('PEST_OBSERVE','DISEASE_OBSERVE')
+            ORDER BY e.event_date DESC LIMIT 20""")
+    return {"data": {
+        "source": "tenant.field_events (PEST_OBSERVE · DISEASE_OBSERVE) · shared.geo_regions · shared.productions",
+        "totals": totals,
+        "pest_pressure": pest_pressure,
+        "disease_pressure": disease_pressure,
+        "recent": recent,
+        "soil_chemistry": None,  # honest gap — pending the soil-lab pipeline
+        "note": "Farmer-reported sightings only — observations, never inferred advice. Soil chemistry (pH/NPK) is pending the soil-lab pipeline.",
+    }}
+
+
 # --------------------------------------------------------- platform controls --
 
 class FlagPatch(BaseModel):

@@ -966,6 +966,10 @@ async def submit_event(
             "PRUNING_TRAINING":   "PRUNE",
             "TRANSPLANT_LOGGED":  "TRANSPLANT",
             "LAND_PREP":          "LAND_PREP",
+            # Phase I5 — scouting/observations onto existing field_events verbs
+            "PEST_SCOUTING":      "PEST_OBSERVE",
+            "DISEASE_SCOUTING":   "DISEASE_OBSERVE",
+            "FIELD_OBSERVATION":  "INSPECTION",
         }
         field_event_type = CATALOG_TO_FIELD_VERB[submission.event_type]
         is_chemical = submission.event_type == "CHEMICAL_APPLIED"
