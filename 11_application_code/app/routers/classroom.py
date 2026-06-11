@@ -880,7 +880,7 @@ async def admin_author_requests(status: str = "PENDING", user: dict = Depends(ge
         raise HTTPException(status_code=403, detail="Admin only")
     async with get_db_ctx() as db:
         rows = (await db.execute(text(
-            "SELECT ar.*, u.full_name, u.email, u.profession, u.avatar_url, COALESCE(u.kyc_verified, FALSE) AS kyc_verified "
+            "SELECT ar.*, u.full_name, u.email, lower(COALESCE(u.account_type, 'FARMER')) AS profession, u.avatar_url, COALESCE(u.kyc_verified, FALSE) AS kyc_verified "
             "FROM community.author_requests ar JOIN tenant.users u ON u.user_id = ar.user_id "
             "WHERE ar.status = :st ORDER BY ar.created_at"),
             {"st": status.upper()})).mappings().all()
@@ -936,7 +936,7 @@ async def admin_authors(user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=403, detail="Admin only")
     async with get_db_ctx() as db:
         rows = (await db.execute(text(
-            "SELECT u.user_id, u.full_name, u.email, u.profession, "
+            "SELECT u.user_id, u.full_name, u.email, lower(COALESCE(u.account_type, 'FARMER')) AS profession, "
             "(SELECT count(*) FROM community.courses c WHERE c.author_user_id = u.user_id) AS course_count "
             "FROM tenant.users u WHERE u.course_author = TRUE ORDER BY u.full_name"))).mappings().all()
         return {"data": [dict(r) for r in rows]}
@@ -1043,7 +1043,7 @@ async def list_instructors(user: dict = Depends(get_current_user)):
                    (SELECT count(*) FROM community.course_ratings r WHERE r.course_id = c.course_id) AS rating_count"""
                  if has_ratings else ", NULL AS avg_rating, 0 AS rating_count")
         rows = (await db.execute(text(f"""
-            SELECT u.user_id, u.full_name, u.avatar_url, u.profession,
+            SELECT u.user_id, u.full_name, u.avatar_url, lower(COALESCE(u.account_type, 'FARMER')) AS profession,
                    COALESCE(u.kyc_verified, FALSE) AS verified,
                    c.course_id, c.title, c.level, c.pricing, c.price_fjd, c.required_tier, c.attribution,
                    (SELECT count(DISTINCT lp.user_id) FROM community.lesson_progress lp WHERE lp.course_id = c.course_id) AS learners,
