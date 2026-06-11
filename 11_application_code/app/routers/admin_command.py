@@ -268,6 +268,59 @@ async def external_report(user: dict = Depends(get_current_user)):
     return _csv_response(rows, "teivaka-external-production-report.csv")
 
 
+@router.get("/intelligence/geo")
+async def geo_intelligence(user: dict = Depends(get_current_user)):
+    """Geographic Intelligence dome (I4). Recursive roll-up of farms (and the
+    consented subset) up the shared.geo_regions tree — National -> Division ->
+    Province — computed from real tenant.farms.region_id. Migration-tolerant:
+    pre-112 deployments report the registry as not-yet-loaded (honest gap).
+
+    Honesty boundary: only COUNTRY/DIVISION/PROVINCE are loaded. DISTRICT/TIKINA/
+    VILLAGE are reported as pending the Fiji Bureau of Statistics dataset — never
+    invented."""
+    _require_admin(user)
+    async with get_db_ctx() as db:
+        regions_loaded = await _scalar(db, "SELECT count(*) FROM shared.geo_regions")
+        farms_total = await _scalar(db, "SELECT count(*) FROM tenant.farms")
+        farms_classified = await _scalar(db, "SELECT count(*) FROM tenant.farms WHERE region_id IS NOT NULL")
+        # Inclusive subtree roll-up: every region carries the counts of itself +
+        # all descendants. The tree is tiny, so the recursive expand is cheap.
+        tree = await _rows(db, """
+            WITH RECURSIVE subtree AS (
+                SELECT region_id AS root, region_id AS node FROM shared.geo_regions
+                UNION ALL
+                SELECT s.root, g.region_id
+                FROM subtree s JOIN shared.geo_regions g ON g.parent_region_id = s.node
+            ), direct AS (
+                SELECT f.region_id,
+                       count(*) AS farms,
+                       count(*) FILTER (WHERE EXISTS (
+                           SELECT 1 FROM tenant.users u
+                           WHERE u.tenant_id = f.tenant_id AND COALESCE(u.aggregate_consent, false) = true
+                       )) AS consented_farms
+                FROM tenant.farms f WHERE f.region_id IS NOT NULL
+                GROUP BY f.region_id
+            )
+            SELECT r.region_id, r.level, r.name, r.parent_region_id,
+                   COALESCE(sum(d.farms), 0) AS farms,
+                   COALESCE(sum(d.consented_farms), 0) AS consented_farms
+            FROM shared.geo_regions r
+            JOIN subtree st ON st.root = r.region_id
+            LEFT JOIN direct d ON d.region_id = st.node
+            GROUP BY r.region_id, r.level, r.name, r.parent_region_id
+            ORDER BY r.level, r.name""")
+    return {"data": {
+        "source": "shared.geo_regions (recursive) · tenant.farms.region_id",
+        "regions_loaded": regions_loaded,
+        "levels_loaded": ["COUNTRY", "DIVISION", "PROVINCE"],
+        "levels_pending": ["DISTRICT", "TIKINA", "VILLAGE"],
+        "pending_blocker": "Sub-province granularity needs the Fiji Bureau of Statistics / iTaukei Lands dataset (external).",
+        "farms_total": farms_total,
+        "farms_classified": farms_classified,
+        "tree": tree,
+    }}
+
+
 # --------------------------------------------------------- platform controls --
 
 class FlagPatch(BaseModel):

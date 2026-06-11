@@ -32,6 +32,7 @@ $PSQL < docs/runbooks/108_growth_metrics_apply_as_owner.sql   > /tmp/rb_108.out 
 $PSQL < docs/runbooks/109_platform_settings_apply_as_owner.sql > /tmp/rb_109.out 2>&1 && ok "109 platform settings" || bad "109 platform settings (see /tmp/rb_109.out)"
 $PSQL < docs/runbooks/110_analytics_events_apply_as_owner.sql  > /tmp/rb_110.out 2>&1 && ok "110 analytics spine" || bad "110 analytics spine (see /tmp/rb_110.out)"
 $PSQL < docs/runbooks/111_consent_ledger_apply_as_owner.sql   > /tmp/rb_111.out 2>&1 && ok "111 consent ledger" || bad "111 consent ledger (see /tmp/rb_111.out)"
+$PSQL < docs/runbooks/112_geo_regions_apply_as_owner.sql      > /tmp/rb_112.out 2>&1 && ok "112 geo registry" || bad "112 geo registry (see /tmp/rb_112.out)"
 
 say "2/7 Verify table shapes (the AmbiguousColumn culprit)"
 SHAPES=$(docker exec teivaka_db psql -U teivaka -d teivaka_db -tA -c "
@@ -100,6 +101,10 @@ ANA=$(docker exec teivaka_db psql -U teivaka -d teivaka_db -tA -c "SELECT (to_re
 [ "$ANA" = "1" ] && ok "analytics event spine present" || { bad "analytics spine missing — runbook tail:"; tail -n 4 /tmp/rb_110.out; }
 CON=$(docker exec teivaka_db psql -U teivaka -d teivaka_db -tA -c "SELECT (to_regclass('community.consent_events') IS NOT NULL)::int + (SELECT count(*) FROM information_schema.columns WHERE table_schema='tenant' AND table_name='users' AND column_name='aggregate_consent');")
 [ "$CON" = "2" ] && ok "consent ledger present (2/2)" || { bad "consent ledger missing ($CON/2) — runbook tail:"; tail -n 4 /tmp/rb_111.out; }
+GEO=$(docker exec teivaka_db psql -U teivaka -d teivaka_db -tA -c "SELECT (to_regclass('shared.geo_regions') IS NOT NULL)::int + (SELECT count(*) FROM information_schema.columns WHERE table_schema='tenant' AND table_name='farms' AND column_name='region_id');")
+[ "$GEO" = "2" ] && ok "geo registry present (2/2)" || { bad "geo registry missing ($GEO/2) — runbook tail:"; tail -n 4 /tmp/rb_112.out; }
+GEON=$(docker exec teivaka_db psql -U teivaka -d teivaka_db -tA -c "SELECT count(*) FROM shared.geo_regions;" 2>/dev/null)
+[ "$GEON" = "19" ] && ok "geo registry seeded (19 regions: 1+4+14)" || bad "geo registry seed count is $GEON, expected 19"
 
 say "4/7 Run migrations (two-pass: app role + owner — covers both table ownerships)"
 # Pass 1: as the app role (its own DATABASE_URL) — handles tables it owns (e.g. listings)
