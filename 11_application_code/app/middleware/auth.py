@@ -46,6 +46,7 @@ class AuthMiddleware:
         "/api/v1/webhooks/whatsapp",
         "/api/v1/webhooks/stripe",
         "/api/v1/attribution/capture",
+        "/api/v1/platform/flags",
         "/verify",
     })
 

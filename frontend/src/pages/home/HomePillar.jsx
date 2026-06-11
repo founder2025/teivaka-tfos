@@ -22,6 +22,7 @@ import FeedView from "../../components/home/FeedView";
 import WeatherStrip from "../../components/home/WeatherStrip";
 import Directory from "../../components/home/Directory";
 import Groups from "../../components/home/Groups";
+import { useFlags, DisabledNotice } from "../../utils/useFlags.jsx";
 import Marketplace from "../../components/home/Marketplace";
 import { StoriesRow, NewsCard } from "../../components/home/FeedExtras";
 import "../../styles/feed.css";
@@ -111,8 +112,14 @@ export default function HomePillar() {
     saved: ["Saved", "Your saved posts and listings"],
   }[view]), [view]);
 
+  const flagOn = useFlags();
+  const FLAG_FOR = { feed: "home_feed", following: "home_feed", marketplace: "marketplace", prices: "marketplace", groups: "groups" };
+  const gateFlag = FLAG_FOR[view];
+
   let body;
-  if (view === "feed") {
+  if (gateFlag && !flagOn(gateFlag)) {
+    body = <DisabledNotice what={head ? head[0] : "This area"} />;
+  } else if (view === "feed") {
     body = (
       <>
         <NewsCard />

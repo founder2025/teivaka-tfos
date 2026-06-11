@@ -171,22 +171,6 @@ export default function MeMenu({ onClose }) {
 
       {/* Items */}
       <ul className="py-1">
-        {showAdminLink && (
-          <li role="none">
-            <Link
-              to="/admin/control-room"
-              role="menuitem"
-              onClick={onClose}
-              className="flex items-center gap-3 text-sm"
-              style={{ height: 36, padding: "8px 12px", color: C.soil, background: "transparent" }}
-              onMouseEnter={(e) => { e.currentTarget.style.background = C.hoverBg; }}
-              onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
-            >
-              <Shield size={16} strokeWidth={1.75} />
-              <span className="flex-1">Control Room</span>
-            </Link>
-          </li>
-        )}
         {ME_MENU_ITEMS.filter((it) => !it.gate || (it.gate === "admin" && showAdminLink)).map((item) => {
           const Icon = item.icon;
           const rowStyle = { height: 36, padding: "8px 12px", color: C.soil, background: "transparent" };

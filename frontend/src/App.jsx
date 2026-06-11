@@ -136,6 +136,9 @@ const AdminDashboard = lazy(() => import("./pages/admin/AdminDashboard"));
 const AdminUsers     = lazy(() => import("./pages/admin/AdminUsers"));
 const AdminVerifications = lazy(() => import("./pages/admin/AdminVerifications"));
 const AdminClassroom = lazy(() => import("./pages/admin/AdminClassroom"));
+const AdminIntelligence = lazy(() => import("./pages/admin/AdminIntelligence"));
+const AdminPlatform = lazy(() => import("./pages/admin/AdminPlatform"));
+const AdminRequests = lazy(() => import("./pages/admin/AdminRequests"));
 const AdminContent   = lazy(() => import("./pages/admin/AdminContent"));
 const AdminAnalytics = lazy(() => import("./pages/admin/AdminAnalytics"));
 const AdminMap       = lazy(() => import("./pages/admin/AdminMap"));
@@ -207,6 +210,15 @@ export default function App() {
           } />
           <Route path="/admin/classroom" element={
             <AdminRoute><AdminClassroom /></AdminRoute>
+          } />
+          <Route path="/admin/intelligence" element={
+            <AdminRoute><AdminIntelligence /></AdminRoute>
+          } />
+          <Route path="/admin/platform" element={
+            <AdminRoute><AdminPlatform /></AdminRoute>
+          } />
+          <Route path="/admin/requests" element={
+            <AdminRoute><AdminRequests /></AdminRoute>
           } />
           <Route path="/admin/users" element={
             <AdminRoute><AdminUsers /></AdminRoute>

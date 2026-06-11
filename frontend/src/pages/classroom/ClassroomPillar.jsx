@@ -17,6 +17,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { BookOpen, Plus, Award, QrCode, Download, Edit3, Lock, GraduationCap, X } from "lucide-react";
 import { getJSON, send } from "../../utils/api";
 import { useChat } from "../../context/ChatContext";
+import { useFlags, DisabledNotice } from "../../utils/useFlags.jsx";
 import CoursePlayer, { Stars } from "../../components/classroom/CoursePlayer";
 import CourseBuilder from "../../components/classroom/CourseBuilder";
 // ROOT-CAUSE FIX: prototype.css was only imported by TfpShell — without this
@@ -717,6 +718,15 @@ export default function ClassroomPillar() {
       <div className="card">
         <p style={{ color: "var(--muted)" }}>Tap any lesson in a course to resume it.</p>
       </div>
+    );
+  }
+
+  const flagOn = useFlags();
+  if (!flagOn("classroom")) {
+    return (
+      <div className="tfp"><main className="main-content"><div className="main-inner">
+        <DisabledNotice what="The Classroom" />
+      </div></main></div>
     );
   }
 

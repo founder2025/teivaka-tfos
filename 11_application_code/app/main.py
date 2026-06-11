@@ -79,6 +79,7 @@ from app.routers import (
     groups,
     team,
     affiliate,
+    admin_command,
     chat,
     subscriptions,
     webhooks,
@@ -347,6 +348,8 @@ app.include_router(classroom.router,          prefix=f"{PREFIX}/classroom",     
 app.include_router(groups.router,             prefix=f"{PREFIX}/community",          tags=["Groups"])
 app.include_router(team.router,               prefix=f"{PREFIX}/team",               tags=["Team"])
 app.include_router(affiliate.router,          prefix=f"{PREFIX}/affiliate",          tags=["Affiliate"])
+app.include_router(admin_command.router,      prefix=f"{PREFIX}/admin",              tags=["Admin Command Center"])
+app.include_router(admin_command.public_router, prefix=f"{PREFIX}/platform",         tags=["Platform"])
 
 # Platform
 app.include_router(subscriptions.router,      prefix=f"{PREFIX}/subscriptions",      tags=["Subscriptions"])

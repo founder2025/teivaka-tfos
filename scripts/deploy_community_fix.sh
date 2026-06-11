@@ -27,6 +27,7 @@ $PSQL < docs/runbooks/103_library_submissions_apply_as_owner.sql > /tmp/rb_103.o
 $PSQL < docs/runbooks/104_groups_apply_as_owner.sql           > /tmp/rb_104.out 2>&1 && ok "104 groups" || bad "104 groups (see /tmp/rb_104.out)"
 $PSQL < docs/runbooks/105_tier_requests_prefs_apply_as_owner.sql > /tmp/rb_105.out 2>&1 && ok "105 tier requests + prefs" || bad "105 tier requests + prefs (see /tmp/rb_105.out)"
 $PSQL < docs/runbooks/106_team_affiliate_apply_as_owner.sql   > /tmp/rb_106.out 2>&1 && ok "106 team + affiliate" || bad "106 team + affiliate (see /tmp/rb_106.out)"
+$PSQL < docs/runbooks/107_admin_command_apply_as_owner.sql    > /tmp/rb_107.out 2>&1 && ok "107 admin command" || bad "107 admin command (see /tmp/rb_107.out)"
 
 say "2/7 Verify table shapes (the AmbiguousColumn culprit)"
 SHAPES=$(docker exec teivaka_db psql -U teivaka -d teivaka_db -tA -c "
@@ -85,6 +86,8 @@ TRQ=$(docker exec teivaka_db psql -U teivaka -d teivaka_db -tA -c "SELECT (to_re
 [ "$TRQ" = "4" ] && ok "tier requests + prefs present (4/4)" || { bad "tier requests/prefs missing ($TRQ/4) — runbook tail:"; tail -n 4 /tmp/rb_105.out; }
 TAF=$(docker exec teivaka_db psql -U teivaka -d teivaka_db -tA -c "SELECT (to_regclass('community.team_invites') IS NOT NULL)::int + (to_regclass('community.affiliates') IS NOT NULL)::int + (to_regclass('community.affiliate_commissions') IS NOT NULL)::int + (to_regclass('community.affiliate_settings') IS NOT NULL)::int + (SELECT count(*) FROM information_schema.columns WHERE table_schema='tenant' AND table_name='users' AND column_name IN ('team_role','farm_scope'));")
 [ "$TAF" = "6" ] && ok "team + affiliate present (6/6)" || { bad "team/affiliate missing ($TAF/6) — runbook tail:"; tail -n 4 /tmp/rb_106.out; }
+ACC=$(docker exec teivaka_db psql -U teivaka -d teivaka_db -tA -c "SELECT (to_regclass('community.intel_snapshots') IS NOT NULL)::int + (to_regclass('community.feature_flags') IS NOT NULL)::int;")
+[ "$ACC" = "2" ] && ok "admin command objects present (2/2)" || { bad "admin command missing ($ACC/2) — runbook tail:"; tail -n 4 /tmp/rb_107.out; }
 
 say "4/7 Run migrations (two-pass: app role + owner — covers both table ownerships)"
 # Pass 1: as the app role (its own DATABASE_URL) — handles tables it owns (e.g. listings)

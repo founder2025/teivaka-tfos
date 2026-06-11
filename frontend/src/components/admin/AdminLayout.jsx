@@ -1,37 +1,57 @@
 /**
- * AdminLayout.jsx — Shell for all admin pages
+ * AdminLayout.jsx — ADMIN COMMAND CENTER shell for all admin pages.
  *
- * Contains:
- *   - Top nav with gold "A" admin badge
- *   - Secondary nav with 5 admin-only tabs
- *   - Page content area
- *
- * This component only renders when role = "ADMIN".
- * It is never imported or rendered in farmer sessions.
+ * Themed to the platform (cream/soil/green, flat lucide icons — no emoji).
+ * Nav is organised into the six command sections: Overview · People ·
+ * Content · Commerce · Intelligence · Platform. Renders only for
+ * FOUNDER/ADMIN; the backend enforces require_admin() on every endpoint —
+ * this shell is a UX gate, not the security boundary.
  */
 
-import { useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
+import {
+  LayoutDashboard, Shield, Users, BadgeCheck, CreditCard,
+  Flag, GraduationCap, Store, BarChart3, LineChart,
+  Settings, Cog, Map as MapIcon, LogOut, Award,
+} from "lucide-react";
 import { clearStoredTokens, getCurrentUser } from "../../utils/auth";
 
-const ADMIN_TABS = [
-  { path: "/admin",           label: "Dashboard",        icon: "📊" },
-  { path: "/admin/control-room", label: "Control Room",  icon: "🛡️" },
-  { path: "/admin/users",     label: "Users",            icon: "👥" },
-  { path: "/admin/content",   label: "Content",          icon: "📋" },
-  { path: "/admin/analytics", label: "Analytics",        icon: "📈" },
-  { path: "/admin/map",       label: "Farm Map",         icon: "🗺️" },
-  { path: "/admin/task-engine", label: "Task Engine",    icon: "⚙︎" },
-  { path: "/admin/moderation", label: "Moderation",      icon: "🚩" },
-  { path: "/admin/verifications", label: "Verifications", icon: "✅" },
-  { path: "/admin/classroom", label: "Classroom",     icon: "🎓" },
-  { path: "/admin/settings",  label: "Platform Settings", icon: "⚙️"  },
+const C = { soil: "#5C4033", cream: "#F8F3E9", green: "#6AA84F", greenDk: "#3E7B1F", line: "#E5DCC9", muted: "#8A8678", gold: "#BF9000" };
+
+/* The six command sections — every admin surface lands in exactly one. */
+const SECTIONS = [
+  { label: "Overview", items: [
+    { path: "/admin", label: "Dashboard", Icon: LayoutDashboard, end: true },
+    { path: "/admin/control-room", label: "Control Room", Icon: Shield },
+  ]},
+  { label: "People", items: [
+    { path: "/admin/users", label: "Users", Icon: Users },
+    { path: "/admin/verifications", label: "Verifications", Icon: BadgeCheck },
+    { path: "/admin/requests", label: "Tier requests", Icon: CreditCard },
+  ]},
+  { label: "Content", items: [
+    { path: "/admin/moderation", label: "Moderation", Icon: Flag },
+    { path: "/admin/classroom", label: "Classroom", Icon: GraduationCap },
+    { path: "/admin/content", label: "Content", Icon: Store },
+  ]},
+  { label: "Commerce", items: [
+    { path: "/me/affiliate/console", label: "Affiliate console", Icon: Award },
+  ]},
+  { label: "Intelligence", items: [
+    { path: "/admin/intelligence", label: "Intelligence", Icon: LineChart },
+    { path: "/admin/analytics", label: "Analytics", Icon: BarChart3 },
+    { path: "/admin/map", label: "Farm Map", Icon: MapIcon },
+  ]},
+  { label: "Platform", items: [
+    { path: "/admin/platform", label: "Platform controls", Icon: Cog },
+    { path: "/admin/task-engine", label: "Task Engine", Icon: Settings },
+    { path: "/admin/settings", label: "Settings", Icon: Settings },
+  ]},
 ];
 
 export default function AdminLayout({ children }) {
   const navigate = useNavigate();
   const user = getCurrentUser();
-  const [menuOpen, setMenuOpen] = useState(false);
 
   function handleLogout() {
     clearStoredTokens();
@@ -39,55 +59,48 @@ export default function AdminLayout({ children }) {
   }
 
   return (
-    <div className="min-h-screen bg-[#F8F3E9] text-[#5C4033]">
+    <div className="min-h-screen" style={{ background: C.cream, color: C.soil }}>
       {/* ── Top bar ─────────────────────────────────────────────────────── */}
-      <header className="bg-[#F8F3E9] border-b border-[#E5DCC9] px-4 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <img src="/teivaka_logo.png" alt="Teivaka" style={{ height: 52, width: "auto", display: "block" }} />
-          {/* Platform badge */}
-          <span className="text-xs bg-amber-500 text-amber-950 font-bold px-2 py-0.5 rounded-full uppercase tracking-wide">
-            Platform Admin
+      <header style={{ background: C.cream, borderBottom: `1px solid ${C.line}`, padding: "12px 16px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <img src="/teivaka_logo.png" alt="Teivaka" style={{ height: 48, width: "auto", display: "block" }} />
+          <span style={{ fontSize: 11, background: C.gold, color: "#fff", fontWeight: 800, padding: "3px 10px", borderRadius: 999, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+            Admin Command Center
           </span>
         </div>
-
-        {/* User info + gold A badge */}
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-full bg-amber-500 flex items-center justify-center text-amber-950 font-bold text-sm">
-              A
-            </div>
-            <span className="text-sm text-[#5C4033] hidden sm:block">
-              {user?.sub?.slice(0, 8)}…
-            </span>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <div style={{ width: 32, height: 32, borderRadius: "50%", background: C.gold, color: "#fff", fontWeight: 800, fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center" }}>A</div>
+            <span style={{ fontSize: 13, color: C.soil }} className="hidden sm:block">{user?.sub?.slice(0, 8)}…</span>
           </div>
-          <button
-            onClick={handleLogout}
-            className="text-xs text-[#5C4033]/70 hover:text-red-400 transition-colors px-2 py-1 rounded border border-[#E5DCC9] hover:border-red-700"
-          >
-            Logout
+          <button onClick={handleLogout}
+            style={{ display: "inline-flex", gap: 6, alignItems: "center", fontSize: 12, color: C.muted, border: `1px solid ${C.line}`, background: "#fff", borderRadius: 8, padding: "6px 12px", cursor: "pointer" }}>
+            <LogOut size={13} /> Logout
           </button>
         </div>
       </header>
 
-      {/* ── Secondary nav (admin tabs) ──────────────────────────────────── */}
-      <nav className="bg-[#F8F3E9] border-b border-[#E5DCC9] px-4">
-        <div className="flex gap-1 overflow-x-auto">
-          {ADMIN_TABS.map((tab) => (
-            <NavLink
-              key={tab.path}
-              to={tab.path}
-              end={tab.path === "/admin"}
-              className={({ isActive }) =>
-                `flex items-center gap-1.5 px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
-                  isActive
-                    ? "border-amber-400 text-amber-400"
-                    : "border-transparent text-[#5C4033]/70 hover:text-[#5C4033] hover:border-[#E5DCC9]"
-                }`
-              }
-            >
-              <span>{tab.icon}</span>
-              {tab.label}
-            </NavLink>
+      {/* ── Sectioned command nav ───────────────────────────────────────── */}
+      <nav style={{ background: C.cream, borderBottom: `1px solid ${C.line}`, padding: "0 16px" }}>
+        <div style={{ display: "flex", gap: 18, overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
+          {SECTIONS.map((sec) => (
+            <div key={sec.label} style={{ display: "flex", flexDirection: "column", paddingTop: 8, flexShrink: 0 }}>
+              <span style={{ fontSize: 9.5, fontWeight: 800, color: C.muted, textTransform: "uppercase", letterSpacing: "0.08em", padding: "0 4px" }}>{sec.label}</span>
+              <div style={{ display: "flex", gap: 2 }}>
+                {sec.items.map((tab) => (
+                  <NavLink key={tab.path} to={tab.path} end={tab.end}
+                    style={({ isActive }) => ({
+                      display: "flex", alignItems: "center", gap: 6, padding: "10px 10px 12px",
+                      fontSize: 13, fontWeight: isActive ? 700 : 500, whiteSpace: "nowrap",
+                      color: isActive ? C.greenDk : C.soil, textDecoration: "none",
+                      borderBottom: `2px solid ${isActive ? C.green : "transparent"}`,
+                    })}>
+                    <tab.Icon size={15} strokeWidth={1.75} />
+                    {tab.label}
+                  </NavLink>
+                ))}
+              </div>
+            </div>
           ))}
         </div>
       </nav>
