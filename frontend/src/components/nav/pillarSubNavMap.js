@@ -82,7 +82,7 @@ export const PILLAR_SUB_NAV = {
 };
 
 // Avatar dropdown — parity with the prototype. `gate:"admin"` hides from non-admins;
-// `external:true` is a full-page (non-SPA) link. Control Room lives under /admin.
+// `external:true` is a full-page (non-SPA) link. The admin area lives under /admin.
 export const ME_MENU_ITEMS = [
   { path: "/me",                   label: "Profile",          icon: User },
   { path: "/me/settings",          label: "Settings",         icon: Settings },

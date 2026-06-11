@@ -20,7 +20,7 @@ const C = { soil: "#5C4033", cream: "#F8F3E9", green: "#6AA84F", greenDk: "#3E7B
 const SECTIONS = [
   { label: "Overview", items: [
     { path: "/admin", label: "Dashboard", Icon: LayoutDashboard, end: true },
-    { path: "/admin/control-room", label: "Control Room", Icon: Shield },
+    { path: "/admin/control-room", label: "System Health", Icon: Shield },
   ]},
   { label: "People", items: [
     { path: "/admin/users", label: "Users", Icon: Users },
