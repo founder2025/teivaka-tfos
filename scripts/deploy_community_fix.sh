@@ -26,6 +26,7 @@ $PSQL < docs/runbooks/102_lesson_saves_apply_as_owner.sql     > /tmp/rb_102.out 
 $PSQL < docs/runbooks/103_library_submissions_apply_as_owner.sql > /tmp/rb_103.out 2>&1 && ok "103 library + featured" || bad "103 library + featured (see /tmp/rb_103.out)"
 $PSQL < docs/runbooks/104_groups_apply_as_owner.sql           > /tmp/rb_104.out 2>&1 && ok "104 groups" || bad "104 groups (see /tmp/rb_104.out)"
 $PSQL < docs/runbooks/105_tier_requests_prefs_apply_as_owner.sql > /tmp/rb_105.out 2>&1 && ok "105 tier requests + prefs" || bad "105 tier requests + prefs (see /tmp/rb_105.out)"
+$PSQL < docs/runbooks/106_team_affiliate_apply_as_owner.sql   > /tmp/rb_106.out 2>&1 && ok "106 team + affiliate" || bad "106 team + affiliate (see /tmp/rb_106.out)"
 
 say "2/7 Verify table shapes (the AmbiguousColumn culprit)"
 SHAPES=$(docker exec teivaka_db psql -U teivaka -d teivaka_db -tA -c "
@@ -82,6 +83,8 @@ GRP=$(docker exec teivaka_db psql -U teivaka -d teivaka_db -tA -c "SELECT (to_re
 [ "$GRP" = "3" ] && ok "groups objects present (3/3)" || { bad "groups objects missing ($GRP/3) — runbook tail:"; tail -n 4 /tmp/rb_104.out; }
 TRQ=$(docker exec teivaka_db psql -U teivaka -d teivaka_db -tA -c "SELECT (to_regclass('community.tier_change_requests') IS NOT NULL)::int + (SELECT count(*) FROM information_schema.columns WHERE table_schema='tenant' AND table_name='users' AND column_name IN ('notify_whatsapp','notify_tasks','notify_weather'));")
 [ "$TRQ" = "4" ] && ok "tier requests + prefs present (4/4)" || { bad "tier requests/prefs missing ($TRQ/4) — runbook tail:"; tail -n 4 /tmp/rb_105.out; }
+TAF=$(docker exec teivaka_db psql -U teivaka -d teivaka_db -tA -c "SELECT (to_regclass('community.team_invites') IS NOT NULL)::int + (to_regclass('community.affiliates') IS NOT NULL)::int + (to_regclass('community.affiliate_commissions') IS NOT NULL)::int + (to_regclass('community.affiliate_settings') IS NOT NULL)::int + (SELECT count(*) FROM information_schema.columns WHERE table_schema='tenant' AND table_name='users' AND column_name IN ('team_role','farm_scope'));")
+[ "$TAF" = "6" ] && ok "team + affiliate present (6/6)" || { bad "team/affiliate missing ($TAF/6) — runbook tail:"; tail -n 4 /tmp/rb_106.out; }
 
 say "4/7 Run migrations (two-pass: app role + owner — covers both table ownerships)"
 # Pass 1: as the app role (its own DATABASE_URL) — handles tables it owns (e.g. listings)

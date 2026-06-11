@@ -216,6 +216,15 @@ async def approve_tier_request(request_id: str, user: dict = Depends(get_current
         if res.rowcount == 0:
             # surface loudly rather than report a tier change that didn't apply
             raise HTTPException(status_code=500, detail="Request approved but tenant tier update was blocked — apply manually via psql and investigate RLS on tenant.tenants")
+        # affiliate commission accrual — best-effort, never blocks the tier change
+        try:
+            from app.routers.affiliate import accrue_commission_for_tier_change
+            tier_def = TIER_DEFINITIONS.get(row[2], {})
+            await accrue_commission_for_tier_change(
+                db, referee_user_id=str(row[1]), tier=row[2],
+                revenue_fjd=float(tier_def.get("price_fjd_monthly") or 0))
+        except Exception:  # noqa: BLE001
+            pass
         try:
             await db.execute(text(
                 "INSERT INTO community.feed_notifications (user_id, actor_user_id, type, body) "

@@ -125,9 +125,12 @@ async def my_team(
     db: AsyncSession = Depends(get_db),
 ):
     """Members on the caller's tenant (real team). Invites land in the workers phase."""
-    rows = (await db.execute(text("""
+    has_tr = bool((await db.execute(text(
+        "SELECT 1 FROM information_schema.columns WHERE table_schema='tenant' AND table_name='users' AND column_name='team_role'"))).scalar())
+    tr_sel = ", team_role, farm_scope" if has_tr else ", NULL AS team_role, NULL AS farm_scope"
+    rows = (await db.execute(text(f"""
         SELECT user_id, full_name, email, role, account_type,
-               COALESCE(is_active, true) AS is_active, created_at
+               COALESCE(is_active, true) AS is_active, created_at{tr_sel}
         FROM tenant.users
         WHERE tenant_id = :tid
         ORDER BY created_at ASC
@@ -135,6 +138,7 @@ async def my_team(
     return {"data": [{
         "user_id": str(r["user_id"]), "full_name": r["full_name"], "email": r["email"],
         "role": r["role"], "account_type": r["account_type"], "is_active": r["is_active"],
+        "team_role": r["team_role"], "farm_scope": r["farm_scope"],
         "is_you": str(r["user_id"]) == str(user["user_id"]),
     } for r in rows]}
 

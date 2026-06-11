@@ -77,6 +77,8 @@ from app.routers import (
     kyc,
     classroom,
     groups,
+    team,
+    affiliate,
     chat,
     subscriptions,
     webhooks,
@@ -343,6 +345,8 @@ app.include_router(news.router,               prefix=f"{PREFIX}/news",          
 app.include_router(kyc.router,                prefix=PREFIX,                         tags=["KYC Verification"])
 app.include_router(classroom.router,          prefix=f"{PREFIX}/classroom",          tags=["Classroom"])
 app.include_router(groups.router,             prefix=f"{PREFIX}/community",          tags=["Groups"])
+app.include_router(team.router,               prefix=f"{PREFIX}/team",               tags=["Team"])
+app.include_router(affiliate.router,          prefix=f"{PREFIX}/affiliate",          tags=["Affiliate"])
 
 # Platform
 app.include_router(subscriptions.router,      prefix=f"{PREFIX}/subscriptions",      tags=["Subscriptions"])

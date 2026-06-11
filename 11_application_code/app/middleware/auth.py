@@ -60,6 +60,8 @@ class AuthMiddleware:
         # Trailing slash keeps POST /api/v1/community/uploads (no slash) fully
         # authenticated; names are unguessable uuid4 hex (social-CDN model).
         "/api/v1/community/uploads/",
+        # team invite accept flow: token-gated public preview + account creation
+        "/api/v1/team/invites/",
     )
 
     async def __call__(self, request: Request, call_next):

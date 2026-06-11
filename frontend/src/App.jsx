@@ -33,6 +33,7 @@ import VerifyEmail from "./pages/VerifyEmail";
 import Home from "./pages/farmer/Home";
 const HomePillar = lazy(() => import("./pages/home/HomePillar"));
 const ClassroomPillar = lazy(() => import("./pages/classroom/ClassroomPillar"));
+const AcceptInvite = lazy(() => import("./pages/AcceptInvite"));
 
 // ── Farmer pages (lazy — farmer bundle does NOT include admin code) ───────────
 const Landing       = lazy(() => import("./pages/Landing"));
@@ -173,6 +174,7 @@ export default function App() {
           {/* ── Public routes ───────────────────────────────────────────── */}
           <Route path="/login"    element={<Login />} />
           <Route path="/register" element={<Register />} />
+          <Route path="/accept/:token" element={<AcceptInvite />} />
           <Route path="/403"      element={<Forbidden />} />
           <Route path="/privacy"  element={<Privacy />} />
           <Route path="/terms"    element={<Terms />} />
