@@ -132,7 +132,7 @@ export default function Directory() {
                   <button className={`btn btn-sm ${p.is_following ? "btn-secondary" : "btn-primary"}`} onClick={() => toggleFollow(p)}>
                     {p.is_following ? <><UserCheck size={13} />Following</> : <><UserPlus size={13} />Follow</>}
                   </button>
-                  {(p.is_connected || p.active_listings > 0) && (
+                  {(p.is_following || p.is_connected || p.active_listings > 0) && (
                     <button className="btn btn-sm btn-secondary" onClick={() => message(p)}><MessageCircle size={13} />Message</button>
                   )}
                 </div>
