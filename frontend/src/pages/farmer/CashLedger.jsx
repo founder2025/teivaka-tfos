@@ -1,1023 +1,333 @@
 /**
- * CashLedger.jsx — /farm/cash
+ * CashLedger.jsx — /farm/cash — PIXEL-EXACT rebuild of the prototype's Cash surface.
  *
- * Cash ledger surface: lifetime balance, filtered list, log/edit/delete
- * modals. Posts to the CashUI-1a backend (POST/GET/PATCH/DELETE
- * /api/v1/cash-ledger). Every mutation lands in audit.events as
- * CASH_LOGGED / CASH_UPDATED / CASH_DELETED — handled by the backend,
- * the page just calls the endpoints.
+ * Reproduces coreFinanceView pixel-for-pixel (cash-balance-card + rail breakdown, KPI
+ * tiles, cycle-view-tabs, cash-event-card, filters) under <TfpShell>, wired to the real
+ * ledger CRUD (GET/POST/PATCH/DELETE /api/v1/cash-ledger — every mutation hash-chained
+ * as CASH_LOGGED/UPDATED/DELETED by the backend) + /orders for receivables.
  *
- * Mode gating is intentionally NOT in this file — that's CashUI-1c.
- * Today the page is reachable from any farmer shell that exposes
- * /farm/cash in the sub-nav.
- *
- * Schema notes (hard rules from the backend):
- *   - transaction_type CHECK: INCOME, EXPENSE, TRANSFER, LOAN,
- *     REPAYMENT, GRANT — UI only exposes INCOME / EXPENSE in v1
- *   - category is freeform text on the DB; the front-end dictates
- *     a closed list per type
- *   - payment_method CHECK: CASH, BANK_TRANSFER, MOBILE_MONEY,
- *     CREDIT, OTHER (or NULL)
- *   - PATCH does NOT accept transaction_date, transaction_type,
- *     farm_id (immutable for audit integrity)
- *   - DELETE is hard delete; the audit chain is the only durable
- *     record once removed
+ * Real/derived: balance (+ M-PAiSA/cash/bank rail split from payment_method), this-week
+ * net, net-so-far, receivables (owed orders), payables (credit-method expenses),
+ * net working capital, ledger feed, category spend. Honest "Building": forecast +
+ * reconciliation. Bank Evidence → links to /farm/reports.
  */
-import { useEffect, useMemo, useState } from "react";
-import {
-  QueryClient,
-  QueryClientProvider,
-  useQuery,
-  useQueryClient,
-} from "@tanstack/react-query";
-import { Coins, Pencil, Plus, Trash2 } from "lucide-react";
+import { useMemo, useState } from "react";
+import { QueryClient, QueryClientProvider, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
+import { Plus, Search, Pencil, Trash2, X, ShieldCheck } from "lucide-react";
+import TfpShell from "../../components/farm/TfpShell";
+import { CurrentFarmProvider, useCurrentFarm } from "../../context/CurrentFarmContext";
+import FarmSelector from "../../components/farm/FarmSelector";
 
-import Modal from "../../components/ui/Modal.jsx";
-import ThemedSelect from "../../components/inputs/ThemedSelect.jsx";
+function authHeaders() { const t = localStorage.getItem("tfos_access_token"); return t ? { "Content-Type": "application/json", Authorization: `Bearer ${t}` } : { "Content-Type": "application/json" }; }
+function emitToast(m) { window.dispatchEvent(new CustomEvent("tfos:toast", { detail: { message: m } })); }
+function todayISO() { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; }
+function fjd0(v) { const n = Number(v ?? 0); return `FJD ${Math.round(n).toLocaleString("en-FJ")}`; }
+function fjd2(v) { const n = Number(v ?? 0); return `FJD ${n.toLocaleString("en-FJ", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`; }
+function amt(e) { return Number(e.amount_fjd ?? 0); }
 
-// --- Palette (warm farmer dialect) -----------------------------------
+const RAIL = { MOBILE_MONEY: ["mpaisa", "M-PAiSA"], CASH: ["cash", "Cash"], BANK_TRANSFER: ["bank", "Bank"], CREDIT: ["credit", "Credit"], OTHER: ["other", "Other"] };
+function railOf(e) { return RAIL[e.payment_method] || RAIL.OTHER; }
+function isIncome(e) { return e.transaction_type === "INCOME"; }
 
-const C = {
-  soil:     "#5C4033",
-  cream:    "#F8F3E9",
-  bgPage:   "#F5EFE0",
-  border:   "#E6DED0",
-  muted:    "#8A7863",
-  green:    "#6AA84F",
-  greenDk:  "#3E7B1F",
-  amber:    "#BF9000",
-  red:      "#D4442E",
-  greenTint: "#E9F2DD",
-  amberTint: "#FAF1D5",
-};
-
-// --- Constants -------------------------------------------------------
-
-const TYPE_OPTIONS = [
-  { value: "INCOME",  label: "Income"  },
-  { value: "EXPENSE", label: "Expense" },
-];
-
-const TYPE_FILTER_OPTIONS = [
-  { value: "ALL",     label: "All types" },
-  { value: "INCOME",  label: "Income"   },
-  { value: "EXPENSE", label: "Expense"  },
-];
-
-const PERIOD_OPTIONS = [
-  { value: "ALL",   label: "All time"     },
-  { value: "MONTH", label: "This month"   },
-  { value: "30D",   label: "Last 30 days" },
-  { value: "90D",   label: "Last 90 days" },
-];
-
-const PAYMENT_METHODS = [
-  { value: "",              label: "—" },
-  { value: "CASH",          label: "Cash" },
-  { value: "BANK_TRANSFER", label: "Bank transfer" },
-  { value: "MOBILE_MONEY",  label: "Mobile money" },
-  { value: "CREDIT",        label: "Credit" },
-  { value: "OTHER",         label: "Other" },
-];
-
+const PAYMENT_METHODS = [["CASH", "Cash"], ["MOBILE_MONEY", "Mobile money"], ["BANK_TRANSFER", "Bank transfer"], ["CREDIT", "Credit"], ["OTHER", "Other"]];
 const CATEGORIES_BY_TYPE = {
-  INCOME: [
-    { value: "HARVEST_SALE",  label: "Harvest sale"  },
-    { value: "OTHER_INCOME",  label: "Other income"  },
-  ],
-  EXPENSE: [
-    { value: "INPUTS_FERTILIZER", label: "Inputs — fertilizer" },
-    { value: "INPUTS_CHEMICAL",   label: "Inputs — chemical"   },
-    { value: "INPUTS_SEED",       label: "Inputs — seed"       },
-    { value: "LABOR",             label: "Labor"               },
-    { value: "EQUIPMENT",         label: "Equipment"           },
-    { value: "FUEL",              label: "Fuel"                },
-    { value: "TRANSPORT",         label: "Transport"           },
-    { value: "FERRY",             label: "Ferry"               },
-    { value: "OTHER_EXPENSE",     label: "Other expense"       },
-  ],
+  INCOME: [["HARVEST_SALE", "Harvest sale"], ["OTHER_INCOME", "Other income"]],
+  EXPENSE: [["INPUTS_FERTILIZER", "Inputs — fertilizer"], ["INPUTS_CHEMICAL", "Inputs — chemical"], ["INPUTS_SEED", "Inputs — seed"], ["LABOR", "Labor"], ["EQUIPMENT", "Equipment"], ["FUEL", "Fuel"], ["TRANSPORT", "Transport"], ["FERRY", "Ferry"], ["OTHER_EXPENSE", "Other expense"]],
 };
+const VIEWS = [["overview", "Overview", "Live balance"], ["ledger", "Ledger", "Audit feed"], ["categories", "Categories", "Spend trends"], ["forecast", "Forecast", "13-week ahead"], ["reconciliation", "Reconcile", "Match statement"], ["evidence", "Bank Evidence", "Lender-ready"]];
+const WINDOWS = [["week", "Week"], ["month", "Month"], ["quarter", "Quarter"], ["year", "Year"], ["all", "All"]];
+const WINDOW_DAYS = { week: 7, month: 31, quarter: 92, year: 366, all: Infinity };
 
-const PAGE_LIMIT = 25;
+async function getCash(farmId) { const qs = new URLSearchParams({ limit: "500" }); if (farmId) qs.set("farm_id", farmId); const r = await fetch(`/api/v1/cash-ledger?${qs}`, { headers: authHeaders() }); if (!r.ok) throw new Error(r.status); return (await r.json())?.data ?? {}; }
+async function getOrders(farmId) { const r = await fetch(`/api/v1/orders${farmId ? `?farm_id=${encodeURIComponent(farmId)}` : ""}`, { headers: authHeaders() }); if (!r.ok) throw new Error(r.status); return (await r.json())?.data ?? []; }
 
-// --- Helpers ---------------------------------------------------------
-
-function authHeaders() {
-  const tok = localStorage.getItem("tfos_access_token");
-  return tok
-    ? { "Content-Type": "application/json", Authorization: `Bearer ${tok}` }
-    : { "Content-Type": "application/json" };
+function Tile({ label, value, sub, color, onClick }) {
+  return <div className="capital-tile" onClick={onClick} style={onClick ? { cursor: "pointer" } : null}>
+    <div className="capital-tile-label">{label}</div><div className="capital-tile-value" style={color ? { color } : null}>{value}</div><div className="capital-tile-sub">{sub}</div></div>;
+}
+function Building({ title, body }) {
+  return <div className="card" style={{ padding: "16px 18px" }}>
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}><span style={{ fontWeight: 700, color: "var(--soil)" }}>{title}</span><span style={{ fontSize: 11.5, fontWeight: 700, color: "var(--muted)" }}>Building</span></div>
+    <div style={{ fontSize: 12.5, color: "var(--muted)", marginTop: 6, lineHeight: 1.5 }}>{body}</div></div>;
 }
 
-function emitToast(message) {
-  window.dispatchEvent(new CustomEvent("tfos:toast", { detail: { message } }));
-}
-
-function todayISO() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
-
-function formatFJD(value, { signed = false } = {}) {
-  const n = Number(value ?? 0);
-  if (Number.isNaN(n)) return "FJD —";
-  const abs = Math.abs(n).toLocaleString("en-FJ", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
-  if (!signed) return `FJD ${abs}`;
-  if (n > 0) return `+ FJD ${abs}`;
-  if (n < 0) return `− FJD ${abs}`;
-  return `FJD ${abs}`;
-}
-
-function periodToDates(period) {
-  if (period === "ALL") return { start: null, end: null };
-  const today = new Date();
-  const end = todayISO();
-  if (period === "MONTH") {
-    const start = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-01`;
-    return { start, end };
-  }
-  if (period === "30D" || period === "90D") {
-    const days = period === "30D" ? 30 : 90;
-    const d = new Date();
-    d.setDate(d.getDate() - days);
-    const start = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-    return { start, end };
-  }
-  return { start: null, end: null };
-}
-
-function categoryLabel(type, value) {
-  const list = CATEGORIES_BY_TYPE[type] || [];
-  return list.find((c) => c.value === value)?.label || value;
-}
-
-function paymentLabel(value) {
-  return PAYMENT_METHODS.find((p) => p.value === value)?.label || value || "—";
-}
-
-async function fetchFarms() {
-  const res = await fetch("/api/v1/farms", { headers: authHeaders() });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const body = await res.json();
-  return body?.data ?? body?.farms ?? [];
-}
-
-async function fetchProductionUnits(farmId) {
-  if (!farmId) return [];
-  const res = await fetch(
-    `/api/v1/production-units?farm_id=${encodeURIComponent(farmId)}`,
-    { headers: authHeaders() },
-  );
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const body = await res.json();
-  return body?.data ?? [];
-}
-
-async function fetchProductions() {
-  const res = await fetch("/api/v1/productions?is_active=true", { headers: authHeaders() });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const body = await res.json();
-  return body?.data?.productions ?? [];
-}
-
-async function fetchCashLedger({ farmId, period, type, offset }) {
-  const { start, end } = periodToDates(period);
-  const qs = new URLSearchParams();
-  if (farmId) qs.set("farm_id", farmId);
-  if (start)  qs.set("period_start", start);
-  if (end)    qs.set("period_end", end);
-  if (type && type !== "ALL") qs.set("transaction_type", type);
-  qs.set("limit",  String(PAGE_LIMIT));
-  qs.set("offset", String(offset));
-  const res = await fetch(`/api/v1/cash-ledger?${qs.toString()}`, { headers: authHeaders() });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const body = await res.json();
-  return body?.data ?? {};
-}
-
-function extractError(parsed, res) {
+function CashEventCard({ e, onEdit, onDelete }) {
+  const inc = isIncome(e); const [railK, railL] = railOf(e);
   return (
-    parsed?.detail?.error?.message ||
-    parsed?.detail?.message ||
-    (typeof parsed?.detail === "string" ? parsed.detail : null) ||
-    `${res.status} ${res.statusText}`
-  );
-}
-
-// --- Form modal (create + edit) --------------------------------------
-
-function EntryFormModal({ mode, entry, farmId, isOpen, onClose, onSaved }) {
-  const isEdit = mode === "edit";
-
-  const [date, setDate]               = useState(todayISO());
-  const [type, setType]               = useState("INCOME");
-  const [category, setCategory]       = useState("");
-  const [description, setDescription] = useState("");
-  const [amount, setAmount]           = useState("");
-  const [payment, setPayment]         = useState("");
-  const [puId, setPuId]               = useState("");
-  const [productionId, setProductionId] = useState("");
-  const [submitting, setSubmitting]   = useState(false);
-  const [error, setError]             = useState("");
-
-  // P-Doctrine-2: Block + Crop options. Only fetch when the modal is
-  // open AND we're in create mode (edit mode keeps anchors as-is per
-  // P-Doctrine-1's pending edit-UI redesign).
-  const pusQuery = useQuery({
-    queryKey: ["production-units", farmId],
-    queryFn: () => fetchProductionUnits(farmId),
-    enabled: isOpen && !isEdit && !!farmId,
-    staleTime: 60_000,
-  });
-
-  const productionsQuery = useQuery({
-    queryKey: ["productions", "active"],
-    queryFn: fetchProductions,
-    enabled: isOpen && !isEdit,
-    staleTime: 5 * 60_000,
-  });
-
-  useEffect(() => {
-    if (!isOpen) return;
-    if (isEdit && entry) {
-      setDate(String(entry.transaction_date || todayISO()).slice(0, 10));
-      setType(entry.transaction_type || "INCOME");
-      setCategory(entry.category || "");
-      setDescription(entry.description || "");
-      setAmount(String(entry.amount_fjd ?? ""));
-      setPayment(entry.payment_method || "");
-      setPuId(entry.pu_id || "");
-      setProductionId(entry.production_id || "");
-    } else {
-      setDate(todayISO());
-      setType("INCOME");
-      setCategory("");
-      setDescription("");
-      setAmount("");
-      setPayment("");
-      setPuId("");
-      setProductionId("");
-    }
-    setError("");
-    setSubmitting(false);
-  }, [isOpen, isEdit, entry]);
-
-  // Reset category when type changes (avoid stale category from other type).
-  useEffect(() => {
-    if (isEdit) return;
-    setCategory("");
-  }, [type, isEdit]);
-
-  // Auto-fill Crop from selected Block's current_production_id.
-  // Only fires when the user picks a block; clearing the block clears
-  // the crop too. The user can still override the crop afterwards.
-  useEffect(() => {
-    if (isEdit) return;
-    if (!puId) {
-      setProductionId("");
-      return;
-    }
-    const pu = (pusQuery.data || []).find((p) => p.pu_id === puId);
-    if (pu?.current_production_id) {
-      setProductionId(pu.current_production_id);
-    }
-  }, [puId, pusQuery.data, isEdit]);
-
-  const categoryOptions = CATEGORIES_BY_TYPE[type] || [];
-
-  const puOptions = useMemo(() => {
-    const base = [{ value: "", label: "— Whole farm / general expense" }];
-    return base.concat(
-      (pusQuery.data || []).map((p) => ({
-        value: p.pu_id,
-        label: p.farmer_label || p.pu_id,
-        sublabel: p.production_name || p.current_production_id || undefined,
-      })),
-    );
-  }, [pusQuery.data]);
-
-  const productionOptions = useMemo(() => {
-    const base = [{ value: "", label: "— No specific crop" }];
-    return base.concat(
-      (productionsQuery.data || []).map((p) => ({
-        value: p.production_id,
-        label: p.production_name || p.production_id,
-      })),
-    );
-  }, [productionsQuery.data]);
-
-  const submitDisabled =
-    submitting ||
-    !date ||
-    !type ||
-    !category ||
-    !description.trim() ||
-    !(Number(amount) > 0);
-
-  async function submit(e) {
-    e.preventDefault();
-    if (submitDisabled) return;
-    setSubmitting(true);
-    setError("");
-    try {
-      let res;
-      if (isEdit) {
-        const body = {
-          category,
-          description: description.trim(),
-          amount_fjd: amount,
-          payment_method: payment || null,
-        };
-        res = await fetch(`/api/v1/cash-ledger/${encodeURIComponent(entry.ledger_id)}`, {
-          method: "PATCH",
-          headers: authHeaders(),
-          body: JSON.stringify(body),
-        });
-      } else {
-        const body = {
-          farm_id: farmId,
-          transaction_date: date,
-          transaction_type: type,
-          category,
-          description: description.trim(),
-          amount_fjd: amount,
-        };
-        if (payment) body.payment_method = payment;
-        // P-Doctrine-2: optional Block + Crop anchors. Empty strings
-        // become absent fields (backend treats absent as NULL).
-        if (puId) body.pu_id = puId;
-        if (productionId) body.production_id = productionId;
-        res = await fetch("/api/v1/cash-ledger", {
-          method: "POST",
-          headers: authHeaders(),
-          body: JSON.stringify(body),
-        });
-      }
-      if (res.ok) {
-        emitToast(isEdit ? "Cash entry updated." : "Cash entry logged.");
-        onSaved?.();
-        onClose?.();
-        return;
-      }
-      let parsed = null;
-      try { parsed = await res.json(); } catch { /* noop */ }
-      setError(extractError(parsed, res));
-    } catch (err) {
-      setError(`Network error: ${err.message}`);
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  return (
-    <Modal
-      isOpen={isOpen}
-      onClose={onClose}
-      title={isEdit ? "Edit cash entry" : "Log cash entry"}
-      size="md"
-      footer={
-        <>
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={submitting}
-            className="text-sm font-medium px-3 py-2 rounded-lg disabled:opacity-40"
-            style={{ background: "white", border: `1px solid ${C.border}`, color: C.soil }}
-          >
-            Cancel
-          </button>
-          <button
-            type="submit"
-            form="cash-entry-form"
-            disabled={submitDisabled}
-            className="text-sm font-semibold px-4 py-2 rounded-lg text-white disabled:opacity-40"
-            style={{ background: C.green }}
-          >
-            {submitting ? "Saving…" : isEdit ? "Save changes" : "Log entry"}
-          </button>
-        </>
-      }
-    >
-      <form id="cash-entry-form" onSubmit={submit} className="space-y-4">
-        {/* Date */}
-        <div>
-          <label className="text-xs uppercase tracking-wider font-medium block mb-1" style={{ color: C.muted }}>
-            Date *
-          </label>
-          <input
-            type="date"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-            disabled={isEdit}
-            required
-            className="w-full px-3 py-2 rounded-lg text-sm disabled:opacity-60 disabled:cursor-not-allowed"
-            style={{ background: C.cream, border: `1px solid ${C.border}`, color: C.soil }}
-          />
-          {isEdit && (
-            <p className="text-xs mt-1" style={{ color: C.muted }}>
-              Date is locked for audit integrity.
-            </p>
-          )}
+    <div className={`cash-event-card ${inc ? "in" : "out"}`}>
+      <div className="cash-event-head">
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+          <span className={`cash-dir-pill ${inc ? "in" : "out"}`}>{inc ? "In" : "Out"}</span>
+          <span className="cash-cat-pill">{(e.category || "—").replace(/_/g, " ").toLowerCase()}</span>
+          <span className={`rail-badge ${railK}`}>{railL}</span>
+          <span style={{ fontSize: 11, color: "var(--muted)", fontFamily: "Menlo,monospace" }}>{String(e.transaction_date).slice(0, 10)}</span>
         </div>
-
-        {/* Type */}
-        <div>
-          <label className="text-xs uppercase tracking-wider font-medium block mb-1" style={{ color: C.muted }}>
-            Type *
-          </label>
-          <ThemedSelect
-            value={type}
-            onChange={setType}
-            options={TYPE_OPTIONS}
-            placeholder="Select type..."
-            disabled={isEdit}
-            required
-          />
-          {isEdit && (
-            <p className="text-xs mt-1" style={{ color: C.muted }}>
-              Type is locked for audit integrity.
-            </p>
-          )}
-        </div>
-
-        {/* Category */}
-        <div>
-          <label className="text-xs uppercase tracking-wider font-medium block mb-1" style={{ color: C.muted }}>
-            Category *
-          </label>
-          <ThemedSelect
-            value={category}
-            onChange={setCategory}
-            options={categoryOptions}
-            placeholder="Select category..."
-            required
-          />
-        </div>
-
-        {/* Description */}
-        <div>
-          <label className="text-xs uppercase tracking-wider font-medium block mb-1" style={{ color: C.muted }}>
-            Description *
-          </label>
-          <input
-            type="text"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            maxLength={500}
-            required
-            placeholder="e.g. Cassava 200kg sale to Nayans"
-            className="w-full px-3 py-2 rounded-lg text-sm"
-            style={{ background: C.cream, border: `1px solid ${C.border}`, color: C.soil }}
-          />
-        </div>
-
-        {/* Block (Production Unit) — optional. Hidden in edit mode. */}
-        {!isEdit && (
-          <div>
-            <label className="text-xs uppercase tracking-wider font-medium block mb-1" style={{ color: C.muted }}>
-              Block (optional)
-            </label>
-            <ThemedSelect
-              value={puId}
-              onChange={setPuId}
-              options={puOptions}
-              placeholder="— Whole farm / general expense"
-              disabled={pusQuery.isLoading}
-            />
-          </div>
-        )}
-
-        {/* Crop — optional, auto-fills from selected block. Hidden in edit mode. */}
-        {!isEdit && (
-          <div>
-            <label className="text-xs uppercase tracking-wider font-medium block mb-1" style={{ color: C.muted }}>
-              Crop (optional, auto-fills from block)
-            </label>
-            <ThemedSelect
-              value={productionId}
-              onChange={setProductionId}
-              options={productionOptions}
-              placeholder="— No specific crop"
-              disabled={productionsQuery.isLoading}
-            />
-          </div>
-        )}
-
-        {/* Amount */}
-        <div>
-          <label className="text-xs uppercase tracking-wider font-medium block mb-1" style={{ color: C.muted }}>
-            Amount (FJD) *
-          </label>
-          <input
-            type="number"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-            step="0.01"
-            min="0.01"
-            required
-            placeholder="0.00"
-            className="w-full px-3 py-2 rounded-lg text-sm"
-            style={{ background: C.cream, border: `1px solid ${C.border}`, color: C.soil }}
-          />
-        </div>
-
-        {/* Payment method (optional) */}
-        <div>
-          <label className="text-xs uppercase tracking-wider font-medium block mb-1" style={{ color: C.muted }}>
-            Payment method
-          </label>
-          <ThemedSelect
-            value={payment}
-            onChange={setPayment}
-            options={PAYMENT_METHODS}
-            placeholder="—"
-          />
-        </div>
-
-        {error && (
-          <div
-            className="text-sm px-3 py-2 rounded-lg"
-            style={{ background: "#FCEEEA", border: `1px solid ${C.red}40`, color: C.red }}
-          >
-            {error}
-          </div>
-        )}
-      </form>
-    </Modal>
-  );
-}
-
-// --- Delete confirm modal --------------------------------------------
-
-function DeleteConfirmModal({ entry, isOpen, onClose, onDeleted }) {
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError]           = useState("");
-
-  useEffect(() => {
-    if (isOpen) { setSubmitting(false); setError(""); }
-  }, [isOpen]);
-
-  async function confirm() {
-    if (!entry) return;
-    setSubmitting(true);
-    setError("");
-    try {
-      const res = await fetch(`/api/v1/cash-ledger/${encodeURIComponent(entry.ledger_id)}`, {
-        method: "DELETE",
-        headers: authHeaders(),
-      });
-      if (res.status === 204 || res.ok) {
-        emitToast("Cash entry deleted.");
-        onDeleted?.();
-        onClose?.();
-        return;
-      }
-      let parsed = null;
-      try { parsed = await res.json(); } catch { /* noop */ }
-      setError(extractError(parsed, res));
-    } catch (err) {
-      setError(`Network error: ${err.message}`);
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  return (
-    <Modal
-      isOpen={isOpen}
-      onClose={onClose}
-      title="Delete cash entry?"
-      size="sm"
-      footer={
-        <>
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={submitting}
-            className="text-sm font-medium px-3 py-2 rounded-lg disabled:opacity-40"
-            style={{ background: "white", border: `1px solid ${C.border}`, color: C.soil }}
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={confirm}
-            disabled={submitting}
-            className="text-sm font-semibold px-4 py-2 rounded-lg text-white disabled:opacity-40"
-            style={{ background: C.red }}
-          >
-            {submitting ? "Deleting…" : "Delete"}
-          </button>
-        </>
-      }
-    >
-      <div className="space-y-3 text-sm" style={{ color: C.soil }}>
-        <p>This entry will be removed from the ledger.</p>
-        {entry && (
-          <div
-            className="rounded-lg px-3 py-2"
-            style={{ background: C.cream, border: `1px solid ${C.border}` }}
-          >
-            <div style={{ color: C.muted, fontSize: 12 }}>
-              {String(entry.transaction_date).slice(0, 10)} · {entry.transaction_type}
-            </div>
-            <div style={{ fontWeight: 600 }}>{entry.description}</div>
-            <div style={{ color: entry.transaction_type === "INCOME" ? C.greenDk : C.amber }}>
-              {formatFJD(entry.amount_fjd)}
-            </div>
-          </div>
-        )}
-        <p style={{ color: C.muted, fontSize: 12 }}>
-          The audit chain preserves a permanent record of this deletion (event
-          type CASH_DELETED with the full pre-delete snapshot).
-        </p>
-        {error && (
-          <div
-            className="text-sm px-3 py-2 rounded-lg"
-            style={{ background: "#FCEEEA", border: `1px solid ${C.red}40`, color: C.red }}
-          >
-            {error}
-          </div>
-        )}
+        <div className={`cash-event-amount ${inc ? "in" : "out"}`}>{inc ? "+" : "−"}{fjd2(amt(e))}</div>
       </div>
-    </Modal>
-  );
-}
-
-// --- Inner page (uses React Query) -----------------------------------
-
-function CashLedgerInner() {
-  const qc = useQueryClient();
-
-  const [period,    setPeriod]    = useState("ALL");
-  const [typeFilt,  setTypeFilt]  = useState("ALL");
-  const [offset,    setOffset]    = useState(0);
-  const [farmId,    setFarmId]    = useState(null);
-
-  const [createOpen, setCreateOpen] = useState(false);
-  const [editEntry,  setEditEntry]  = useState(null);  // entry obj or null
-  const [deleteEntry, setDeleteEntry] = useState(null);
-
-  const farmsQuery = useQuery({
-    queryKey: ["farms"],
-    queryFn: fetchFarms,
-    staleTime: 5 * 60_000,
-  });
-
-  // Default to first farm once loaded.
-  useEffect(() => {
-    if (!farmId && farmsQuery.data && farmsQuery.data.length > 0) {
-      setFarmId(farmsQuery.data[0].farm_id);
-    }
-  }, [farmId, farmsQuery.data]);
-
-  const farm = useMemo(
-    () => (farmsQuery.data || []).find((f) => f.farm_id === farmId),
-    [farmsQuery.data, farmId],
-  );
-
-  const ledgerQuery = useQuery({
-    queryKey: ["cash-ledger", { farmId, period, typeFilt, offset }],
-    queryFn: () => fetchCashLedger({ farmId, period, type: typeFilt, offset }),
-    enabled: !!farmId,
-    keepPreviousData: true,
-  });
-
-  function refresh() {
-    qc.invalidateQueries({ queryKey: ["cash-ledger"] });
-  }
-
-  // Reset pagination when filters change.
-  useEffect(() => { setOffset(0); }, [period, typeFilt, farmId]);
-
-  const entries = ledgerQuery.data?.entries ?? [];
-  const count   = ledgerQuery.data?.count ?? 0;
-  const balance = ledgerQuery.data?.cash_balance_fjd ?? "0";
-
-  const balanceNum = Number(balance);
-  const balanceColor =
-    balanceNum > 0 ? C.greenDk :
-    balanceNum < 0 ? C.amber   : C.muted;
-
-  const start = entries.length ? offset + 1 : 0;
-  const end   = offset + entries.length;
-  const canPrev = offset > 0;
-  const canNext = end < count;
-
-  return (
-    <div className="min-h-screen" style={{ background: C.bgPage }}>
-      <div className="max-w-4xl mx-auto p-4 md:p-6">
-        {/* Header */}
-        <header className="mb-5">
-          <div className="flex items-center gap-2 text-xs uppercase tracking-wider font-medium" style={{ color: C.muted }}>
-            <Coins size={14} />
-            <span>Cash ledger</span>
-          </div>
-          <h1 className="text-2xl font-bold mt-1" style={{ color: C.soil }}>
-            {farm?.farm_name || "Cash"}
-          </h1>
-
-          <div
-            className="mt-4 rounded-2xl px-5 py-4 flex items-end justify-between"
-            style={{
-              background: balanceNum >= 0 ? C.greenTint : C.amberTint,
-              border: `1px solid ${C.border}`,
-            }}
-          >
-            <div>
-              <div className="text-xs uppercase tracking-wider font-medium" style={{ color: C.muted }}>
-                Lifetime balance
-              </div>
-              <div className="text-3xl font-bold mt-1" style={{ color: balanceColor }}>
-                {formatFJD(balance)}
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={() => setCreateOpen(true)}
-              disabled={!farmId}
-              className="text-sm font-semibold px-4 py-2 rounded-lg text-white inline-flex items-center gap-1 disabled:opacity-40"
-              style={{ background: C.green }}
-            >
-              <Plus size={16} />
-              Log entry
-            </button>
-          </div>
-        </header>
-
-        {/* Toolbar */}
-        <div className="mb-3 grid grid-cols-1 md:grid-cols-2 gap-2">
-          <ThemedSelect
-            value={period}
-            onChange={setPeriod}
-            options={PERIOD_OPTIONS}
-            placeholder="Period"
-          />
-          <ThemedSelect
-            value={typeFilt}
-            onChange={setTypeFilt}
-            options={TYPE_FILTER_OPTIONS}
-            placeholder="Type"
-          />
-        </div>
-
-        {/* List */}
-        <div
-          className="bg-white rounded-2xl overflow-hidden"
-          style={{ border: `1px solid ${C.border}` }}
-        >
-          {ledgerQuery.isLoading && (
-            <div className="px-5 py-8 text-sm text-center" style={{ color: C.muted }}>
-              Loading…
-            </div>
-          )}
-
-          {ledgerQuery.isError && (
-            <div className="px-5 py-6 text-sm text-center" style={{ color: C.red }}>
-              Couldn't load cash entries.
-              <button
-                type="button"
-                onClick={() => ledgerQuery.refetch()}
-                className="ml-2 underline"
-                style={{ color: C.greenDk }}
-              >
-                Retry
-              </button>
-            </div>
-          )}
-
-          {!ledgerQuery.isLoading && !ledgerQuery.isError && entries.length === 0 && (
-            <div className="px-5 py-12 text-center">
-              <div className="text-sm" style={{ color: C.muted }}>
-                No cash entries yet.
-              </div>
-              <div className="text-sm mt-1" style={{ color: C.muted }}>
-                Tap <span style={{ color: C.greenDk, fontWeight: 600 }}>+ Log entry</span> to record your first.
-              </div>
-            </div>
-          )}
-
-          {!ledgerQuery.isLoading && entries.length > 0 && (
-            <>
-              {/* Desktop table */}
-              <table className="hidden md:table w-full text-sm">
-                <thead style={{ background: C.cream }}>
-                  <tr style={{ color: C.muted }}>
-                    <th className="text-left px-4 py-2 font-medium">Date</th>
-                    <th className="text-left px-4 py-2 font-medium">Type</th>
-                    <th className="text-left px-4 py-2 font-medium">Category</th>
-                    <th className="text-left px-4 py-2 font-medium">Description</th>
-                    <th className="text-right px-4 py-2 font-medium">Amount</th>
-                    <th className="text-right px-4 py-2 font-medium">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {entries.map((row) => {
-                    const isIncome = row.transaction_type === "INCOME";
-                    return (
-                      <tr
-                        key={row.ledger_id}
-                        style={{ borderTop: `1px solid ${C.border}` }}
-                      >
-                        <td className="px-4 py-3" style={{ color: C.soil }}>
-                          {String(row.transaction_date).slice(0, 10)}
-                        </td>
-                        <td className="px-4 py-3">
-                          <span
-                            className="text-xs font-semibold px-2 py-0.5 rounded-full"
-                            style={{
-                              background: isIncome ? C.greenTint : C.amberTint,
-                              color:      isIncome ? C.greenDk   : C.amber,
-                            }}
-                          >
-                            {row.transaction_type}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3" style={{ color: C.soil }}>
-                          {categoryLabel(row.transaction_type, row.category)}
-                        </td>
-                        <td className="px-4 py-3" style={{ color: C.soil }}>
-                          {row.description}
-                          {row.payment_method && (
-                            <div className="text-xs" style={{ color: C.muted }}>
-                              {paymentLabel(row.payment_method)}
-                            </div>
-                          )}
-                        </td>
-                        <td
-                          className="px-4 py-3 text-right font-semibold tabular-nums"
-                          style={{ color: isIncome ? C.greenDk : C.amber }}
-                        >
-                          {isIncome ? "+ " : "− "}{formatFJD(row.amount_fjd)}
-                        </td>
-                        <td className="px-4 py-3 text-right">
-                          <div className="inline-flex gap-1">
-                            <button
-                              type="button"
-                              onClick={() => setEditEntry(row)}
-                              aria-label="Edit"
-                              className="rounded-lg p-1.5"
-                              style={{ color: C.muted }}
-                            >
-                              <Pencil size={16} />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setDeleteEntry(row)}
-                              aria-label="Delete"
-                              className="rounded-lg p-1.5"
-                              style={{ color: C.red }}
-                            >
-                              <Trash2 size={16} />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-
-              {/* Mobile card stack */}
-              <ul className="md:hidden">
-                {entries.map((row) => {
-                  const isIncome = row.transaction_type === "INCOME";
-                  return (
-                    <li
-                      key={row.ledger_id}
-                      className="px-4 py-3 flex items-start justify-between gap-3"
-                      style={{ borderTop: `1px solid ${C.border}` }}
-                    >
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs" style={{ color: C.muted }}>
-                            {String(row.transaction_date).slice(0, 10)}
-                          </span>
-                          <span
-                            className="text-xs font-semibold px-2 py-0.5 rounded-full"
-                            style={{
-                              background: isIncome ? C.greenTint : C.amberTint,
-                              color:      isIncome ? C.greenDk   : C.amber,
-                            }}
-                          >
-                            {row.transaction_type}
-                          </span>
-                        </div>
-                        <div className="mt-0.5 text-sm font-medium truncate" style={{ color: C.soil }}>
-                          {row.description}
-                        </div>
-                        <div className="text-xs" style={{ color: C.muted }}>
-                          {categoryLabel(row.transaction_type, row.category)}
-                          {row.payment_method && ` · ${paymentLabel(row.payment_method)}`}
-                        </div>
-                      </div>
-                      <div className="flex flex-col items-end gap-1">
-                        <div
-                          className="text-sm font-semibold tabular-nums"
-                          style={{ color: isIncome ? C.greenDk : C.amber }}
-                        >
-                          {isIncome ? "+ " : "− "}{formatFJD(row.amount_fjd)}
-                        </div>
-                        <div className="flex gap-1">
-                          <button
-                            type="button"
-                            onClick={() => setEditEntry(row)}
-                            aria-label="Edit"
-                            className="rounded-lg p-1"
-                            style={{ color: C.muted }}
-                          >
-                            <Pencil size={14} />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setDeleteEntry(row)}
-                            aria-label="Delete"
-                            className="rounded-lg p-1"
-                            style={{ color: C.red }}
-                          >
-                            <Trash2 size={14} />
-                          </button>
-                        </div>
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
-
-              {/* Pagination */}
-              <div
-                className="flex items-center justify-between px-4 py-3 text-xs"
-                style={{ borderTop: `1px solid ${C.border}`, background: C.cream, color: C.muted }}
-              >
-                <span>
-                  Showing {start}–{end} of {count}
-                </span>
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setOffset(Math.max(0, offset - PAGE_LIMIT))}
-                    disabled={!canPrev}
-                    className="px-3 py-1 rounded-lg disabled:opacity-40"
-                    style={{ background: "white", border: `1px solid ${C.border}`, color: C.soil }}
-                  >
-                    Previous
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setOffset(offset + PAGE_LIMIT)}
-                    disabled={!canNext}
-                    className="px-3 py-1 rounded-lg disabled:opacity-40"
-                    style={{ background: "white", border: `1px solid ${C.border}`, color: C.soil }}
-                  >
-                    Next
-                  </button>
-                </div>
-              </div>
-            </>
-          )}
-        </div>
+      <div className="cash-event-desc">{e.description || "—"}</div>
+      <div className="cash-event-meta">
+        {e.farm_id && <span className="event-anchor-chip">{e.farm_id}</span>}
+        {e.pu_id && <span className="event-anchor-chip">{e.pu_id}</span>}
+        {e.reference_id && e.reference_type !== "CASH" && <span style={{ color: "var(--muted)", fontFamily: "Menlo,monospace" }}>· {e.reference_id}</span>}
       </div>
-
-      <EntryFormModal
-        mode="create"
-        farmId={farmId}
-        isOpen={createOpen}
-        onClose={() => setCreateOpen(false)}
-        onSaved={refresh}
-      />
-
-      <EntryFormModal
-        mode="edit"
-        entry={editEntry}
-        farmId={farmId}
-        isOpen={!!editEntry}
-        onClose={() => setEditEntry(null)}
-        onSaved={refresh}
-      />
-
-      <DeleteConfirmModal
-        entry={deleteEntry}
-        isOpen={!!deleteEntry}
-        onClose={() => setDeleteEntry(null)}
-        onDeleted={refresh}
-      />
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 6, paddingTop: 6, borderTop: "1px dashed var(--line)", flexWrap: "wrap" }}>
+        <span className="verification-badge"><span className="verify-dot" />hash-chained</span>
+        <span style={{ flex: 1 }} />
+        <button className="btn btn-secondary btn-sm" onClick={() => onEdit(e)}><Pencil size={12} />Edit</button>
+        <button className="btn btn-secondary btn-sm" style={{ color: "var(--red)" }} onClick={() => onDelete(e)}><Trash2 size={12} />Delete</button>
+      </div>
     </div>
   );
 }
 
-// --- Default export with isolated QueryClient ------------------------
+function CashInner() {
+  const navigate = useNavigate();
+  const qc = useQueryClient();
+  const { farmId } = useCurrentFarm();
+  const [view, setView] = useState("overview");
+  const [dir, setDir] = useState("all");
+  const [catFilter, setCatFilter] = useState("all");
+  const [rail, setRail] = useState("all");
+  const [win, setWin] = useState("month");
+  const [q, setQ] = useState("");
+  const [form, setForm] = useState(null); // {mode, type, entry}
+  const [del, setDel] = useState(null);
 
-const queryClient = new QueryClient({
-  defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false, staleTime: 30_000 } },
-});
+  const cashQ = useQuery({ queryKey: ["cash", farmId], queryFn: () => getCash(farmId), enabled: !!farmId });
+  const ordersQ = useQuery({ queryKey: ["orders", farmId], queryFn: () => getOrders(farmId), enabled: !!farmId });
+  const entries = cashQ.data?.entries ?? [];
+  const balance = Number(cashQ.data?.cash_balance_fjd ?? 0);
+  const orders = ordersQ.data ?? [];
 
+  const railBal = useMemo(() => {
+    const b = { mpaisa: 0, cash: 0, bank: 0 };
+    entries.forEach((e) => { const [k] = railOf(e); const s = isIncome(e) ? amt(e) : -amt(e); if (k in b) b[k] += s; });
+    return b;
+  }, [entries]);
+  const now = Date.now();
+  const inWin = (e, w) => { const d = Date.parse(e.transaction_date); return Number.isFinite(d) && (now - d) / 864e5 <= WINDOW_DAYS[w]; };
+  const week = entries.filter((e) => inWin(e, "week"));
+  const weekIn = week.filter(isIncome).reduce((s, e) => s + amt(e), 0);
+  const weekOut = week.filter((e) => !isIncome(e)).reduce((s, e) => s + amt(e), 0);
+  const weekNet = weekIn - weekOut;
+  const receivables = orders.filter((o) => ["DISPATCHED", "DELIVERED", "INVOICED"].includes(o.order_status)).reduce((s, o) => s + Number(o.net_amount_fjd ?? o.total_amount_fjd ?? 0), 0);
+  const payables = entries.filter((e) => !isIncome(e) && e.payment_method === "CREDIT").reduce((s, e) => s + amt(e), 0);
+  const nwc = balance + receivables - payables;
+
+  // Ledger filtering
+  const filtered = useMemo(() => {
+    let r = entries.filter((e) => inWin(e, win));
+    if (dir === "in") r = r.filter(isIncome); else if (dir === "out") r = r.filter((e) => !isIncome(e));
+    if (catFilter !== "all") r = r.filter((e) => e.category === catFilter);
+    if (rail !== "all") r = r.filter((e) => railOf(e)[0] === rail);
+    if (q.trim()) { const qq = q.toLowerCase(); r = r.filter((e) => `${e.description || ""} ${e.category || ""} ${e.reference_id || ""}`.toLowerCase().includes(qq)); }
+    return r.sort((a, b) => String(b.transaction_date).localeCompare(String(a.transaction_date)));
+  }, [entries, win, dir, catFilter, rail, q]);
+  const fIn = filtered.filter(isIncome).reduce((s, e) => s + amt(e), 0);
+  const fOut = filtered.filter((e) => !isIncome(e)).reduce((s, e) => s + amt(e), 0);
+  const cats = useMemo(() => { const m = {}; entries.forEach((e) => { m[e.category] = (m[e.category] || 0) + 1; }); return m; }, [entries]);
+
+  const refetch = () => qc.invalidateQueries({ queryKey: ["cash", farmId] });
+  async function doDelete() {
+    try { const r = await fetch(`/api/v1/cash-ledger/${encodeURIComponent(del.ledger_id)}`, { method: "DELETE", headers: authHeaders() }); if (!r.ok && r.status !== 204) throw new Error(); emitToast("Entry deleted"); refetch(); }
+    catch { emitToast("Could not delete"); } finally { setDel(null); }
+  }
+  const recent = entries.slice().sort((a, b) => String(b.transaction_date).localeCompare(String(a.transaction_date))).slice(0, 8);
+
+  return (
+    <TfpShell>
+      <main className="main-content">
+        <div className="main-inner">
+          <div className="page-header">
+            <div><h1>Cash</h1><div className="subtitle">Live balance across every business · crops + animals</div></div>
+            <div className="page-actions">
+              <FarmSelector />
+              <button className="btn btn-secondary" onClick={() => setForm({ mode: "create", type: "INCOME" })}><Plus size={13} />Log cash in</button>
+              <button className="btn btn-primary" onClick={() => setForm({ mode: "create", type: "EXPENSE" })}><Plus size={13} />Log expense</button>
+            </div>
+          </div>
+
+          {/* KPI tiles */}
+          <div className="capital-strip" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))" }}>
+            <Tile label="Balance" value={fjd0(balance)} sub={`M-PAiSA ${fjd0(railBal.mpaisa)} · cash ${fjd0(railBal.cash)} · bank ${fjd0(railBal.bank)}`} />
+            <Tile label="This week net" value={`${weekNet < 0 ? "−" : "+"}${fjd0(Math.abs(weekNet))}`} sub={`${fjd0(weekIn)} in · ${fjd0(weekOut)} out`} color={weekNet < 0 ? "var(--amber)" : "var(--green-dk)"} onClick={() => setView("ledger")} />
+            <Tile label="Receivables" value={fjd0(receivables)} sub="owed to farm" onClick={() => navigate("/farm/buyers")} />
+            <Tile label="Payables" value={fjd0(payables)} sub={payables > 0 ? "credit purchases" : "nothing owed"} color={payables > 0 ? "var(--amber)" : null} />
+            <Tile label="Net working capital" value={fjd0(nwc)} sub="cash + recv − pay" />
+          </div>
+
+          <div className="cycle-view-tabs">
+            {VIEWS.map(([id, label, sub]) => <div key={id} className={`task-tab ${view === id ? "active" : ""}`} onClick={() => setView(id)}>{label}<span className="task-tab-count" style={{ fontSize: 10 }}>{sub}</span></div>)}
+          </div>
+
+          {!farmId ? <div className="card" style={{ padding: 20, color: "var(--muted)" }}>Select a farm to see its cash.</div>
+            : cashQ.isLoading ? <div className="card" style={{ padding: 20, color: "var(--muted)" }}>Loading…</div>
+            : view === "overview" ? (
+              <>
+                <div className="cash-balance-card" style={{ marginBottom: 14 }}>
+                  <div className="cash-balance-label">Balance</div>
+                  <div className="cash-balance-value">{fjd2(balance)}</div>
+                  <div className="cash-balance-sub">{entries.length} logged entries</div>
+                  <div className="rail-breakdown">
+                    <div className="rail-segment mpaisa"><div className="rail-segment-label">M-PAiSA</div><div className="rail-segment-value">{fjd0(railBal.mpaisa)}</div><div className="rail-segment-sub">mobile</div></div>
+                    <div className="rail-segment cash"><div className="rail-segment-label">Cash</div><div className="rail-segment-value">{fjd0(railBal.cash)}</div><div className="rail-segment-sub">on hand</div></div>
+                    <div className="rail-segment bank"><div className="rail-segment-label">Bank</div><div className="rail-segment-value">{fjd0(railBal.bank)}</div><div className="rail-segment-sub">transfer</div></div>
+                  </div>
+                </div>
+                <div className="cash-rp-strip">
+                  <div className="cash-rp-tile receivables" onClick={() => navigate("/farm/buyers")}><div className="cash-rp-label">Receivables</div><div className="cash-rp-value">{fjd0(receivables)}</div><div className="cash-rp-sub">owed to farm</div></div>
+                  <div className="cash-rp-tile payables"><div className="cash-rp-label">Payables</div><div className="cash-rp-value">{fjd0(payables)}</div><div className="cash-rp-sub">credit purchases</div></div>
+                  <div className="cash-rp-tile net-wc"><div className="cash-rp-label">Net working capital</div><div className="cash-rp-value">{fjd0(nwc)}</div><div className="cash-rp-sub">cash + recv − pay</div></div>
+                </div>
+                <div style={{ marginTop: 18 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "var(--soil)", marginBottom: 10, display: "flex", justifyContent: "space-between" }}><span>Recent cash events</span><span style={{ fontSize: 11.5, color: "var(--muted)", cursor: "pointer" }} onClick={() => setView("ledger")}>View all in ledger</span></div>
+                  {recent.length === 0 ? <div className="card" style={{ padding: 24, textAlign: "center", color: "var(--muted)" }}>No cash logged yet — use Log cash in / Log expense.</div>
+                    : recent.map((e) => <CashEventCard key={e.ledger_id} e={e} onEdit={(x) => setForm({ mode: "edit", type: x.transaction_type, entry: x })} onDelete={setDel} />)}
+                </div>
+              </>
+            ) : view === "ledger" ? (
+              <>
+                <div className="capital-strip" style={{ gridTemplateColumns: "repeat(4,1fr)" }}>
+                  <Tile label={`Cash in (${win})`} value={fjd2(fIn)} sub={`${filtered.filter(isIncome).length} events`} color="var(--green-dk)" />
+                  <Tile label={`Cash out (${win})`} value={fjd2(fOut)} sub={`${filtered.filter((e) => !isIncome(e)).length} events`} color="var(--amber)" />
+                  <Tile label="Net" value={`${fIn - fOut < 0 ? "−" : "+"}${fjd2(Math.abs(fIn - fOut))}`} sub="in − out" color={fIn - fOut < 0 ? "var(--red)" : "var(--green-dk)"} />
+                  <Tile label="Events" value={filtered.length} sub="in window" />
+                </div>
+                <div className="gallery-filter-row" style={{ marginBottom: 8 }}>
+                  <span style={{ fontSize: 10.5, color: "var(--muted)", textTransform: "uppercase", letterSpacing: ".5px", marginRight: 6, alignSelf: "center" }}>Direction:</span>
+                  {[["all", "All", entries.length], ["in", "In", entries.filter(isIncome).length], ["out", "Out", entries.filter((e) => !isIncome(e)).length]].map(([id, l, n]) => <button key={id} className={`filter-pill ${dir === id ? "active" : ""}`} onClick={() => setDir(id)}>{l}<span className="filter-pill-count">{n}</span></button>)}
+                </div>
+                <div className="gallery-filter-row" style={{ marginBottom: 8 }}>
+                  <span style={{ fontSize: 10.5, color: "var(--muted)", textTransform: "uppercase", letterSpacing: ".5px", marginRight: 6, alignSelf: "center" }}>Category:</span>
+                  <button className={`filter-pill ${catFilter === "all" ? "active" : ""}`} onClick={() => setCatFilter("all")}>All</button>
+                  {Object.entries(cats).map(([c, n]) => <button key={c} className={`filter-pill ${catFilter === c ? "active" : ""}`} onClick={() => setCatFilter(c)}>{(c || "—").replace(/_/g, " ").toLowerCase()}<span className="filter-pill-count">{n}</span></button>)}
+                </div>
+                <div className="task-controls-row" style={{ marginBottom: 10, flexWrap: "wrap" }}>
+                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                    <span style={{ fontSize: 10.5, color: "var(--muted)", textTransform: "uppercase", letterSpacing: ".5px" }}>Rail:</span>
+                    <select value={rail} onChange={(e) => setRail(e.target.value)} style={{ padding: "5px 10px", borderRadius: 5, border: "1px solid var(--line)", background: "var(--paper)", fontSize: 12 }}>
+                      <option value="all">All rails</option><option value="mpaisa">M-PAiSA</option><option value="cash">Cash</option><option value="bank">Bank</option><option value="credit">Credit</option>
+                    </select>
+                  </div>
+                  <div className="task-time-window">{WINDOWS.map(([w, l]) => <div key={w} className={`task-time-btn ${win === w ? "active" : ""}`} onClick={() => setWin(w)}>{l}</div>)}</div>
+                </div>
+                <div style={{ marginBottom: 14, position: "relative" }}>
+                  <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search description, reference..." style={{ width: "100%", padding: "9px 12px 9px 38px", border: "1.5px solid var(--line)", borderRadius: 7, fontSize: 13, background: "var(--paper)" }} />
+                  <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "var(--muted)", pointerEvents: "none" }}><Search size={14} /></span>
+                </div>
+                {filtered.length === 0 ? <div className="card" style={{ padding: 40, textAlign: "center", color: "var(--muted)" }}>No cash events match these filters.</div>
+                  : filtered.map((e) => <CashEventCard key={e.ledger_id} e={e} onEdit={(x) => setForm({ mode: "edit", type: x.transaction_type, entry: x })} onDelete={setDel} />)}
+              </>
+            ) : view === "categories" ? <CategoriesView entries={entries} />
+            : view === "forecast" ? <Building title="13-week cash forecast" body="Projects cash in/out 13 weeks ahead from your recurring buyer demand signals + scheduled costs. Turns on once you log a season of cash and set buyer demand. Nothing projected from fabricated numbers." />
+            : view === "reconciliation" ? <Building title="Reconcile statement" body="Match your logged cash against a bank / M-PAiSA statement to catch anything missed. Ships with statement import — until then the ledger is your single source of truth." />
+            : (
+              <div className="card" style={{ padding: "18px 20px" }}>
+                <div style={{ fontWeight: 700, color: "var(--soil)", display: "flex", alignItems: "center", gap: 6 }}><ShieldCheck size={15} />Bank Evidence</div>
+                <div style={{ fontSize: 12.5, color: "var(--muted)", margin: "8px 0 12px", lineHeight: 1.5 }}>Your cash ledger is hash-chained and feeds the lender-ready Bank Evidence pack (cashflow statement + audit-verifiable records).</div>
+                <button className="btn btn-primary btn-sm" onClick={() => navigate("/farm/reports")}>Open Bank Evidence →</button>
+              </div>
+            )}
+        </div>
+      </main>
+
+      {form && <EntryForm form={form} farmId={farmId} onClose={() => setForm(null)} onSaved={() => { refetch(); setForm(null); }} />}
+      {del && (
+        <div className="overlay-backdrop show" onClick={() => setDel(null)}>
+          <div className="overlay-modal" style={{ maxWidth: 420 }} onClick={(e) => e.stopPropagation()}>
+            <div className="overlay-head"><h2>Delete this entry?</h2><button className="overlay-close" onClick={() => setDel(null)}><X size={14} /></button></div>
+            <div className="overlay-body"><div style={{ fontSize: 13, color: "var(--soil)", lineHeight: 1.6 }}>{del.description || del.category} · {fjd2(amt(del))}. The audit-chain record remains; only the live ledger row is removed. This can't be undone.</div></div>
+            <div className="overlay-foot"><button className="btn btn-secondary" onClick={() => setDel(null)}>Cancel</button><button className="btn btn-primary" style={{ background: "var(--red)" }} onClick={doDelete}>Delete</button></div>
+          </div>
+        </div>
+      )}
+    </TfpShell>
+  );
+}
+
+function CategoriesView({ entries }) {
+  const byCat = useMemo(() => {
+    const m = {};
+    entries.forEach((e) => { const k = e.category || "—"; (m[k] = m[k] || { cat: k, income: 0, expense: 0 }); if (isIncome(e)) m[k].income += amt(e); else m[k].expense += amt(e); });
+    return Object.values(m).sort((a, b) => (b.income + b.expense) - (a.income + a.expense));
+  }, [entries]);
+  if (!byCat.length) return <Building title="Category spend trends" body="Income and expense by category appear here once you log cash." />;
+  const max = byCat.reduce((m, r) => Math.max(m, r.income, r.expense), 0) || 1;
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      {byCat.map((r) => (
+        <div key={r.cat}>
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5, color: "var(--soil)", fontWeight: 600, marginBottom: 4 }}>
+            <span>{(r.cat).replace(/_/g, " ").toLowerCase()}</span>
+            <span>{r.income ? `+${fjd0(r.income)}` : ""}{r.expense ? ` −${fjd0(r.expense)}` : ""}</span>
+          </div>
+          {r.income > 0 && <div style={{ height: 7, borderRadius: 999, background: "var(--cream-2,#efe7d6)", marginBottom: 3 }}><div style={{ height: 7, borderRadius: 999, width: `${(r.income / max) * 100}%`, background: "var(--green-dk)" }} /></div>}
+          {r.expense > 0 && <div style={{ height: 7, borderRadius: 999, background: "var(--cream-2,#efe7d6)" }}><div style={{ height: 7, borderRadius: 999, width: `${(r.expense / max) * 100}%`, background: "var(--amber)" }} /></div>}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function Field({ label, children }) { return <div className="form-row"><label>{label}</label>{children}</div>; }
+
+function EntryForm({ form, farmId, onClose, onSaved }) {
+  const isEdit = form.mode === "edit";
+  const e = form.entry || {};
+  const [type, setType] = useState(form.type || "INCOME");
+  const [date, setDate] = useState((e.transaction_date || todayISO()).slice(0, 10));
+  const [category, setCategory] = useState(e.category || CATEGORIES_BY_TYPE[form.type || "INCOME"][0][0]);
+  const [amount, setAmount] = useState(e.amount_fjd ? String(e.amount_fjd) : "");
+  const [method, setMethod] = useState(e.payment_method || "CASH");
+  const [description, setDescription] = useState(e.description || "");
+  const [busy, setBusy] = useState(false);
+  const cats = CATEGORIES_BY_TYPE[type] || [];
+  async function submit() {
+    if (!Number(amount)) { emitToast("Enter the amount"); return; }
+    setBusy(true);
+    try {
+      let r;
+      if (isEdit) {
+        r = await fetch(`/api/v1/cash-ledger/${encodeURIComponent(e.ledger_id)}`, { method: "PATCH", headers: authHeaders(), body: JSON.stringify({ category, amount_fjd: Number(amount), payment_method: method, description: description.trim() || category }) });
+      } else {
+        r = await fetch("/api/v1/cash-ledger", { method: "POST", headers: authHeaders(), body: JSON.stringify({ farm_id: farmId, transaction_date: date, transaction_type: type, category, description: description.trim() || category, amount_fjd: Number(amount), payment_method: method }) });
+      }
+      if (!r.ok) { let m = "Could not save"; try { const b = await r.json(); m = b?.detail?.message || b?.detail || m; } catch {} emitToast(typeof m === "string" ? m : "Could not save"); return; }
+      emitToast(isEdit ? "Entry updated" : type === "INCOME" ? "Cash in logged" : "Expense logged"); onSaved?.();
+    } catch { emitToast("Could not save"); } finally { setBusy(false); }
+  }
+  return (
+    <div className="overlay-backdrop show" onClick={onClose}>
+      <div className="overlay-modal" onClick={(ev) => ev.stopPropagation()}>
+        <div className="overlay-head"><h2>{isEdit ? "Edit entry" : type === "INCOME" ? "Log cash in" : "Log expense"}</h2><button className="overlay-close" onClick={onClose}><X size={14} /></button></div>
+        <div className="overlay-body">
+          {!isEdit && (
+            <div className="form-row" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+              <div><label>Type</label><select value={type} onChange={(ev) => { setType(ev.target.value); setCategory(CATEGORIES_BY_TYPE[ev.target.value][0][0]); }}><option value="INCOME">Cash in</option><option value="EXPENSE">Expense</option></select></div>
+              <div><label>Date</label><input type="date" value={date} onChange={(ev) => setDate(ev.target.value)} /></div>
+            </div>
+          )}
+          <div className="form-row" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: isEdit ? 0 : 10 }}>
+            <div><label>Category</label><select value={category} onChange={(ev) => setCategory(ev.target.value)}>{cats.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></div>
+            <div><label>Amount (FJD)</label><input type="number" min="0" step="0.01" value={amount} onChange={(ev) => setAmount(ev.target.value)} /></div>
+          </div>
+          <Field label="Payment method"><select value={method} onChange={(ev) => setMethod(ev.target.value)}>{PAYMENT_METHODS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></Field>
+          <Field label="Description"><input value={description} onChange={(ev) => setDescription(ev.target.value)} placeholder="What was this for" /></Field>
+        </div>
+        <div className="overlay-foot"><button className="btn btn-secondary" onClick={onClose}>Cancel</button><button className="btn btn-primary" onClick={submit} disabled={busy}>{busy ? "Saving…" : isEdit ? "Save" : "Log"}</button></div>
+      </div>
+    </div>
+  );
+}
+
+const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false, staleTime: 60_000 } } });
 export default function CashLedger() {
   return (
     <QueryClientProvider client={queryClient}>
-      <CashLedgerInner />
+      <CurrentFarmProvider>
+        <CashInner />
+      </CurrentFarmProvider>
     </QueryClientProvider>
   );
 }
