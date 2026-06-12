@@ -12,7 +12,7 @@
  */
 import { useMemo, useState } from "react";
 import { QueryClient, QueryClientProvider, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, Search, X, ArrowDownToLine, ArrowUpFromLine } from "lucide-react";
+import { Plus, Search, X, ArrowDownToLine, ArrowUpFromLine, Pencil } from "lucide-react";
 import TfpShell from "../../components/farm/TfpShell";
 import { CurrentFarmProvider, useCurrentFarm } from "../../context/CurrentFarmContext";
 import FarmSelector from "../../components/farm/FarmSelector";
@@ -60,6 +60,7 @@ function InventoryInner() {
   const [sort, setSort] = useState("days-left-asc");
   const [q, setQ] = useState("");
   const [addOpen, setAddOpen] = useState(false);
+  const [editItem, setEditItem] = useState(null);
   const [move, setMove] = useState(null); // {input|null, kind:'PURCHASE'|'USAGE'}
 
   const inputsQ = useQuery({ queryKey: ["inputs", farmId], queryFn: () => getInputs(farmId), enabled: !!farmId });
@@ -174,7 +175,7 @@ function InventoryInner() {
                       return (
                         <tr key={i.input_id} onClick={() => setMove({ input: i, kind: "PURCHASE" })} style={{ cursor: "pointer" }}>
                           <td className="sku-cell" style={{ fontSize: 10.5, fontFamily: "Menlo,monospace", color: "var(--muted)" }}>{i.input_id}</td>
-                          <td className="name-cell"><span style={{ fontWeight: 600, color: "var(--soil)" }}>{i.input_name}</span>{i.expiring_soon && <span className="compliance-badge expired" style={{ marginLeft: 6 }}>EXPIRING</span>}{i.is_chemical && <span className="compliance-badge restricted" style={{ marginLeft: 6 }}>CHEM</span>}</td>
+                          <td className="name-cell"><span style={{ fontWeight: 600, color: "var(--soil)" }}>{i.input_name}</span>{i.expiring_soon && <span className="compliance-badge expired" style={{ marginLeft: 6 }}>EXPIRING</span>}{i.is_chemical && <span className="compliance-badge restricted" style={{ marginLeft: 6 }}>CHEM</span>}<button className="btn btn-secondary btn-sm" title="Edit item" style={{ marginLeft: 8 }} onClick={(ev) => { ev.stopPropagation(); setEditItem(i); }}><Pencil size={11} /></button></td>
                           <td><span className={`inv-category-pill ${(i.input_category || "").toLowerCase()}`}>{CAT_LABEL[i.input_category] || i.input_category}</span></td>
                           <td>{i.storage_location ? <span className="storage-chip">{i.storage_location}</span> : <span style={{ color: "var(--muted)", fontSize: 11 }}>—</span>}</td>
                           <td><StockBar i={i} /></td>
@@ -221,6 +222,7 @@ function InventoryInner() {
       </main>
 
       {addOpen && <AddInputModal farmId={farmId} suppliers={suppliers} onClose={() => setAddOpen(false)} onSaved={() => { refetch(); setAddOpen(false); }} />}
+      {editItem && <AddInputModal farmId={farmId} suppliers={suppliers} edit={editItem} onClose={() => setEditItem(null)} onSaved={() => { refetch(); setEditItem(null); }} />}
       {move && <MoveModal farmId={farmId} input={move.input} kind={move.kind} items={items} suppliers={suppliers} onClose={() => setMove(null)} onSaved={() => { refetch(); qc.invalidateQueries({ queryKey: ["moves"] }); setMove(null); }} />}
     </TfpShell>
   );
@@ -248,27 +250,36 @@ function AnalyticsView({ items }) {
 
 function Field({ label, children }) { return <div className="form-row"><label>{label}</label>{children}</div>; }
 
-function AddInputModal({ farmId, suppliers, onClose, onSaved }) {
-  const [f, setF] = useState({ input_name: "", input_category: "FERTILIZER", unit_of_measure: "kg", current_stock_qty: "0", reorder_point_qty: "", reorder_qty: "", unit_cost_fjd: "", preferred_supplier_id: "", storage_location: "" });
+function AddInputModal({ farmId, suppliers, edit, onClose, onSaved }) {
+  const it = edit || {};
+  const [f, setF] = useState({
+    input_name: it.input_name || "", input_category: it.input_category || "FERTILIZER", unit_of_measure: it.unit_of_measure || "kg",
+    current_stock_qty: String(it.current_stock_qty ?? "0"), reorder_point_qty: it.reorder_point_qty ?? "", reorder_qty: it.reorder_qty ?? "",
+    unit_cost_fjd: it.unit_cost_fjd ?? "", preferred_supplier_id: it.preferred_supplier_id || "", storage_location: it.storage_location || "",
+  });
   const [busy, setBusy] = useState(false);
   const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }));
   async function submit() {
     if (!f.input_name.trim()) { emitToast("Item name is required"); return; }
     setBusy(true);
     try {
-      const r = await fetch("/api/v1/inputs", { method: "POST", headers: authHeaders(), body: JSON.stringify({
-        farm_id: farmId, input_name: f.input_name.trim(), input_category: f.input_category, unit_of_measure: f.unit_of_measure.trim() || "unit",
-        current_stock_qty: Number(f.current_stock_qty) || 0, reorder_point_qty: f.reorder_point_qty ? Number(f.reorder_point_qty) : null,
-        reorder_qty: f.reorder_qty ? Number(f.reorder_qty) : null, unit_cost_fjd: f.unit_cost_fjd ? Number(f.unit_cost_fjd) : null,
-        preferred_supplier_id: f.preferred_supplier_id || null, storage_location: f.storage_location.trim() || null }) });
-      if (!r.ok) { let m = "Could not add item"; try { const b = await r.json(); m = b?.detail || m; } catch {} emitToast(typeof m === "string" ? m : "Could not add item"); return; }
-      emitToast("Item added"); onSaved?.();
-    } catch { emitToast("Could not add item"); } finally { setBusy(false); }
+      // current_stock_qty is trigger-managed — only sent on create, never on edit.
+      const base = {
+        input_name: f.input_name.trim(), input_category: f.input_category, unit_of_measure: f.unit_of_measure.trim() || "unit",
+        reorder_point_qty: f.reorder_point_qty ? Number(f.reorder_point_qty) : null, reorder_qty: f.reorder_qty ? Number(f.reorder_qty) : null,
+        unit_cost_fjd: f.unit_cost_fjd ? Number(f.unit_cost_fjd) : null, preferred_supplier_id: f.preferred_supplier_id || null, storage_location: f.storage_location.trim() || null,
+      };
+      const r = edit
+        ? await fetch(`/api/v1/inputs/${encodeURIComponent(edit.input_id)}`, { method: "PATCH", headers: authHeaders(), body: JSON.stringify(base) })
+        : await fetch("/api/v1/inputs", { method: "POST", headers: authHeaders(), body: JSON.stringify({ farm_id: farmId, current_stock_qty: Number(f.current_stock_qty) || 0, ...base }) });
+      if (!r.ok) { let m = edit ? "Could not save item" : "Could not add item"; try { const b = await r.json(); m = b?.detail || m; } catch {} emitToast(typeof m === "string" ? m : "Could not save"); return; }
+      emitToast(edit ? "Item updated" : "Item added"); onSaved?.();
+    } catch { emitToast("Could not save"); } finally { setBusy(false); }
   }
   return (
     <div className="overlay-backdrop show" onClick={onClose}>
       <div className="overlay-modal" onClick={(e) => e.stopPropagation()}>
-        <div className="overlay-head"><h2>Add inventory item</h2><button className="overlay-close" onClick={onClose}><X size={14} /></button></div>
+        <div className="overlay-head"><h2>{edit ? "Edit item" : "Add inventory item"}</h2><button className="overlay-close" onClick={onClose}><X size={14} /></button></div>
         <div className="overlay-body">
           <div className="form-row" style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 10 }}>
             <div><label>Item name</label><input value={f.input_name} onChange={set("input_name")} placeholder="e.g. NPK 13-13-21" /></div>
@@ -276,7 +287,7 @@ function AddInputModal({ farmId, suppliers, onClose, onSaved }) {
           </div>
           <div className="form-row" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginTop: 10 }}>
             <div><label>Unit</label><input value={f.unit_of_measure} onChange={set("unit_of_measure")} placeholder="kg / L / unit" /></div>
-            <div><label>On hand</label><input type="number" min="0" step="0.01" value={f.current_stock_qty} onChange={set("current_stock_qty")} /></div>
+            <div><label>On hand{edit ? " (use Receive/Use)" : ""}</label><input type="number" min="0" step="0.01" value={f.current_stock_qty} onChange={set("current_stock_qty")} disabled={!!edit} /></div>
             <div><label>Unit cost (FJD)</label><input type="number" min="0" step="0.01" value={f.unit_cost_fjd} onChange={set("unit_cost_fjd")} /></div>
           </div>
           <div className="form-row" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 10 }}>
@@ -288,7 +299,7 @@ function AddInputModal({ farmId, suppliers, onClose, onSaved }) {
             <div><label>Storage location</label><input value={f.storage_location} onChange={set("storage_location")} placeholder="e.g. Shed A" /></div>
           </div>
         </div>
-        <div className="overlay-foot"><button className="btn btn-secondary" onClick={onClose}>Cancel</button><button className="btn btn-primary" onClick={submit} disabled={busy}>{busy ? "Adding…" : "Add item"}</button></div>
+        <div className="overlay-foot"><button className="btn btn-secondary" onClick={onClose}>Cancel</button><button className="btn btn-primary" onClick={submit} disabled={busy}>{busy ? "Saving…" : edit ? "Save" : "Add item"}</button></div>
       </div>
     </div>
   );

@@ -105,6 +105,7 @@ function LaborInner() {
   const [showFamily, setShowFamily] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
   const [editRate, setEditRate] = useState(null);
+  const [editDay, setEditDay] = useState(null);
   const [markFor, setMarkFor] = useState(undefined); // undefined=closed; null/worker=open
   const [payFor, setPayFor] = useState(null);
   const [detailFor, setDetailFor] = useState(null);
@@ -235,7 +236,7 @@ function LaborInner() {
                         <div className="worker-meta-tile"><div className="worker-meta-label">Contact</div><div className="worker-meta-value" style={{ fontSize: 11 }}>{w.contact_number || "—"}</div></div>
                       </div>
                       {!isFamily(w) && <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, paddingTop: 8, borderTop: "1px dashed var(--line)", marginTop: 8 }}>
-                        <button className="btn btn-secondary btn-sm" onClick={() => setEditRate(w)}><Pencil size={12} />Edit rate</button>
+                        <button className="btn btn-secondary btn-sm" onClick={() => setEditRate(w)}><Pencil size={12} />Edit</button>
                         <button className="btn btn-secondary btn-sm" onClick={() => setMarkFor(w)}>Mark attendance</button>
                       </div>}
                     </div>
@@ -257,9 +258,9 @@ function LaborInner() {
                 <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: ".5px", color: "var(--muted)", margin: "18px 0 8px" }}>Logged days (hours &amp; pay)</div>
                 {records.length === 0 ? <div className="card" style={{ padding: 16, color: "var(--muted)" }}>No days logged yet.</div>
                   : <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>{records.map((r) => (
-                    <div key={r.attendance_id} className="card" style={{ padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <div key={r.attendance_id} className="card" style={{ padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
                       <div><div style={{ fontWeight: 600, color: "var(--soil)" }}>{r.worker_name}</div><div style={{ fontSize: 11.5, color: "var(--muted)" }}>{String(r.work_date).slice(0, 10)} · {r.hours_worked}h{r.task_description ? ` · ${r.task_description}` : ""}</div></div>
-                      <div style={{ fontWeight: 700, color: "var(--soil)" }}>{fjd2(r.total_pay_fjd)}</div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}><div style={{ fontWeight: 700, color: "var(--soil)" }}>{fjd2(r.total_pay_fjd)}</div><button className="btn btn-secondary btn-sm" title="Fix this day" onClick={() => setEditDay(r)}><Pencil size={11} /></button></div>
                     </div>
                   ))}</div>}
               </>
@@ -290,6 +291,7 @@ function LaborInner() {
 
       {addOpen && <AddWorkerModal farmId={farmId} onClose={() => setAddOpen(false)} onSaved={() => { refetch(); setAddOpen(false); }} />}
       {editRate && <EditRateModal worker={editRate} onClose={() => setEditRate(null)} onSaved={() => { refetch(); setEditRate(null); }} />}
+      {editDay && <DayEditModal record={editDay} onClose={() => setEditDay(null)} onSaved={() => { refetch(); setEditDay(null); }} />}
       {markFor !== undefined && <MarkAttendanceModal farmId={farmId} workers={team.concat(family)} preset={markFor} onClose={() => setMarkFor(undefined)} onSaved={() => { refetch(); setMarkFor(undefined); }} />}
       {payFor && <PayWagesModal farmId={farmId} worker={payFor} onClose={() => setPayFor(null)} onSaved={() => { qc.invalidateQueries({ queryKey: ["cash", farmId] }); setPayFor(null); }} />}
     </TfpShell>
@@ -332,19 +334,69 @@ function AddWorkerModal({ farmId, onClose, onSaved }) {
 }
 
 function EditRateModal({ worker, onClose, onSaved }) {
-  const [rate, setRate] = useState(String(worker.daily_rate_fjd ?? ""));
+  const [f, setF] = useState({
+    full_name: worker.full_name || "", worker_type: worker.worker_type || "CASUAL",
+    daily_rate_fjd: String(worker.daily_rate_fjd ?? ""), contact_number: worker.contact_number || "", whatsapp_number: worker.whatsapp_number || "",
+  });
   const [busy, setBusy] = useState(false);
+  const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }));
   async function submit() {
-    if (!Number(rate)) { emitToast("Enter a daily rate"); return; }
+    if (!f.full_name.trim()) { emitToast("Name is required"); return; }
     setBusy(true);
-    try { const r = await fetch(`/api/v1/workers/${encodeURIComponent(worker.worker_id)}/rate?daily_rate_fjd=${encodeURIComponent(Number(rate))}`, { method: "PATCH", headers: authHeaders() }); if (!r.ok) throw new Error(); emitToast("Rate updated"); onSaved?.(); }
-    catch { emitToast("Could not update rate"); } finally { setBusy(false); }
+    try {
+      const r = await fetch(`/api/v1/workers/${encodeURIComponent(worker.worker_id)}`, { method: "PATCH", headers: authHeaders(), body: JSON.stringify({
+        full_name: f.full_name.trim(), worker_type: f.worker_type, daily_rate_fjd: Number(f.daily_rate_fjd) || 0,
+        contact_number: f.contact_number.trim() || null, whatsapp_number: f.whatsapp_number.trim() || null }) });
+      if (!r.ok) { let m = "Could not save"; try { const b = await r.json(); m = b?.detail || m; } catch {} emitToast(typeof m === "string" ? m : "Could not save"); return; }
+      emitToast("Worker updated"); onSaved?.();
+    } catch { emitToast("Could not update worker"); } finally { setBusy(false); }
   }
   return (
     <div className="overlay-backdrop show" onClick={onClose}>
-      <div className="overlay-modal" style={{ maxWidth: 440 }} onClick={(e) => e.stopPropagation()}>
-        <div className="overlay-head"><h2>Edit rate — {worker.full_name}</h2><button className="overlay-close" onClick={onClose}><X size={14} /></button></div>
-        <div className="overlay-body"><Field label="Daily rate (FJD)"><input type="number" min="0" step="0.50" value={rate} onChange={(e) => setRate(e.target.value)} autoFocus /></Field></div>
+      <div className="overlay-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="overlay-head"><h2>Edit worker — {worker.full_name}</h2><button className="overlay-close" onClick={onClose}><X size={14} /></button></div>
+        <div className="overlay-body">
+          <div className="form-row" style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 10 }}>
+            <div><label>Full name</label><input value={f.full_name} onChange={set("full_name")} /></div>
+            <div><label>Type</label><select value={f.worker_type} onChange={set("worker_type")}>{WORKER_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}</select></div>
+          </div>
+          <div className="form-row" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginTop: 10 }}>
+            <div><label>Daily rate (FJD)</label><input type="number" min="0" step="0.50" value={f.daily_rate_fjd} onChange={set("daily_rate_fjd")} /></div>
+            <div><label>Phone</label><input value={f.contact_number} onChange={set("contact_number")} /></div>
+            <div><label>WhatsApp</label><input value={f.whatsapp_number} onChange={set("whatsapp_number")} /></div>
+          </div>
+        </div>
+        <div className="overlay-foot"><button className="btn btn-secondary" onClick={onClose}>Cancel</button><button className="btn btn-primary" onClick={submit} disabled={busy}>{busy ? "Saving…" : "Save"}</button></div>
+      </div>
+    </div>
+  );
+}
+
+function DayEditModal({ record, onClose, onSaved }) {
+  const [f, setF] = useState({ hours_worked: String(record.hours_worked ?? ""), total_pay_fjd: String(record.total_pay_fjd ?? ""), task_description: record.task_description || "" });
+  const [busy, setBusy] = useState(false);
+  const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }));
+  async function submit() {
+    setBusy(true);
+    try {
+      const r = await fetch(`/api/v1/labor/${encodeURIComponent(record.attendance_id)}`, { method: "PATCH", headers: authHeaders(), body: JSON.stringify({
+        hours_worked: Number(f.hours_worked) || 0, total_pay_fjd: Number(f.total_pay_fjd) || 0, task_description: f.task_description.trim() || null }) });
+      if (!r.ok) throw new Error();
+      emitToast("Day corrected"); onSaved?.();
+    } catch { emitToast("Could not save"); } finally { setBusy(false); }
+  }
+  return (
+    <div className="overlay-backdrop show" onClick={onClose}>
+      <div className="overlay-modal" style={{ maxWidth: 460 }} onClick={(e) => e.stopPropagation()}>
+        <div className="overlay-head"><h2>Fix logged day — {record.worker_name}</h2><button className="overlay-close" onClick={onClose}><X size={14} /></button></div>
+        <div className="overlay-body">
+          <div style={{ fontSize: 12.5, color: "var(--muted)", marginBottom: 12 }}>{String(record.work_date).slice(0, 10)}. Correct the hours, pay or task.</div>
+          <div className="form-row" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+            <div><label>Hours</label><input type="number" min="0" step="0.5" value={f.hours_worked} onChange={set("hours_worked")} /></div>
+            <div><label>Pay (FJD)</label><input type="number" min="0" step="0.01" value={f.total_pay_fjd} onChange={set("total_pay_fjd")} /></div>
+          </div>
+          <Field label="Task"><input value={f.task_description} onChange={set("task_description")} /></Field>
+        </div>
         <div className="overlay-foot"><button className="btn btn-secondary" onClick={onClose}>Cancel</button><button className="btn btn-primary" onClick={submit} disabled={busy}>{busy ? "Saving…" : "Save"}</button></div>
       </div>
     </div>
@@ -432,7 +484,7 @@ function WorkerDetail({ worker, records, att, clockFeed, onClose, onClock, clock
             <span className={`worker-status-pill ${onSite ? "on-site" : "off"}`}><span className="worker-status-dot" />{onSite ? "On-site" : att ? "Off" : "—"}</span>
             <GpsChip att={att} />
             <span style={{ flex: 1 }} />
-            {!fam && <button className="btn btn-secondary btn-sm" onClick={onEditRate}><Pencil size={12} />Rate</button>}
+            {!fam && <button className="btn btn-secondary btn-sm" onClick={onEditRate}><Pencil size={12} />Edit</button>}
             <button className="btn btn-primary btn-sm" disabled={clocking} onClick={() => onClock(worker, onSite ? "CLOCK_OUT" : "CLOCK_IN")}>{clocking ? "Locating…" : onSite ? "Check out" : "Check in (GPS)"}</button>
           </div>
           <div className="worker-directory-meta" style={{ marginBottom: 14 }}>

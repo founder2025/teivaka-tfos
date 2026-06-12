@@ -149,6 +149,7 @@ function BuyersInner() {
   const [relFilter, setRelFilter] = useState("all");
   const [q, setQ] = useState("");
   const [addOpen, setAddOpen] = useState(false);
+  const [editBuyer, setEditBuyer] = useState(null);
   const [orderOpen, setOrderOpen] = useState(false);
   const [payOrder, setPayOrder] = useState(null);
   const [commFor, setCommFor] = useState(null);
@@ -216,7 +217,7 @@ function BuyersInner() {
           {detailBuyer ? (
             <BuyerDetail b={detailBuyer} orders={ordersByCust[detailBuyer.id] || []} onBack={() => setDetailId(null)}
               onNewOrder={() => setOrderOpen(true)} advance={advance}
-              onLogPayment={(o) => setPayOrder(o)} onLogComm={() => setCommFor(detailBuyer)} />
+              onLogPayment={(o) => setPayOrder(o)} onLogComm={() => setCommFor(detailBuyer)} onEdit={() => setEditBuyer(detailBuyer.raw)} />
           ) : (
             <>
               <div className="page-header">
@@ -289,6 +290,7 @@ function BuyersInner() {
       </main>
 
       {addOpen && <AddBuyerModal onClose={() => setAddOpen(false)} onSaved={() => { refetchCustomers(); setAddOpen(false); }} />}
+      {editBuyer && <AddBuyerModal edit={editBuyer} onClose={() => setEditBuyer(null)} onSaved={() => { refetchCustomers(); setDetailId(null); setEditBuyer(null); }} />}
       {orderOpen && <NewOrderModal farmId={farmId} customers={customers} onClose={() => setOrderOpen(false)} onSaved={() => { refetchOrders(); setOrderOpen(false); }} />}
       {payOrder && <LogPaymentModal order={payOrder} onClose={() => setPayOrder(null)} onSaved={() => { refetchOrders(); setPayOrder(null); }} />}
       {commFor && <LogCommunicationModal buyer={commFor} onClose={() => setCommFor(null)} onSaved={() => { qc.invalidateQueries({ queryKey: ["communications", commFor.id] }); setCommFor(null); }} />}
@@ -367,7 +369,7 @@ function Analytics({ ranked, totalRev, top3pct, concCls }) {
 
 const CHANNEL_LABEL = { whatsapp: "WhatsApp", call: "Call", visit: "Visit", email: "Email", sms: "SMS" };
 
-function BuyerDetail({ b, orders, onBack, onNewOrder, advance, onLogPayment, onLogComm }) {
+function BuyerDetail({ b, orders, onBack, onNewOrder, advance, onLogPayment, onLogComm, onEdit }) {
   const { farmId } = useCurrentFarm();
   const qc = useQueryClient();
   const live = orders.filter((o) => o.order_status !== "CANCELLED");
@@ -392,6 +394,7 @@ function BuyerDetail({ b, orders, onBack, onNewOrder, advance, onLogPayment, onL
           <div className="subtitle">{b.typeLabel}{b.city ? ` · ${b.city}` : ""}{b.terms > 0 ? ` · ${b.terms}d terms` : " · cash"}</div>
         </div>
         <div className="page-actions">
+          <button className="btn btn-secondary" onClick={onEdit}><Pencil size={14} />Edit</button>
           <button className="btn btn-secondary" onClick={onLogComm}><Phone size={14} />Log communication</button>
           <button className="btn btn-primary" onClick={onNewOrder}><Plus size={14} />New order</button>
         </div>
@@ -551,12 +554,13 @@ function PipelineView({ leads, loading, onAdd, onStage }) {
 
 function Field({ label, children }) { return <div className="form-row"><label>{label}</label>{children}</div>; }
 
-function AddBuyerModal({ onClose, onSaved }) {
+function AddBuyerModal({ onClose, onSaved, edit }) {
   const { farmId } = useCurrentFarm();
+  const c = edit || {};
   const [f, setF] = useState({
-    customer_name: "", customer_type: "SUPERMARKET", island: "", distance_km: "",
-    contact_name: "", contact_role: "", phone: "", whatsapp_number: "",
-    payment_terms_days: "0", preferred_channel: "whatsapp", ferry_dependent: false, notes: "",
+    customer_name: c.customer_name || "", customer_type: c.customer_type || "SUPERMARKET", island: c.island || "", distance_km: c.distance_km ?? "",
+    contact_name: c.contact_name || "", contact_role: c.contact_role || "", phone: c.phone || "", whatsapp_number: c.whatsapp_number || "",
+    payment_terms_days: String(c.payment_terms_days ?? "0"), preferred_channel: c.preferred_channel || "whatsapp", ferry_dependent: !!c.ferry_dependent, notes: c.notes || "",
   });
   const [busy, setBusy] = useState(false);
   const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }));
@@ -564,25 +568,25 @@ function AddBuyerModal({ onClose, onSaved }) {
     if (!f.customer_name.trim()) { emitToast("Buyer name is required"); return; }
     setBusy(true);
     try {
-      const r = await fetch("/api/v1/customers", {
-        method: "POST", headers: authHeaders(),
-        body: JSON.stringify({
-          customer_name: f.customer_name.trim(), customer_type: f.customer_type,
-          island: f.island.trim() || null, distance_km: f.distance_km ? Number(f.distance_km) : null,
-          contact_name: f.contact_name.trim() || null, contact_role: f.contact_role.trim() || null,
-          phone: f.phone.trim() || null, whatsapp_number: f.whatsapp_number.trim() || null,
-          preferred_channel: f.preferred_channel, ferry_dependent: !!f.ferry_dependent,
-          payment_terms_days: Number(f.payment_terms_days) || 0, notes: f.notes.trim() || null,
-        }),
-      });
-      if (!r.ok) { let msg = "Could not add buyer"; try { const b = await r.json(); if (b?.detail) msg = typeof b.detail === "string" ? b.detail : msg; } catch {} emitToast(msg); return; }
-      emitToast("Buyer added"); onSaved?.();
-    } catch { emitToast("Could not add buyer"); } finally { setBusy(false); }
+      const body = {
+        customer_name: f.customer_name.trim(), customer_type: f.customer_type,
+        island: f.island.trim() || null, distance_km: f.distance_km ? Number(f.distance_km) : null,
+        contact_name: f.contact_name.trim() || null, contact_role: f.contact_role.trim() || null,
+        phone: f.phone.trim() || null, whatsapp_number: f.whatsapp_number.trim() || null,
+        preferred_channel: f.preferred_channel, ferry_dependent: !!f.ferry_dependent,
+        payment_terms_days: Number(f.payment_terms_days) || 0, notes: f.notes.trim() || null,
+      };
+      const r = edit
+        ? await fetch(`/api/v1/customers/${encodeURIComponent(edit.customer_id)}`, { method: "PATCH", headers: authHeaders(), body: JSON.stringify(body) })
+        : await fetch("/api/v1/customers", { method: "POST", headers: authHeaders(), body: JSON.stringify(body) });
+      if (!r.ok) { let msg = edit ? "Could not save buyer" : "Could not add buyer"; try { const b = await r.json(); if (b?.detail) msg = typeof b.detail === "string" ? b.detail : msg; } catch {} emitToast(msg); return; }
+      emitToast(edit ? "Buyer updated" : "Buyer added"); onSaved?.();
+    } catch { emitToast(edit ? "Could not save buyer" : "Could not add buyer"); } finally { setBusy(false); }
   }
   return (
     <div className="overlay-backdrop show" onClick={onClose}>
       <div className="overlay-modal" onClick={(e) => e.stopPropagation()}>
-        <div className="overlay-head"><h2>Add new buyer</h2><button onClick={onClose} className="overlay-close"><X size={14} /></button></div>
+        <div className="overlay-head"><h2>{edit ? "Edit buyer" : "Add new buyer"}</h2><button onClick={onClose} className="overlay-close"><X size={14} /></button></div>
         <div className="overlay-body">
           <div className="form-event-anchors">
             <div className="anchors-block-head">Anchors · Farm + Operator</div>
@@ -615,7 +619,7 @@ function AddBuyerModal({ onClose, onSaved }) {
           </div>
           <div className="form-row" style={{ marginTop: 10 }}><label>Internal notes</label><textarea rows={2} maxLength={500} value={f.notes} onChange={set("notes")} placeholder="Preferences, payment habits..." /></div>
         </div>
-        <div className="overlay-foot"><button className="btn btn-secondary" onClick={onClose}>Cancel</button><button className="btn btn-primary" onClick={submit} disabled={busy}>{busy ? "Adding…" : "Add buyer"}</button></div>
+        <div className="overlay-foot"><button className="btn btn-secondary" onClick={onClose}>Cancel</button><button className="btn btn-primary" onClick={submit} disabled={busy}>{busy ? "Saving…" : edit ? "Save" : "Add buyer"}</button></div>
       </div>
     </div>
   );
