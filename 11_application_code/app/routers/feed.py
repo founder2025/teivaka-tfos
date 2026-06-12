@@ -778,7 +778,7 @@ async def unblock_user(target_user_id: str, user: dict = Depends(get_current_use
 # ----------------------------------------------------------------------------- people
 @router.get("/people")
 async def list_people(search: str = Query(None), following: bool = Query(False),
-                      profession: str = Query(None), sort: str = Query("verified"),
+                      profession: str = Query(None), group: str = Query(None), sort: str = Query("verified"),
                       user: dict = Depends(get_current_user)):
     """Directory: rich person cards — identity, tick, bio, member-since,
     presence, and marketplace context (active listings / wanted counts).
@@ -800,6 +800,15 @@ async def list_people(search: str = Query(None), following: bool = Query(False),
         if profession and profession.lower() != "all":
             clause += " AND LOWER(u.account_type) = :prof"
             params["prof"] = profession.lower()
+        if group and group.lower() != "all":
+            # persona-group filter → all account_types in that group
+            from app.core.account_types import PERSONA_GROUPS
+            gtypes = [k.lower() for k, v in PERSONA_GROUPS.items() if v == group.upper()]
+            if gtypes:
+                ph = ", ".join(f":g{i}" for i in range(len(gtypes)))
+                clause += f" AND LOWER(u.account_type) IN ({ph})"
+                for i, t in enumerate(gtypes):
+                    params[f"g{i}"] = t
         if following:
             clause += """ AND EXISTS (SELECT 1 FROM community.follows mf
                           WHERE mf.follower_user_id = :uid AND mf.followed_user_id = u.user_id)"""

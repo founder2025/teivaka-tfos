@@ -15,7 +15,7 @@ import Avatar from "../ui/Avatar";
 const API = "/api/v1/community";
 const toast = (message, type) => { try { window.dispatchEvent(new CustomEvent("tfos:toast", { detail: { message, type } })); } catch { /* noop */ } };
 import { personaLabel } from "../../utils/personas";
-const PROF_TABS = [["all", "All"], ["farmer", "Farmers"], ["buyer", "Buyers"], ["supplier", "Suppliers"], ["service_provider", "Service Providers"], ["banker", "Bankers"], ["business", "Business"], ["exporter", "Exporters"]];
+const GROUP_TABS = [["all", "All"], ["PRODUCER", "Producers"], ["TRADE", "Trade"], ["CAPITAL", "Capital / Lenders"], ["GOVERNANCE", "Governance"], ["SERVICE", "Services"]];
 const sinceYear = (iso) => { try { return new Date(iso).getFullYear(); } catch { return null; } };
 
 function InviteCard() {
@@ -48,7 +48,7 @@ export default function Directory() {
   const load = (search) => {
     const p = new URLSearchParams({ sort });
     if (search) p.set("search", search);
-    if (prof !== "all") p.set("profession", prof);
+    if (prof !== "all") p.set("group", prof);
     getJSON(`${API}/people?${p.toString()}`)
       .then((r) => { setPeople(r.data || []); setMeta(r.meta || null); })
       .catch((e) => { setPeople([]); toast(`Couldn't load the directory: ${e.userMessage || e.message}`, "error"); });
@@ -86,7 +86,7 @@ export default function Directory() {
           style={{ border: "none", outline: "none", flex: 1, fontSize: 14, background: "transparent", color: "var(--soil)" }} />
       </div>
       <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 12, alignItems: "center" }}>
-        {PROF_TABS.map(([v, l]) => (
+        {GROUP_TABS.map(([v, l]) => (
           <button key={v} onClick={() => setProf(v)} style={{ padding: "6px 12px", borderRadius: 999, fontSize: 12, fontWeight: 600, cursor: "pointer", minHeight: 34, border: `1px solid ${prof === v ? "var(--green-dk)" : "var(--line)"}`, background: prof === v ? "var(--green)" : "#fff", color: prof === v ? "#fff" : "var(--soil)" }}>{l}</button>
         ))}
         <button onClick={() => setSort(sort === "verified" ? "newest" : "verified")} style={{ marginLeft: "auto", padding: "6px 12px", borderRadius: 999, fontSize: 12, cursor: "pointer", border: "1px solid var(--line)", background: "#fff", color: "var(--muted)" }}>
@@ -95,7 +95,7 @@ export default function Directory() {
       </div>
 
       {people == null ? <div style={{ color: "var(--muted)", padding: 14 }}>Loading…</div>
-        : people.length === 0 ? <div style={{ color: "var(--muted)", padding: 14 }}>No people found{q ? ` for "${q}"` : prof !== "all" ? ` in ${personaLabel(prof)}s` : " yet"}. As more users join, they appear here.</div>
+        : people.length === 0 ? <div style={{ color: "var(--muted)", padding: 14 }}>No people found{q ? ` for "${q}"` : prof !== "all" ? ` in ${(GROUP_TABS.find(([v]) => v === prof)?.[1] || prof)}` : " yet"}. As more users join, they appear here.</div>
         : (
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             {people.map((p) => (
