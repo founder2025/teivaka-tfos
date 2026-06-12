@@ -20,6 +20,7 @@ import { useChat } from "../../context/ChatContext";
 import { useFlags, DisabledNotice } from "../../utils/useFlags.jsx";
 import CoursePlayer, { Stars } from "../../components/classroom/CoursePlayer";
 import CourseBuilder from "../../components/classroom/CourseBuilder";
+import { useCapabilities } from "../../utils/capabilities";
 // ROOT-CAUSE FIX: prototype.css was only imported by TfpShell — without this
 // import the whole pillar rendered UNSTYLED (no cards, no modals, no grid).
 import "../../styles/prototype.css";
@@ -180,12 +181,15 @@ function CourseGrid({ courses, loading, canAuthor, onOpen, onEdit, onNew }) {
 }
 
 /** "Teach on Teivaka" — author application for verified, experienced members. */
-function TeachCard({ canAuthor, applicationsOpen, onChanged }) {
+function TeachCard({ canAuthor, applicationsOpen, onChanged, institution = false }) {
   const [mine, setMine] = useState(null);
   const [open, setOpen] = useState(false);
   const [f, setF] = useState({ expertise: "", credentials: "", topics: "" });
   useEffect(() => { getJSON(`${API}/author-request/me`).then((r) => setMine(r.data)).catch(() => {}); }, []);
-  if (canAuthor || !applicationsOpen) return null;
+  if (canAuthor) return null;
+  // Institutions (banks/donors/exporters/regulators) get the contribute path even
+  // when general teaching applications are closed; everyone else only when open.
+  if (!institution && !applicationsOpen) return null;
   const submit = async () => {
     try {
       await send("POST", `${API}/author-request`, f);
@@ -201,28 +205,29 @@ function TeachCard({ canAuthor, applicationsOpen, onChanged }) {
       <div style={{ marginTop: 14, padding: "14px 16px", border: "1px dashed var(--green)", borderRadius: 12, background: "rgba(106,168,79,0.05)", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
         <GraduationCap size={22} style={{ color: "var(--green-dk)" }} />
         <div style={{ flex: 1, minWidth: 200 }}>
-          <div style={{ fontWeight: 700, color: "var(--soil)", fontSize: 13.5 }}>Know something other farmers need?</div>
+          <div style={{ fontWeight: 700, color: "var(--soil)", fontSize: 13.5 }}>{institution ? "Contribute your institution's modules" : "Know something other farmers need?"}</div>
           <div style={{ fontSize: 12, color: "var(--muted)" }}>
-            {mine?.status === "PENDING" ? "Your application to teach is under review — we'll notify you."
+            {mine?.status === "PENDING" ? "Your application is under review — we'll notify you."
               : mine?.status === "REJECTED" ? `Previous application wasn't approved${mine.reason ? ` — ${mine.reason}` : ""}. You can apply again.`
+              : institution ? "Banks, donors, exporters and regulators can publish finance, market and compliance modules. Apply to contribute — requires the green tick."
               : "Verified, experienced members can apply to teach. Requires the green tick."}
           </div>
         </div>
         {mine?.status !== "PENDING" && (
-          <button className="btn btn-sm btn-primary" onClick={() => setOpen(true)}>Apply to teach</button>
+          <button className="btn btn-sm btn-primary" onClick={() => setOpen(true)}>{institution ? "Apply to contribute" : "Apply to teach"}</button>
         )}
       </div>
       {open && (
         <div className="overlay-backdrop show" style={{ alignItems: "center", padding: 16 }} onClick={() => setOpen(false)}>
           <div className="overlay-modal" style={{ maxWidth: 460 }} onClick={(e) => e.stopPropagation()}>
-            <div className="overlay-head"><span>Teach on Teivaka</span><button className="overlay-close" onClick={() => setOpen(false)}><X size={18} /></button></div>
+            <div className="overlay-head"><span>{institution ? "Contribute a module" : "Teach on Teivaka"}</span><button className="overlay-close" onClick={() => setOpen(false)}><X size={18} /></button></div>
             <div style={{ padding: 18 }}>
               <div className="cb-field-lbl">Your area of expertise *</div>
-              <input style={inp} value={f.expertise} placeholder="e.g. 20 years growing watermelon on Viti Levu" onChange={(e) => setF({ ...f, expertise: e.target.value })} />
+              <input style={inp} value={f.expertise} placeholder={institution ? "e.g. Rural development finance, export compliance, biosecurity" : "e.g. 20 years growing watermelon on Viti Levu"} onChange={(e) => setF({ ...f, expertise: e.target.value })} />
               <div className="cb-field-lbl">Credentials &amp; experience</div>
               <textarea style={{ ...inp, minHeight: 70 }} value={f.credentials} placeholder="Training, certifications, yields, references — anything that proves you know your craft" onChange={(e) => setF({ ...f, credentials: e.target.value })} />
               <div className="cb-field-lbl">What would you teach?</div>
-              <input style={inp} value={f.topics} placeholder="e.g. Dry-season melons, drip irrigation on a budget" onChange={(e) => setF({ ...f, topics: e.target.value })} />
+              <input style={inp} value={f.topics} placeholder={institution ? "e.g. Accessing farm credit, meeting export standards" : "e.g. Dry-season melons, drip irrigation on a budget"} onChange={(e) => setF({ ...f, topics: e.target.value })} />
               <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 12 }}>Requires a verified email and the identity green tick. Every application is reviewed by a human.</div>
               <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
                 <button className="btn btn-sm btn-secondary" onClick={() => setOpen(false)}>Cancel</button>
@@ -605,6 +610,8 @@ export default function ClassroomPillar() {
   const [gLevel, setGLevel] = useState("");
   const [gPrice, setGPrice] = useState("");
   const [gSort, setGSort] = useState("featured");
+  const { can } = useCapabilities();
+  const institution = can("CLASSROOM_UPLOAD_MODULE");  // banks/donors/exporters/regulators
 
   const load = () =>
     getJSON(`${API}/courses`)
@@ -644,13 +651,13 @@ export default function ClassroomPillar() {
         )}
         <CourseGrid courses={filterCourses(courses || [], { q: gq, level: gLevel, price: gPrice, sort: gSort })} loading={courses == null} canAuthor={canAuthor}
           onOpen={(c) => setPlaying(c.course_id)} onEdit={(c) => setBuilding(c.course_id)} onNew={() => setCreating(true)} />
-        <TeachCard canAuthor={canAuthor} applicationsOpen={appsOpen} onChanged={load} />
+        <TeachCard canAuthor={canAuthor} applicationsOpen={appsOpen} onChanged={load} institution={institution} />
       </>
     );
   } else if (view === "library") {
     body = <LibraryView canAuthor={canAuthor} />;
   } else if (view === "instructors") {
-    body = <InstructorsView onOpenCourse={setPlaying} teachCta={<TeachCard canAuthor={canAuthor} applicationsOpen={appsOpen} onChanged={load} />} />;
+    body = <InstructorsView onOpenCourse={setPlaying} teachCta={<TeachCard canAuthor={canAuthor} applicationsOpen={appsOpen} onChanged={load} institution={institution} />} />;
   } else if (view === "saved") {
     body = <SavedView onOpen={(courseId, lessonId) => setPlaying({ courseId, lessonId })} />;
   } else if (view === "teaching") {
