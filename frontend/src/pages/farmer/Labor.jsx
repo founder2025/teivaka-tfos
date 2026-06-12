@@ -27,11 +27,23 @@ function initials(n) { return String(n || "?").split(/\s+/).filter(Boolean).slic
 
 const TYPE_LABEL = { PERMANENT: "Permanent", CASUAL: "Casual", CONTRACT: "Contract", FAMILY: "Family" };
 const WORKER_TYPES = Object.entries(TYPE_LABEL).map(([value, label]) => ({ value, label }));
-const VIEWS = [["today", "Today", "Who's working"], ["roster", "Roster", "Employees"], ["timesheets", "Timesheets", "Hours & days"], ["payroll", "Payroll", "Owed & paid"], ["tasks", "Tasks", "Assignments"], ["costing", "Costing", "Labour cost"], ["analytics", "Productivity", "Trends"]];
+const VIEWS = [["today", "Today", "Who's working"], ["roster", "Roster", "Employees"], ["attendance", "Timesheets", "Hours & GPS"], ["payroll", "Payroll", "Owed & paid"], ["tasks", "Tasks", "Assignments"], ["costing", "Costing", "Labour cost"], ["develop", "Training & safety", "Records"], ["analytics", "Productivity", "Trends"]];
 
 async function getWorkers(farmId) { const r = await fetch(`/api/v1/workers?farm_id=${encodeURIComponent(farmId)}`, { headers: authHeaders() }); if (!r.ok) throw new Error(r.status); return (await r.json())?.data ?? []; }
 async function getLabor(farmId) { const r = await fetch(`/api/v1/labor?farm_id=${encodeURIComponent(farmId)}`, { headers: authHeaders() }); if (!r.ok) throw new Error(r.status); return (await r.json())?.data ?? []; }
 async function getOnSite(farmId) { const r = await fetch(`/api/v1/attendance/on-site?farm_id=${encodeURIComponent(farmId)}`, { headers: authHeaders() }); if (!r.ok) return { data: [], on_site_count: 0 }; return await r.json(); }
+async function getAttendance(farmId) { const r = await fetch(`/api/v1/attendance?farm_id=${encodeURIComponent(farmId)}&limit=100`, { headers: authHeaders() }); if (!r.ok) return []; return (await r.json())?.data ?? []; }
+
+// Device GPS fix for geo-locked clock in/out.
+function getGeo() {
+  return new Promise((resolve, reject) => {
+    if (!navigator.geolocation) return reject(new Error("no-geolocation"));
+    navigator.geolocation.getCurrentPosition(
+      (p) => resolve({ lat: p.coords.latitude, lng: p.coords.longitude, accuracy: p.coords.accuracy }),
+      reject, { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 });
+  });
+}
+function fmtTime(iso) { if (!iso) return ""; const d = new Date(iso); return isNaN(d) ? "" : d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }); }
 
 const isFamily = (w) => w.worker_type === "FAMILY";
 const tk = (w) => (w.worker_type || "").toLowerCase();
@@ -43,19 +55,28 @@ function Building({ title, body }) {
   return <div className="card" style={{ padding: "16px 18px" }}><div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}><span style={{ fontWeight: 700, color: "var(--soil)" }}>{title}</span><span style={{ fontSize: 11.5, fontWeight: 700, color: "var(--muted)" }}>Building</span></div><div style={{ fontSize: 12.5, color: "var(--muted)", marginTop: 6, lineHeight: 1.5 }}>{body}</div></div>;
 }
 
-function TodayWorkerCard({ w, onSite, onMark, onPay, onAssign }) {
+function GpsChip({ att }) {
+  if (!att) return null;
+  if (att.inside_boundary === true) return <span className="gps-chip" style={{ color: "var(--green-dk)" }}><MapPin size={10} />on the farm</span>;
+  if (att.inside_boundary === false) return <span className="gps-chip" style={{ color: "var(--amber)" }}><MapPin size={10} />{att.distance_m != null ? `${Math.round(att.distance_m)}m off` : "off-farm"}</span>;
+  return <span className="gps-chip"><MapPin size={10} />GPS logged</span>;
+}
+
+function TodayWorkerCard({ w, att, clocking, onClock, onPay, onAssign, onOpen }) {
   const fam = isFamily(w);
+  const onSite = att?.on_site;
   return (
     <div className={`today-worker-card ${tk(w)}`}>
       <div className="today-worker-head">
         <div className={`worker-avatar ${tk(w)}`}>{initials(w.full_name)}</div>
         <div style={{ flex: 1 }}>
-          <div className="today-worker-name">{w.full_name}</div>
+          <div className="today-worker-name" style={{ cursor: "pointer" }} onClick={() => onOpen(w)}>{w.full_name}</div>
           <div className="today-worker-role"><span className={`worker-type-pill ${tk(w)}`}>{TYPE_LABEL[w.worker_type] || w.worker_type}</span></div>
         </div>
-        <span className={`worker-status-pill ${onSite ? "on-site" : "off"}`}><span className="worker-status-dot" />{onSite ? "On-site" : "—"}</span>
+        <span className={`worker-status-pill ${onSite ? "on-site" : "off"}`}><span className="worker-status-dot" />{onSite ? "On-site" : att ? "Off" : "—"}</span>
       </div>
       <div className="today-worker-info">
+        {att && <div className="today-worker-info-row"><span className="today-worker-info-label">{onSite ? "Checked in" : "Last seen"}</span><span className="today-worker-info-value" style={{ display: "flex", gap: 6, alignItems: "center" }}>{fmtTime(att.last_at)} <GpsChip att={att} /></span></div>}
         <div className="today-worker-info-row"><span className="today-worker-info-label">Hours this week</span><span className="today-worker-info-value">{w.hoursThisWeek}h</span></div>
         {fam ? <div className="today-worker-info-row"><span className="today-worker-info-label">Wages</span><span className="today-worker-info-value" style={{ fontStyle: "italic", color: "var(--muted)" }}>N/A · family</span></div>
           : <>
@@ -64,7 +85,9 @@ function TodayWorkerCard({ w, onSite, onMark, onPay, onAssign }) {
           </>}
       </div>
       <div className="today-worker-actions">
-        <button className="btn btn-secondary" onClick={() => onMark(w)}>Mark attendance</button>
+        {onSite
+          ? <button className="btn btn-secondary" disabled={clocking} onClick={() => onClock(w, "CLOCK_OUT")}>{clocking ? "Locating…" : "Check out"}</button>
+          : <button className="btn btn-primary" disabled={clocking} onClick={() => onClock(w, "CLOCK_IN")}>{clocking ? "Locating…" : "Check in (GPS)"}</button>}
         <button className="btn btn-secondary" onClick={onAssign}>Assign task</button>
         {!fam && <button className="btn btn-secondary" onClick={() => onPay(w)}>Pay wages</button>}
       </div>
@@ -84,12 +107,35 @@ function LaborInner() {
   const [editRate, setEditRate] = useState(null);
   const [markFor, setMarkFor] = useState(undefined); // undefined=closed; null/worker=open
   const [payFor, setPayFor] = useState(null);
+  const [detailFor, setDetailFor] = useState(null);
+  const [clocking, setClocking] = useState(null);
 
   const workersQ = useQuery({ queryKey: ["workers", farmId], queryFn: () => getWorkers(farmId), enabled: !!farmId });
   const laborQ = useQuery({ queryKey: ["labor", farmId], queryFn: () => getLabor(farmId), enabled: !!farmId });
   const onSiteQ = useQuery({ queryKey: ["onsite", farmId], queryFn: () => getOnSite(farmId), enabled: !!farmId });
+  const attendanceQ = useQuery({ queryKey: ["attendance", farmId], queryFn: () => getAttendance(farmId), enabled: !!farmId && (view === "attendance" || view === "today") });
   const records = laborQ.data ?? [];
-  const onSiteIds = useMemo(() => new Set((onSiteQ.data?.data ?? []).filter((d) => d.on_site).map((d) => d.worker_id)), [onSiteQ.data]);
+  const clockFeed = attendanceQ.data ?? [];
+  const onSiteByName = useMemo(() => { const m = {}; (onSiteQ.data?.data ?? []).forEach((d) => { if (d.worker_name) m[d.worker_name] = d; }); return m; }, [onSiteQ.data]);
+
+  async function clock(w, kind) {
+    setClocking(w.worker_id);
+    try {
+      const g = await getGeo();
+      const r = await fetch("/api/v1/attendance/clock", { method: "POST", headers: authHeaders(), body: JSON.stringify({ farm_id: farmId, kind, lat: g.lat, lng: g.lng, accuracy_m: g.accuracy, worker_name: w.full_name }) });
+      const b = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error();
+      const verb = kind === "CLOCK_IN" ? "Checked in" : "Checked out";
+      if (b.has_boundary === false) emitToast(`${verb} · GPS saved · draw a farm boundary in Locations to geo-lock`);
+      else if (b.inside_boundary) emitToast(`${verb} ✓ on the farm`);
+      else emitToast(`${verb} · ⚠ ${Math.round(b.distance_m || 0)}m outside the boundary`);
+      qc.invalidateQueries({ queryKey: ["onsite", farmId] }); qc.invalidateQueries({ queryKey: ["attendance", farmId] });
+    } catch (e) {
+      if (e && e.code === 1) emitToast("Location blocked — allow GPS in your browser to check in");
+      else if (e && e.code === 3) emitToast("Location timed out — try again with a clear sky view");
+      else emitToast("Couldn't get your location");
+    } finally { setClocking(null); }
+  }
 
   const wkAgo = Date.now() - 7 * 864e5;
   const recById = useMemo(() => {
@@ -151,7 +197,7 @@ function LaborInner() {
                 {team.length === 0 && family.length === 0 ? <div className="card" style={{ padding: 28, textAlign: "center", color: "var(--muted)", marginTop: 14 }}>No workers yet — add your first worker.</div> : null}
                 {team.length > 0 && <>
                   <div style={{ fontSize: 10.5, textTransform: "uppercase", letterSpacing: ".5px", color: "var(--muted)", margin: "18px 0 8px" }}>Team</div>
-                  <div className="today-team-grid">{team.map((w) => <TodayWorkerCard key={w.worker_id} w={w} onSite={onSiteIds.has(w.worker_id)} onMark={setMarkFor} onPay={setPayFor} onAssign={() => navigate("/farm/tasks")} />)}</div>
+                  <div className="today-team-grid">{team.map((w) => <TodayWorkerCard key={w.worker_id} w={w} att={onSiteByName[w.full_name]} clocking={clocking === w.worker_id} onClock={clock} onPay={setPayFor} onAssign={() => navigate("/farm/tasks")} onOpen={setDetailFor} />)}</div>
                 </>}
                 {family.length > 0 && (
                   <div className="family-section">
@@ -159,7 +205,7 @@ function LaborInner() {
                       <div className="family-section-title">Family helpers · {family.length} tracked, unpaid</div>
                       <label style={{ fontSize: 11.5, color: "var(--soil)", cursor: "pointer" }}><input type="checkbox" checked={showFamily} onChange={(e) => setShowFamily(e.target.checked)} /> Show family</label>
                     </div>
-                    {showFamily && <div className="today-team-grid">{family.map((w) => <TodayWorkerCard key={w.worker_id} w={w} onSite={onSiteIds.has(w.worker_id)} onMark={setMarkFor} onPay={setPayFor} onAssign={() => navigate("/farm/tasks")} />)}</div>}
+                    {showFamily && <div className="today-team-grid">{family.map((w) => <TodayWorkerCard key={w.worker_id} w={w} att={onSiteByName[w.full_name]} clocking={clocking === w.worker_id} onClock={clock} onPay={setPayFor} onAssign={() => navigate("/farm/tasks")} onOpen={setDetailFor} />)}</div>}
                   </div>
                 )}
               </>
@@ -195,14 +241,28 @@ function LaborInner() {
                     </div>
                   ))}</div>}
               </>
-            ) : view === "timesheets" ? (
-              records.length === 0 ? <Building title="Timesheets" body="Hours and days appear here as you mark attendance. Each record is hash-chained." />
-                : <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>{records.map((r) => (
-                  <div key={r.attendance_id} className="card" style={{ padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <div><div style={{ fontWeight: 600, color: "var(--soil)" }}>{r.worker_name}</div><div style={{ fontSize: 11.5, color: "var(--muted)" }}>{String(r.work_date).slice(0, 10)} · {r.hours_worked}h{r.task_description ? ` · ${r.task_description}` : ""}</div></div>
-                    <div style={{ fontWeight: 700, color: "var(--soil)" }}>{fjd2(r.total_pay_fjd)}</div>
-                  </div>
-                ))}</div>
+            ) : view === "attendance" ? (
+              <>
+                <div className="calendar-banner">Check-in/out is GPS-verified against your farm boundary — green = on the farm, amber = off. Draw the boundary in Locations to enable geo-lock.</div>
+                <div style={{ display: "flex", justifyContent: "flex-end", margin: "12px 0" }}><button className="btn btn-secondary" onClick={() => setMarkFor(null)}><Plus size={14} />Log a day (hours + pay)</button></div>
+                <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: ".5px", color: "var(--muted)", margin: "4px 0 8px" }}>Recent check-in / check-out (GPS)</div>
+                {attendanceQ.isLoading ? <div className="card" style={{ padding: 16, color: "var(--muted)" }}>Loading…</div>
+                  : clockFeed.length === 0 ? <div className="card" style={{ padding: 20, color: "var(--muted)" }}>No GPS check-ins yet — tap “Check in (GPS)” on a worker in Today.</div>
+                  : <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>{clockFeed.map((c) => (
+                    <div key={c.attendance_id} className="card" style={{ padding: "9px 13px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+                      <div><div style={{ fontWeight: 600, color: "var(--soil)", fontSize: 13 }}>{c.worker_name || "—"} <span style={{ fontWeight: 700, color: c.kind === "CLOCK_IN" ? "var(--green-dk)" : "var(--muted)" }}>· {c.kind === "CLOCK_IN" ? "IN" : "OUT"}</span></div><div style={{ fontSize: 11, color: "var(--muted)" }}>{String(c.occurred_at).slice(0, 10)} {fmtTime(c.occurred_at)}{c.note ? ` · ${c.note}` : ""}</div></div>
+                      <GpsChip att={{ inside_boundary: c.inside_boundary, distance_m: c.distance_m }} />
+                    </div>
+                  ))}</div>}
+                <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: ".5px", color: "var(--muted)", margin: "18px 0 8px" }}>Logged days (hours &amp; pay)</div>
+                {records.length === 0 ? <div className="card" style={{ padding: 16, color: "var(--muted)" }}>No days logged yet.</div>
+                  : <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>{records.map((r) => (
+                    <div key={r.attendance_id} className="card" style={{ padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <div><div style={{ fontWeight: 600, color: "var(--soil)" }}>{r.worker_name}</div><div style={{ fontSize: 11.5, color: "var(--muted)" }}>{String(r.work_date).slice(0, 10)} · {r.hours_worked}h{r.task_description ? ` · ${r.task_description}` : ""}</div></div>
+                      <div style={{ fontWeight: 700, color: "var(--soil)" }}>{fjd2(r.total_pay_fjd)}</div>
+                    </div>
+                  ))}</div>}
+              </>
             ) : view === "payroll" ? (
               team.length === 0 ? <Building title="Payroll" body="Wages owed and paid appear here once you add paid workers and mark attendance." />
                 : <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -221,9 +281,12 @@ function LaborInner() {
                 <button className="btn btn-primary btn-sm" onClick={() => navigate("/farm/tasks")}>Open Tasks →</button>
               </div>
             ) : view === "costing" ? <Building title="Labour cost per cycle" body="What labour costs each cycle and enterprise to run — rolls up from attendance tagged to cycles. Turns on as you tag work to production." />
+            : view === "develop" ? <Building title="Training & safety records" body="Worker skills, certifications, safety briefings and incident records — hash-chained to each worker. The records table ships next; honest-empty until then, never fabricated." />
             : <Building title="Productivity" body="Output per worker (kg per hour, over time) — needs work-to-harvest attribution. Tag attendance to cycles and harvests and this builds. No fabricated numbers." />}
         </div>
       </main>
+
+      {detailFor && <WorkerDetail worker={workers.find((w) => w.worker_id === detailFor.worker_id) || detailFor} records={recById[detailFor.worker_id] || []} att={onSiteByName[detailFor.full_name]} clockFeed={clockFeed.filter((c) => c.worker_name === detailFor.full_name)} onClose={() => setDetailFor(null)} onClock={clock} clocking={clocking === detailFor.worker_id} onPay={() => { setPayFor(detailFor); setDetailFor(null); }} onEditRate={() => { setEditRate(detailFor); setDetailFor(null); }} />}
 
       {addOpen && <AddWorkerModal farmId={farmId} onClose={() => setAddOpen(false)} onSaved={() => { refetch(); setAddOpen(false); }} />}
       {editRate && <EditRateModal worker={editRate} onClose={() => setEditRate(null)} onSaved={() => { refetch(); setEditRate(null); }} />}
@@ -349,6 +412,53 @@ function PayWagesModal({ farmId, worker, onClose, onSaved }) {
           <Field label="Method"><select value={method} onChange={(e) => setMethod(e.target.value)}><option value="MOBILE_MONEY">M-PAiSA / mobile</option><option value="CASH">Cash</option><option value="BANK_TRANSFER">Bank transfer</option></select></Field>
         </div>
         <div className="overlay-foot"><button className="btn btn-secondary" onClick={onClose}>Cancel</button><button className="btn btn-primary" onClick={submit} disabled={busy}>{busy ? "Paying…" : "Pay wages"}</button></div>
+      </div>
+    </div>
+  );
+}
+
+function WorkerDetail({ worker, records, att, clockFeed, onClose, onClock, clocking, onPay, onEditRate }) {
+  const fam = isFamily(worker);
+  const onSite = att?.on_site;
+  const season = records.reduce((s, r) => s + Number(r.total_pay_fjd || 0), 0);
+  const hours = records.reduce((s, r) => s + Number(r.hours_worked || 0), 0);
+  return (
+    <div className="overlay-backdrop show" onClick={onClose}>
+      <div className="overlay-modal" style={{ maxWidth: 620 }} onClick={(e) => e.stopPropagation()}>
+        <div className="overlay-head"><h2>{worker.full_name}</h2><button className="overlay-close" onClick={onClose}><X size={14} /></button></div>
+        <div className="overlay-body">
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+            <span className={`worker-type-pill ${tk(worker)}`}>{TYPE_LABEL[worker.worker_type] || worker.worker_type}</span>
+            <span className={`worker-status-pill ${onSite ? "on-site" : "off"}`}><span className="worker-status-dot" />{onSite ? "On-site" : att ? "Off" : "—"}</span>
+            <GpsChip att={att} />
+            <span style={{ flex: 1 }} />
+            {!fam && <button className="btn btn-secondary btn-sm" onClick={onEditRate}><Pencil size={12} />Rate</button>}
+            <button className="btn btn-primary btn-sm" disabled={clocking} onClick={() => onClock(worker, onSite ? "CLOCK_OUT" : "CLOCK_IN")}>{clocking ? "Locating…" : onSite ? "Check out" : "Check in (GPS)"}</button>
+          </div>
+          <div className="worker-directory-meta" style={{ marginBottom: 14 }}>
+            <div className="worker-meta-tile"><div className="worker-meta-label">Day rate</div><div className="worker-meta-value">{fam ? "N/A" : `${fjd0(worker.daily_rate_fjd)}/d`}</div></div>
+            <div className="worker-meta-tile"><div className="worker-meta-label">Hours (season)</div><div className="worker-meta-value">{hours}h</div></div>
+            <div className="worker-meta-tile"><div className="worker-meta-label">Wages (season)</div><div className="worker-meta-value">{fam ? "N/A" : fjd0(season)}</div></div>
+            <div className="worker-meta-tile"><div className="worker-meta-label">Contact</div><div className="worker-meta-value" style={{ fontSize: 11 }}>{worker.contact_number || "—"}</div></div>
+          </div>
+          <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: ".5px", color: "var(--muted)", marginBottom: 6 }}>GPS check-in history</div>
+          {clockFeed.length === 0 ? <div style={{ fontSize: 12.5, color: "var(--muted)", marginBottom: 12 }}>No GPS check-ins yet.</div>
+            : <div style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 14 }}>{clockFeed.slice(0, 8).map((c) => (
+              <div key={c.attendance_id} style={{ display: "flex", justifyContent: "space-between", fontSize: 12, padding: "5px 0", borderBottom: "1px solid rgba(92,64,51,0.08)" }}>
+                <span style={{ color: "var(--soil)" }}>{c.kind === "CLOCK_IN" ? "IN" : "OUT"} · {String(c.occurred_at).slice(0, 10)} {fmtTime(c.occurred_at)}</span>
+                <GpsChip att={{ inside_boundary: c.inside_boundary, distance_m: c.distance_m }} />
+              </div>
+            ))}</div>}
+          <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: ".5px", color: "var(--muted)", marginBottom: 6 }}>Logged days</div>
+          {records.length === 0 ? <div style={{ fontSize: 12.5, color: "var(--muted)" }}>No days logged yet.</div>
+            : records.slice(0, 10).map((r) => (
+              <div key={r.attendance_id} style={{ display: "flex", justifyContent: "space-between", fontSize: 12, padding: "5px 0", borderBottom: "1px solid rgba(92,64,51,0.08)" }}>
+                <span style={{ color: "var(--soil)" }}>{String(r.work_date).slice(0, 10)} · {r.hours_worked}h{r.task_description ? ` · ${r.task_description}` : ""}</span>
+                <span style={{ fontWeight: 600 }}>{fjd2(r.total_pay_fjd)}</span>
+              </div>
+            ))}
+        </div>
+        <div className="overlay-foot">{!fam && <button className="btn btn-secondary" onClick={onPay}>Pay wages</button>}<button className="btn btn-primary" onClick={onClose}>Close</button></div>
       </div>
     </div>
   );

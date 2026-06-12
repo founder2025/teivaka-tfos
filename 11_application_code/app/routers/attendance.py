@@ -85,7 +85,12 @@ async def clock(body: ClockIn, user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=422, detail="kind must be CLOCK_IN or CLOCK_OUT")
     tid = str(user["tenant_id"])
     uid = str(user.get("user_id")) if user.get("user_id") else None
-    worker_id = body.worker_id or uid
+    # Self check-in (no named worker) clocks the logged-in user. When a worker_name is
+    # given (manager clocking a named hired worker), keep worker_id NULL so the on-site
+    # view groups by name instead of collapsing every worker onto the operator's uid.
+    worker_id = body.worker_id
+    if not worker_id and not body.worker_name:
+        worker_id = uid
 
     async with get_rls_db(tid) as db:
         res = await db.execute(
