@@ -134,6 +134,8 @@ export default function Library() {
   const [showAll, setShowAll] = useState({});
   const [detail, setDetail] = useState(null); // {kind, row}
   const [reqOpen, setReqOpen] = useState(false);
+  const [reqPrefill, setReqPrefill] = useState(null); // {kind?, details?}
+  const [lessonOpen, setLessonOpen] = useState(false);
 
   const [crops, setCrops] = useState(null);
   const [chems, setChems] = useState(null);
@@ -196,6 +198,17 @@ export default function Library() {
   }, [q, crops, chems, pests, dis, fert]);
 
   const openRow = (kind, row) => setDetail({ kind, row });
+  const openRequest = (prefill) => { setReqPrefill(prefill || null); setReqOpen(true); };
+
+  // First-run: show the "How to use the Library" lesson once.
+  useEffect(() => {
+    try {
+      if (!localStorage.getItem("tfos_lib_lesson_seen")) {
+        setLessonOpen(true);
+        localStorage.setItem("tfos_lib_lesson_seen", "1");
+      }
+    } catch { /* private mode — skip */ }
+  }, []);
 
   // Tabs (prototype order; nutrition + kb kept as cited extras per Operator)
   const tabs = [
@@ -218,7 +231,8 @@ export default function Library() {
           <div className="page-header">
             <div><h1>Library</h1><div className="subtitle">Knowledge for your farm · crops, chemicals, pests, diseases, fertilizers, livestock</div></div>
             <div className="page-actions">
-              <button className="btn btn-secondary" onClick={() => setReqOpen(true)}><MessageSquare size={13} />Request library update</button>
+              <button className="btn btn-secondary" onClick={() => setLessonOpen(true)}><BookOpen size={13} />How to use</button>
+              <button className="btn btn-secondary" onClick={() => openRequest(null)}><MessageSquare size={13} />Request library update</button>
             </div>
           </div>
 
@@ -235,7 +249,15 @@ export default function Library() {
           {/* Cross-library search results */}
           {searchHits && (
             searchHits.total === 0 ? (
-              <div className="lib-search-empty">No results for "{search}". Try requesting a library update if it should be there.</div>
+              <div className="lib-search-empty">
+                No results for "{search}". If it should be in the library, tell Teivaka —
+                your search becomes signal the agronomists review.
+                <div style={{ marginTop: 10 }}>
+                  <button className="btn btn-sm btn-primary" onClick={() => openRequest({ kind: "Other", details: `Searched for "${search.trim()}" — not found in the library.` })}>
+                    <Plus size={12} />Request "{clip(search.trim(), 40)}" for the library
+                  </button>
+                </div>
+              </div>
             ) : (
               <div className="lib-search-results">
                 <div className="lib-search-h">{searchHits.total} results across libraries</div>
@@ -498,7 +520,8 @@ export default function Library() {
       </main>
 
       {detail && <RowDetail detail={detail} onClose={() => setDetail(null)} />}
-      {reqOpen && <RequestUpdate onClose={() => setReqOpen(false)} />}
+      {reqOpen && <RequestUpdate prefill={reqPrefill} onClose={() => { setReqOpen(false); setReqPrefill(null); }} />}
+      {lessonOpen && <LibraryLesson onClose={() => setLessonOpen(false)} onOpenCrops={() => { setLessonOpen(false); setTab("crops"); }} />}
     </TfpShell>
   );
 }
@@ -561,11 +584,42 @@ function RowDetail({ detail, onClose }) {
   );
 }
 
+/* ---- "How to use the Farm Library" lesson (prototype openLibraryLesson) ---- */
+function LibraryLesson({ onClose, onOpenCrops }) {
+  const STEPS = [
+    ["The System Library is curated.", "Teivaka agronomists review every chemical, pest, disease, variety, and fertilizer entry. Each row has a version, a source, and a last-reviewed date. That is what makes it trustworthy."],
+    ["My Library is yours.", "Custom varieties you trial, sightings you log, notes you keep — these live in My Library, private to your farm, fully yours to edit."],
+    ["You cannot edit System rows — and that is the point.", "If every farmer could change the chemical library, the withholding periods would no longer be trustworthy, and the compliance gate would fail. Curation is the moat."],
+    ["Citations make it auditable.", "When TIS answers a chemical or pest question, it cites the library row by ID (CHEM-003, PEST-001). Tap the citation to see the source. No black-box answers."],
+    ["Found something wrong or missing?", "Use the Request library update button on the Library page. Teivaka reviews every signal from farmers. You contribute signal; the library stays curated."],
+  ];
+  return (
+    <div className="overlay-backdrop show" onClick={onClose}>
+      <div className="overlay-modal" style={{ maxWidth: 680 }} onClick={(e) => e.stopPropagation()}>
+        <div className="overlay-head"><h2>How to use the Farm Library</h2><button className="overlay-close" onClick={onClose}><X size={16} /></button></div>
+        <div className="overlay-body">
+          <div style={{ fontSize: 13, color: "var(--soil)", lineHeight: 1.65, marginBottom: 14 }}>
+            A short lesson on how the Farm Library is built, why it is trustworthy, and how you can contribute to it without breaking it.
+          </div>
+          {STEPS.map(([h, b], i) => (
+            <div className="lib-lesson-step" key={i}>
+              <span className="lib-lesson-n">{i + 1}</span>
+              <div><strong>{h}</strong> {b}</div>
+            </div>
+          ))}
+          <div className="lib-lesson-cta"><button className="btn btn-primary" onClick={onOpenCrops}><BookOpen size={13} />Open the Library now</button></div>
+        </div>
+        <div className="overlay-foot"><button className="btn btn-secondary" onClick={onClose}>Close</button></div>
+      </div>
+    </div>
+  );
+}
+
 /* ---- Request library update (prototype openLibRequestUpdate → real endpoint) ---- */
-function RequestUpdate({ onClose }) {
+function RequestUpdate({ onClose, prefill }) {
   const KINDS = ["New chemical", "Chemical correction (WHD, dosage)", "New pest sighting in Fiji", "Disease symptom or treatment correction", "New variety", "Other"];
-  const [kind, setKind] = useState(KINDS[0]);
-  const [details, setDetails] = useState("");
+  const [kind, setKind] = useState(prefill?.kind || KINDS[0]);
+  const [details, setDetails] = useState(prefill?.details || "");
   const [source, setSource] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
