@@ -28,7 +28,7 @@ const toast = (message, type) => {
   try { window.dispatchEvent(new CustomEvent("tfos:toast", { detail: { message, type } })); }
   catch { /* noop */ }
 };
-const AUDIENCE_LABELS = { everyone: "Everyone", followers: "Your followers", farmer: "Farmers", buyer: "Buyers", banker: "Bankers", business: "Business", service_provider: "Service Providers" };
+const AUDIENCE_LABELS = { everyone: "Everyone", followers: "Your followers", PRODUCER: "Producers", TRADE: "Trade", CAPITAL: "Capital", GOVERNANCE: "Governance", SERVICE: "Services", farmer: "Farmers", buyer: "Buyers", supplier: "Suppliers", banker: "Bankers", business: "Business", exporter: "Exporters", importer: "Importers", service_provider: "Service Providers" };
 
 const REACTIONS = [
   { key: "strong_crop", label: "Strong crop", Icon: Leaf },
@@ -45,8 +45,8 @@ const FILTERS = [
   ["group_CAPITAL", "Capital"], ["group_GOVERNANCE", "Governance"], ["group_SERVICE", "Services"],
 ];
 const AUDIENCES = [
-  ["everyone", "Everyone"], ["followers", "Your followers"], ["farmer", "Farmers"],
-  ["buyer", "Buyers"], ["banker", "Bankers"], ["business", "Business"], ["service_provider", "Service Providers"],
+  ["everyone", "Everyone"], ["followers", "Your followers"], ["PRODUCER", "Producers"],
+  ["TRADE", "Trade"], ["CAPITAL", "Capital"], ["GOVERNANCE", "Governance"], ["SERVICE", "Services"],
 ];
 
 const initials = (name) => (name || "?").split(" ").map((s) => s[0]).slice(0, 2).join("").toUpperCase();
@@ -354,7 +354,7 @@ function Composer({ me, onPosted, groupId }) {
             ))}
           </div>
         )}
-        {!narrow && <div className="cm-composer-hint">Seen by your country's {draft.audience === "everyone" ? "whole network" : draft.audience} (global if Reel/🌐). Use Mention to tag people. Reports go to Cody as moderator.</div>}
+        {!narrow && <div className="cm-composer-hint">Seen by your country's {draft.audience === "everyone" ? "whole network" : (AUDIENCE_LABELS[draft.audience] || draft.audience)} (global if Reel/🌐). Use Mention to tag people. Reports go to Cody as moderator.</div>}
       </div>
       {modal === "place" && <PlaceModal onClose={() => setModal(null)} onPick={(v) => { set("location", v); setModal(null); }} />}
       {modal === "link" && <LinkRecordModal onClose={() => setModal(null)} onPick={(v) => { set("link", v); setModal(null); }} />}

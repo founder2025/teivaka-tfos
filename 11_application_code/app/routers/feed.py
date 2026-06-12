@@ -43,8 +43,28 @@ router = APIRouter()
 
 REACTIONS = {"strong_crop", "good_harvest", "vinaka", "hoping_rain", "learning"}
 # Canonical profession = account_type lower-cased (8-profession taxonomy).
-_AUDIENCES = ("everyone", "followers", "farmer", "buyer", "supplier", "service_provider",
+_AUDIENCES = ("everyone", "followers",
+              # persona-group audiences (current taxonomy)
+              "PRODUCER", "TRADE", "CAPITAL", "GOVERNANCE", "SERVICE",
+              # legacy 8-profession audiences (pre-migration posts) — still accepted
+              "farmer", "buyer", "supplier", "service_provider",
               "banker", "business", "exporter", "importer")
+
+
+def _viewer_audiences(account_type):
+    """Audience values that should reach a viewer: their persona group (current
+    taxonomy) plus any legacy old-profession audience that maps to that group, so
+    pre-migration posts still reach the right people."""
+    from app.core.account_types import persona_group, LEGACY_ACCOUNT_TYPE_MAP
+    g = persona_group(account_type)
+    if not g:
+        return []
+    auds = [g]
+    for old_key, new_val in LEGACY_ACCOUNT_TYPE_MAP.items():
+        ok = old_key.lower()  # stored legacy audiences are lowercase ('farmer', …)
+        if ok != "other" and persona_group(new_val) == g and ok not in auds:
+            auds.append(ok)
+    return auds
 
 # Upload storage — served back through /api/v1/community/uploads/{name} (Caddy proxies
 # /api/* to the API). Mount a volume at this path in compose to survive rebuilds.
@@ -232,13 +252,20 @@ async def list_feed(
             OR fp.country = :vcountry
         )""")
 
-        # audience visibility (NOT follow-gated — profession/everyone within country)
-        where.append("""(
+        # audience visibility (NOT follow-gated — persona-group/everyone within country)
+        _vauds = _viewer_audiences(viewer_prof)
+        _aud_or = ""
+        if _vauds:
+            _ph = ", ".join(f":va{i}" for i in range(len(_vauds)))
+            _aud_or = f" OR fp.audience IN ({_ph})"
+            for i, a in enumerate(_vauds):
+                params[f"va{i}"] = a
+        where.append(f"""(
             fp.author_user_id = :uid
             OR fp.audience = 'everyone'
             OR (fp.audience = 'followers' AND EXISTS (SELECT 1 FROM community.follows f
                     WHERE f.follower_user_id = :uid AND f.followed_user_id = fp.author_user_id))
-            OR fp.audience = :vprof
+            {_aud_or}
         )""")
 
         has_groups_col = await _has(db, "col_fp_group", "SELECT 1 FROM information_schema.columns WHERE table_schema='community' AND table_name='feed_posts' AND column_name='group_id'")
@@ -1231,11 +1258,17 @@ async def get_profile(target_id: str, user: dict = Depends(get_current_user)):
             pwhere = "fp.author_user_id = cast(:t AS uuid) AND fp.status='active'"
             pparams = {"t": target_id}
         else:
-            pwhere = """fp.author_user_id = cast(:t AS uuid) AND fp.status='active' AND (
+            _vauds = _viewer_audiences(vprof)
+            pparams = {"t": target_id, "ifollow": i_follow}
+            _aud_or = ""
+            if _vauds:
+                _ph = ", ".join(f":va{i}" for i in range(len(_vauds)))
+                _aud_or = f" OR fp.audience IN ({_ph})"
+                for i, a in enumerate(_vauds):
+                    pparams[f"va{i}"] = a
+            pwhere = f"""fp.author_user_id = cast(:t AS uuid) AND fp.status='active' AND (
                 fp.audience='everyone'
-                OR (fp.audience='followers' AND :ifollow)
-                OR fp.audience=:vprof)"""
-            pparams = {"t": target_id, "ifollow": i_follow, "vprof": vprof}
+                OR (fp.audience='followers' AND :ifollow){_aud_or})"""
         posts = (await db.execute(text(f"""
             SELECT fp.post_id, fp.body, fp.audience, fp.photos, fp.is_repost, fp.created_at,
                    (SELECT count(*) FROM community.feed_likes l WHERE l.post_id=fp.post_id) AS like_count,
