@@ -1,9 +1,56 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import text
+from pydantic import BaseModel
+from typing import Optional
+from decimal import Decimal
+import uuid
 from app.db.session import get_rls_db
 from app.middleware.rls import get_current_user
 
 router = APIRouter()
+
+VALID_INPUT_CATEGORIES = {"FERTILIZER", "PESTICIDE", "HERBICIDE", "FUNGICIDE", "SEED", "SEEDLING", "TOOL", "PACKAGING", "FUEL", "OTHER"}
+
+
+class InputCreate(BaseModel):
+    farm_id: str
+    input_name: str
+    input_category: str = "OTHER"
+    unit_of_measure: str = "unit"
+    current_stock_qty: Decimal = Decimal("0")
+    reorder_point_qty: Optional[Decimal] = None
+    reorder_qty: Optional[Decimal] = None
+    unit_cost_fjd: Optional[Decimal] = None
+    preferred_supplier_id: Optional[str] = None
+    storage_location: Optional[str] = None
+    notes: Optional[str] = None
+
+
+@router.post("", status_code=201)
+async def create_input(body: InputCreate, user: dict = Depends(get_current_user)):
+    if body.input_category not in VALID_INPUT_CATEGORIES:
+        raise HTTPException(400, detail=f"input_category must be one of {sorted(VALID_INPUT_CATEGORIES)}")
+    if not body.input_name.strip():
+        raise HTTPException(400, detail="input_name is required")
+    input_id = f"INP-{uuid.uuid4().hex[:6].upper()}"
+    async with get_rls_db(str(user["tenant_id"])) as db:
+        await db.execute(text("""
+            INSERT INTO tenant.inputs
+                (input_id, tenant_id, farm_id, input_name, input_category, unit_of_measure,
+                 current_stock_qty, reorder_point_qty, reorder_qty, unit_cost_fjd,
+                 preferred_supplier_id, storage_location, notes)
+            VALUES
+                (:id, :tid, :farm_id, :name, :cat, :uom,
+                 :stock, :rop, :roq, :cost, :sup, :loc, :notes)
+        """), {
+            "id": input_id, "tid": str(user["tenant_id"]), "farm_id": body.farm_id,
+            "name": body.input_name.strip(), "cat": body.input_category, "uom": body.unit_of_measure,
+            "stock": body.current_stock_qty, "rop": body.reorder_point_qty, "roq": body.reorder_qty,
+            "cost": body.unit_cost_fjd, "sup": body.preferred_supplier_id or None,
+            "loc": body.storage_location, "notes": body.notes,
+        })
+    return {"data": {"input_id": input_id, "input_name": body.input_name.strip()}}
+
 
 @router.get("")
 async def list_inputs(farm_id: str = None, user: dict = Depends(get_current_user)):

@@ -1,421 +1,295 @@
 /**
- * InventoryList.jsx — /farm/inventory (Phase 4b).
+ * InventoryList.jsx — /farm/inventory — PIXEL-EXACT rebuild of the prototype's Inventory.
  *
- * Read-only table of inputs/inventory on hand for the active tenant. Reads
- * from GET /api/v1/inputs. Bearer token from localStorage.
- *
- * ENVELOPE QUIRK: GET /api/v1/inputs returns { data: [...flat array...] } —
- * NOT the success_envelope wrapper used by /harvests and /cycles. There is
- * no `meta`, and `data` is the row array directly (not `data.inputs`).
- *
- * Per backlog note, the `farm_id` query param has a 500-bug at the SQL
- * layer (filter references a column that doesn't exist on tenant.inputs).
- * Do not pass it. Inventory creation is via the universal (+) shell
- * button, not from this page — there is no "New input" CTA here.
- *
- * Status pill mapping (driven by mv_input_balance.stock_status):
- *   OK / HEALTHY / null → green  "In stock"
- *   LOW                 → amber  "Low"
- *   OUT                 → red    "Out"
- *   anything else       → gray   raw value
+ * Reproduces coreInventoryView (stock/movements/reorder/suppliers/analytics) pixel-for-
+ * pixel — capital-strip, inventory-table + stock-progress bars, reorder-card grid,
+ * cycle-view-tabs under <TfpShell> — replacing the Tailwind page. Wired real:
+ *   Stock     GET /api/v1/inputs (with computed stock_status)   Add → POST /api/v1/inputs
+ *   Movements GET/POST /api/v1/input-transactions (PURCHASE = receive, USAGE = use;
+ *             the after_input_txn_inventory trigger auto-updates on-hand stock)
+ *   Suppliers GET /api/v1/suppliers
+ * Analytics = value by category, derived. Honest-empty where there's nothing logged.
  */
-import { useEffect, useState } from "react";
+import { useMemo, useState } from "react";
+import { QueryClient, QueryClientProvider, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Plus, Search, X, ArrowDownToLine, ArrowUpFromLine } from "lucide-react";
+import TfpShell from "../../components/farm/TfpShell";
+import { CurrentFarmProvider, useCurrentFarm } from "../../context/CurrentFarmContext";
+import FarmSelector from "../../components/farm/FarmSelector";
 
-const C = {
-  soil:    "#5C4033",
-  green:   "#6AA84F",
-  amber:   "#BF9000",
-  red:     "#B00020",
-  cream:   "#F8F3E9",
-  border:  "#E6DED0",
-  muted:   "#8A7863",
-  panel:   "#FFFFFF",
-};
+function authHeaders() { const t = localStorage.getItem("tfos_access_token"); return t ? { "Content-Type": "application/json", Authorization: `Bearer ${t}` } : { "Content-Type": "application/json" }; }
+function emitToast(m) { window.dispatchEvent(new CustomEvent("tfos:toast", { detail: { message: m } })); }
+function todayISO() { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; }
+function fjd0(v) { const n = Number(v ?? 0); return `FJD ${Math.round(n).toLocaleString("en-FJ")}`; }
+function fjd2(v) { const n = Number(v ?? 0); return `FJD ${n.toLocaleString("en-FJ", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`; }
+function num(v) { return Number(v ?? 0); }
 
-function authHeaders() {
-  const tok = localStorage.getItem("tfos_access_token");
-  return tok
-    ? { "Content-Type": "application/json", Authorization: `Bearer ${tok}` }
-    : { "Content-Type": "application/json" };
-}
+const CAT_LABEL = { FERTILIZER: "Fertilizer", PESTICIDE: "Pesticide", HERBICIDE: "Herbicide", FUNGICIDE: "Fungicide", SEED: "Seed", SEEDLING: "Seedling", TOOL: "Tool", PACKAGING: "Packaging", FUEL: "Fuel", OTHER: "Other" };
+const CAT_OPTIONS = Object.entries(CAT_LABEL).map(([value, label]) => ({ value, label }));
+const VIEWS = [["stock", "Stock", "Current snapshot"], ["movements", "Movements", "Audit feed"], ["reorder", "Reorder", "What to order"], ["suppliers", "Suppliers", "Who supplies"], ["analytics", "Analytics", "Value by category"]];
+const CRITICAL = new Set(["OUT_OF_STOCK", "REORDER_NOW"]);
+const statusBand = (s) => CRITICAL.has(s) ? "critical" : s === "LOW_STOCK" ? "low" : s === "NO_REORDER_SET" ? "unset" : "ok";
+const STATUS_COLOR = { critical: "var(--red)", low: "var(--amber)", ok: "var(--green-dk)", unset: "var(--muted)" };
+const itemValue = (i) => num(i.current_stock_qty) * num(i.unit_cost_fjd);
 
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
-                "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+async function getInputs(farmId) { const r = await fetch(`/api/v1/inputs${farmId ? `?farm_id=${encodeURIComponent(farmId)}` : ""}`, { headers: authHeaders() }); if (!r.ok) throw new Error(r.status); return (await r.json())?.data ?? []; }
+async function getMovements() { const r = await fetch("/api/v1/input-transactions", { headers: authHeaders() }); if (!r.ok) return []; return (await r.json())?.data ?? []; }
+async function getSuppliers() { const r = await fetch("/api/v1/suppliers", { headers: authHeaders() }); if (!r.ok) return []; const b = await r.json(); return b?.data ?? []; }
 
-function fmtDate(iso) {
-  if (!iso) return null;
-  const d = new Date(iso);
-  if (isNaN(d.getTime())) return String(iso);
-  const day = String(d.getUTCDate()).padStart(2, "0");
-  return `${day} ${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
-}
-
-function fmtQty(n) {
-  if (n === null || n === undefined) return null;
-  const num = Number(n);
-  if (isNaN(num)) return null;
-  return num.toFixed(1).replace(/\.0$/, "");
-}
-
-function fmtMoney(n) {
-  if (n === null || n === undefined) return null;
-  const num = Number(n);
-  if (isNaN(num)) return null;
-  return num.toFixed(2);
-}
-
-function StockBadge({ status }) {
-  // Real values from /inputs: ADEQUATE | LOW_STOCK | REORDER_NOW | OUT_OF_STOCK | NO_REORDER_SET
-  const map = {
-    ADEQUATE:       { bg: C.green,  fg: "#FFF",   label: "In stock" },
-    LOW_STOCK:      { bg: C.amber,  fg: "#FFF",   label: "Low" },
-    REORDER_NOW:    { bg: "#D4442E", fg: "#FFF",  label: "Reorder" },
-    OUT_OF_STOCK:   { bg: C.red,    fg: "#FFF",   label: "Out" },
-    NO_REORDER_SET: { bg: C.border, fg: C.soil,   label: "No reorder set" },
-  };
-  const s = map[status] || (status == null
-    ? { bg: C.green, fg: "#FFF", label: "In stock" }
-    : { bg: C.border, fg: C.soil, label: String(status) });
-  return (
-    <span className="inline-block px-2 py-0.5 rounded-full text-xs font-semibold" style={{ background: s.bg, color: s.fg }}>
-      {s.label}
-    </span>
-  );
-}
-
-function ChemicalTag() {
-  return (
-    <span
-      className="inline-block px-2 py-0.5 rounded-full text-xs font-semibold border"
-      style={{ borderColor: C.red, color: C.red, background: "#FFF" }}
-      title="Restricted chemical"
-    >
-      ⚗ Chemical
-    </span>
-  );
-}
-
-function ExpiringSoonTag() {
-  return (
-    <span
-      className="ml-2 inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase"
-      style={{ background: C.amber, color: "#FFF" }}
-    >
-      expires soon
-    </span>
-  );
-}
-
-function Muted({ children }) {
-  return <span style={{ color: C.muted }}>{children ?? "—"}</span>;
-}
-
-function HeaderBar() {
-  return (
-    <div className="flex items-start justify-between mb-6">
-      <div>
-        <h1 className="text-2xl font-bold" style={{ color: C.soil }}>
-          Inventory
-        </h1>
-        <p className="text-sm mt-1" style={{ color: C.muted }}>
-          Stock on hand
-        </p>
-      </div>
-      {/* Inventory creation is via the universal (+) shell button, not here. */}
-      <div />
-    </div>
-  );
-}
-
-function LoadingState() {
-  return (
-    <div
-      className="text-center py-16 text-sm"
-      style={{ color: C.muted }}
-      role="status"
-    >
-      Loading inventory…
-    </div>
-  );
-}
-
-function ErrorPanel({ message }) {
-  return (
-    <div
-      className="border rounded-lg px-4 py-3 text-sm"
-      style={{ background: "#FDECEC", borderColor: C.red, color: C.red }}
-      role="alert"
-    >
-      {message}
-    </div>
-  );
-}
-
-function EmptyState() {
-  return (
-    <div className="text-center py-16">
-      <p className="text-base font-semibold" style={{ color: C.soil }}>
-        No inventory yet
-      </p>
-      <p className="text-sm mt-1" style={{ color: C.muted }}>
-        Add your first item from the (+) button
-      </p>
-    </div>
-  );
-}
-
-function ItemCell({ row }) {
-  const primary = row.input_name || row.input_id || "—";
-  const secondary = row.input_category || "";
+function StockBar({ i }) {
+  const cur = num(i.current_stock_qty), rop = num(i.reorder_point_qty);
+  if (!rop) return <span className="stock-qty-text">{cur} {i.unit_of_measure}</span>;
+  const scale = rop * 2;
+  const fillPct = Math.max(2, Math.min(100, (cur / scale) * 100));
+  const band = statusBand(i.stock_status);
   return (
     <div>
-      <div className="font-semibold" style={{ color: C.soil }}>{primary}</div>
-      {secondary && (
-        <div className="text-xs mt-0.5 uppercase tracking-wide" style={{ color: C.muted }}>
-          {secondary}
-        </div>
-      )}
+      <span className="stock-qty-text">{cur} {i.unit_of_measure} <span style={{ color: "var(--muted)", fontSize: 11 }}>· min {rop}</span></span>
+      <div className="stock-progress-wrap"><div className="stock-progress-bar"><div className="stock-progress-fill" style={{ width: `${fillPct}%`, background: STATUS_COLOR[band] }} /><div className="stock-progress-min-marker" style={{ left: "50%" }} /></div></div>
     </div>
   );
 }
 
-function StockCell({ row }) {
-  const qty = fmtQty(row.current_stock_qty);
-  const unit = row.unit_of_measure || "";
-  if (qty === null) return <Muted />;
-  return <span>{qty}{unit ? ` ${unit}` : ""}</span>;
-}
-
-function ExpiryCell({ row }) {
-  const date = fmtDate(row.expiry_date);
-  if (!date) return <Muted />;
-  return (
-    <span>
-      {date}
-      {row.expiring_soon === true && <ExpiringSoonTag />}
-    </span>
-  );
-}
-
-function InventoryTable({ rows }) {
-  const thCls = "text-left px-3 py-2 text-xs font-semibold uppercase tracking-wide";
-  const tdCls = "px-3 py-2 text-sm align-top";
-  return (
-    <div
-      className="overflow-x-auto rounded-lg border"
-      style={{ borderColor: C.border, background: C.panel }}
-    >
-      <table className="w-full border-collapse">
-        <thead>
-          <tr style={{ background: C.cream, color: C.soil }}>
-            <th className={thCls}>Item</th>
-            <th className={thCls}>Stock</th>
-            <th className={thCls}>Status</th>
-            <th className={thCls}>Expiry</th>
-            <th className={thCls}>Unit cost (FJD)</th>
-            <th className={thCls}>Location</th>
-            <th className={thCls}>Chemical</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row, i) => {
-            const stripe = i % 2 === 0 ? C.panel : C.cream;
-            const cost = fmtMoney(row.unit_cost_fjd);
-            return (
-              <tr
-                key={row.input_id || i}
-                style={{ background: stripe, color: C.soil }}
-              >
-                <td className={tdCls}><ItemCell row={row} /></td>
-                <td className={tdCls}><StockCell row={row} /></td>
-                <td className={tdCls}><StockBadge status={row.stock_status} /></td>
-                <td className={tdCls}><ExpiryCell row={row} /></td>
-                <td className={tdCls}>{cost ?? <Muted />}</td>
-                <td className={tdCls}>
-                  {row.storage_location ? row.storage_location : <Muted />}
-                </td>
-                <td className={tdCls}>
-                  {row.is_chemical === true ? <ChemicalTag /> : null}
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-const NEEDS_ORDER = new Set(["OUT_OF_STOCK", "REORDER_NOW", "LOW_STOCK"]);
-
-function KpiStrip({ rows }) {
-  const skus = rows.length;
-  const value = rows.reduce((a, r) => a + (Number(r.current_stock_qty) || 0) * (Number(r.unit_cost_fjd) || 0), 0);
-  const reorder = rows.filter((r) => NEEDS_ORDER.has(r.stock_status)).length;
-  const expiring = rows.filter((r) => r.expiring_soon === true).length;
-  const tile = (label, val, color) => (
-    <div className="rounded-xl border p-3" style={{ background: C.panel, borderColor: C.border }}>
-      <div className="text-[10px] font-bold uppercase tracking-wider" style={{ color: C.muted }}>{label}</div>
-      <div className="text-xl font-extrabold mt-0.5" style={{ color: color || C.soil }}>{val}</div>
-    </div>
-  );
-  return (
-    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
-      {tile("SKUs", skus)}
-      {tile("Stock value", `FJD ${value.toLocaleString(undefined, { maximumFractionDigits: 0 })}`)}
-      {tile("To reorder", reorder, reorder ? C.amber : C.green)}
-      {tile("Expiring soon", expiring, expiring ? C.amber : C.green)}
-    </div>
-  );
-}
-
-function Tabs({ view, setView }) {
-  const TABS = [["stock", "Stock", "On hand"], ["reorder", "Reorder", "What to order"], ["movements", "Movements", "Audit feed"], ["suppliers", "Suppliers", "Who supplies"], ["analytics", "Analytics", "Value by category"]];
-  return (
-    <div className="flex gap-2 overflow-x-auto mb-3">
-      {TABS.map(([v, label, sub]) => (
-        <button key={v} onClick={() => setView(v)} className="px-3 py-2 rounded-lg text-sm font-semibold border text-left shrink-0"
-          style={{ borderColor: view === v ? C.green : C.border, background: view === v ? "#E9F2DD" : "#fff", color: C.soil }}>
-          {label}<span className="block text-[10px] font-normal" style={{ color: C.muted }}>{sub}</span>
-        </button>
-      ))}
-    </div>
-  );
-}
-
-function MovementsView({ rows, loading }) {
-  if (loading) return <Muted>Loading movements…</Muted>;
-  if (!rows.length) return <div className="rounded-lg border p-8 text-center text-sm" style={{ borderColor: C.border, background: C.panel, color: C.muted }}>No stock movements logged yet — receiving or using stock records here.</div>;
-  return (
-    <div className="overflow-x-auto rounded-lg border" style={{ borderColor: C.border, background: C.panel }}>
-      <table className="w-full border-collapse text-sm">
-        <thead><tr style={{ background: C.cream, color: C.soil }}>
-          {["Date", "Item", "Type", "Change", "Cost (FJD)"].map((h) => <th key={h} className="text-left px-3 py-2 text-xs font-semibold uppercase tracking-wide">{h}</th>)}
-        </tr></thead>
-        <tbody>
-          {rows.map((r, i) => {
-            const qc = Number(r.qty_change) || 0;
-            return (
-              <tr key={r.transaction_id || i} style={{ background: i % 2 ? C.cream : C.panel, color: C.soil }}>
-                <td className="px-3 py-2">{fmtDate(r.transaction_date) || <Muted />}</td>
-                <td className="px-3 py-2 font-medium">{r.input_name || r.input_id}</td>
-                <td className="px-3 py-2">{String(r.transaction_type || "").replace(/_/g, " ")}</td>
-                <td className="px-3 py-2 font-semibold" style={{ color: qc < 0 ? C.red : C.green }}>{qc > 0 ? "+" : ""}{fmtQty(qc)}</td>
-                <td className="px-3 py-2">{fmtMoney(r.total_cost_fjd) ?? <Muted />}</td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-function SuppliersView({ rows, loading }) {
-  if (loading) return <Muted>Loading suppliers…</Muted>;
-  if (!rows.length) return <div className="rounded-lg border p-8 text-center text-sm" style={{ borderColor: C.border, background: C.panel, color: C.muted }}>No suppliers added yet.</div>;
-  return (
-    <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-      {rows.map((s) => (
-        <div key={s.supplier_id} className="rounded-xl border p-3" style={{ borderColor: C.border, background: C.panel }}>
-          <div className="font-semibold" style={{ color: C.soil }}>{s.supplier_name}</div>
-          <div className="text-xs mt-0.5" style={{ color: C.muted }}>{s.supplier_type || "—"}{s.island ? ` · ${s.island}` : ""}</div>
-          {(s.phone || s.whatsapp_number) && <div className="text-xs mt-1" style={{ color: C.soil }}>{s.phone || s.whatsapp_number}</div>}
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function AnalyticsView({ rows }) {
-  const byCat = {};
-  for (const r of rows) {
-    const cat = r.input_category || "Other";
-    byCat[cat] = (byCat[cat] || 0) + (Number(r.current_stock_qty) || 0) * (Number(r.unit_cost_fjd) || 0);
-  }
-  const cats = Object.entries(byCat).sort((a, b) => b[1] - a[1]);
-  const total = cats.reduce((a, [, v]) => a + v, 0);
-  if (!cats.length || total === 0) return <div className="rounded-lg border p-8 text-center text-sm" style={{ borderColor: C.border, background: C.panel, color: C.muted }}>Stock value by category appears once items carry quantities and unit costs.</div>;
-  return (
-    <div className="rounded-xl border p-4 space-y-2" style={{ borderColor: C.border, background: C.panel }}>
-      <div className="text-sm font-semibold" style={{ color: C.soil }}>Stock value by category — FJD {total.toLocaleString(undefined, { maximumFractionDigits: 0 })}</div>
-      {cats.map(([cat, v]) => (
-        <div key={cat}>
-          <div className="flex justify-between text-xs mb-0.5" style={{ color: C.soil }}><span className="uppercase tracking-wide">{cat}</span><span>FJD {v.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span></div>
-          <div className="h-2 rounded-full" style={{ background: C.cream }}><div className="h-2 rounded-full" style={{ width: `${Math.round((v / total) * 100)}%`, background: C.green }} /></div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-export default function InventoryList() {
-  const [rows, setRows] = useState([]);
-  const [movements, setMovements] = useState([]);
-  const [suppliers, setSuppliers] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [auxLoading, setAuxLoading] = useState(true);
-  const [error, setError] = useState("");
+function InventoryInner() {
+  const qc = useQueryClient();
+  const { farmId } = useCurrentFarm();
   const [view, setView] = useState("stock");
+  const [cat, setCat] = useState("all");
+  const [status, setStatus] = useState("all");
+  const [q, setQ] = useState("");
+  const [addOpen, setAddOpen] = useState(false);
+  const [move, setMove] = useState(null); // {input, kind:'PURCHASE'|'USAGE'}
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      setLoading(true); setError("");
-      try {
-        const res = await fetch("/api/v1/inputs", { headers: authHeaders() });
-        if (!res.ok) {
-          let msg = `Request failed (${res.status})`;
-          try { const body = await res.json(); msg = body?.detail?.message || body?.detail || body?.message || msg; } catch (_) { /* ignore */ }
-          if (!cancelled) setError(typeof msg === "string" ? msg : JSON.stringify(msg));
-          return;
-        }
-        const body = await res.json();
-        if (!cancelled) setRows(Array.isArray(body?.data) ? body.data : []);
-      } catch (e) {
-        if (!cancelled) setError(e?.message || "Network error");
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-      // Movements + suppliers are independently fail-soft (don't block the page).
-      try {
-        const [mv, sp] = await Promise.allSettled([
-          fetch("/api/v1/input-transactions", { headers: authHeaders() }).then((r) => (r.ok ? r.json() : null)),
-          fetch("/api/v1/suppliers", { headers: authHeaders() }).then((r) => (r.ok ? r.json() : null)),
-        ]);
-        if (!cancelled) {
-          setMovements(mv.status === "fulfilled" && Array.isArray(mv.value?.data) ? mv.value.data : []);
-          setSuppliers(sp.status === "fulfilled" && Array.isArray(sp.value?.data) ? sp.value.data : []);
-        }
-      } finally {
-        if (!cancelled) setAuxLoading(false);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, []);
+  const inputsQ = useQuery({ queryKey: ["inputs", farmId], queryFn: () => getInputs(farmId), enabled: !!farmId });
+  const movesQ = useQuery({ queryKey: ["moves"], queryFn: getMovements, enabled: view === "movements" });
+  const supsQ = useQuery({ queryKey: ["suppliers"], queryFn: getSuppliers, enabled: view === "suppliers" || addOpen || !!move });
+  const items = inputsQ.data ?? [];
+  const suppliers = supsQ.data ?? [];
+  const supName = (id) => suppliers.find((s) => s.supplier_id === id)?.supplier_name;
 
-  const reorderRows = rows.filter((r) => NEEDS_ORDER.has(r.stock_status));
+  const totalValue = items.reduce((s, i) => s + itemValue(i), 0);
+  const critical = items.filter((i) => CRITICAL.has(i.stock_status)).length;
+  const low = items.filter((i) => i.stock_status === "LOW_STOCK").length;
+  const chemValue = items.filter((i) => ["PESTICIDE", "HERBICIDE", "FUNGICIDE"].includes(i.input_category)).reduce((s, i) => s + itemValue(i), 0);
+  const fuelValue = items.filter((i) => i.input_category === "FUEL").reduce((s, i) => s + itemValue(i), 0);
+  const catsPresent = useMemo(() => { const m = {}; items.forEach((i) => { m[i.input_category] = (m[i.input_category] || 0) + 1; }); return m; }, [items]);
+
+  let rows = items.slice();
+  if (cat !== "all") rows = rows.filter((i) => i.input_category === cat);
+  if (status !== "all") rows = rows.filter((i) => statusBand(i.stock_status) === status);
+  if (q.trim()) { const qq = q.toLowerCase(); rows = rows.filter((i) => `${i.input_name} ${i.input_id} ${i.storage_location || ""}`.toLowerCase().includes(qq)); }
+  const reorderItems = items.filter((i) => CRITICAL.has(i.stock_status));
+
+  const refetch = () => qc.invalidateQueries({ queryKey: ["inputs", farmId] });
 
   return (
-    <div style={{ background: C.cream, minHeight: "100%" }}>
-      <div style={{ maxWidth: 1200, margin: "0 auto", padding: 24 }}>
-        <HeaderBar />
-        {loading ? <LoadingState />
-          : error ? <ErrorPanel message={error} />
-          : (
-            <>
-              <KpiStrip rows={rows} />
-              <Tabs view={view} setView={setView} />
-              {view === "stock" && (rows.length === 0 ? <EmptyState /> : <InventoryTable rows={rows} />)}
-              {view === "reorder" && (reorderRows.length === 0
-                ? <div className="rounded-lg border p-8 text-center text-sm" style={{ borderColor: C.border, background: C.panel, color: C.greenDk || C.green }}>Nothing to reorder — every item is above its reorder point.</div>
-                : <InventoryTable rows={reorderRows} />)}
-              {view === "movements" && <MovementsView rows={movements} loading={auxLoading} />}
-              {view === "suppliers" && <SuppliersView rows={suppliers} loading={auxLoading} />}
-              {view === "analytics" && <AnalyticsView rows={rows} />}
-            </>
-          )}
+    <TfpShell>
+      <main className="main-content">
+        <div className="main-inner">
+          <div className="page-header">
+            <div><h1>Inventory</h1><div className="subtitle">Seed, fertilizer, chemicals, fuel · what you hold and what to reorder</div></div>
+            <div className="page-actions">
+              <FarmSelector />
+              <button className="btn btn-primary" onClick={() => setAddOpen(true)}><Plus size={13} />Add item</button>
+            </div>
+          </div>
+
+          <div className="capital-strip" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))" }}>
+            <div className="capital-tile total"><div className="capital-tile-label">Total inventory value</div><div className="capital-tile-value">{fjd0(totalValue)}</div><div className="capital-tile-sub">capital tied up</div></div>
+            <div className="capital-tile critical"><div className="capital-tile-label">Critical items</div><div className={`capital-tile-value ${critical > 0 ? "critical" : ""}`} style={{ color: critical > 0 ? "var(--red)" : null }}>{critical}</div><div className="capital-tile-sub">order now</div></div>
+            <div className="capital-tile low"><div className="capital-tile-label">Low items</div><div className="capital-tile-value" style={{ color: low > 0 ? "var(--amber)" : null }}>{low}</div><div className="capital-tile-sub">in buffer</div></div>
+            <div className="capital-tile"><div className="capital-tile-label">In chemicals</div><div className="capital-tile-value">{fjd0(chemValue)}</div><div className="capital-tile-sub">WHD-tracked</div></div>
+            <div className="capital-tile"><div className="capital-tile-label">In fuel</div><div className="capital-tile-value">{fjd0(fuelValue)}</div><div className="capital-tile-sub">fast-turning</div></div>
+          </div>
+
+          <div className="cycle-view-tabs">
+            {VIEWS.map(([id, l, s]) => <div key={id} className={`task-tab ${view === id ? "active" : ""}`} onClick={() => setView(id)}>{l}<span className="task-tab-count" style={{ fontSize: 10 }}>{s}</span></div>)}
+          </div>
+
+          {!farmId ? <div className="card" style={{ padding: 20, color: "var(--muted)" }}>Select a farm to see its inventory.</div>
+            : inputsQ.isLoading ? <div className="card" style={{ padding: 20, color: "var(--muted)" }}>Loading…</div>
+            : view === "stock" ? (
+              <>
+                <div className="gallery-filter-row" style={{ marginBottom: 8 }}>
+                  <span style={{ fontSize: 10.5, color: "var(--muted)", textTransform: "uppercase", letterSpacing: ".5px", marginRight: 6, alignSelf: "center" }}>Category:</span>
+                  <button className={`filter-pill ${cat === "all" ? "active" : ""}`} onClick={() => setCat("all")}>All<span className="filter-pill-count">{items.length}</span></button>
+                  {Object.entries(catsPresent).map(([c, n]) => <button key={c} className={`filter-pill ${cat === c ? "active" : ""}`} onClick={() => setCat(c)}>{CAT_LABEL[c] || c}<span className="filter-pill-count">{n}</span></button>)}
+                </div>
+                <div className="task-controls-row" style={{ marginBottom: 10, flexWrap: "wrap" }}>
+                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                    <span style={{ fontSize: 10.5, color: "var(--muted)", textTransform: "uppercase", letterSpacing: ".5px" }}>Status:</span>
+                    <select value={status} onChange={(e) => setStatus(e.target.value)} style={{ padding: "5px 10px", borderRadius: 5, border: "1px solid var(--line)", background: "var(--paper)", fontSize: 12 }}>
+                      <option value="all">All status</option><option value="critical">Critical</option><option value="low">Low</option><option value="ok">OK</option>
+                    </select>
+                  </div>
+                  <div style={{ flex: 1, minWidth: 180, position: "relative" }}>
+                    <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search by name, SKU, location..." style={{ width: "100%", padding: "7px 12px 7px 34px", border: "1.5px solid var(--line)", borderRadius: 7, fontSize: 13, background: "var(--paper)" }} />
+                    <span style={{ position: "absolute", left: 11, top: "50%", transform: "translateY(-50%)", color: "var(--muted)", pointerEvents: "none" }}><Search size={13} /></span>
+                  </div>
+                </div>
+                {items.length === 0 ? <div className="card" style={{ padding: 28, textAlign: "center", color: "var(--muted)" }}>No items yet — add your seed, fertilizer, chemicals or fuel to track stock.</div>
+                  : rows.length === 0 ? <div className="card" style={{ padding: 40, textAlign: "center", color: "var(--muted)" }}>No items match these filters.</div>
+                  : <div className="inventory-table-wrap"><table className="inventory-table">
+                    <thead><tr><th>Item</th><th>Category</th><th>On hand</th><th>Value</th><th style={{ textAlign: "right" }}>Move</th></tr></thead>
+                    <tbody>{rows.map((i) => (
+                      <tr key={i.input_id}>
+                        <td><div style={{ fontWeight: 600, color: "var(--soil)" }}>{i.input_name}</div><div style={{ fontSize: 11, color: "var(--muted)" }}>{i.input_id}{i.storage_location ? ` · ${i.storage_location}` : ""}{i.expiring_soon ? " · ⚠ expiring" : ""}</div></td>
+                        <td><span style={{ fontSize: 11.5, color: "var(--muted)" }}>{CAT_LABEL[i.input_category] || i.input_category}</span></td>
+                        <td><StockBar i={i} /></td>
+                        <td style={{ fontFamily: "Menlo,monospace", fontSize: 12 }}>{i.unit_cost_fjd ? fjd2(itemValue(i)) : "—"}</td>
+                        <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                          <button className="btn btn-secondary btn-sm" title="Receive" onClick={() => setMove({ input: i, kind: "PURCHASE" })}><ArrowDownToLine size={12} /></button>{" "}
+                          <button className="btn btn-secondary btn-sm" title="Use" onClick={() => setMove({ input: i, kind: "USAGE" })}><ArrowUpFromLine size={12} /></button>
+                        </td>
+                      </tr>
+                    ))}</tbody>
+                  </table></div>}
+              </>
+            ) : view === "reorder" ? (
+              reorderItems.length === 0 ? <div className="card" style={{ padding: 28, textAlign: "center", color: "var(--muted)" }}>Nothing to reorder — all items are above their reorder point.</div>
+                : <div className="reorder-grid">{reorderItems.map((i) => (
+                  <div className="reorder-card" key={i.input_id}>
+                    <div className="reorder-card-head"><span className="reorder-card-title">{i.input_name}</span><span style={{ fontSize: 11, fontWeight: 700, color: "var(--red)" }}>{i.stock_status === "OUT_OF_STOCK" ? "OUT" : "REORDER"}</span></div>
+                    <div className="reorder-card-meta">On hand {num(i.current_stock_qty)} {i.unit_of_measure} · min {num(i.reorder_point_qty)}{i.reorder_qty ? ` · order ${num(i.reorder_qty)}` : ""}</div>
+                    {i.preferred_supplier_id && <div className="reorder-card-supplier-mini">Supplier: {supName(i.preferred_supplier_id) || i.preferred_supplier_id}</div>}
+                    <div className="reorder-card-actions"><button className="btn btn-primary btn-sm" onClick={() => setMove({ input: i, kind: "PURCHASE" })}><ArrowDownToLine size={12} />Receive stock</button></div>
+                  </div>
+                ))}</div>
+            ) : view === "movements" ? (
+              movesQ.isLoading ? <div className="card" style={{ padding: 16, color: "var(--muted)" }}>Loading…</div>
+                : (movesQ.data ?? []).length === 0 ? <div className="card" style={{ padding: 24, textAlign: "center", color: "var(--muted)" }}>No stock movements yet — receiving or using stock records here.</div>
+                : <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>{(movesQ.data ?? []).map((m) => (
+                  <div key={m.txn_id} className="card" style={{ padding: "9px 13px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <div><div style={{ fontWeight: 600, color: "var(--soil)", fontSize: 13 }}>{m.input_name} <span style={{ color: m.txn_type === "PURCHASE" ? "var(--green-dk)" : "var(--amber)", fontWeight: 700 }}>· {m.txn_type}</span></div><div style={{ fontSize: 11, color: "var(--muted)" }}>{String(m.transaction_date).slice(0, 10)} · {num(m.quantity)} {m.unit}{m.total_cost_fjd ? ` · ${fjd2(m.total_cost_fjd)}` : ""}</div></div>
+                  </div>
+                ))}</div>
+            ) : view === "suppliers" ? (
+              supsQ.isLoading ? <div className="card" style={{ padding: 16, color: "var(--muted)" }}>Loading…</div>
+                : suppliers.length === 0 ? <div className="card" style={{ padding: 24, textAlign: "center", color: "var(--muted)" }}>No suppliers added yet.</div>
+                : <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(220px,1fr))", gap: 10 }}>{suppliers.map((s) => (
+                  <div key={s.supplier_id} className="card" style={{ padding: "12px 14px" }}><div style={{ fontWeight: 700, color: "var(--soil)" }}>{s.supplier_name}</div><div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 2 }}>{s.supplier_type || "—"}{s.island ? ` · ${s.island}` : ""}{s.phone ? ` · ${s.phone}` : ""}</div></div>
+                ))}</div>
+            ) : <AnalyticsView items={items} />}
+        </div>
+      </main>
+
+      {addOpen && <AddInputModal farmId={farmId} suppliers={suppliers} onClose={() => setAddOpen(false)} onSaved={() => { refetch(); setAddOpen(false); }} />}
+      {move && <MoveModal farmId={farmId} input={move.input} kind={move.kind} suppliers={suppliers} onClose={() => setMove(null)} onSaved={() => { refetch(); qc.invalidateQueries({ queryKey: ["moves"] }); setMove(null); }} />}
+    </TfpShell>
+  );
+}
+
+function AnalyticsView({ items }) {
+  const byCat = useMemo(() => {
+    const m = {};
+    items.forEach((i) => { const k = i.input_category; (m[k] = m[k] || { cat: k, value: 0, count: 0 }); m[k].value += itemValue(i); m[k].count += 1; });
+    return Object.values(m).sort((a, b) => b.value - a.value);
+  }, [items]);
+  if (!byCat.length) return <div className="card" style={{ padding: 24, textAlign: "center", color: "var(--muted)" }}>Stock value by category appears once you add items with a unit cost.</div>;
+  const max = byCat.reduce((m, r) => Math.max(m, r.value), 0) || 1;
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      {byCat.map((r) => (
+        <div key={r.cat}>
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5, color: "var(--soil)", fontWeight: 600, marginBottom: 4 }}><span>{CAT_LABEL[r.cat] || r.cat} · {r.count} item{r.count === 1 ? "" : "s"}</span><span>{fjd0(r.value)}</span></div>
+          <div style={{ height: 8, borderRadius: 999, background: "var(--cream-2,#efe7d6)" }}><div style={{ height: 8, borderRadius: 999, width: `${(r.value / max) * 100}%`, background: "var(--green-dk)" }} /></div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function Field({ label, children }) { return <div className="form-row"><label>{label}</label>{children}</div>; }
+
+function AddInputModal({ farmId, suppliers, onClose, onSaved }) {
+  const [f, setF] = useState({ input_name: "", input_category: "FERTILIZER", unit_of_measure: "kg", current_stock_qty: "0", reorder_point_qty: "", reorder_qty: "", unit_cost_fjd: "", preferred_supplier_id: "", storage_location: "" });
+  const [busy, setBusy] = useState(false);
+  const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }));
+  async function submit() {
+    if (!f.input_name.trim()) { emitToast("Item name is required"); return; }
+    setBusy(true);
+    try {
+      const r = await fetch("/api/v1/inputs", { method: "POST", headers: authHeaders(), body: JSON.stringify({
+        farm_id: farmId, input_name: f.input_name.trim(), input_category: f.input_category, unit_of_measure: f.unit_of_measure.trim() || "unit",
+        current_stock_qty: Number(f.current_stock_qty) || 0, reorder_point_qty: f.reorder_point_qty ? Number(f.reorder_point_qty) : null,
+        reorder_qty: f.reorder_qty ? Number(f.reorder_qty) : null, unit_cost_fjd: f.unit_cost_fjd ? Number(f.unit_cost_fjd) : null,
+        preferred_supplier_id: f.preferred_supplier_id || null, storage_location: f.storage_location.trim() || null }) });
+      if (!r.ok) { let m = "Could not add item"; try { const b = await r.json(); m = b?.detail || m; } catch {} emitToast(typeof m === "string" ? m : "Could not add item"); return; }
+      emitToast("Item added"); onSaved?.();
+    } catch { emitToast("Could not add item"); } finally { setBusy(false); }
+  }
+  return (
+    <div className="overlay-backdrop show" onClick={onClose}>
+      <div className="overlay-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="overlay-head"><h2>Add inventory item</h2><button className="overlay-close" onClick={onClose}><X size={14} /></button></div>
+        <div className="overlay-body">
+          <div className="form-row" style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 10 }}>
+            <div><label>Item name</label><input value={f.input_name} onChange={set("input_name")} placeholder="e.g. NPK 13-13-21" /></div>
+            <div><label>Category</label><select value={f.input_category} onChange={set("input_category")}>{CAT_OPTIONS.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}</select></div>
+          </div>
+          <div className="form-row" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginTop: 10 }}>
+            <div><label>Unit</label><input value={f.unit_of_measure} onChange={set("unit_of_measure")} placeholder="kg / L / unit" /></div>
+            <div><label>On hand</label><input type="number" min="0" step="0.01" value={f.current_stock_qty} onChange={set("current_stock_qty")} /></div>
+            <div><label>Unit cost (FJD)</label><input type="number" min="0" step="0.01" value={f.unit_cost_fjd} onChange={set("unit_cost_fjd")} /></div>
+          </div>
+          <div className="form-row" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 10 }}>
+            <div><label>Reorder point</label><input type="number" min="0" step="0.01" value={f.reorder_point_qty} onChange={set("reorder_point_qty")} placeholder="alert below this" /></div>
+            <div><label>Reorder qty</label><input type="number" min="0" step="0.01" value={f.reorder_qty} onChange={set("reorder_qty")} placeholder="how much to buy" /></div>
+          </div>
+          <div className="form-row" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 10 }}>
+            <div><label>Supplier</label><select value={f.preferred_supplier_id} onChange={set("preferred_supplier_id")}><option value="">—</option>{suppliers.map((s) => <option key={s.supplier_id} value={s.supplier_id}>{s.supplier_name}</option>)}</select></div>
+            <div><label>Storage location</label><input value={f.storage_location} onChange={set("storage_location")} placeholder="e.g. Shed A" /></div>
+          </div>
+        </div>
+        <div className="overlay-foot"><button className="btn btn-secondary" onClick={onClose}>Cancel</button><button className="btn btn-primary" onClick={submit} disabled={busy}>{busy ? "Adding…" : "Add item"}</button></div>
       </div>
     </div>
+  );
+}
+
+function MoveModal({ farmId, input, kind, suppliers, onClose, onSaved }) {
+  const receive = kind === "PURCHASE";
+  const [qty, setQty] = useState("");
+  const [cost, setCost] = useState(input.unit_cost_fjd ? String(input.unit_cost_fjd) : "");
+  const [supplier, setSupplier] = useState(input.preferred_supplier_id || "");
+  const [busy, setBusy] = useState(false);
+  async function submit() {
+    if (!Number(qty)) { emitToast("Enter a quantity"); return; }
+    setBusy(true);
+    try {
+      const r = await fetch("/api/v1/input-transactions", { method: "POST", headers: authHeaders(), body: JSON.stringify({
+        input_id: input.input_id, farm_id: farmId, transaction_type: kind, transaction_date: todayISO(),
+        quantity: Number(qty), unit: input.unit_of_measure,
+        ...(receive ? { unit_cost_fjd: cost ? Number(cost) : null, supplier_id: supplier || null } : {}) }) });
+      if (!r.ok) throw new Error();
+      emitToast(receive ? "Stock received" : "Stock used"); onSaved?.();
+    } catch { emitToast("Could not record movement"); } finally { setBusy(false); }
+  }
+  return (
+    <div className="overlay-backdrop show" onClick={onClose}>
+      <div className="overlay-modal" style={{ maxWidth: 460 }} onClick={(e) => e.stopPropagation()}>
+        <div className="overlay-head"><h2>{receive ? "Receive stock" : "Use stock"} — {input.input_name}</h2><button className="overlay-close" onClick={onClose}><X size={14} /></button></div>
+        <div className="overlay-body">
+          <div style={{ fontSize: 12.5, color: "var(--muted)", marginBottom: 12 }}>On hand: {num(input.current_stock_qty)} {input.unit_of_measure}. {receive ? "Receiving adds to" : "Using subtracts from"} on-hand stock.</div>
+          <div className="form-row" style={{ display: "grid", gridTemplateColumns: receive ? "1fr 1fr" : "1fr", gap: 10 }}>
+            <div><label>Quantity ({input.unit_of_measure})</label><input type="number" min="0" step="0.01" value={qty} onChange={(e) => setQty(e.target.value)} autoFocus /></div>
+            {receive && <div><label>Unit cost (FJD)</label><input type="number" min="0" step="0.01" value={cost} onChange={(e) => setCost(e.target.value)} /></div>}
+          </div>
+          {receive && <Field label="Supplier"><select value={supplier} onChange={(e) => setSupplier(e.target.value)}><option value="">—</option>{suppliers.map((s) => <option key={s.supplier_id} value={s.supplier_id}>{s.supplier_name}</option>)}</select></Field>}
+        </div>
+        <div className="overlay-foot"><button className="btn btn-secondary" onClick={onClose}>Cancel</button><button className="btn btn-primary" onClick={submit} disabled={busy}>{busy ? "Saving…" : receive ? "Receive" : "Use"}</button></div>
+      </div>
+    </div>
+  );
+}
+
+const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false, staleTime: 60_000 } } });
+export default function InventoryList() {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <CurrentFarmProvider>
+        <InventoryInner />
+      </CurrentFarmProvider>
+    </QueryClientProvider>
   );
 }
