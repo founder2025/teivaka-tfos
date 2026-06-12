@@ -1,19 +1,17 @@
 /**
  * Register.jsx — Teivaka Farm OS Registration Page
  *
- * Two-step flow:
- *   Step 1: Privacy Policy & Terms of Service acceptance (hard gate)
- *   Step 2: Full registration form with fraud-prevention fields
- *
- * Features:
- *   - Privacy acceptance required before form is shown
- *   - Password field hidden by default, eye-icon toggle to reveal
- *   - Strong password indicator (visual strength bar)
- *   - E.164 phone number formatting hint
- *   - Real-time field validation with clear error messages
- *   - Account type selector (Farmer / Supplier / Buyer / Other)
- *   - Date of birth with age gate messaging
- *   - Fully responsive — optimised for mobile field workers
+ * Single-screen flow:
+ *   - Privacy Policy & Terms acceptance via checkbox (links to full /privacy + /terms
+ *     pages — NO scroll-wall; the old "scroll to the bottom to unlock" gate was a
+ *     mobile conversion trap and has been removed).
+ *   - Full registration form with the real 8-profession taxonomy + smart "Other".
+ *   - Password field hidden by default, eye-icon toggle to reveal.
+ *   - E.164 phone number formatting with searchable country-code dropdown.
+ *   - Field validation with clear, human-readable error messages (FastAPI 422 arrays
+ *     are parsed — never rendered as "[object Object]").
+ *   - Verify-later: account is created immediately; high-trust roles (Banker /
+ *     Exporter / Importer / Business) show a "pending verification" note on success.
  *
  * API: POST /api/v1/auth/register
  */
@@ -35,20 +33,68 @@ const COUNTRY_CODES = [
 ];
 
 // ---------------------------------------------------------------------------
-// Constants
+// Account-type taxonomy — these 8 values are the ONLY ones the backend accepts
+// (auth.py valid_account_type). Keep this list in lockstep with that validator.
 // ---------------------------------------------------------------------------
 
 const ACCOUNT_TYPES = [
-  { value: "FARMER",   label: "Farmer",   icon: "🌱" },
-  { value: "SUPPLIER", label: "Supplier", icon: "🏭" },
-  { value: "BUYER",    label: "Buyer",    icon: "🛒" },
-  { value: "OTHER",    label: "Other",    icon: "👤" },
+  { value: "FARMER",           label: "Farmer",          icon: "🌱" },
+  { value: "BUYER",            label: "Buyer",           icon: "🛒" },
+  { value: "SUPPLIER",         label: "Supplier",        icon: "🏭" },
+  { value: "SERVICE_PROVIDER", label: "Service Provider", icon: "🛠️" },
+  { value: "BANKER",           label: "Banker / Lender", icon: "🏦" },
+  { value: "BUSINESS",         label: "Business",        icon: "🏢" },
+  { value: "EXPORTER",         label: "Exporter",        icon: "🚢" },
+  { value: "IMPORTER",         label: "Importer",        icon: "📦" },
 ];
 
+// Roles whose privileged capabilities unlock only after manual/KYC verification.
+// Signup is still instant (verify-later); these just carry a "pending" note.
+const HIGH_TRUST = new Set(["BANKER", "EXPORTER", "IMPORTER", "BUSINESS"]);
+
+// Smart "Other" — map a free-text role to the nearest valid account_type instead
+// of silently dumping everything to BUSINESS. Ordered most-specific first.
+const OTHER_KEYWORD_MAP = [
+  [/bank|lender|loan|credit|financ|microfinanc/i, "BANKER"],
+  [/export/i,                                      "EXPORTER"],
+  [/import/i,                                      "IMPORTER"],
+  [/suppl|input|seed|fertili|vendor|wholesal/i,    "SUPPLIER"],
+  [/buy|retail|grocer|market|shop|trader/i,        "BUYER"],
+  [/servic|agronom|consult|\bvet\b|extension|transport|logistic|contractor|advis/i, "SERVICE_PROVIDER"],
+  [/farm|grow|plant|crop|livestock|poultry|garden|plantation|fish/i, "FARMER"],
+];
+
+function mapOtherRole(text) {
+  const t = (text || "").trim();
+  if (!t) return "BUSINESS";
+  for (const [re, type] of OTHER_KEYWORD_MAP) if (re.test(t)) return type;
+  return "BUSINESS";
+}
+
+const ACCOUNT_LABEL = Object.fromEntries(ACCOUNT_TYPES.map((t) => [t.value, t.label]));
 const PRIVACY_POLICY_VERSION = "1.0";
 
 // ---------------------------------------------------------------------------
-// Password complexity check (kept simple — no strength meter)
+// Parse whatever FastAPI returns in `detail` into a human-readable string.
+// 200/4xx string → as-is. 422 validation → array of {msg, loc}. Object → .msg.
+// Without this, React renders an array/object as "[object Object]".
+// ---------------------------------------------------------------------------
+
+function extractErrorMessage(detail) {
+  if (!detail) return "Registration failed. Please try again.";
+  if (typeof detail === "string") return detail;
+  if (Array.isArray(detail)) {
+    const msgs = detail
+      .map((d) => (typeof d === "string" ? d : d?.msg))
+      .filter(Boolean);
+    return msgs.length ? msgs.join(" · ") : "Please check the highlighted fields and try again.";
+  }
+  if (typeof detail === "object") return detail.msg || detail.message || "Registration failed. Please try again.";
+  return String(detail);
+}
+
+// ---------------------------------------------------------------------------
+// Password complexity check
 // ---------------------------------------------------------------------------
 
 function passwordComplexityError(pw) {
@@ -75,7 +121,9 @@ function Field({ label, id, error, hint, children }) {
       </label>
       {children}
       {hint && !error && <p className="text-xs text-gray-400 mt-1">{hint}</p>}
-      {error && <p className="text-xs text-red-500 mt-1">⚠ {error}</p>}
+      {error && (
+        <p className="text-xs text-red-500 mt-1" role="alert">⚠ {error}</p>
+      )}
     </div>
   );
 }
@@ -106,151 +154,7 @@ function EyeIcon({ open }) {
 }
 
 // ---------------------------------------------------------------------------
-// Step 1: Privacy Policy Gate
-// ---------------------------------------------------------------------------
-
-function PrivacyGate({ onAccept }) {
-  const [scrolledToBottom, setScrolledToBottom] = useState(false);
-  const [accepted, setAccepted] = useState(false);
-
-  function handleScroll(e) {
-    const el = e.target;
-    const atBottom = el.scrollHeight - el.scrollTop <= el.clientHeight + 40;
-    if (atBottom) setScrolledToBottom(true);
-  }
-
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-green-50 to-emerald-100 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg">
-        {/* Header */}
-        <div className="rounded-t-2xl px-6 py-5 text-center" style={{ background: "#F8F3E9", borderBottom: "1px solid #E5DCC9" }}>
-          <img src="/teivaka_logo.png" alt="Teivaka" style={{ height: 88, width: "auto", display: "block", margin: "0 auto 10px" }} />
-          <h1 className="text-xl font-bold" style={{ color: "#5C4033" }}>Welcome to Teivaka Farm OS</h1>
-          <p className="text-sm mt-1" style={{ color: "#5C4033", opacity: 0.7 }}>
-            Please read and accept our policies before continuing
-          </p>
-        </div>
-
-        {/* Policy text */}
-        <div
-          className="mx-6 mt-5 h-64 overflow-y-auto border border-gray-200 rounded-lg p-4 text-sm text-gray-600 leading-relaxed bg-gray-50"
-          onScroll={handleScroll}
-        >
-          <h2 className="font-bold text-gray-800 mb-2">Privacy Policy — Version {PRIVACY_POLICY_VERSION}</h2>
-          <p className="mb-3">
-            Teivaka Limited ("Teivaka", "we", "us") operates the Teivaka Farm Operating System
-            (TFOS). This policy explains how we collect, use, and protect your personal information.
-          </p>
-
-          <h3 className="font-semibold text-gray-700 mb-1">1. Information We Collect</h3>
-          <p className="mb-3">
-            When you register, we collect your full name, email address, phone number,
-            date of birth, country of residence, and account type. We also record your
-            IP address and device information at registration to prevent fraud and protect
-            the platform community.
-          </p>
-
-          <h3 className="font-semibold text-gray-700 mb-1">2. How We Use Your Information</h3>
-          <p className="mb-3">
-            Your data is used to operate your farm account, send operational alerts via
-            WhatsApp, provide AI-assisted farming intelligence (TIS), and improve our
-            platform. We do not sell your data to third parties.
-          </p>
-
-          <h3 className="font-semibold text-gray-700 mb-1">3. Data Security</h3>
-          <p className="mb-3">
-            All data is encrypted in transit (TLS 1.3) and at rest. Passwords are hashed
-            using bcrypt and are never stored in plain text. Access to your data is
-            protected by row-level security — no other tenant can access your farm data.
-          </p>
-
-          <h3 className="font-semibold text-gray-700 mb-1">4. Fraud Prevention</h3>
-          <p className="mb-3">
-            To protect all platform users, we log registration attempts, IP addresses,
-            and device fingerprints. Accounts found to be fraudulent or spam will be
-            permanently suspended without refund.
-          </p>
-
-          <h3 className="font-semibold text-gray-700 mb-1">5. Your Rights</h3>
-          <p className="mb-3">
-            You may request access to, correction of, or deletion of your personal data
-            at any time by contacting support@teivaka.com. Data deletion requests will be
-            processed within 30 days.
-          </p>
-
-          <h3 className="font-semibold text-gray-700 mb-1">6. Age Requirement</h3>
-          <p className="mb-3">
-            You must be at least 18 years old to register. By providing your date of birth,
-            you confirm you meet this requirement.
-          </p>
-
-          <h2 className="font-bold text-gray-800 mb-2 mt-4">Terms of Service</h2>
-          <p className="mb-3">
-            By registering, you agree to use Teivaka Farm OS only for lawful agricultural
-            business purposes. You are responsible for all activity under your account.
-            Misuse, including spam, false information, or unauthorised access attempts,
-            will result in immediate account termination.
-          </p>
-
-          <p className="text-xs text-gray-400 mt-4 text-center">
-            — End of Policy — Scroll to the bottom to accept
-          </p>
-        </div>
-
-        {/* Acceptance checkbox */}
-        <div className="px-6 mt-4">
-          <label className={`flex items-start gap-3 cursor-pointer p-3 rounded-lg border transition-colors ${
-            scrolledToBottom
-              ? "border-emerald-300 bg-emerald-50 hover:bg-emerald-100"
-              : "border-gray-200 bg-gray-50 opacity-50 cursor-not-allowed"
-          }`}>
-            <input
-              type="checkbox"
-              disabled={!scrolledToBottom}
-              checked={accepted}
-              onChange={(e) => setAccepted(e.target.checked)}
-              className="mt-0.5 h-4 w-4 accent-emerald-600"
-            />
-            <span className="text-sm text-gray-700">
-              I have read and agree to Teivaka's{" "}
-              <span className="font-semibold text-emerald-700">Privacy Policy</span>{" "}
-              and{" "}
-              <span className="font-semibold text-emerald-700">Terms of Service</span>.
-              I confirm I am at least 18 years old.
-            </span>
-          </label>
-          {!scrolledToBottom && (
-            <p className="text-xs text-gray-400 mt-1 ml-1">
-              ↑ Please scroll through the full policy above to enable this checkbox.
-            </p>
-          )}
-        </div>
-
-        {/* CTA */}
-        <div className="px-6 pb-6 mt-4">
-          <button
-            disabled={!accepted}
-            onClick={() => onAccept(true)}
-            className={`w-full py-3 rounded-xl font-semibold text-white transition-all ${
-              accepted
-                ? "bg-emerald-600 hover:bg-emerald-700 shadow-md hover:shadow-lg"
-                : "bg-gray-300 cursor-not-allowed"
-            }`}
-          >
-            Accept & Continue to Registration
-          </button>
-          <p className="text-center text-xs text-gray-400 mt-3">
-            Already have an account?{" "}
-            <a href="/login" className="text-emerald-600 hover:underline font-medium">Sign in</a>
-          </p>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Step 2: Registration Form
+// Registration Form (single screen)
 // ---------------------------------------------------------------------------
 
 function RegistrationForm({ onSuccess }) {
@@ -267,6 +171,13 @@ function RegistrationForm({ onSuccess }) {
     referral_source: "",
     referral_code: "",
   });
+
+  // Smart "Other" role capture.
+  const [otherOpen, setOtherOpen] = useState(false);
+  const [otherText, setOtherText] = useState("");
+
+  // Policy acceptance (checkbox only — no scroll-wall).
+  const [policyAccepted, setPolicyAccepted] = useState(false);
 
   // Pre-fill invite code from sessionStorage (set by landing page ?ref=XXXX capture).
   useEffect(() => {
@@ -312,6 +223,21 @@ function RegistrationForm({ onSuccess }) {
     setServerError("");
   }
 
+  function selectAccountType(value) {
+    setOtherOpen(false);
+    update("account_type", value);
+  }
+
+  function openOther() {
+    setOtherOpen(true);
+    update("account_type", mapOtherRole(otherText));
+  }
+
+  function onOtherTextChange(value) {
+    setOtherText(value);
+    update("account_type", mapOtherRole(value));
+  }
+
   function validate() {
     const e = {};
     if (!form.first_name.trim()) e.first_name = "First name is required";
@@ -331,6 +257,7 @@ function RegistrationForm({ onSuccess }) {
         - ((today.getMonth() < dob.getMonth() || (today.getMonth() === dob.getMonth() && today.getDate() < dob.getDate())) ? 1 : 0);
       if (age < 18) e.date_of_birth = "You must be at least 18 years old to register";
     }
+    if (!policyAccepted) e.policy = "Please accept the Privacy Policy and Terms of Service to continue";
     return e;
   }
 
@@ -366,7 +293,7 @@ function RegistrationForm({ onSuccess }) {
       const data = await res.json();
 
       if (!res.ok) {
-        setServerError(data.detail || "Registration failed. Please try again.");
+        setServerError(extractErrorMessage(data.detail));
         return;
       }
 
@@ -374,7 +301,9 @@ function RegistrationForm({ onSuccess }) {
       localStorage.setItem("tfos_access_token", data.access_token);
       localStorage.setItem("tfos_refresh_token", data.refresh_token);
 
-      onSuccess(data);
+      // Pass the chosen account_type through — the API response omits it, but the
+      // success screen needs it to show the verify-later note for high-trust roles.
+      onSuccess({ ...data, account_type: form.account_type });
     } catch {
       setServerError("Network error. Please check your connection and try again.");
     } finally {
@@ -403,31 +332,67 @@ function RegistrationForm({ onSuccess }) {
 
           {/* Server error banner */}
           {serverError && (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700 flex gap-2">
+            <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700 flex gap-2" role="alert">
               <span>⚠</span>
               <span>{serverError}</span>
             </div>
           )}
 
-          {/* Account Type */}
+          {/* Account Type — 8 real professions + smart Other */}
           <Field label="I am a..." id="account_type" error={errors.account_type}>
             <div className="grid grid-cols-4 gap-2 mt-1">
-              {ACCOUNT_TYPES.map((t) => (
-                <button
-                  key={t.value}
-                  type="button"
-                  onClick={() => update("account_type", t.value)}
-                  className={`flex flex-col items-center py-2 px-1 rounded-lg border text-xs font-medium transition-all ${
-                    form.account_type === t.value
-                      ? "border-emerald-500 bg-emerald-50 text-emerald-700"
-                      : "border-gray-200 text-gray-600 hover:border-emerald-300"
-                  }`}
-                >
-                  <span className="text-lg mb-0.5">{t.icon}</span>
-                  {t.label}
-                </button>
-              ))}
+              {ACCOUNT_TYPES.map((t) => {
+                const selected = !otherOpen && form.account_type === t.value;
+                return (
+                  <button
+                    key={t.value}
+                    type="button"
+                    aria-pressed={selected}
+                    onClick={() => selectAccountType(t.value)}
+                    className={`flex flex-col items-center justify-center text-center py-2 px-1 rounded-lg border text-xs font-medium transition-all ${
+                      selected
+                        ? "border-emerald-500 bg-emerald-50 text-emerald-700"
+                        : "border-gray-200 text-gray-600 hover:border-emerald-300"
+                    }`}
+                  >
+                    <span className="text-lg mb-0.5">{t.icon}</span>
+                    {t.label}
+                  </button>
+                );
+              })}
+              {/* Other */}
+              <button
+                type="button"
+                aria-pressed={otherOpen}
+                onClick={openOther}
+                className={`flex flex-col items-center justify-center text-center py-2 px-1 rounded-lg border text-xs font-medium transition-all ${
+                  otherOpen
+                    ? "border-emerald-500 bg-emerald-50 text-emerald-700"
+                    : "border-gray-200 text-gray-600 hover:border-emerald-300"
+                }`}
+              >
+                <span className="text-lg mb-0.5">👤</span>
+                Other
+              </button>
             </div>
+
+            {otherOpen && (
+              <div className="mt-2">
+                <input
+                  type="text"
+                  value={otherText}
+                  onChange={(e) => onOtherTextChange(e.target.value)}
+                  placeholder="Describe your role — e.g. cooperative officer, agronomist…"
+                  className={inputCls("account_type")}
+                  aria-label="Describe your role"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  We'll register you as{" "}
+                  <span className="font-semibold text-emerald-700">{ACCOUNT_LABEL[form.account_type]}</span>
+                  . Pick a card above if that's not right.
+                </p>
+              </div>
+            )}
           </Field>
 
           {/* Name row */}
@@ -662,10 +627,27 @@ function RegistrationForm({ onSuccess }) {
             />
           </Field>
 
-          {/* Privacy reminder */}
-          <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 text-xs text-emerald-700">
-            ✅ You accepted our Privacy Policy and Terms of Service (v{PRIVACY_POLICY_VERSION}).
-            Your registration IP and device info are logged for fraud prevention.
+          {/* Policy acceptance — checkbox + links to full pages, no scroll-wall */}
+          <div>
+            <label className="flex items-start gap-3 cursor-pointer p-3 rounded-lg border border-gray-200 bg-gray-50 hover:bg-gray-100 transition-colors">
+              <input
+                type="checkbox"
+                checked={policyAccepted}
+                onChange={(e) => { setPolicyAccepted(e.target.checked); setErrors((er) => ({ ...er, policy: "" })); }}
+                className="mt-0.5 h-4 w-4 accent-emerald-600"
+              />
+              <span className="text-sm text-gray-700">
+                I have read and agree to Teivaka's{" "}
+                <a href="/privacy" target="_blank" rel="noopener noreferrer" className="font-semibold text-emerald-700 hover:underline">Privacy Policy</a>{" "}
+                and{" "}
+                <a href="/terms" target="_blank" rel="noopener noreferrer" className="font-semibold text-emerald-700 hover:underline">Terms of Service</a>.
+                I confirm I am at least 18 years old. My registration IP and device
+                info are logged for fraud prevention.
+              </span>
+            </label>
+            {errors.policy && (
+              <p className="text-xs text-red-500 mt-1" role="alert">⚠ {errors.policy}</p>
+            )}
           </div>
 
           {/* Submit */}
@@ -700,18 +682,14 @@ function RegistrationForm({ onSuccess }) {
 }
 
 // ---------------------------------------------------------------------------
-// Main export — orchestrates the two-step flow
+// Main export
 // ---------------------------------------------------------------------------
 
 export default function Register() {
-  const [step, setStep] = useState("privacy");  // "privacy" | "form" | "success"
   const [accountData, setAccountData] = useState(null);
 
-  if (step === "privacy") {
-    return <PrivacyGate onAccept={() => setStep("form")} />;
-  }
-
-  if (step === "success" && accountData) {
+  if (accountData) {
+    const highTrust = HIGH_TRUST.has(accountData.account_type);
     return (
       <div className="min-h-screen bg-gradient-to-br from-green-50 to-emerald-100 flex items-center justify-center p-4">
         <div className="bg-white rounded-2xl shadow-xl w-full max-w-md text-center p-8">
@@ -720,10 +698,22 @@ export default function Register() {
           <p className="text-gray-500 mt-2">
             Hello <strong>{accountData.display_name}</strong> — your farm account is ready.
           </p>
-          <div className="mt-4 bg-emerald-50 rounded-lg p-3 text-sm text-emerald-700">
-            <p>Your plan: <strong>FREE</strong></p>
-            <p>TIS queries: <strong>5 per day</strong></p>
+          <div className="mt-4 bg-emerald-50 rounded-lg p-3 text-sm text-emerald-700 text-left">
+            <p>Your plan: <strong>{accountData.tier || "BASIC"}</strong> — 14-day trial</p>
+            <p>TIS queries: <strong>{accountData.tis_daily_limit ?? 20} per day</strong></p>
           </div>
+          {accountData.email_unverified && (
+            <div className="mt-3 bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-800 text-left">
+              📧 We've sent a verification link to <strong>{accountData.email}</strong>.
+              You can start now — please verify your email to keep full access.
+            </div>
+          )}
+          {highTrust && (
+            <div className="mt-3 bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-800 text-left">
+              🔒 Your <strong>{ACCOUNT_LABEL[accountData.account_type]}</strong> features
+              unlock after we verify your account. We'll be in touch shortly.
+            </div>
+          )}
           <a
             href="/home"
             className="mt-6 inline-block w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-semibold transition-colors"
@@ -737,10 +727,7 @@ export default function Register() {
 
   return (
     <RegistrationForm
-      onSuccess={(data) => {
-        setAccountData(data);
-        setStep("success");
-      }}
+      onSuccess={(data) => setAccountData(data)}
     />
   );
 }
