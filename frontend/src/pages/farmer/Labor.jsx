@@ -1,394 +1,355 @@
 /**
- * Labor.jsx — /farm/labor
+ * Labor.jsx — /farm/labor — PIXEL-EXACT rebuild of the prototype's Labor surface.
  *
- * Rebuilt to match the team design system (FarmDashboard pattern) + the v262
- * prototype Labor surface. Layout: title + subtitle, FarmSelector/ModeDropdown
- * header row, MetricCard snapshot grid (live where the API serves it, dimmed
- * phase-stubs where it doesn't — the established parity convention), prototype
- * view tabs, white section cards.
- *
- * Live API: GET/POST /api/v1/workers, PATCH /workers/{id}/rate,
- *           GET/POST /api/v1/labor.
- * Phase-stub (no backend yet, shown dimmed, no mock data): On-site/Expected
- * live status, Payroll (WAGE_PAID/batch pay), Tasks, Costing, Productivity.
+ * Reproduces coreLaborView (today/roster/timesheets/payroll/tasks/costing/analytics)
+ * pixel-for-pixel — its own live-snapshot-strip, today-worker-card, worker-directory-card,
+ * cycle-view-tabs DOM under <TfpShell> — replacing the Team-design page (and the stale
+ * ModeDropdown). Wired to real data:
+ *   Workers  GET/POST /api/v1/workers, PATCH /workers/{id}/rate
+ *   Labor    GET/POST /api/v1/labor (labor_attendance)   On-site GET /api/v1/attendance/on-site
+ *   Pay wages → POST /api/v1/cash-ledger (EXPENSE · LABOR — feeds Cash + Bank Evidence)
+ * Honest "Building": Costing + Productivity (need work→harvest attribution). Tasks → /farm/tasks.
  */
 import { useMemo, useState } from "react";
-import {
-  QueryClient, QueryClientProvider, useQuery, useQueryClient,
-} from "@tanstack/react-query";
-import { Plus, Pencil, Clock, Phone } from "lucide-react";
-
+import { QueryClient, QueryClientProvider, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
+import { Plus, Search, Pencil, X, MapPin } from "lucide-react";
+import TfpShell from "../../components/farm/TfpShell";
 import { CurrentFarmProvider, useCurrentFarm } from "../../context/CurrentFarmContext";
 import FarmSelector from "../../components/farm/FarmSelector";
-import ModeDropdown from "../../components/farm/ModeDropdown";
-import MetricCard from "../../components/farm/MetricCard";
-import AttendanceCard from "../../components/farm/AttendanceCard";
-import Modal from "../../components/ui/Modal.jsx";
-import ThemedSelect from "../../components/inputs/ThemedSelect.jsx";
 
-const C = {
-  soil: "#5C4033", cream: "#F8F3E9", border: "#E6DED0", muted: "#8A7863",
-  green: "#6AA84F", greenDk: "#3E7B1F", amber: "#BF9000", red: "#D4442E",
-  greenTint: "#E9F2DD",
-};
-
-const WORKER_TYPES = [
-  { value: "CASUAL", label: "Casual" },
-  { value: "PERMANENT", label: "Permanent" },
-  { value: "CONTRACT", label: "Contract" },
-  { value: "FAMILY", label: "Family" },
-];
-
-// Prototype view tabs (all 8, in prototype order). `needs` set = the specific
-// backend that tab waits on → rendered as an honest structured empty state.
-const TABS = [
-  { id: "today", label: "Today", hint: "Who's working" },
-  { id: "roster", label: "Roster", hint: "Employees & teams" },
-  { id: "timesheets", label: "Timesheets", hint: "Hours & days" },
-  { id: "payroll", label: "Payroll", hint: "Owed & paid", needs: "a wage-payments + FNPF endpoint" },
-  { id: "tasks", label: "Tasks", hint: "Assignments", needs: "a task-assignment endpoint" },
-  { id: "costing", label: "Costing", hint: "Labour cost", needs: "per-cycle labour cost rollup" },
-  { id: "develop", label: "Training & safety", hint: "Skills & records", needs: "a training/skills records table" },
-  { id: "productivity", label: "Productivity", hint: "Trends", needs: "productivity attribution data" },
-];
-
-function authHeaders() {
-  const tok = localStorage.getItem("tfos_access_token");
-  return tok
-    ? { "Content-Type": "application/json", Authorization: `Bearer ${tok}` }
-    : { "Content-Type": "application/json" };
-}
+function authHeaders() { const t = localStorage.getItem("tfos_access_token"); return t ? { "Content-Type": "application/json", Authorization: `Bearer ${t}` } : { "Content-Type": "application/json" }; }
 function emitToast(m) { window.dispatchEvent(new CustomEvent("tfos:toast", { detail: { message: m } })); }
-function todayISO() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+function todayISO() { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; }
+function fjd0(v) { const n = Number(v ?? 0); return `FJD ${Math.round(n).toLocaleString("en-FJ")}`; }
+function fjd2(v) { const n = Number(v ?? 0); return `FJD ${n.toLocaleString("en-FJ", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`; }
+function initials(n) { return String(n || "?").split(/\s+/).filter(Boolean).slice(0, 2).map((s) => s[0]).join("").toUpperCase() || "?"; }
+
+const TYPE_LABEL = { PERMANENT: "Permanent", CASUAL: "Casual", CONTRACT: "Contract", FAMILY: "Family" };
+const WORKER_TYPES = Object.entries(TYPE_LABEL).map(([value, label]) => ({ value, label }));
+const VIEWS = [["today", "Today", "Who's working"], ["roster", "Roster", "Employees"], ["timesheets", "Timesheets", "Hours & days"], ["payroll", "Payroll", "Owed & paid"], ["tasks", "Tasks", "Assignments"], ["costing", "Costing", "Labour cost"], ["analytics", "Productivity", "Trends"]];
+
+async function getWorkers(farmId) { const r = await fetch(`/api/v1/workers?farm_id=${encodeURIComponent(farmId)}`, { headers: authHeaders() }); if (!r.ok) throw new Error(r.status); return (await r.json())?.data ?? []; }
+async function getLabor(farmId) { const r = await fetch(`/api/v1/labor?farm_id=${encodeURIComponent(farmId)}`, { headers: authHeaders() }); if (!r.ok) throw new Error(r.status); return (await r.json())?.data ?? []; }
+async function getOnSite(farmId) { const r = await fetch(`/api/v1/attendance/on-site?farm_id=${encodeURIComponent(farmId)}`, { headers: authHeaders() }); if (!r.ok) return { data: [], on_site_count: 0 }; return await r.json(); }
+
+const isFamily = (w) => w.worker_type === "FAMILY";
+const tk = (w) => (w.worker_type || "").toLowerCase();
+
+function Snapshot({ label, value, sub, cls }) {
+  return <div className={`snapshot-tile ${cls || ""}`}><div className="snapshot-label">{label}</div><div className="snapshot-value">{value}</div><div className="snapshot-sub">{sub}</div></div>;
 }
-function formatFJD(v) {
-  const n = Number(v ?? 0);
-  if (Number.isNaN(n)) return "FJD —";
-  return `FJD ${Math.abs(n).toLocaleString("en-FJ", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-}
-function typeLabel(v) { return WORKER_TYPES.find((t) => t.value === v)?.label || v || "—"; }
-function initials(name) {
-  return String(name || "?").split(/\s+/).slice(0, 2).map((s) => s[0]).join("").toUpperCase();
+function Building({ title, body }) {
+  return <div className="card" style={{ padding: "16px 18px" }}><div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}><span style={{ fontWeight: 700, color: "var(--soil)" }}>{title}</span><span style={{ fontSize: 11.5, fontWeight: 700, color: "var(--muted)" }}>Building</span></div><div style={{ fontSize: 12.5, color: "var(--muted)", marginTop: 6, lineHeight: 1.5 }}>{body}</div></div>;
 }
 
-async function fetchWorkers(farmId) {
-  if (!farmId) return [];
-  const res = await fetch(`/api/v1/workers?farm_id=${encodeURIComponent(farmId)}`, { headers: authHeaders() });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const b = await res.json(); return b?.data ?? [];
+function TodayWorkerCard({ w, onSite, onMark, onPay, onAssign }) {
+  const fam = isFamily(w);
+  return (
+    <div className={`today-worker-card ${tk(w)}`}>
+      <div className="today-worker-head">
+        <div className={`worker-avatar ${tk(w)}`}>{initials(w.full_name)}</div>
+        <div style={{ flex: 1 }}>
+          <div className="today-worker-name">{w.full_name}</div>
+          <div className="today-worker-role"><span className={`worker-type-pill ${tk(w)}`}>{TYPE_LABEL[w.worker_type] || w.worker_type}</span></div>
+        </div>
+        <span className={`worker-status-pill ${onSite ? "on-site" : "off"}`}><span className="worker-status-dot" />{onSite ? "On-site" : "—"}</span>
+      </div>
+      <div className="today-worker-info">
+        <div className="today-worker-info-row"><span className="today-worker-info-label">Hours this week</span><span className="today-worker-info-value">{w.hoursThisWeek}h</span></div>
+        {fam ? <div className="today-worker-info-row"><span className="today-worker-info-label">Wages</span><span className="today-worker-info-value" style={{ fontStyle: "italic", color: "var(--muted)" }}>N/A · family</span></div>
+          : <>
+            <div className="today-worker-info-row"><span className="today-worker-info-label">Day rate</span><span className="today-worker-info-value">{fjd0(w.daily_rate_fjd)}/d</span></div>
+            <div className="today-worker-info-row"><span className="today-worker-info-label">Wages this week</span><span className="today-worker-info-value">{fjd2(w.wagesWeek)}</span></div>
+          </>}
+      </div>
+      <div className="today-worker-actions">
+        <button className="btn btn-secondary" onClick={() => onMark(w)}>Mark attendance</button>
+        <button className="btn btn-secondary" onClick={onAssign}>Assign task</button>
+        {!fam && <button className="btn btn-secondary" onClick={() => onPay(w)}>Pay wages</button>}
+      </div>
+    </div>
+  );
 }
-async function fetchLabor(farmId) {
-  if (!farmId) return [];
-  const res = await fetch(`/api/v1/labor?farm_id=${encodeURIComponent(farmId)}`, { headers: authHeaders() });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const b = await res.json(); return b?.data ?? [];
-}
-async function fetchOnSite(farmId) {
-  if (!farmId) return { on_site_count: 0, data: [] };
-  const res = await fetch(`/api/v1/attendance/on-site?farm_id=${encodeURIComponent(farmId)}`, { headers: authHeaders() });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.json();
-}
-function fmtClock(iso) { try { return new Date(iso).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" }); } catch { return ""; } }
 
-// ── Modals (functional, API-backed) ──────────────────────────────────
-function AddWorkerModal({ farmId, isOpen, onClose, onSaved }) {
-  const [name, setName] = useState("");
-  const [type, setType] = useState("CASUAL");
-  const [rate, setRate] = useState("");
-  const [phone, setPhone] = useState("");
+function LaborInner() {
+  const navigate = useNavigate();
+  const qc = useQueryClient();
+  const { farmId } = useCurrentFarm();
+  const [view, setView] = useState("today");
+  const [typeFilter, setTypeFilter] = useState("all");
+  const [q, setQ] = useState("");
+  const [showFamily, setShowFamily] = useState(false);
+  const [addOpen, setAddOpen] = useState(false);
+  const [editRate, setEditRate] = useState(null);
+  const [markFor, setMarkFor] = useState(undefined); // undefined=closed; null/worker=open
+  const [payFor, setPayFor] = useState(null);
+
+  const workersQ = useQuery({ queryKey: ["workers", farmId], queryFn: () => getWorkers(farmId), enabled: !!farmId });
+  const laborQ = useQuery({ queryKey: ["labor", farmId], queryFn: () => getLabor(farmId), enabled: !!farmId });
+  const onSiteQ = useQuery({ queryKey: ["onsite", farmId], queryFn: () => getOnSite(farmId), enabled: !!farmId });
+  const records = laborQ.data ?? [];
+  const onSiteIds = useMemo(() => new Set((onSiteQ.data?.data ?? []).filter((d) => d.on_site).map((d) => d.worker_id)), [onSiteQ.data]);
+
+  const wkAgo = Date.now() - 7 * 864e5;
+  const recById = useMemo(() => {
+    const m = {};
+    records.forEach((r) => { (m[r.worker_id] = m[r.worker_id] || []).push(r); });
+    return m;
+  }, [records]);
+  const workers = useMemo(() => (workersQ.data ?? []).map((w) => {
+    const recs = recById[w.worker_id] || [];
+    const wk = recs.filter((r) => { const d = Date.parse(r.work_date); return Number.isFinite(d) && d >= wkAgo; });
+    return {
+      ...w,
+      hoursThisWeek: wk.reduce((s, r) => s + Number(r.hours_worked || 0), 0),
+      wagesWeek: wk.reduce((s, r) => s + Number(r.total_pay_fjd || 0), 0),
+      wagesSeason: recs.reduce((s, r) => s + Number(r.total_pay_fjd || 0), 0),
+    };
+  }), [workersQ.data, recById]);
+
+  const onSiteNow = onSiteQ.data?.on_site_count ?? workers.filter((w) => onSiteIds.has(w.worker_id)).length;
+  const hoursToday = records.filter((r) => String(r.work_date).slice(0, 10) === todayISO()).reduce((s, r) => s + Number(r.hours_worked || 0), 0);
+  const wagesWeekTotal = workers.reduce((s, w) => s + (isFamily(w) ? 0 : w.wagesWeek), 0);
+
+  const refetch = () => { qc.invalidateQueries({ queryKey: ["workers", farmId] }); qc.invalidateQueries({ queryKey: ["labor", farmId] }); };
+  const team = workers.filter((w) => !isFamily(w));
+  const family = workers.filter(isFamily);
+
+  let roster = workers.slice();
+  if (typeFilter !== "all") roster = roster.filter((w) => w.worker_type === typeFilter);
+  if (q.trim()) { const qq = q.toLowerCase(); roster = roster.filter((w) => `${w.full_name} ${w.worker_id}`.toLowerCase().includes(qq)); }
+
+  return (
+    <TfpShell>
+      <main className="main-content">
+        <div className="main-inner">
+          <div className="page-header">
+            <div><h1>Labor</h1><div className="subtitle">Who works the farm · hours, attendance, wages</div></div>
+            <div className="page-actions">
+              <FarmSelector />
+              <button className="btn btn-secondary" onClick={() => setMarkFor(null)}><Plus size={13} />Mark attendance</button>
+              <button className="btn btn-primary" onClick={() => setAddOpen(true)}><Plus size={13} />Add worker</button>
+            </div>
+          </div>
+
+          <div className="cycle-view-tabs">
+            {VIEWS.map(([id, l, s]) => <div key={id} className={`task-tab ${view === id ? "active" : ""}`} onClick={() => setView(id)}>{l}<span className="task-tab-count" style={{ fontSize: 10 }}>{s}</span></div>)}
+          </div>
+
+          {!farmId ? <div className="card" style={{ padding: 20, color: "var(--muted)" }}>Select a farm to see its team.</div>
+            : workersQ.isLoading ? <div className="card" style={{ padding: 20, color: "var(--muted)" }}>Loading…</div>
+            : view === "today" ? (
+              <>
+                <div className="live-snapshot-strip">
+                  <Snapshot cls="on-site" label="On-site now" value={onSiteNow} sub="checked in" />
+                  <Snapshot cls="hours" label="Hours today" value={`${hoursToday}h`} sub="logged" />
+                  <Snapshot cls="owed" label="Wages this week" value={fjd0(wagesWeekTotal)} sub={`${team.length} paid workers`} />
+                  <Snapshot label="Team" value={workers.length} sub={`${family.length} family`} />
+                  <Snapshot cls="payday" label="Next payday" value="Fri" sub="weekly" />
+                </div>
+                {team.length === 0 && family.length === 0 ? <div className="card" style={{ padding: 28, textAlign: "center", color: "var(--muted)", marginTop: 14 }}>No workers yet — add your first worker.</div> : null}
+                {team.length > 0 && <>
+                  <div style={{ fontSize: 10.5, textTransform: "uppercase", letterSpacing: ".5px", color: "var(--muted)", margin: "18px 0 8px" }}>Team</div>
+                  <div className="today-team-grid">{team.map((w) => <TodayWorkerCard key={w.worker_id} w={w} onSite={onSiteIds.has(w.worker_id)} onMark={setMarkFor} onPay={setPayFor} onAssign={() => navigate("/farm/tasks")} />)}</div>
+                </>}
+                {family.length > 0 && (
+                  <div className="family-section">
+                    <div className="family-section-head">
+                      <div className="family-section-title">Family helpers · {family.length} tracked, unpaid</div>
+                      <label style={{ fontSize: 11.5, color: "var(--soil)", cursor: "pointer" }}><input type="checkbox" checked={showFamily} onChange={(e) => setShowFamily(e.target.checked)} /> Show family</label>
+                    </div>
+                    {showFamily && <div className="today-team-grid">{family.map((w) => <TodayWorkerCard key={w.worker_id} w={w} onSite={onSiteIds.has(w.worker_id)} onMark={setMarkFor} onPay={setPayFor} onAssign={() => navigate("/farm/tasks")} />)}</div>}
+                  </div>
+                )}
+              </>
+            ) : view === "roster" ? (
+              <>
+                <div className="gallery-filter-row" style={{ marginBottom: 8 }}>
+                  <span style={{ fontSize: 10.5, color: "var(--muted)", textTransform: "uppercase", letterSpacing: ".5px", marginRight: 6, alignSelf: "center" }}>Type:</span>
+                  <button className={`filter-pill ${typeFilter === "all" ? "active" : ""}`} onClick={() => setTypeFilter("all")}>All<span className="filter-pill-count">{workers.length}</span></button>
+                  {WORKER_TYPES.map((t) => { const n = workers.filter((w) => w.worker_type === t.value).length; return n === 0 ? null : <button key={t.value} className={`filter-pill ${typeFilter === t.value ? "active" : ""}`} onClick={() => setTypeFilter(t.value)}>{t.label}<span className="filter-pill-count">{n}</span></button>; })}
+                </div>
+                <div style={{ marginBottom: 14, position: "relative" }}>
+                  <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search workers by name or ID..." style={{ width: "100%", padding: "9px 12px 9px 38px", border: "1.5px solid var(--line)", borderRadius: 7, fontSize: 13, background: "var(--paper)" }} />
+                  <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "var(--muted)", pointerEvents: "none" }}><Search size={14} /></span>
+                </div>
+                {roster.length === 0 ? <div className="card" style={{ padding: 40, textAlign: "center", color: "var(--muted)" }}>No workers match these filters.</div>
+                  : <div className="worker-directory-grid">{roster.map((w) => (
+                    <div className="worker-directory-card" key={w.worker_id}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 10 }}>
+                        <div className={`worker-avatar lg ${tk(w)}`}>{initials(w.full_name)}</div>
+                        <div style={{ flex: 1 }}><div style={{ fontSize: 15, fontWeight: 600, color: "var(--soil)" }}>{w.full_name}</div><div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 2 }}>{w.worker_id}{w.start_date ? ` · started ${String(w.start_date).slice(0, 10)}` : ""}</div></div>
+                        <span className={`worker-type-pill ${tk(w)}`}>{TYPE_LABEL[w.worker_type] || w.worker_type}</span>
+                      </div>
+                      <div className="worker-directory-meta">
+                        <div className="worker-meta-tile"><div className="worker-meta-label">Day rate</div><div className="worker-meta-value">{isFamily(w) ? "N/A" : `${fjd0(w.daily_rate_fjd)}/d`}</div></div>
+                        <div className="worker-meta-tile"><div className="worker-meta-label">Hours / week</div><div className="worker-meta-value">{w.hoursThisWeek}h</div></div>
+                        <div className="worker-meta-tile"><div className="worker-meta-label">Wages (season)</div><div className="worker-meta-value">{isFamily(w) ? "N/A" : fjd0(w.wagesSeason)}</div></div>
+                        <div className="worker-meta-tile"><div className="worker-meta-label">Contact</div><div className="worker-meta-value" style={{ fontSize: 11 }}>{w.contact_number || "—"}</div></div>
+                      </div>
+                      {!isFamily(w) && <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, paddingTop: 8, borderTop: "1px dashed var(--line)", marginTop: 8 }}>
+                        <button className="btn btn-secondary btn-sm" onClick={() => setEditRate(w)}><Pencil size={12} />Edit rate</button>
+                        <button className="btn btn-secondary btn-sm" onClick={() => setMarkFor(w)}>Mark attendance</button>
+                      </div>}
+                    </div>
+                  ))}</div>}
+              </>
+            ) : view === "timesheets" ? (
+              records.length === 0 ? <Building title="Timesheets" body="Hours and days appear here as you mark attendance. Each record is hash-chained." />
+                : <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>{records.map((r) => (
+                  <div key={r.attendance_id} className="card" style={{ padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <div><div style={{ fontWeight: 600, color: "var(--soil)" }}>{r.worker_name}</div><div style={{ fontSize: 11.5, color: "var(--muted)" }}>{String(r.work_date).slice(0, 10)} · {r.hours_worked}h{r.task_description ? ` · ${r.task_description}` : ""}</div></div>
+                    <div style={{ fontWeight: 700, color: "var(--soil)" }}>{fjd2(r.total_pay_fjd)}</div>
+                  </div>
+                ))}</div>
+            ) : view === "payroll" ? (
+              team.length === 0 ? <Building title="Payroll" body="Wages owed and paid appear here once you add paid workers and mark attendance." />
+                : <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  <div style={{ fontSize: 12.5, color: "var(--muted)" }}>Wages logged from attendance. Pay wages records a labour expense in Cash (feeds Bank Evidence).</div>
+                  {team.map((w) => (
+                    <div key={w.worker_id} className="card" style={{ padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
+                      <div><div style={{ fontWeight: 600, color: "var(--soil)" }}>{w.full_name}</div><div style={{ fontSize: 11.5, color: "var(--muted)" }}>{w.hoursThisWeek}h this week · {fjd0(w.daily_rate_fjd)}/d</div></div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}><div style={{ fontWeight: 700, color: "var(--soil)" }}>{fjd2(w.wagesSeason)}</div><button className="btn btn-secondary btn-sm" onClick={() => setPayFor(w)}>Pay wages</button></div>
+                    </div>
+                  ))}
+                </div>
+            ) : view === "tasks" ? (
+              <div className="card" style={{ padding: "18px 20px" }}>
+                <div style={{ fontWeight: 700, color: "var(--soil)" }}>Task assignments</div>
+                <div style={{ fontSize: 12.5, color: "var(--muted)", margin: "8px 0 12px", lineHeight: 1.5 }}>Worker task assignments live in the Tasks pillar, where they're scheduled, tracked and auto-generated from compliance.</div>
+                <button className="btn btn-primary btn-sm" onClick={() => navigate("/farm/tasks")}>Open Tasks →</button>
+              </div>
+            ) : view === "costing" ? <Building title="Labour cost per cycle" body="What labour costs each cycle and enterprise to run — rolls up from attendance tagged to cycles. Turns on as you tag work to production." />
+            : <Building title="Productivity" body="Output per worker (kg per hour, over time) — needs work-to-harvest attribution. Tag attendance to cycles and harvests and this builds. No fabricated numbers." />}
+        </div>
+      </main>
+
+      {addOpen && <AddWorkerModal farmId={farmId} onClose={() => setAddOpen(false)} onSaved={() => { refetch(); setAddOpen(false); }} />}
+      {editRate && <EditRateModal worker={editRate} onClose={() => setEditRate(null)} onSaved={() => { refetch(); setEditRate(null); }} />}
+      {markFor !== undefined && <MarkAttendanceModal farmId={farmId} workers={team.concat(family)} preset={markFor} onClose={() => setMarkFor(undefined)} onSaved={() => { refetch(); setMarkFor(undefined); }} />}
+      {payFor && <PayWagesModal farmId={farmId} worker={payFor} onClose={() => setPayFor(null)} onSaved={() => { qc.invalidateQueries({ queryKey: ["cash", farmId] }); setPayFor(null); }} />}
+    </TfpShell>
+  );
+}
+
+function Field({ label, children }) { return <div className="form-row"><label>{label}</label>{children}</div>; }
+
+function AddWorkerModal({ farmId, onClose, onSaved }) {
+  const [f, setF] = useState({ full_name: "", worker_type: "CASUAL", daily_rate_fjd: "", contact_number: "" });
   const [busy, setBusy] = useState(false);
+  const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }));
   async function submit() {
-    if (!name.trim() || !rate) { emitToast("Name and daily rate are required"); return; }
+    if (!f.full_name.trim() || !f.daily_rate_fjd) { emitToast("Name and daily rate are required"); return; }
     setBusy(true);
     try {
-      const res = await fetch("/api/v1/workers", {
-        method: "POST", headers: authHeaders(),
-        body: JSON.stringify({ farm_id: farmId, full_name: name.trim(), worker_type: type, daily_rate_fjd: Number(rate), contact_number: phone.trim() || null }),
-      });
-      if (res.status === 403) { emitToast("You don't have permission to add workers"); return; }
-      if (!res.ok) throw new Error();
-      emitToast("Worker added"); onSaved?.(); onClose?.();
+      const r = await fetch("/api/v1/workers", { method: "POST", headers: authHeaders(), body: JSON.stringify({ farm_id: farmId, full_name: f.full_name.trim(), worker_type: f.worker_type, daily_rate_fjd: Number(f.daily_rate_fjd), contact_number: f.contact_number.trim() || null }) });
+      if (r.status === 403) { emitToast("You don't have permission to add workers"); return; }
+      if (!r.ok) throw new Error();
+      emitToast("Worker added"); onSaved?.();
     } catch { emitToast("Could not add worker"); } finally { setBusy(false); }
   }
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Add worker"
-      footer={<div className="flex justify-end gap-2">
-        <button onClick={onClose} className="px-4 py-2 rounded-lg" style={{ color: C.muted }}>Cancel</button>
-        <button onClick={submit} disabled={busy} className="px-4 py-2 rounded-lg text-white" style={{ background: C.greenDk, opacity: busy ? 0.6 : 1 }}>Add worker</button>
-      </div>}>
-      <div className="space-y-3">
-        <label className="block text-sm" style={{ color: C.soil }}>Full name
-          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Laisenia Waqa" className="mt-1 w-full px-3 py-2 rounded-lg border" style={{ borderColor: C.border }} /></label>
-        <label className="block text-sm" style={{ color: C.soil }}>Worker type
-          <ThemedSelect value={type} onChange={setType} options={WORKER_TYPES} /></label>
-        <label className="block text-sm" style={{ color: C.soil }}>Daily rate (FJD)
-          <input type="number" min="0" step="0.50" value={rate} onChange={(e) => setRate(e.target.value)} placeholder="30.00" className="mt-1 w-full px-3 py-2 rounded-lg border" style={{ borderColor: C.border }} /></label>
-        <label className="block text-sm" style={{ color: C.soil }}>Phone (optional)
-          <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+679 …" className="mt-1 w-full px-3 py-2 rounded-lg border" style={{ borderColor: C.border }} /></label>
-        <p className="text-xs" style={{ color: C.muted }}>Fiji minimum wage is FJD 4.00/hr. Adding a worker writes an audit record.</p>
+    <div className="overlay-backdrop show" onClick={onClose}>
+      <div className="overlay-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="overlay-head"><h2>Add worker</h2><button className="overlay-close" onClick={onClose}><X size={14} /></button></div>
+        <div className="overlay-body">
+          <Field label="Full name"><input value={f.full_name} onChange={set("full_name")} placeholder="e.g. Laisenia Waqa" /></Field>
+          <div className="form-row" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 10 }}>
+            <div><label>Type</label><select value={f.worker_type} onChange={set("worker_type")}>{WORKER_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}</select></div>
+            <div><label>Daily rate (FJD)</label><input type="number" min="0" step="0.50" value={f.daily_rate_fjd} onChange={set("daily_rate_fjd")} placeholder="30.00" /></div>
+          </div>
+          <Field label="Phone (optional)"><input value={f.contact_number} onChange={set("contact_number")} placeholder="9XX XXXX" /></Field>
+          <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 4 }}>Fiji minimum wage is FJD 4.00/hr. Adding a worker writes an audit record.</div>
+        </div>
+        <div className="overlay-foot"><button className="btn btn-secondary" onClick={onClose}>Cancel</button><button className="btn btn-primary" onClick={submit} disabled={busy}>{busy ? "Adding…" : "Add worker"}</button></div>
       </div>
-    </Modal>
+    </div>
   );
 }
 
-function EditRateModal({ worker, isOpen, onClose, onSaved }) {
-  const [rate, setRate] = useState(worker ? String(worker.daily_rate_fjd ?? "") : "");
+function EditRateModal({ worker, onClose, onSaved }) {
+  const [rate, setRate] = useState(String(worker.daily_rate_fjd ?? ""));
   const [busy, setBusy] = useState(false);
-  if (!worker) return null;
   async function submit() {
-    if (!rate) { emitToast("Enter a rate"); return; }
+    if (!Number(rate)) { emitToast("Enter a daily rate"); return; }
     setBusy(true);
-    try {
-      const res = await fetch(`/api/v1/workers/${encodeURIComponent(worker.worker_id)}/rate?daily_rate_fjd=${encodeURIComponent(Number(rate))}`, { method: "PATCH", headers: authHeaders() });
-      if (res.status === 403) { emitToast("Only FOUNDER or MANAGER can change rates"); return; }
-      if (!res.ok) throw new Error();
-      emitToast("Rate updated"); onSaved?.(); onClose?.();
-    } catch { emitToast("Could not update rate"); } finally { setBusy(false); }
+    try { const r = await fetch(`/api/v1/workers/${encodeURIComponent(worker.worker_id)}/rate?daily_rate_fjd=${encodeURIComponent(Number(rate))}`, { method: "PATCH", headers: authHeaders() }); if (!r.ok) throw new Error(); emitToast("Rate updated"); onSaved?.(); }
+    catch { emitToast("Could not update rate"); } finally { setBusy(false); }
   }
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={`Edit rate — ${worker.full_name}`} size="sm"
-      footer={<div className="flex justify-end gap-2">
-        <button onClick={onClose} className="px-4 py-2 rounded-lg" style={{ color: C.muted }}>Cancel</button>
-        <button onClick={submit} disabled={busy} className="px-4 py-2 rounded-lg text-white" style={{ background: C.greenDk }}>Save</button>
-      </div>}>
-      <label className="block text-sm" style={{ color: C.soil }}>Daily rate (FJD)
-        <input type="number" min="0" step="0.50" value={rate} onChange={(e) => setRate(e.target.value)} className="mt-1 w-full px-3 py-2 rounded-lg border" style={{ borderColor: C.border }} /></label>
-    </Modal>
+    <div className="overlay-backdrop show" onClick={onClose}>
+      <div className="overlay-modal" style={{ maxWidth: 440 }} onClick={(e) => e.stopPropagation()}>
+        <div className="overlay-head"><h2>Edit rate — {worker.full_name}</h2><button className="overlay-close" onClick={onClose}><X size={14} /></button></div>
+        <div className="overlay-body"><Field label="Daily rate (FJD)"><input type="number" min="0" step="0.50" value={rate} onChange={(e) => setRate(e.target.value)} autoFocus /></Field></div>
+        <div className="overlay-foot"><button className="btn btn-secondary" onClick={onClose}>Cancel</button><button className="btn btn-primary" onClick={submit} disabled={busy}>{busy ? "Saving…" : "Save"}</button></div>
+      </div>
+    </div>
   );
 }
 
-function LogAttendanceModal({ farmId, workers, isOpen, onClose, onSaved }) {
-  const [workerId, setWorkerId] = useState("");
+function MarkAttendanceModal({ farmId, workers, preset, onClose, onSaved }) {
+  const [workerId, setWorkerId] = useState(preset?.worker_id || "");
   const [hours, setHours] = useState("8");
   const [task, setTask] = useState("");
   const [busy, setBusy] = useState(false);
   const worker = workers.find((w) => w.worker_id === workerId);
-  const dailyRate = Number(worker?.daily_rate_fjd ?? 0);
-  const totalPay = useMemo(() => Math.round(dailyRate * (Number(hours || 0) / 8) * 100) / 100, [dailyRate, hours]);
+  const rate = Number(worker?.daily_rate_fjd ?? 0);
+  const total = Math.round(rate * (Number(hours || 0) / 8) * 100) / 100;
   async function submit() {
     if (!workerId) { emitToast("Pick a worker"); return; }
     setBusy(true);
     try {
-      const res = await fetch("/api/v1/labor", {
-        method: "POST", headers: authHeaders(),
-        body: JSON.stringify({ worker_id: workerId, farm_id: farmId, work_date: todayISO(), hours_worked: Number(hours), daily_rate_fjd: dailyRate, total_pay_fjd: totalPay, task_description: task.trim() || null }),
-      });
-      if (!res.ok) throw new Error();
-      emitToast("Attendance logged"); onSaved?.(); onClose?.();
+      const r = await fetch("/api/v1/labor", { method: "POST", headers: authHeaders(), body: JSON.stringify({ worker_id: workerId, farm_id: farmId, work_date: todayISO(), hours_worked: Number(hours), daily_rate_fjd: rate, total_pay_fjd: total, task_description: task.trim() || null }) });
+      if (!r.ok) throw new Error();
+      emitToast("Attendance logged"); onSaved?.();
     } catch { emitToast("Could not log attendance"); } finally { setBusy(false); }
   }
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Mark attendance"
-      footer={<div className="flex justify-end gap-2">
-        <button onClick={onClose} className="px-4 py-2 rounded-lg" style={{ color: C.muted }}>Cancel</button>
-        <button onClick={submit} disabled={busy || !workerId} className="px-4 py-2 rounded-lg text-white" style={{ background: C.greenDk, opacity: busy || !workerId ? 0.6 : 1 }}>Log · {formatFJD(totalPay)}</button>
-      </div>}>
-      <div className="space-y-3">
-        <label className="block text-sm" style={{ color: C.soil }}>Worker
-          <ThemedSelect value={workerId} onChange={setWorkerId} placeholder="Pick a worker…"
-            options={workers.map((w) => ({ value: w.worker_id, label: `${w.full_name} · ${formatFJD(w.daily_rate_fjd)}/day` }))} /></label>
-        <label className="block text-sm" style={{ color: C.soil }}>Hours worked
-          <input type="number" min="0" step="0.5" value={hours} onChange={(e) => setHours(e.target.value)} className="mt-1 w-full px-3 py-2 rounded-lg border" style={{ borderColor: C.border }} /></label>
-        <label className="block text-sm" style={{ color: C.soil }}>Task (optional)
-          <input value={task} onChange={(e) => setTask(e.target.value)} placeholder="e.g. Weeding Bed 3" className="mt-1 w-full px-3 py-2 rounded-lg border" style={{ borderColor: C.border }} /></label>
-        <div className="text-sm rounded-lg p-3" style={{ background: C.greenTint, color: C.greenDk }}>
-          Pay for this entry: <strong>{formatFJD(totalPay)}</strong> ({hours}h @ {formatFJD(dailyRate)}/day)</div>
+    <div className="overlay-backdrop show" onClick={onClose}>
+      <div className="overlay-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="overlay-head"><h2>Mark attendance</h2><button className="overlay-close" onClick={onClose}><X size={14} /></button></div>
+        <div className="overlay-body">
+          <Field label="Worker"><select value={workerId} onChange={(e) => setWorkerId(e.target.value)}><option value="">Pick a worker…</option>{workers.map((w) => <option key={w.worker_id} value={w.worker_id}>{w.full_name} · {fjd0(w.daily_rate_fjd)}/d</option>)}</select></Field>
+          <div className="form-row" style={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: 10, marginTop: 10 }}>
+            <div><label>Hours</label><input type="number" min="0" step="0.5" value={hours} onChange={(e) => setHours(e.target.value)} /></div>
+            <div><label>Task (optional)</label><input value={task} onChange={(e) => setTask(e.target.value)} placeholder="e.g. weeding Bed 3" /></div>
+          </div>
+        </div>
+        <div className="overlay-foot"><button className="btn btn-secondary" onClick={onClose}>Cancel</button><button className="btn btn-primary" onClick={submit} disabled={busy || !workerId}>{busy ? "Logging…" : `Log · ${fjd2(total)}`}</button></div>
       </div>
-    </Modal>
+    </div>
   );
 }
 
-// ── Page ─────────────────────────────────────────────────────────────
-function LaborInner() {
-  const qc = useQueryClient();
-  const { farmId } = useCurrentFarm();
-  const [tab, setTab] = useState("today");
-  const [addOpen, setAddOpen] = useState(false);
-  const [logOpen, setLogOpen] = useState(false);
-  const [rateWorker, setRateWorker] = useState(null);
-
-  const workersQuery = useQuery({ queryKey: ["workers", farmId], queryFn: () => fetchWorkers(farmId), enabled: !!farmId });
-  const laborQuery = useQuery({ queryKey: ["labor", farmId], queryFn: () => fetchLabor(farmId), enabled: !!farmId });
-  const onSiteQuery = useQuery({ queryKey: ["onsite", farmId], queryFn: () => fetchOnSite(farmId), enabled: !!farmId, refetchInterval: 60_000 });
-  const workers = workersQuery.data ?? [];
-  const attendance = laborQuery.data ?? [];
-  const onSite = onSiteQuery.data ?? { on_site_count: 0, data: [] };
-  const statusByWorker = useMemo(() => {
-    const m = {};
-    (onSite.data || []).forEach((p) => { if (p.worker_id) m[p.worker_id] = p; });
-    return m;
-  }, [onSite]);
-  const wagesRecorded = useMemo(() => attendance.reduce((s, r) => s + Number(r.total_pay_fjd ?? 0), 0), [attendance]);
-  const activeTab = TABS.find((t) => t.id === tab) || TABS[0];
-
+function PayWagesModal({ farmId, worker, onClose, onSaved }) {
+  const [amount, setAmount] = useState(String(Math.round((worker.wagesSeason || worker.daily_rate_fjd || 0) * 100) / 100));
+  const [date, setDate] = useState(todayISO());
+  const [method, setMethod] = useState("MOBILE_MONEY");
+  const [busy, setBusy] = useState(false);
+  async function submit() {
+    if (!Number(amount)) { emitToast("Enter the amount"); return; }
+    setBusy(true);
+    try {
+      const r = await fetch("/api/v1/cash-ledger", { method: "POST", headers: authHeaders(), body: JSON.stringify({ farm_id: farmId, transaction_date: date, transaction_type: "EXPENSE", category: "LABOR", description: `Wages · ${worker.full_name}`, amount_fjd: Number(amount), payment_method: method }) });
+      if (!r.ok) throw new Error();
+      emitToast("Wages paid · logged in Cash"); onSaved?.();
+    } catch { emitToast("Could not record payment"); } finally { setBusy(false); }
+  }
   return (
-    <div className="space-y-4">
-      {/* Title */}
-      <div>
-        <h1 className="text-2xl font-bold" style={{ color: C.soil }}>Labor</h1>
-        <div className="text-xs mt-0.5" style={{ color: C.muted }}>Your team · payday surface · Fiji wage compliance</div>
-      </div>
-
-      {/* Header row — shared components */}
-      <div className="flex items-center justify-between gap-2 flex-wrap">
-        <FarmSelector />
-        <ModeDropdown />
-      </div>
-
-      {/* Snapshot grid — live + dimmed phase stubs (prototype parity) */}
-      <div className="grid gap-2 grid-cols-2 sm:grid-cols-3 md:grid-cols-5">
-        <MetricCard label="Active workers" value={String(workers.length)} sub="on roster" loading={workersQuery.isLoading} />
-        <MetricCard label="Wages recorded" value={formatFJD(wagesRecorded)} sub="recent timesheets" loading={laborQuery.isLoading} />
-        <MetricCard label="On-site now" value={String(onSite.on_site_count)} sub="GPS clocked in" loading={onSiteQuery.isLoading} />
-        <MetricCard label="Clocked today" value={String(onSite.total_today ?? onSite.data.length)} sub="in & out" loading={onSiteQuery.isLoading} />
-        <MetricCard label="Next payday" phase="Phase 4.2" />
-      </div>
-
-      {/* View tabs */}
-      <div className="flex gap-1 overflow-x-auto border-b" style={{ borderColor: C.border }}>
-        {TABS.map((t) => (
-          <button key={t.id} onClick={() => setTab(t.id)} className="px-3 py-2 text-sm font-medium whitespace-nowrap flex flex-col items-start"
-            style={{ color: tab === t.id ? C.greenDk : C.muted, borderBottom: tab === t.id ? `2px solid ${C.green}` : "2px solid transparent", opacity: t.needs ? 0.6 : 1 }}>
-            {t.label}<span className="text-[10px]" style={{ color: C.muted }}>{t.hint}</span>
-          </button>
-        ))}
-      </div>
-
-      {/* Section card */}
-      <section className="bg-white rounded-2xl px-4 py-4" style={{ border: `1px solid ${C.border}` }}>
-        <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
-          <div className="text-sm font-semibold uppercase tracking-wider" style={{ color: C.soil }}>{activeTab.label}</div>
-          {tab === "roster" && (
-            <button onClick={() => setAddOpen(true)} className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-white text-sm" style={{ background: C.greenDk }}><Plus size={15} /> Add worker</button>
-          )}
-          {(tab === "timesheets" || tab === "today") && (
-            <button onClick={() => setLogOpen(true)} className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-white text-sm" style={{ background: C.greenDk }}><Clock size={15} /> Mark attendance</button>
-          )}
+    <div className="overlay-backdrop show" onClick={onClose}>
+      <div className="overlay-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="overlay-head"><h2>Pay wages — {worker.full_name}</h2><button className="overlay-close" onClick={onClose}><X size={14} /></button></div>
+        <div className="overlay-body">
+          <div style={{ fontSize: 12.5, color: "var(--muted)", marginBottom: 12 }}>Records a labour expense in Cash (feeds Bank Evidence) and is hash-chained.</div>
+          <div className="form-row" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+            <div><label>Amount (FJD)</label><input type="number" min="0" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} /></div>
+            <div><label>Date</label><input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></div>
+          </div>
+          <Field label="Method"><select value={method} onChange={(e) => setMethod(e.target.value)}><option value="MOBILE_MONEY">M-PAiSA / mobile</option><option value="CASH">Cash</option><option value="BANK_TRANSFER">Bank transfer</option></select></Field>
         </div>
-
-        {/* Today — who's working */}
-        {tab === "today" && (
-          <div>
-            {/* Clock in/out — geo-locked to the farm boundary (moved here from Locations) */}
-            <div className="mb-4 rounded-xl p-3" style={{ background: C.cream }}>
-              <AttendanceCard farmId={farmId} />
-            </div>
-            {/* On-site now — live from geo-locked clock in/out */}
-            <div className="mb-4">
-              <div className="flex items-center gap-2 mb-2">
-                <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: C.soil }}>On-site now</span>
-                <span className="text-[10px] px-2 py-0.5 rounded-full" style={{ background: C.greenTint, color: C.greenDk }}>{onSite.on_site_count} on-site · GPS</span>
-              </div>
-              {onSiteQuery.isLoading ? <p className="text-xs" style={{ color: C.muted }}>Checking…</p>
-                : onSite.data.length === 0 ? <p className="text-xs" style={{ color: C.muted }}>No one has clocked in today. Workers clock in from <strong>Locations → Worker attendance</strong> (GPS-checked against your farm boundary).</p>
-                : (
-                  <div className="grid gap-2 grid-cols-1 sm:grid-cols-2">
-                    {onSite.data.map((p, i) => (
-                      <div key={i} className="flex items-center gap-3 rounded-xl p-2.5" style={{ background: C.cream }}>
-                        <div className="w-9 h-9 rounded-full flex items-center justify-center text-xs font-semibold text-white" style={{ background: p.on_site ? C.green : C.muted }}>{initials(p.worker_name)}</div>
-                        <div className="flex-1 min-w-0">
-                          <div className="font-medium text-sm truncate" style={{ color: C.soil }}>{p.worker_name}</div>
-                          <div className="text-[11px]" style={{ color: C.muted }}>{p.on_site ? "Clocked in" : "Clocked out"} {fmtClock(p.last_at)}{p.inside_boundary === false ? ` · ~${Math.round(p.distance_m)}m off-farm` : ""}</div>
-                        </div>
-                        <span className="text-[10px] font-semibold px-2 py-1 rounded-full" style={{
-                          color: p.on_site ? (p.inside_boundary === false ? C.amber : C.greenDk) : C.muted,
-                          background: "white", border: `1px solid ${C.border}`,
-                        }}>{p.on_site ? (p.inside_boundary === false ? "off-farm" : "on-site") : "out"}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-            </div>
-            <div className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: C.soil }}>Roster</div>
-            {workersQuery.isLoading && <p style={{ color: C.muted }}>Loading team…</p>}
-            {!workersQuery.isLoading && workers.length === 0 && <p style={{ color: C.muted }}>No workers on this farm yet. Add workers in the Roster tab.</p>}
-            <div className="grid gap-2 grid-cols-1 sm:grid-cols-2">
-              {workers.map((w) => (
-                <div key={w.worker_id} className="flex items-center gap-3 rounded-xl p-3" style={{ background: C.cream }}>
-                  <div className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-semibold text-white" style={{ background: C.green }}>{initials(w.full_name)}</div>
-                  <div className="flex-1">
-                    <div className="font-medium text-sm" style={{ color: C.soil }}>{w.full_name}</div>
-                    <div className="text-xs" style={{ color: C.muted }}>{typeLabel(w.worker_type)} · {formatFJD(w.daily_rate_fjd)}/day{statusByWorker[w.worker_id]?.last_at ? ` · ${fmtClock(statusByWorker[w.worker_id].last_at)}` : ""}</div>
-                  </div>
-                  {(() => {
-                    const st = statusByWorker[w.worker_id];
-                    const onsite = st?.on_site, off = onsite && st?.inside_boundary === false;
-                    return (
-                      <span className="text-[10px] font-semibold px-2 py-1 rounded-full" style={{
-                        color: !st ? C.muted : off ? C.amber : onsite ? C.greenDk : C.muted,
-                        background: "white", border: `1px solid ${C.border}`,
-                      }}>{!st ? "—" : off ? "off-farm" : onsite ? "on-site" : "out"}</span>
-                    );
-                  })()}
-                </div>
-              ))}
-            </div>
-            {workers.length > 0 && (
-              <p className="text-xs mt-3" style={{ color: C.muted }}>Live on-site status comes from GPS clock-in (Locations → Worker attendance). “Mark attendance” logs a paid timesheet day for payroll.</p>
-            )}
-          </div>
-        )}
-
-        {/* Roster */}
-        {tab === "roster" && (
-          <div className="space-y-2">
-            {workersQuery.isLoading && <p style={{ color: C.muted }}>Loading workers…</p>}
-            {!workersQuery.isLoading && workers.length === 0 && <p style={{ color: C.muted }}>No workers yet. Add your first worker.</p>}
-            {workers.map((w) => (
-              <div key={w.worker_id} className="flex items-center justify-between rounded-xl p-2.5" style={{ background: C.cream }}>
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-full flex items-center justify-center text-xs font-semibold text-white" style={{ background: C.green }}>{initials(w.full_name)}</div>
-                  <div>
-                    <div className="font-medium text-sm" style={{ color: C.soil }}>{w.full_name}</div>
-                    <div className="text-xs flex items-center gap-2" style={{ color: C.muted }}>
-                      <span>{typeLabel(w.worker_type)}</span>
-                      {w.contact_number && <span className="flex items-center gap-1"><Phone size={10} />{w.contact_number}</span>}
-                    </div>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="text-right"><div className="font-semibold text-sm" style={{ color: C.soil }}>{formatFJD(w.daily_rate_fjd)}</div><div className="text-[10px]" style={{ color: C.muted }}>per day</div></div>
-                  <button onClick={() => setRateWorker(w)} className="p-2 rounded-lg" style={{ color: C.muted }} title="Edit rate"><Pencil size={14} /></button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Timesheets */}
-        {tab === "timesheets" && (
-          <div className="space-y-2">
-            {laborQuery.isLoading && <p style={{ color: C.muted }}>Loading timesheets…</p>}
-            {!laborQuery.isLoading && attendance.length === 0 && <p style={{ color: C.muted }}>No attendance logged yet.</p>}
-            {attendance.map((r) => (
-              <div key={r.attendance_id} className="flex items-center justify-between rounded-xl p-2.5" style={{ background: C.cream }}>
-                <div>
-                  <div className="font-medium text-sm" style={{ color: C.soil }}>{r.worker_name}</div>
-                  <div className="text-xs" style={{ color: C.muted }}>{String(r.work_date).slice(0, 10)} · {Number(r.hours_worked)}h{r.task_description ? ` · ${r.task_description}` : ""}</div>
-                </div>
-                <div className="font-semibold text-sm" style={{ color: C.greenDk }}>{formatFJD(r.total_pay_fjd)}</div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Tabs awaiting a backend — full section structure, honest empty (no mock data) */}
-        {activeTab.needs && (
-          <div className="rounded-xl py-8 px-4 text-center" style={{ background: C.cream, border: `1px dashed ${C.border}` }}>
-            <div className="text-sm font-medium" style={{ color: C.soil }}>{activeTab.label}</div>
-            <div className="text-xs mt-1 max-w-md mx-auto" style={{ color: C.muted }}>
-              This tab is ready and will populate from {activeTab.needs}. No numbers are shown until that data is real — by design, so nothing here is fabricated.
-            </div>
-          </div>
-        )}
-      </section>
-
-      <AddWorkerModal farmId={farmId} isOpen={addOpen} onClose={() => setAddOpen(false)} onSaved={() => qc.invalidateQueries({ queryKey: ["workers", farmId] })} />
-      <LogAttendanceModal farmId={farmId} workers={workers} isOpen={logOpen} onClose={() => setLogOpen(false)} onSaved={() => qc.invalidateQueries({ queryKey: ["labor", farmId] })} />
-      <EditRateModal worker={rateWorker} isOpen={!!rateWorker} onClose={() => setRateWorker(null)} onSaved={() => qc.invalidateQueries({ queryKey: ["workers", farmId] })} />
+        <div className="overlay-foot"><button className="btn btn-secondary" onClick={onClose}>Cancel</button><button className="btn btn-primary" onClick={submit} disabled={busy}>{busy ? "Paying…" : "Pay wages"}</button></div>
+      </div>
     </div>
   );
 }
