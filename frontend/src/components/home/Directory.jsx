@@ -14,7 +14,7 @@ import Avatar from "../ui/Avatar";
 
 const API = "/api/v1/community";
 const toast = (message, type) => { try { window.dispatchEvent(new CustomEvent("tfos:toast", { detail: { message, type } })); } catch { /* noop */ } };
-const PROF_LABEL = { farmer: "Farmer", buyer: "Buyer", supplier: "Supplier", service_provider: "Service Provider", banker: "Banker", business: "Business", exporter: "Exporter", importer: "Importer" };
+import { personaLabel } from "../../utils/personas";
 const PROF_TABS = [["all", "All"], ["farmer", "Farmers"], ["buyer", "Buyers"], ["supplier", "Suppliers"], ["service_provider", "Service Providers"], ["banker", "Bankers"], ["business", "Business"], ["exporter", "Exporters"]];
 const sinceYear = (iso) => { try { return new Date(iso).getFullYear(); } catch { return null; } };
 
@@ -95,7 +95,7 @@ export default function Directory() {
       </div>
 
       {people == null ? <div style={{ color: "var(--muted)", padding: 14 }}>Loading…</div>
-        : people.length === 0 ? <div style={{ color: "var(--muted)", padding: 14 }}>No people found{q ? ` for "${q}"` : prof !== "all" ? ` in ${PROF_LABEL[prof] || prof}s` : " yet"}. As more users join, they appear here.</div>
+        : people.length === 0 ? <div style={{ color: "var(--muted)", padding: 14 }}>No people found{q ? ` for "${q}"` : prof !== "all" ? ` in ${personaLabel(prof)}s` : " yet"}. As more users join, they appear here.</div>
         : (
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             {people.map((p) => (
@@ -111,7 +111,7 @@ export default function Directory() {
                     </span>
                   </button>
                   <div style={{ fontSize: 11.5, color: "var(--muted)", display: "flex", gap: 8, flexWrap: "wrap", marginTop: 1 }}>
-                    <span className="pill grey" style={{ fontSize: 10.5 }}>{PROF_LABEL[p.profession] || p.profession}</span>
+                    <span className="pill grey" style={{ fontSize: 10.5 }}>{personaLabel(p.profession)}</span>
                     {p.country && <span>{p.country}</span>}
                     {p.member_since && <span>since {sinceYear(p.member_since)}</span>}
                     {p.online ? <span style={{ color: "#2e7d32", fontWeight: 600 }}>online</span> : null}

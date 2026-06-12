@@ -15,7 +15,7 @@ const tok = () => localStorage.getItem("tfos_access_token");
 async function getJSON(u) { const t = tok(); const r = await fetch(u, { headers: t ? { Authorization: `Bearer ${t}` } : {} }); if (!r.ok) throw new Error(String(r.status)); return r.json(); }
 const C = { soil: "#5C4033", green: "#6AA84F", greenDk: "#3E7B1F", line: "#E8E2D4", muted: "#8A7B6F", red: "#D4442E" };
 const initials = (n) => (n || "?").split(" ").map((s) => s[0]).slice(0, 2).join("").toUpperCase();
-const PROF = { farmer: "Farmer", buyer: "Buyer", supplier: "Supplier", service_provider: "Service Provider", banker: "Banker", business: "Business", exporter: "Exporter", importer: "Importer" };
+import { personaLabel } from "../../utils/personas";
 
 export default function ChatDropdown() {
   const narrow = useIsNarrow(640);
@@ -79,7 +79,7 @@ export default function ChatDropdown() {
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                   <span style={{ fontWeight: 700, fontSize: 13.5, color: C.soil, flex: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{c.full_name}</span>
-                  <span style={{ fontSize: 9.5, color: C.muted }}>{PROF[c.profession] || c.profession}</span>
+                  <span style={{ fontSize: 9.5, color: C.muted }}>{personaLabel(c.profession)}</span>
                 </div>
                 <div style={{ fontSize: 11.5, color: C.muted, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                   {c.online ? <span style={{ color: C.greenDk }}>● Active now</span> : c.last_body || "Tap to chat"}

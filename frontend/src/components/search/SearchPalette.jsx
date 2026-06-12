@@ -19,7 +19,7 @@ async function send(method, u) { const t = tok(); const r = await fetch(u, { met
 
 const C = { soil: "#5C4033", green: "#6AA84F", greenDk: "#3E7B1F", line: "#E8E2D4", cream: "#F8F3E9", muted: "#8A7B6F" };
 const initials = (n) => (n || "?").split(" ").map((s) => s[0]).slice(0, 2).join("").toUpperCase();
-const PROF = { farmer: "Farmer", buyer: "Buyer", supplier: "Supplier", service_provider: "Service Provider", banker: "Banker", business: "Business", exporter: "Exporter", importer: "Importer" };
+import { personaLabel, personaGroup } from "../../utils/personas";
 const LS_RECENT = "tfos_search_recent";
 
 // flatten the route map → navigation commands
@@ -66,8 +66,8 @@ export default function SearchPalette({ onClose }) {
     if (!term) return [];
     return NAV.filter((n) => n.label.toLowerCase().includes(term) || n.group.toLowerCase().includes(term)).slice(0, 7);
   }, [q]);
-  const farmers = people.filter((p) => p.profession === "farmer");
-  const businesses = people.filter((p) => p.profession !== "farmer");
+  const farmers = people.filter((p) => personaGroup(p.profession) === "PRODUCER");
+  const businesses = people.filter((p) => personaGroup(p.profession) !== "PRODUCER");
 
   // flat selectable list for keyboard nav
   const flat = useMemo(() => {
@@ -162,7 +162,7 @@ export default function SearchPalette({ onClose }) {
             <span style={{ fontWeight: 600, fontSize: 13.5, color: C.soil, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.full_name}</span>
             {p.verified && <BadgeCheck size={13} style={{ color: C.green }} />}
           </span>
-          <span style={{ fontSize: 11, color: C.muted }}>{PROF[p.profession] || p.profession}{p.country ? ` · ${p.country}` : ""}</span>
+          <span style={{ fontSize: 11, color: C.muted }}>{personaLabel(p.profession)}{p.country ? ` · ${p.country}` : ""}</span>
         </span>
         <span style={{ fontSize: 11.5, color: C.greenDk, display: "inline-flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
           {p.is_connected ? <><MessageCircle size={13} />Message</> : p.is_following ? <><UserCheck size={13} />Following</> : <><UserPlus size={13} />Follow</>}

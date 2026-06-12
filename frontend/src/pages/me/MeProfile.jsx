@@ -5,7 +5,7 @@ import { C, getJSON, card } from "./_meCommon";
 import Avatar from "../../components/ui/Avatar";
 
 const initials = (n) => (n || "?").split(" ").map((s) => s[0]).slice(0, 2).join("").toUpperCase();
-const PROF = { farmer: "Farmer", buyer: "Buyer", supplier: "Supplier", service_provider: "Service Provider", banker: "Banker", business: "Business", exporter: "Exporter", importer: "Importer" };
+import { personaLabel } from "../../utils/personas";
 const fmt = (iso) => { try { return new Date(iso).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }); } catch { return ""; } };
 
 export default function MeProfile() {
@@ -33,7 +33,7 @@ export default function MeProfile() {
             {me?.email_verified && <BadgeCheck size={18} style={{ color: C.green }} />}
           </div>
           <div style={{ fontSize: 12.5, color: C.muted, marginTop: 3, display: "flex", gap: 10, flexWrap: "wrap" }}>
-            {prof && <span style={{ background: "rgba(106,168,79,0.12)", color: C.greenDk, borderRadius: 6, padding: "2px 8px", fontWeight: 700, textTransform: "uppercase", fontSize: 10 }}>{PROF[prof] || prof}</span>}
+            {prof && <span style={{ background: "rgba(106,168,79,0.12)", color: C.greenDk, borderRadius: 6, padding: "2px 8px", fontWeight: 700, textTransform: "uppercase", fontSize: 10 }}>{personaLabel(prof)}</span>}
             {me?.country && <span><MapPin size={12} /> {me.country}</span>}
             {me?.email && <span>{me.email}</span>}
           </div>

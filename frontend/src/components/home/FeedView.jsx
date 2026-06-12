@@ -38,7 +38,7 @@ const REACTIONS = [
   { key: "learning", label: "Learning from this", Icon: BookOpen },
 ];
 const RX = Object.fromEntries(REACTIONS.map((r) => [r.key, r]));
-const PROF_LABEL = { farmer: "Farmer", buyer: "Buyer", banker: "Banker", business: "Business", service_provider: "Service Provider" };
+import { personaLabel } from "../../utils/personas";
 const FILTERS = [
   ["all", "All"], ["following", "Following"], ["questions", "Questions"],
   ["topics", "Topics"], ["profession_farmer", "Farmers"], ["profession_buyer", "Buyers"],
@@ -147,7 +147,7 @@ function ShareModal({ post, onClose, onShared }) {
               <button key={p.user_id} className="cm-menu-item" style={{ borderColor: sel?.user_id === p.user_id ? "var(--green)" : "var(--line)" }} onClick={() => setSel(p)}>
                 <Avatar src={p.avatar_url} name={p.full_name} size={30} fontScale={0.4} />
                 <span style={{ flex: 1 }}>{p.full_name} {p.verified && <BadgeCheck size={12} className="cm-verified-tick" />}</span>
-                <span className="cm-prof-badge">{PROF_LABEL[p.profession] || p.profession}</span>
+                <span className="cm-prof-badge">{personaLabel(p.profession)}</span>
               </button>
             ))}
       </div>
@@ -196,7 +196,7 @@ function MentionPicker({ onPick, onClose }) {
             <button key={p.user_id} className="cm-menu-item" onClick={() => onPick(p.full_name)}>
               <Avatar src={p.avatar_url} name={p.full_name} size={30} fontScale={0.4} />
               <span style={{ flex: 1 }}>{p.full_name}</span>
-              <span className="cm-prof-badge">{PROF_LABEL[p.profession] || p.profession}</span>
+              <span className="cm-prof-badge">{personaLabel(p.profession)}</span>
             </button>
           ))}
       </div>
@@ -515,7 +515,7 @@ function PostCard({ post, me, onChange, onRemoved }) {
           <div className="cm-post-author-row">
             <span className="cm-post-author-name" onClick={() => p.author_user_id && navigate(`/u/${p.author_user_id}`)} style={{ cursor: "pointer" }}>{p.author_name}</span>
             {p.author_verified && <BadgeCheck size={13} className="cm-verified-tick" />}
-            <span className="cm-prof-badge">{PROF_LABEL[p.author_profession] || p.author_profession}</span>
+            <span className="cm-prof-badge">{personaLabel(p.author_profession)}</span>
             {p.is_question && <span className="cm-prof-badge" style={{ background: "rgba(191,144,0,0.14)", color: "var(--amber,#bf9000)" }}><HelpCircle size={10} /> Question</span>}
           </div>
           <div className="cm-post-meta">{fmtTime(p.created_at)}{p.location ? ` · ${p.location}` : ""}{p.vertical ? ` · ${p.vertical}` : ""}{p.pinned ? " · 📌 Pinned" : ""}</div>
@@ -554,7 +554,7 @@ function PostCard({ post, me, onChange, onRemoved }) {
 
       {p.is_repost && p.repost_author_name && (
         <div className="cm-quoted">
-          <div className="cm-quoted-author">{p.repost_author_name} · {PROF_LABEL[p.repost_author_profession] || p.repost_author_profession}</div>
+          <div className="cm-quoted-author">{p.repost_author_name} · {personaLabel(p.repost_author_profession)}</div>
           <div className="cm-quoted-body">{renderBody(p.repost_body)}</div>
         </div>
       )}
