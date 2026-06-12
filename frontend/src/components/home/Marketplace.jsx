@@ -43,7 +43,7 @@ const priceLine = (l) => {
   return `${v}${BASIS_SUFFIX[l.price_basis || "kg"] ?? "/kg"}`;
 };
 // Profession-aware default category (just a default — freely changeable).
-const PROF_DEFAULT_CAT = { buyer: "WANTED", supplier: "INPUTS", service_provider: "SERVICES", importer: "WANTED", exporter: "WANTED" };
+const PROF_DEFAULT_CAT = { commercial_buyer: "WANTED", agri_input_supplier: "INPUTS", logistics_operator: "SERVICES", trade_importer: "WANTED", commodity_exporter: "WANTED" };
 const fjd = (v) => { const n = Number(v); return isNaN(n) || v == null ? null : `FJD ${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`; };
 const inp = { width: "100%", padding: "9px 11px", border: "1px solid var(--line)", borderRadius: 8, fontSize: 14, background: "#fff", boxSizing: "border-box" };
 

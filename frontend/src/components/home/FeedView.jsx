@@ -41,8 +41,8 @@ const RX = Object.fromEntries(REACTIONS.map((r) => [r.key, r]));
 import { personaLabel } from "../../utils/personas";
 const FILTERS = [
   ["all", "All"], ["following", "Following"], ["questions", "Questions"],
-  ["topics", "Topics"], ["profession_farmer", "Farmers"], ["profession_buyer", "Buyers"],
-  ["profession_service_provider", "Service Providers"], ["profession_banker", "Bankers"], ["profession_business", "Business"],
+  ["topics", "Topics"], ["group_PRODUCER", "Producers"], ["group_TRADE", "Trade"],
+  ["group_CAPITAL", "Capital"], ["group_GOVERNANCE", "Governance"], ["group_SERVICE", "Services"],
 ];
 const AUDIENCES = [
   ["everyone", "Everyone"], ["followers", "Your followers"], ["farmer", "Farmers"],

@@ -264,6 +264,15 @@ async def list_feed(
         elif filter.startswith("profession_"):
             where.append("fp.author_profession = :prof")
             params["prof"] = filter.replace("profession_", "")
+        elif filter.startswith("group_"):
+            from app.core.account_types import PERSONA_GROUPS
+            grp = filter.replace("group_", "").upper()
+            gtypes = [k.lower() for k, v in PERSONA_GROUPS.items() if v == grp]
+            if gtypes:
+                ph = ", ".join(f":fg{i}" for i in range(len(gtypes)))
+                where.append(f"fp.author_profession IN ({ph})")
+                for i, t in enumerate(gtypes):
+                    params[f"fg{i}"] = t
 
         if verified_only:
             where.append(f"{await _verified_expr(db)} = TRUE")
