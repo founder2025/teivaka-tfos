@@ -1,270 +1,280 @@
 /**
- * Equipment.jsx — /farm/equipment
+ * Equipment.jsx — /farm/equipment — PIXEL-EXACT rebuild of the prototype's Assets & Equipment.
  *
- * Team design system + v262 Equipment surface, all 6 prototype tabs.
- *   Live: GET/POST /api/v1/equipment (Fleet register + add + service-due).
- *   Empty (named backend needed): Maintenance, Usage, Costs, Parts, Analytics.
+ * Reproduces coreEquipmentView (Fleet) pixel-for-pixel — the "Shared across your farm" card,
+ * capital-strip, type + status filter pills, search, and the equip-card fleet grid (avatar,
+ * type/status pills, down-banner, service-countdown, meta tiles, actions) under <TfpShell> —
+ * replacing the Team-design page + stale ModeDropdown. Wired to real /api/v1/equipment:
+ *   Add → POST   Edit / Maintenance / Report fault / Mark resolved → PATCH /equipment/{id}
+ * Status derived from condition + next_service_date. Usage/Costs/Parts/Analytics = honest Building.
  */
-import { useState } from "react";
-import {
-  QueryClient, QueryClientProvider, useQuery, useQueryClient,
-} from "@tanstack/react-query";
-import { Plus, AlertTriangle } from "lucide-react";
-
+import { useMemo, useState } from "react";
+import { QueryClient, QueryClientProvider, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Plus, Search, X, Pencil, Tractor, Droplets, Wrench, Truck, Factory, Warehouse, Package, AlertTriangle } from "lucide-react";
+import TfpShell from "../../components/farm/TfpShell";
 import { CurrentFarmProvider, useCurrentFarm } from "../../context/CurrentFarmContext";
 import FarmSelector from "../../components/farm/FarmSelector";
-import ModeDropdown from "../../components/farm/ModeDropdown";
-import MetricCard from "../../components/farm/MetricCard";
-import Modal from "../../components/ui/Modal.jsx";
-import ThemedSelect from "../../components/inputs/ThemedSelect.jsx";
 
-const C = {
-  soil: "#5C4033", cream: "#F8F3E9", border: "#E6DED0", muted: "#8A7863",
-  green: "#6AA84F", greenDk: "#3E7B1F", amber: "#BF9000", red: "#D4442E",
-};
-const EQUIP_TYPES = [
-  { value: "TRACTOR", label: "Tractor" },
-  { value: "IRRIGATION", label: "Irrigation" },
-  { value: "TOOL", label: "Tool" },
-  { value: "VEHICLE", label: "Vehicle" },
-  { value: "PROCESSING", label: "Processing" },
-  { value: "STORAGE", label: "Storage" },
-  { value: "OTHER", label: "Other" },
-];
-const TABS = [
-  { id: "fleet", label: "Fleet", hint: "Assets" },
-  { id: "maintenance", label: "Maintenance", hint: "Service schedule" },
-  { id: "usage", label: "Usage", hint: "Hours & fuel", needs: "an equipment-usage log (no hours/fuel column yet)" },
-  { id: "costs", label: "Costs", hint: "Value & depreciation" },
-  { id: "parts", label: "Parts", hint: "Spares", needs: "a spare-parts inventory" },
-  { id: "analytics", label: "Analytics", hint: "Condition & value" },
-];
-
-function authHeaders() {
-  const tok = localStorage.getItem("tfos_access_token");
-  return tok ? { "Content-Type": "application/json", Authorization: `Bearer ${tok}` } : { "Content-Type": "application/json" };
-}
+function authHeaders() { const t = localStorage.getItem("tfos_access_token"); return t ? { "Content-Type": "application/json", Authorization: `Bearer ${t}` } : { "Content-Type": "application/json" }; }
 function emitToast(m) { window.dispatchEvent(new CustomEvent("tfos:toast", { detail: { message: m } })); }
-function formatFJD(v) {
-  const n = Number(v ?? 0);
-  if (Number.isNaN(n)) return "FJD —";
-  return `FJD ${Math.abs(n).toLocaleString("en-FJ", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-}
-function typeLabel(v) { return EQUIP_TYPES.find((t) => t.value === v)?.label || v || "—"; }
-function serviceDue(next) {
-  if (!next) return null;
-  const days = Math.ceil((new Date(String(next).slice(0, 10)) - new Date(new Date().toISOString().slice(0, 10))) / 86400000);
-  if (days < 0) return { label: `Overdue ${Math.abs(days)}d`, color: C.red };
-  if (days <= 14) return { label: `Service in ${days}d`, color: C.amber };
-  return { label: `Service in ${days}d`, color: C.green };
-}
+function todayISO() { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; }
+function plusDaysISO(n) { const d = new Date(Date.now() + n * 864e5); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; }
+function num(v) { return Number(v ?? 0); }
+function fjd0(v) { const n = Number(v ?? 0); return `FJD ${Math.round(n).toLocaleString("en-FJ")}`; }
 
-async function fetchEquipment(farmId) {
-  if (!farmId) return [];
-  const res = await fetch(`/api/v1/equipment?farm_id=${encodeURIComponent(farmId)}`, { headers: authHeaders() });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const b = await res.json(); return b?.data ?? [];
-}
+const TYPE_LABEL = { TRACTOR: "Tractor", IRRIGATION: "Irrigation", VEHICLE: "Vehicle", PROCESSING: "Processing", STORAGE: "Storage", TOOL: "Tool", OTHER: "Other" };
+const TYPE_OPTIONS = Object.entries(TYPE_LABEL).map(([value, label]) => ({ value, label }));
+const TYPE_ICON = { TRACTOR: Tractor, IRRIGATION: Droplets, VEHICLE: Truck, PROCESSING: Factory, STORAGE: Warehouse, TOOL: Wrench, OTHER: Package };
+const CONDITIONS = ["EXCELLENT", "GOOD", "FAIR", "POOR", "DECOMMISSIONED"];
+const VIEWS = [["fleet", "Fleet", "Assets"], ["maintenance", "Maintenance", "Service"], ["usage", "Usage", "Hours & fuel"], ["costs", "Costs", "Per-hour & P&L"], ["parts", "Parts", "Spares"], ["analytics", "Analytics", "Utilization"]];
+const STATUS_LABEL = { ok: "OK", "due-soon": "Due soon", overdue: "Overdue", down: "Down" };
 
-function AddEquipmentModal({ farmId, isOpen, onClose, onSaved }) {
-  const [name, setName] = useState("");
-  const [type, setType] = useState("TRACTOR");
-  const [make, setMake] = useState("");
-  const [model, setModel] = useState("");
-  const [value, setValue] = useState("");
-  const [nextService, setNextService] = useState("");
-  const [busy, setBusy] = useState(false);
-  async function submit() {
-    if (!name.trim()) { emitToast("Equipment name is required"); return; }
-    setBusy(true);
-    try {
-      const res = await fetch("/api/v1/equipment", {
-        method: "POST", headers: authHeaders(),
-        body: JSON.stringify({ farm_id: farmId, equipment_name: name.trim(), equipment_type: type, brand: make.trim() || null, model: model.trim() || null, current_value_fjd: value ? Number(value) : null, next_service_date: nextService || null }),
-      });
-      if (!res.ok) throw new Error();
-      emitToast("Equipment added"); onSaved?.(); onClose?.();
-    } catch { emitToast("Could not add equipment"); } finally { setBusy(false); }
-  }
+function effStatus(e) {
+  if (e.condition === "POOR" || e.condition === "DECOMMISSIONED") return "down";
+  if (e.next_service_date) { const d = Date.parse(e.next_service_date); if (Number.isFinite(d)) { const days = Math.floor((d - Date.now()) / 864e5); if (days < 0) return "overdue"; if (days <= 30) return "due-soon"; } }
+  return "ok";
+}
+function serviceLabel(e) {
+  if (!e.next_service_date) return "Calendar-tracked";
+  const d = Date.parse(e.next_service_date); if (!Number.isFinite(d)) return "Calendar-tracked";
+  const days = Math.floor((d - Date.now()) / 864e5);
+  return days < 0 ? `OVERDUE ${Math.abs(days)}d` : `${days}d to service`;
+}
+function yearOf(d) { if (!d) return ""; const y = new Date(d).getFullYear(); return Number.isFinite(y) ? y : ""; }
+
+async function getEquipment(farmId) { const r = await fetch(`/api/v1/equipment?farm_id=${encodeURIComponent(farmId)}`, { headers: authHeaders() }); if (!r.ok) throw new Error(r.status); return (await r.json())?.data ?? []; }
+
+function EquipCard({ e, onOpen, onMaint, onFault, onResolve, onEdit }) {
+  const st = effStatus(e); const Icon = TYPE_ICON[e.equipment_type] || Package;
+  const sub = [e.brand, e.model, yearOf(e.purchase_date)].filter(Boolean).join(" ");
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Add equipment"
-      footer={<div className="flex justify-end gap-2">
-        <button onClick={onClose} className="px-4 py-2 rounded-lg" style={{ color: C.muted }}>Cancel</button>
-        <button onClick={submit} disabled={busy} className="px-4 py-2 rounded-lg text-white" style={{ background: C.greenDk, opacity: busy ? 0.6 : 1 }}>Add equipment</button>
-      </div>}>
-      <div className="space-y-3">
-        <label className="block text-sm" style={{ color: C.soil }}>Name
-          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Kubota L3408" className="mt-1 w-full px-3 py-2 rounded-lg border" style={{ borderColor: C.border }} /></label>
-        <label className="block text-sm" style={{ color: C.soil }}>Type
-          <ThemedSelect value={type} onChange={setType} options={EQUIP_TYPES} /></label>
-        <div className="grid grid-cols-2 gap-3">
-          <label className="block text-sm" style={{ color: C.soil }}>Make (optional)
-            <input value={make} onChange={(e) => setMake(e.target.value)} className="mt-1 w-full px-3 py-2 rounded-lg border" style={{ borderColor: C.border }} /></label>
-          <label className="block text-sm" style={{ color: C.soil }}>Model (optional)
-            <input value={model} onChange={(e) => setModel(e.target.value)} className="mt-1 w-full px-3 py-2 rounded-lg border" style={{ borderColor: C.border }} /></label>
+    <div className={`equip-card ${st}`}>
+      <div className="equip-card-head" onClick={onOpen} style={{ cursor: "pointer" }}>
+        <div className={`equip-avatar ${(e.equipment_type || "").toLowerCase()}`}><Icon size={20} /></div>
+        <div style={{ flex: 1 }}>
+          <div className="equip-card-name">{e.equipment_name}</div>
+          <div style={{ margin: "3px 0" }}>
+            <span className={`equip-cat-pill ${(e.equipment_type || "").toLowerCase()}`}>{TYPE_LABEL[e.equipment_type] || e.equipment_type}</span>{" "}
+            <span className={`equip-status-pill ${st}`}><span className={`equip-status-dot ${st}`} />{STATUS_LABEL[st]}</span>
+          </div>
+          <div className="equip-card-sub">{sub || "—"}{e.serial_number ? ` · ${e.serial_number}` : ""}</div>
         </div>
-        <div className="grid grid-cols-2 gap-3">
-          <label className="block text-sm" style={{ color: C.soil }}>Current value (FJD)
-            <input type="number" min="0" value={value} onChange={(e) => setValue(e.target.value)} className="mt-1 w-full px-3 py-2 rounded-lg border" style={{ borderColor: C.border }} /></label>
-          <label className="block text-sm" style={{ color: C.soil }}>Next service due
-            <input type="date" value={nextService} onChange={(e) => setNextService(e.target.value)} className="mt-1 w-full px-3 py-2 rounded-lg border" style={{ borderColor: C.border }} /></label>
-        </div>
+        <button className="btn btn-secondary btn-sm" title="Edit" onClick={(ev) => { ev.stopPropagation(); onEdit(e); }}><Pencil size={12} /></button>
       </div>
-    </Modal>
-  );
-}
-
-function NeedsBlock({ tab }) {
-  return (
-    <div className="rounded-xl py-8 px-4 text-center" style={{ background: C.cream, border: `1px dashed ${C.border}` }}>
-      <div className="text-sm font-medium" style={{ color: C.soil }}>{tab.label}</div>
-      <div className="text-xs mt-1 max-w-md mx-auto" style={{ color: C.muted }}>
-        This tab is ready and will populate from {tab.needs}. No numbers shown until that data is real — by design, so nothing here is fabricated.
+      {st === "down"
+        ? <div className="down-banner"><AlertTriangle size={14} /><div><strong>DOWN{e.condition === "DECOMMISSIONED" ? " · decommissioned" : " · fault reported"}</strong>{e.notes ? <><br />{e.notes}</> : null}</div></div>
+        : <div className={`service-countdown ${st === "ok" ? "ok" : st}`}>{serviceLabel(e)}</div>}
+      <div className="equip-card-meta">
+        <div className="equip-meta-tile"><div className="equip-meta-label">Condition</div><div className="equip-meta-value" style={{ fontSize: 11 }}>{e.condition ? e.condition[0] + e.condition.slice(1).toLowerCase() : "—"}</div></div>
+        <div className="equip-meta-tile"><div className="equip-meta-label">Book value</div><div className="equip-meta-value">{e.current_value_fjd ? fjd0(e.current_value_fjd) : "—"}</div></div>
+        <div className="equip-meta-tile"><div className="equip-meta-label">Next service</div><div className="equip-meta-value" style={{ fontSize: 10.5 }}>{e.next_service_date ? String(e.next_service_date).slice(0, 10) : "—"}</div></div>
+      </div>
+      <div className="equip-card-actions">
+        <button className="btn btn-secondary" onClick={() => onMaint(e)}>Maintenance</button>
+        {st === "down" ? <button className="btn btn-primary" onClick={() => onResolve(e)}>Mark resolved</button> : <button className="btn btn-secondary" onClick={() => onFault(e)}>Report fault</button>}
       </div>
     </div>
   );
 }
 
+function Building({ title, body }) {
+  return <div className="card" style={{ padding: "16px 18px" }}><div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}><span style={{ fontWeight: 700, color: "var(--soil)" }}>{title}</span><span style={{ fontSize: 11.5, fontWeight: 700, color: "var(--muted)" }}>Building</span></div><div style={{ fontSize: 12.5, color: "var(--muted)", marginTop: 6, lineHeight: 1.5 }}>{body}</div></div>;
+}
+
 function EquipmentInner() {
   const qc = useQueryClient();
   const { farmId } = useCurrentFarm();
-  const [tab, setTab] = useState("fleet");
-  const [addOpen, setAddOpen] = useState(false);
+  const [view, setView] = useState("fleet");
+  const [type, setType] = useState("all");
+  const [status, setStatus] = useState("all");
+  const [q, setQ] = useState("");
+  const [form, setForm] = useState(null); // {mode:'add'|'edit', equip?}
+  const [maint, setMaint] = useState(null);
+  const [fault, setFault] = useState(null);
 
-  const equipQuery = useQuery({ queryKey: ["equipment", farmId], queryFn: () => fetchEquipment(farmId), enabled: !!farmId });
-  const items = equipQuery.data ?? [];
-  const dueCount = items.filter((e) => { const s = serviceDue(e.next_service_date); return s && s.color !== C.green; }).length;
-  const fleetValue = items.reduce((s, e) => s + Number(e.current_value_fjd ?? 0), 0);
-  const activeTab = TABS.find((t) => t.id === tab) || TABS[0];
+  const equipQ = useQuery({ queryKey: ["equipment", farmId], queryFn: () => getEquipment(farmId), enabled: !!farmId });
+  const equip = equipQ.data ?? [];
+
+  const bookValue = equip.reduce((s, e) => s + num(e.current_value_fjd), 0);
+  const serviceDue = equip.filter((e) => ["due-soon", "overdue"].includes(effStatus(e))).length;
+  const down = equip.filter((e) => effStatus(e) === "down").length;
+  const typesPresent = useMemo(() => { const m = {}; equip.forEach((e) => { m[e.equipment_type] = (m[e.equipment_type] || 0) + 1; }); return m; }, [equip]);
+
+  let rows = equip.slice();
+  if (type !== "all") rows = rows.filter((e) => e.equipment_type === type);
+  if (status !== "all") rows = rows.filter((e) => effStatus(e) === status);
+  if (q.trim()) { const qq = q.toLowerCase(); rows = rows.filter((e) => `${e.equipment_name} ${e.brand || ""} ${e.model || ""} ${e.serial_number || ""}`.toLowerCase().includes(qq)); }
+
+  const refetch = () => qc.invalidateQueries({ queryKey: ["equipment", farmId] });
+  async function patch(id, body, okMsg) {
+    try { const r = await fetch(`/api/v1/equipment/${encodeURIComponent(id)}`, { method: "PATCH", headers: authHeaders(), body: JSON.stringify(body) }); if (!r.ok) throw new Error(); emitToast(okMsg); refetch(); }
+    catch { emitToast("Could not update"); }
+  }
+
+  const maintList = useMemo(() => equip.slice().sort((a, b) => String(a.next_service_date || "9999").localeCompare(String(b.next_service_date || "9999"))), [equip]);
 
   return (
-    <div className="space-y-4">
-      <div>
-        <h1 className="text-2xl font-bold" style={{ color: C.soil }}>Equipment</h1>
-        <div className="text-xs mt-0.5" style={{ color: C.muted }}>Asset register · maintenance · utilization</div>
-      </div>
-      <div className="flex items-center justify-between gap-2 flex-wrap">
-        <FarmSelector />
-        <ModeDropdown />
-      </div>
-      <div className="grid gap-2 grid-cols-2 sm:grid-cols-4">
-        <MetricCard label="Assets" value={String(items.length)} sub="in fleet" loading={equipQuery.isLoading} />
-        <MetricCard label="Service due" value={String(dueCount)} sub="due / overdue" loading={equipQuery.isLoading} />
-        <MetricCard label="Fleet value" value={formatFJD(fleetValue)} sub="current" loading={equipQuery.isLoading} />
-        <MetricCard label="Usage hours" phase="Phase 6.5" />
-      </div>
-      <div className="flex gap-1 overflow-x-auto border-b" style={{ borderColor: C.border }}>
-        {TABS.map((t) => (
-          <button key={t.id} onClick={() => setTab(t.id)} className="px-3 py-2 text-sm font-medium whitespace-nowrap flex flex-col items-start"
-            style={{ color: tab === t.id ? C.greenDk : C.muted, borderBottom: tab === t.id ? `2px solid ${C.green}` : "2px solid transparent", opacity: t.needs ? 0.6 : 1 }}>
-            {t.label}<span className="text-[10px]" style={{ color: C.muted }}>{t.hint}</span>
-          </button>
-        ))}
-      </div>
-      <section className="bg-white rounded-2xl px-4 py-4" style={{ border: `1px solid ${C.border}` }}>
-        <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
-          <div className="text-sm font-semibold uppercase tracking-wider" style={{ color: C.soil }}>{activeTab.label}</div>
-          {tab === "fleet" && <button onClick={() => setAddOpen(true)} className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-white text-sm" style={{ background: C.greenDk }}><Plus size={15} /> Add equipment</button>}
-        </div>
-
-        {tab === "fleet" && (
-          <div className="space-y-2">
-            {equipQuery.isLoading && <p style={{ color: C.muted }}>Loading fleet…</p>}
-            {!equipQuery.isLoading && items.length === 0 && <p style={{ color: C.muted }}>No equipment yet. Add your first asset.</p>}
-            {items.map((e) => {
-              const due = serviceDue(e.next_service_date);
-              return (
-                <div key={e.equipment_id} className="flex items-center justify-between rounded-xl p-2.5" style={{ background: C.cream }}>
-                  <div>
-                    <div className="font-medium text-sm" style={{ color: C.soil }}>{e.equipment_name}</div>
-                    <div className="text-xs" style={{ color: C.muted }}>
-                      {typeLabel(e.equipment_type)}{(e.brand || e.model) ? ` · ${[e.brand, e.model].filter(Boolean).join(" ")}` : ""}{e.current_value_fjd != null ? ` · ${formatFJD(e.current_value_fjd)}` : ""}
-                    </div>
-                  </div>
-                  {due && (
-                    <span className="text-xs font-semibold flex items-center gap-1 rounded-full px-2 py-1" style={{ color: due.color, background: "white", border: `1px solid ${C.border}` }}>
-                      {due.color === C.red && <AlertTriangle size={12} />} {due.label}
-                    </span>
-                  )}
-                </div>
-              );
-            })}
+    <TfpShell>
+      <main className="main-content">
+        <div className="main-inner">
+          <div className="page-header">
+            <div><h1>Assets &amp; Equipment</h1><div className="subtitle">Crops + animals · {equip.length} asset{equip.length === 1 ? "" : "s"}{down > 0 ? ` · ${down} down` : ""}</div></div>
+            <div className="page-actions"><FarmSelector /><button className="btn btn-primary" onClick={() => setForm({ mode: "add" })}><Plus size={13} />Add equipment</button></div>
           </div>
-        )}
 
-        {tab === "maintenance" && (() => {
-          // Real service schedule from the fleet's last/next_service_date + condition.
-          const sorted = [...items].sort((a, b) => String(a.next_service_date || "9999").localeCompare(String(b.next_service_date || "9999")));
-          if (!items.length) return <p style={{ color: C.muted }}>No equipment yet — service schedule appears as you add assets with service dates.</p>;
-          return (
-            <div className="space-y-2">
-              {sorted.map((e) => { const d = serviceDue(e.next_service_date); return (
-                <div key={e.equipment_id} className="flex items-center justify-between rounded-xl p-2.5" style={{ background: C.cream }}>
-                  <div>
-                    <div className="font-medium text-sm" style={{ color: C.soil }}>{e.equipment_name}</div>
-                    <div className="text-xs" style={{ color: C.muted }}>{e.condition ? `${e.condition} · ` : ""}last service {e.last_service_date ? String(e.last_service_date).slice(0, 10) : "—"}</div>
+          <div className="cycle-view-tabs">
+            {VIEWS.map(([id, l, s]) => <div key={id} className={`task-tab ${view === id ? "active" : ""}`} onClick={() => setView(id)}>{l}<span className="task-tab-count" style={{ fontSize: 10 }}>{s}</span></div>)}
+          </div>
+
+          {!farmId ? <div className="card" style={{ padding: 20, color: "var(--muted)" }}>Select a farm to see its assets.</div>
+            : equipQ.isLoading ? <div className="card" style={{ padding: 20, color: "var(--muted)" }}>Loading…</div>
+            : view === "fleet" ? (
+              <>
+                <div className="card" style={{ marginBottom: 14, padding: "12px 16px" }}>
+                  <div style={{ fontWeight: 700, color: "var(--soil)", marginBottom: 6 }}>Shared across your farm</div>
+                  <div style={{ fontSize: 12.5, color: "var(--soil)", lineHeight: 1.6 }}>Your machines and tools aren't tied to one crop — the pump waters beds and fills troughs, the ute hauls produce and stock, hand tools serve every job. Each asset is logged once and worked across every enterprise. Animal-specific gear (feeders, coops, fencing, milking, incubators) registers here the same way.</div>
+                </div>
+
+                <div className="capital-strip" style={{ gridTemplateColumns: "repeat(4,1fr)" }}>
+                  <div className="capital-tile"><div className="capital-tile-label">Total assets</div><div className="capital-tile-value">{equip.length}</div><div className="capital-tile-sub">{farmId} fleet</div></div>
+                  <div className="capital-tile" onClick={() => setView("costs")} style={{ cursor: "pointer" }}><div className="capital-tile-label">Book value</div><div className="capital-tile-value">FJD {(bookValue / 1000).toFixed(1)}k</div><div className="capital-tile-sub">balance sheet</div></div>
+                  <div className="capital-tile" onClick={() => setView("maintenance")} style={{ cursor: "pointer" }}><div className="capital-tile-label">Service due</div><div className="capital-tile-value" style={{ color: serviceDue > 0 ? "var(--amber)" : null }}>{serviceDue}</div><div className="capital-tile-sub">due soon + overdue</div></div>
+                  <div className="capital-tile"><div className="capital-tile-label">Down / at-risk</div><div className="capital-tile-value" style={{ color: down > 0 ? "var(--red)" : null }}>{down}</div><div className="capital-tile-sub">{down > 0 ? "needs attention" : "all running"}</div></div>
+                </div>
+
+                <div className="gallery-filter-row" style={{ marginBottom: 8 }}>
+                  <span style={{ fontSize: 10.5, color: "var(--muted)", textTransform: "uppercase", letterSpacing: ".5px", marginRight: 6, alignSelf: "center" }}>Type:</span>
+                  <button className={`filter-pill ${type === "all" ? "active" : ""}`} onClick={() => setType("all")}>All<span className="filter-pill-count">{equip.length}</span></button>
+                  {Object.entries(typesPresent).map(([t, n]) => <button key={t} className={`filter-pill ${type === t ? "active" : ""}`} onClick={() => setType(t)}>{TYPE_LABEL[t] || t}<span className="filter-pill-count">{n}</span></button>)}
+                </div>
+                <div className="gallery-filter-row" style={{ marginBottom: 8 }}>
+                  <span style={{ fontSize: 10.5, color: "var(--muted)", textTransform: "uppercase", letterSpacing: ".5px", marginRight: 6, alignSelf: "center" }}>Status:</span>
+                  {[["all", "All"], ["ok", "OK"], ["due-soon", "Due soon"], ["overdue", "Overdue"], ["down", "Down"]].map(([id, l]) => <button key={id} className={`filter-pill ${status === id ? "active" : ""}`} onClick={() => setStatus(id)}>{l}</button>)}
+                </div>
+                <div style={{ marginBottom: 14, position: "relative" }}>
+                  <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search equipment by name, make, serial..." style={{ width: "100%", padding: "9px 12px 9px 38px", border: "1.5px solid var(--line)", borderRadius: 7, fontSize: 13, background: "var(--paper)" }} />
+                  <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "var(--muted)", pointerEvents: "none" }}><Search size={14} /></span>
+                </div>
+
+                {equip.length === 0 ? <div className="card" style={{ padding: 28, textAlign: "center", color: "var(--muted)" }}>No equipment yet — add your tractors, pumps, sprayers, tools and vehicles to put them on the books.</div>
+                  : rows.length === 0 ? <div className="card" style={{ padding: 40, textAlign: "center", color: "var(--muted)" }}>No equipment matches these filters.</div>
+                  : <div className="equip-fleet-grid">{rows.map((e) => <EquipCard key={e.equipment_id} e={e} onOpen={() => setForm({ mode: "edit", equip: e })} onEdit={(x) => setForm({ mode: "edit", equip: x })} onMaint={setMaint} onFault={setFault} onResolve={(x) => patch(x.equipment_id, { condition: "GOOD" }, "Marked resolved")} />)}</div>}
+              </>
+            ) : view === "maintenance" ? (
+              maintList.length === 0 ? <Building title="Maintenance schedule" body="Service dates appear here as you add equipment and log maintenance." />
+                : <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>{maintList.map((e) => { const st = effStatus(e); return (
+                  <div key={e.equipment_id} className="card" style={{ padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
+                    <div><div style={{ fontWeight: 600, color: "var(--soil)" }}>{e.equipment_name}</div><div style={{ fontSize: 11.5, color: "var(--muted)" }}>{TYPE_LABEL[e.equipment_type] || e.equipment_type} · {e.next_service_date ? `next ${String(e.next_service_date).slice(0, 10)}` : "no service date"} · {serviceLabel(e)}</div></div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}><span className={`equip-status-pill ${st}`}><span className={`equip-status-dot ${st}`} />{STATUS_LABEL[st]}</span><button className="btn btn-secondary btn-sm" onClick={() => setMaint(e)}>Log service</button></div>
                   </div>
-                  {d ? <span className="text-xs font-semibold rounded-full px-2 py-1" style={{ color: d.color, background: "white", border: `1px solid ${C.border}` }}>{d.label}</span>
-                     : <span className="text-xs" style={{ color: C.muted }}>no service date</span>}
-                </div>
-              ); })}
-            </div>
-          );
-        })()}
+                ); })}</div>
+            ) : view === "usage" ? <Building title="Usage — hours & fuel" body="Log running hours and fuel per machine to drive cost-per-hour and service-by-hours. Needs a usage-log table — ships next; nothing fabricated until then." />
+            : view === "costs" ? <Building title="Costs — per-hour & P&L" body="Cost per hour and asset P&L roll up from purchase cost, maintenance spend (Cash · category EQUIPMENT) and logged hours. Turns on once usage + maintenance costs are logged." />
+            : view === "parts" ? <Building title="Parts & spares" body="Track spare parts, their suppliers and ferry lead time. Needs a parts inventory — on the roadmap." />
+            : <Building title="Utilization analytics" body="Which assets earn their keep — utilization and downtime trends. Builds from usage + fault history." />}
+        </div>
+      </main>
 
-        {tab === "costs" && (() => {
-          // Real value/depreciation by type from purchase_cost_fjd vs current_value_fjd.
-          if (!items.length) return <p style={{ color: C.muted }}>Add equipment to see fleet value and depreciation.</p>;
-          const by = {};
-          items.forEach((e) => { const k = typeLabel(e.equipment_type); (by[k] = by[k] || { cur: 0, buy: 0, n: 0 }); by[k].cur += Number(e.current_value_fjd) || 0; by[k].buy += Number(e.purchase_cost_fjd) || 0; by[k].n += 1; });
-          const totalCur = items.reduce((a, e) => a + (Number(e.current_value_fjd) || 0), 0);
-          const totalBuy = items.reduce((a, e) => a + (Number(e.purchase_cost_fjd) || 0), 0);
-          return (
-            <div className="space-y-2">
-              <div className="text-sm font-semibold" style={{ color: C.soil }}>Fleet value {formatFJD(totalCur)} · purchased {formatFJD(totalBuy)} · depreciation {formatFJD(totalBuy - totalCur)}</div>
-              {Object.entries(by).sort((a, b) => b[1].cur - a[1].cur).map(([k, v]) => (
-                <div key={k} className="flex items-center justify-between rounded-xl p-2.5 text-sm" style={{ background: C.cream }}>
-                  <span style={{ color: C.soil }}>{k} <span style={{ color: C.muted }}>· {v.n}</span></span>
-                  <span style={{ color: C.soil }}>{formatFJD(v.cur)}</span>
-                </div>
-              ))}
-            </div>
-          );
-        })()}
+      {form && <EquipForm farmId={farmId} mode={form.mode} equip={form.equip} onClose={() => setForm(null)} onSaved={() => { refetch(); setForm(null); }} />}
+      {maint && <MaintModal equip={maint} onClose={() => setMaint(null)} onSave={(body) => { patch(maint.equipment_id, body, "Service logged"); setMaint(null); }} />}
+      {fault && <FaultModal equip={fault} onClose={() => setFault(null)} onSave={(notes) => { patch(fault.equipment_id, { condition: "POOR", notes }, "Fault reported · marked down"); setFault(null); }} />}
+    </TfpShell>
+  );
+}
 
-        {tab === "analytics" && (() => {
-          // Real condition + value-by-type breakdown.
-          if (!items.length) return <p style={{ color: C.muted }}>Fleet analytics appear once you add equipment.</p>;
-          const cond = {};
-          items.forEach((e) => { const k = e.condition || "UNKNOWN"; cond[k] = (cond[k] || 0) + 1; });
-          const byType = {};
-          items.forEach((e) => { const k = typeLabel(e.equipment_type); byType[k] = (byType[k] || 0) + (Number(e.current_value_fjd) || 0); });
-          const maxV = Math.max(1, ...Object.values(byType));
-          return (
-            <div className="space-y-3">
-              <div>
-                <div className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: C.muted }}>Condition</div>
-                <div className="flex flex-wrap gap-2">
-                  {Object.entries(cond).map(([k, n]) => <span key={k} className="text-xs rounded-full px-2 py-1" style={{ background: C.cream, color: C.soil }}>{k}: {n}</span>)}
-                </div>
-              </div>
-              <div>
-                <div className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: C.muted }}>Value by type</div>
-                {Object.entries(byType).sort((a, b) => b[1] - a[1]).map(([k, v]) => (
-                  <div key={k} className="mb-1.5">
-                    <div className="flex justify-between text-xs mb-0.5" style={{ color: C.soil }}><span>{k}</span><span>{formatFJD(v)}</span></div>
-                    <div className="h-2 rounded-full" style={{ background: C.cream }}><div className="h-2 rounded-full" style={{ width: `${Math.round((v / maxV) * 100)}%`, background: C.greenDk }} /></div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          );
-        })()}
+function Field({ label, children }) { return <div className="form-row"><label>{label}</label>{children}</div>; }
 
-        {activeTab.needs && <NeedsBlock tab={activeTab} />}
-      </section>
+function EquipForm({ farmId, mode, equip, onClose, onSaved }) {
+  const isEdit = mode === "edit"; const e = equip || {};
+  const [f, setF] = useState({
+    equipment_name: e.equipment_name || "", equipment_type: e.equipment_type || "TRACTOR", condition: e.condition || "GOOD",
+    brand: e.brand || "", model: e.model || "", serial_number: e.serial_number || "",
+    purchase_date: e.purchase_date ? String(e.purchase_date).slice(0, 10) : "", purchase_cost_fjd: e.purchase_cost_fjd || "",
+    current_value_fjd: e.current_value_fjd || "", next_service_date: e.next_service_date ? String(e.next_service_date).slice(0, 10) : "", notes: e.notes || "",
+  });
+  const [busy, setBusy] = useState(false);
+  const set = (k) => (ev) => setF((s) => ({ ...s, [k]: ev.target.value }));
+  async function submit() {
+    if (!f.equipment_name.trim()) { emitToast("Name is required"); return; }
+    setBusy(true);
+    const payload = {
+      equipment_name: f.equipment_name.trim(), equipment_type: f.equipment_type, condition: f.condition,
+      brand: f.brand.trim() || null, model: f.model.trim() || null, serial_number: f.serial_number.trim() || null,
+      purchase_date: f.purchase_date || null, purchase_cost_fjd: f.purchase_cost_fjd ? Number(f.purchase_cost_fjd) : null,
+      current_value_fjd: f.current_value_fjd ? Number(f.current_value_fjd) : null, next_service_date: f.next_service_date || null, notes: f.notes.trim() || null,
+    };
+    try {
+      const r = isEdit
+        ? await fetch(`/api/v1/equipment/${encodeURIComponent(e.equipment_id)}`, { method: "PATCH", headers: authHeaders(), body: JSON.stringify(payload) })
+        : await fetch("/api/v1/equipment", { method: "POST", headers: authHeaders(), body: JSON.stringify({ farm_id: farmId, ...payload }) });
+      if (!r.ok) { let m = "Could not save"; try { const b = await r.json(); m = b?.detail || m; } catch {} emitToast(typeof m === "string" ? m : "Could not save"); return; }
+      emitToast(isEdit ? "Equipment updated" : "Equipment added"); onSaved?.();
+    } catch { emitToast("Could not save"); } finally { setBusy(false); }
+  }
+  return (
+    <div className="overlay-backdrop show" onClick={onClose}>
+      <div className="overlay-modal" onClick={(ev) => ev.stopPropagation()}>
+        <div className="overlay-head"><h2>{isEdit ? "Edit equipment" : "Add equipment"}</h2><button className="overlay-close" onClick={onClose}><X size={14} /></button></div>
+        <div className="overlay-body">
+          <div className="form-row" style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 10 }}>
+            <div><label>Name</label><input value={f.equipment_name} onChange={set("equipment_name")} placeholder="e.g. Honda 4x4 tractor" /></div>
+            <div><label>Type</label><select value={f.equipment_type} onChange={set("equipment_type")}>{TYPE_OPTIONS.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}</select></div>
+          </div>
+          <div className="form-row" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginTop: 10 }}>
+            <div><label>Make</label><input value={f.brand} onChange={set("brand")} /></div>
+            <div><label>Model</label><input value={f.model} onChange={set("model")} /></div>
+            <div><label>Serial</label><input value={f.serial_number} onChange={set("serial_number")} /></div>
+          </div>
+          <div className="form-row" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginTop: 10 }}>
+            <div><label>Purchase date</label><input type="date" value={f.purchase_date} onChange={set("purchase_date")} /></div>
+            <div><label>Purchase cost</label><input type="number" min="0" value={f.purchase_cost_fjd} onChange={set("purchase_cost_fjd")} /></div>
+            <div><label>Book value</label><input type="number" min="0" value={f.current_value_fjd} onChange={set("current_value_fjd")} /></div>
+          </div>
+          <div className="form-row" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 10 }}>
+            <div><label>Condition</label><select value={f.condition} onChange={set("condition")}>{CONDITIONS.map((c) => <option key={c} value={c}>{c[0] + c.slice(1).toLowerCase()}</option>)}</select></div>
+            <div><label>Next service date</label><input type="date" value={f.next_service_date} onChange={set("next_service_date")} /></div>
+          </div>
+          <div className="form-row" style={{ marginTop: 10 }}><label>Notes</label><textarea rows={2} value={f.notes} onChange={set("notes")} /></div>
+        </div>
+        <div className="overlay-foot"><button className="btn btn-secondary" onClick={onClose}>Cancel</button><button className="btn btn-primary" onClick={submit} disabled={busy}>{busy ? "Saving…" : isEdit ? "Save" : "Add equipment"}</button></div>
+      </div>
+    </div>
+  );
+}
 
-      <AddEquipmentModal farmId={farmId} isOpen={addOpen} onClose={() => setAddOpen(false)} onSaved={() => qc.invalidateQueries({ queryKey: ["equipment", farmId] })} />
+function MaintModal({ equip, onClose, onSave }) {
+  const [last, setLast] = useState(todayISO());
+  const [next, setNext] = useState(plusDaysISO(90));
+  const [note, setNote] = useState("");
+  return (
+    <div className="overlay-backdrop show" onClick={onClose}>
+      <div className="overlay-modal" style={{ maxWidth: 460 }} onClick={(e) => e.stopPropagation()}>
+        <div className="overlay-head"><h2>Log service — {equip.equipment_name}</h2><button className="overlay-close" onClick={onClose}><X size={14} /></button></div>
+        <div className="overlay-body">
+          <div className="form-row" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+            <div><label>Serviced on</label><input type="date" value={last} onChange={(e) => setLast(e.target.value)} /></div>
+            <div><label>Next service</label><input type="date" value={next} onChange={(e) => setNext(e.target.value)} /></div>
+          </div>
+          <div className="form-row" style={{ marginTop: 10 }}><label>What was done (optional)</label><input value={note} onChange={(e) => setNote(e.target.value)} placeholder="e.g. oil + filter change" /></div>
+        </div>
+        <div className="overlay-foot"><button className="btn btn-secondary" onClick={onClose}>Cancel</button><button className="btn btn-primary" onClick={() => onSave({ last_service_date: last, next_service_date: next, ...(note.trim() ? { notes: `Serviced ${last}: ${note.trim()}` } : {}) })}>Log service</button></div>
+      </div>
+    </div>
+  );
+}
+
+function FaultModal({ equip, onClose, onSave }) {
+  const [desc, setDesc] = useState("");
+  return (
+    <div className="overlay-backdrop show" onClick={onClose}>
+      <div className="overlay-modal" style={{ maxWidth: 460 }} onClick={(e) => e.stopPropagation()}>
+        <div className="overlay-head"><h2>Report fault — {equip.equipment_name}</h2><button className="overlay-close" onClick={onClose}><X size={14} /></button></div>
+        <div className="overlay-body">
+          <div style={{ fontSize: 12.5, color: "var(--muted)", marginBottom: 12 }}>Marks the asset <strong style={{ color: "var(--red)" }}>down</strong> until you mark it resolved.</div>
+          <Field label="What's wrong?"><textarea rows={3} value={desc} onChange={(e) => setDesc(e.target.value)} placeholder="e.g. Impeller failure · won't prime" /></Field>
+        </div>
+        <div className="overlay-foot"><button className="btn btn-secondary" onClick={onClose}>Cancel</button><button className="btn btn-primary" style={{ background: "var(--red)" }} onClick={() => { if (!desc.trim()) { emitToast("Describe the fault"); return; } onSave(`DOWN: ${desc.trim()}`); }}>Report fault</button></div>
+      </div>
     </div>
   );
 }
