@@ -56,29 +56,51 @@ function InventoryInner() {
   const [view, setView] = useState("stock");
   const [cat, setCat] = useState("all");
   const [status, setStatus] = useState("all");
+  const [storage, setStorage] = useState("all");
+  const [sort, setSort] = useState("days-left-asc");
   const [q, setQ] = useState("");
   const [addOpen, setAddOpen] = useState(false);
-  const [move, setMove] = useState(null); // {input, kind:'PURCHASE'|'USAGE'}
+  const [move, setMove] = useState(null); // {input|null, kind:'PURCHASE'|'USAGE'}
 
   const inputsQ = useQuery({ queryKey: ["inputs", farmId], queryFn: () => getInputs(farmId), enabled: !!farmId });
-  const movesQ = useQuery({ queryKey: ["moves"], queryFn: getMovements, enabled: view === "movements" });
-  const supsQ = useQuery({ queryKey: ["suppliers"], queryFn: getSuppliers, enabled: view === "suppliers" || addOpen || !!move });
+  const movesQ = useQuery({ queryKey: ["moves"], queryFn: getMovements, enabled: !!farmId });
+  const supsQ = useQuery({ queryKey: ["suppliers"], queryFn: getSuppliers, enabled: !!farmId });
   const items = inputsQ.data ?? [];
+  const movements = movesQ.data ?? [];
   const suppliers = supsQ.data ?? [];
   const supName = (id) => suppliers.find((s) => s.supplier_id === id)?.supplier_name;
+
+  // Burn rate (last 30d USAGE) + days-left, per item — real, from movements.
+  const burnByInput = useMemo(() => {
+    const cut = Date.now() - 30 * 864e5; const m = {};
+    movements.forEach((t) => { if (t.txn_type !== "USAGE") return; const d = Date.parse(t.transaction_date); if (!Number.isFinite(d) || d < cut) return; m[t.input_id] = (m[t.input_id] || 0) + num(t.quantity); });
+    return m;
+  }, [movements]);
+  const burn30 = (i) => burnByInput[i.input_id] || 0;
+  const daysLeft = (i) => { const daily = burn30(i) / 30; return daily > 0 ? Math.round(num(i.current_stock_qty) / daily) : null; };
+  const storages = useMemo(() => Array.from(new Set(items.map((i) => i.storage_location).filter(Boolean))), [items]);
 
   const totalValue = items.reduce((s, i) => s + itemValue(i), 0);
   const critical = items.filter((i) => CRITICAL.has(i.stock_status)).length;
   const low = items.filter((i) => i.stock_status === "LOW_STOCK").length;
   const chemValue = items.filter((i) => ["PESTICIDE", "HERBICIDE", "FUNGICIDE"].includes(i.input_category)).reduce((s, i) => s + itemValue(i), 0);
-  const fuelValue = items.filter((i) => i.input_category === "FUEL").reduce((s, i) => s + itemValue(i), 0);
+  const expiringCount = items.filter((i) => i.expiring_soon).length;
   const catsPresent = useMemo(() => { const m = {}; items.forEach((i) => { m[i.input_category] = (m[i.input_category] || 0) + 1; }); return m; }, [items]);
 
   let rows = items.slice();
   if (cat !== "all") rows = rows.filter((i) => i.input_category === cat);
   if (status !== "all") rows = rows.filter((i) => statusBand(i.stock_status) === status);
+  if (storage !== "all") rows = rows.filter((i) => i.storage_location === storage);
   if (q.trim()) { const qq = q.toLowerCase(); rows = rows.filter((i) => `${i.input_name} ${i.input_id} ${i.storage_location || ""}`.toLowerCase().includes(qq)); }
+  rows.sort((a, b) => {
+    if (sort === "name") return (a.input_name || "").localeCompare(b.input_name || "");
+    if (sort === "value-desc") return itemValue(b) - itemValue(a);
+    if (sort === "category") return (a.input_category || "").localeCompare(b.input_category || "");
+    const da = daysLeft(a), db = daysLeft(b); // days-left-asc (nulls last)
+    return (da == null ? Infinity : da) - (db == null ? Infinity : db);
+  });
   const reorderItems = items.filter((i) => CRITICAL.has(i.stock_status));
+  const recentMoves = movements.slice(0, 4);
 
   const refetch = () => qc.invalidateQueries({ queryKey: ["inputs", farmId] });
 
@@ -99,8 +121,15 @@ function InventoryInner() {
             <div className="capital-tile critical"><div className="capital-tile-label">Critical items</div><div className={`capital-tile-value ${critical > 0 ? "critical" : ""}`} style={{ color: critical > 0 ? "var(--red)" : null }}>{critical}</div><div className="capital-tile-sub">order now</div></div>
             <div className="capital-tile low"><div className="capital-tile-label">Low items</div><div className="capital-tile-value" style={{ color: low > 0 ? "var(--amber)" : null }}>{low}</div><div className="capital-tile-sub">in buffer</div></div>
             <div className="capital-tile"><div className="capital-tile-label">In chemicals</div><div className="capital-tile-value">{fjd0(chemValue)}</div><div className="capital-tile-sub">WHD-tracked</div></div>
-            <div className="capital-tile"><div className="capital-tile-label">In fuel</div><div className="capital-tile-value">{fjd0(fuelValue)}</div><div className="capital-tile-sub">fast-turning</div></div>
+            <div className="capital-tile"><div className="capital-tile-label">Expiring</div><div className="capital-tile-value" style={{ color: expiringCount > 0 ? "var(--amber)" : null }}>{expiringCount}</div><div className="capital-tile-sub">within 30 days</div></div>
           </div>
+
+          {recentMoves.length > 0 && (
+            <div style={{ background: "rgba(106,168,79,0.07)", border: "1px solid var(--line)", borderLeft: "3px solid var(--green)", borderRadius: 9, padding: "9px 13px", margin: "12px 0", display: "flex", gap: 14, flexWrap: "wrap", alignItems: "center" }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: "var(--green-dk)", textTransform: "uppercase", letterSpacing: ".4px" }}>Recent events</span>
+              {recentMoves.map((m) => <span key={m.txn_id} style={{ fontSize: 11.5, color: "var(--soil)" }}>{m.txn_type === "PURCHASE" ? "↓" : "↑"} {m.input_name} · {num(m.quantity)}{m.unit}</span>)}
+            </div>
+          )}
 
           <div className="cycle-view-tabs">
             {VIEWS.map(([id, l, s]) => <div key={id} className={`task-tab ${view === id ? "active" : ""}`} onClick={() => setView(id)}>{l}<span className="task-tab-count" style={{ fontSize: 10 }}>{s}</span></div>)}
@@ -115,35 +144,53 @@ function InventoryInner() {
                   <button className={`filter-pill ${cat === "all" ? "active" : ""}`} onClick={() => setCat("all")}>All<span className="filter-pill-count">{items.length}</span></button>
                   {Object.entries(catsPresent).map(([c, n]) => <button key={c} className={`filter-pill ${cat === c ? "active" : ""}`} onClick={() => setCat(c)}>{CAT_LABEL[c] || c}<span className="filter-pill-count">{n}</span></button>)}
                 </div>
-                <div className="task-controls-row" style={{ marginBottom: 10, flexWrap: "wrap" }}>
-                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                    <span style={{ fontSize: 10.5, color: "var(--muted)", textTransform: "uppercase", letterSpacing: ".5px" }}>Status:</span>
-                    <select value={status} onChange={(e) => setStatus(e.target.value)} style={{ padding: "5px 10px", borderRadius: 5, border: "1px solid var(--line)", background: "var(--paper)", fontSize: 12 }}>
-                      <option value="all">All status</option><option value="critical">Critical</option><option value="low">Low</option><option value="ok">OK</option>
+                <div className="task-controls-row" style={{ marginBottom: 10, flexWrap: "wrap", gap: 8 }}>
+                  <span style={{ fontSize: 10.5, color: "var(--muted)", textTransform: "uppercase", letterSpacing: ".5px", alignSelf: "center" }}>Status:</span>
+                  <select value={status} onChange={(e) => setStatus(e.target.value)} style={{ padding: "5px 10px", borderRadius: 5, border: "1px solid var(--line)", background: "var(--paper)", fontSize: 12 }}>
+                    <option value="all">All status</option><option value="critical">Critical</option><option value="low">Low</option><option value="ok">OK</option>
+                  </select>
+                  {storages.length > 0 && <>
+                    <span style={{ fontSize: 10.5, color: "var(--muted)", textTransform: "uppercase", letterSpacing: ".5px", alignSelf: "center" }}>Storage:</span>
+                    <select value={storage} onChange={(e) => setStorage(e.target.value)} style={{ padding: "5px 10px", borderRadius: 5, border: "1px solid var(--line)", background: "var(--paper)", fontSize: 12 }}>
+                      <option value="all">All locations</option>{storages.map((s) => <option key={s} value={s}>{s}</option>)}
                     </select>
-                  </div>
-                  <div style={{ flex: 1, minWidth: 180, position: "relative" }}>
+                  </>}
+                  <span style={{ fontSize: 10.5, color: "var(--muted)", textTransform: "uppercase", letterSpacing: ".5px", alignSelf: "center" }}>Sort:</span>
+                  <select value={sort} onChange={(e) => setSort(e.target.value)} style={{ padding: "5px 10px", borderRadius: 5, border: "1px solid var(--line)", background: "var(--paper)", fontSize: 12 }}>
+                    <option value="days-left-asc">Days left ↑</option><option value="name">Name</option><option value="value-desc">Value ↓</option><option value="category">Category</option>
+                  </select>
+                  <div style={{ flex: 1, minWidth: 160, position: "relative" }}>
                     <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search by name, SKU, location..." style={{ width: "100%", padding: "7px 12px 7px 34px", border: "1.5px solid var(--line)", borderRadius: 7, fontSize: 13, background: "var(--paper)" }} />
                     <span style={{ position: "absolute", left: 11, top: "50%", transform: "translateY(-50%)", color: "var(--muted)", pointerEvents: "none" }}><Search size={13} /></span>
                   </div>
                 </div>
                 {items.length === 0 ? <div className="card" style={{ padding: 28, textAlign: "center", color: "var(--muted)" }}>No items yet — add your seed, fertilizer, chemicals or fuel to track stock.</div>
                   : rows.length === 0 ? <div className="card" style={{ padding: 40, textAlign: "center", color: "var(--muted)" }}>No items match these filters.</div>
-                  : <div className="inventory-table-wrap"><table className="inventory-table">
-                    <thead><tr><th>Item</th><th>Category</th><th>On hand</th><th>Value</th><th style={{ textAlign: "right" }}>Move</th></tr></thead>
-                    <tbody>{rows.map((i) => (
-                      <tr key={i.input_id}>
-                        <td><div style={{ fontWeight: 600, color: "var(--soil)" }}>{i.input_name}</div><div style={{ fontSize: 11, color: "var(--muted)" }}>{i.input_id}{i.storage_location ? ` · ${i.storage_location}` : ""}{i.expiring_soon ? " · ⚠ expiring" : ""}</div></td>
-                        <td><span style={{ fontSize: 11.5, color: "var(--muted)" }}>{CAT_LABEL[i.input_category] || i.input_category}</span></td>
-                        <td><StockBar i={i} /></td>
-                        <td style={{ fontFamily: "Menlo,monospace", fontSize: 12 }}>{i.unit_cost_fjd ? fjd2(itemValue(i)) : "—"}</td>
-                        <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
-                          <button className="btn btn-secondary btn-sm" title="Receive" onClick={() => setMove({ input: i, kind: "PURCHASE" })}><ArrowDownToLine size={12} /></button>{" "}
-                          <button className="btn btn-secondary btn-sm" title="Use" onClick={() => setMove({ input: i, kind: "USAGE" })}><ArrowUpFromLine size={12} /></button>
-                        </td>
-                      </tr>
-                    ))}</tbody>
-                  </table></div>}
+                  : <><div className="inventory-table-wrap"><table className="inventory-table">
+                    <thead><tr><th>SKU</th><th>Item</th><th>Category</th><th>Storage</th><th>Stock</th><th>Min/Max</th><th>Burn rate</th><th>Days left</th><th>Value</th><th>Status</th></tr></thead>
+                    <tbody>{rows.map((i) => {
+                      const band = statusBand(i.stock_status); const dl = daysLeft(i); const b30 = burn30(i);
+                      const rop = num(i.reorder_point_qty); const max = rop ? rop + num(i.reorder_qty || rop) : 0;
+                      return (
+                        <tr key={i.input_id} onClick={() => setMove({ input: i, kind: "PURCHASE" })} style={{ cursor: "pointer" }}>
+                          <td className="sku-cell" style={{ fontSize: 10.5, fontFamily: "Menlo,monospace", color: "var(--muted)" }}>{i.input_id}</td>
+                          <td className="name-cell"><span style={{ fontWeight: 600, color: "var(--soil)" }}>{i.input_name}</span>{i.expiring_soon && <span className="compliance-badge expired" style={{ marginLeft: 6 }}>EXPIRING</span>}{i.is_chemical && <span className="compliance-badge restricted" style={{ marginLeft: 6 }}>CHEM</span>}</td>
+                          <td><span className={`inv-category-pill ${(i.input_category || "").toLowerCase()}`}>{CAT_LABEL[i.input_category] || i.input_category}</span></td>
+                          <td>{i.storage_location ? <span className="storage-chip">{i.storage_location}</span> : <span style={{ color: "var(--muted)", fontSize: 11 }}>—</span>}</td>
+                          <td><StockBar i={i} /></td>
+                          <td className="value-cell" style={{ fontSize: 10.5, color: "var(--muted)" }}>{rop ? `${rop}/${max}` : "—"}</td>
+                          <td><span className="burn-rate-display">{b30 > 0 ? `${b30.toFixed(1)}${i.unit_of_measure}/30d` : "—"}</span></td>
+                          <td className="value-cell">{dl == null ? "∞" : `${dl}d`}</td>
+                          <td className="value-cell">{i.unit_cost_fjd ? fjd2(itemValue(i)) : "—"}</td>
+                          <td><span className={`inv-status-pill ${band}`}><span className="inv-status-dot" />{band}</span></td>
+                        </tr>
+                      );
+                    })}</tbody>
+                  </table></div>
+                  <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 14 }}>
+                    <button className="btn btn-secondary" onClick={() => setMove({ input: null, kind: "USAGE" })}><ArrowUpFromLine size={14} />Use stock</button>
+                    <button className="btn btn-primary" onClick={() => setMove({ input: null, kind: "PURCHASE" })}><ArrowDownToLine size={14} />Receive stock</button>
+                  </div></>}
               </>
             ) : view === "reorder" ? (
               reorderItems.length === 0 ? <div className="card" style={{ padding: 28, textAlign: "center", color: "var(--muted)" }}>Nothing to reorder — all items are above their reorder point.</div>
@@ -174,7 +221,7 @@ function InventoryInner() {
       </main>
 
       {addOpen && <AddInputModal farmId={farmId} suppliers={suppliers} onClose={() => setAddOpen(false)} onSaved={() => { refetch(); setAddOpen(false); }} />}
-      {move && <MoveModal farmId={farmId} input={move.input} kind={move.kind} suppliers={suppliers} onClose={() => setMove(null)} onSaved={() => { refetch(); qc.invalidateQueries({ queryKey: ["moves"] }); setMove(null); }} />}
+      {move && <MoveModal farmId={farmId} input={move.input} kind={move.kind} items={items} suppliers={suppliers} onClose={() => setMove(null)} onSaved={() => { refetch(); qc.invalidateQueries({ queryKey: ["moves"] }); setMove(null); }} />}
     </TfpShell>
   );
 }
@@ -247,19 +294,23 @@ function AddInputModal({ farmId, suppliers, onClose, onSaved }) {
   );
 }
 
-function MoveModal({ farmId, input, kind, suppliers, onClose, onSaved }) {
+function MoveModal({ farmId, input, kind, items, suppliers, onClose, onSaved }) {
   const receive = kind === "PURCHASE";
+  const [inputId, setInputId] = useState(input?.input_id || "");
+  const sel = input || (items || []).find((i) => i.input_id === inputId) || null;
   const [qty, setQty] = useState("");
-  const [cost, setCost] = useState(input.unit_cost_fjd ? String(input.unit_cost_fjd) : "");
-  const [supplier, setSupplier] = useState(input.preferred_supplier_id || "");
+  const [cost, setCost] = useState(sel?.unit_cost_fjd ? String(sel.unit_cost_fjd) : "");
+  const [supplier, setSupplier] = useState(sel?.preferred_supplier_id || "");
   const [busy, setBusy] = useState(false);
+  const unit = sel?.unit_of_measure || "unit";
   async function submit() {
+    if (!sel) { emitToast("Pick an item"); return; }
     if (!Number(qty)) { emitToast("Enter a quantity"); return; }
     setBusy(true);
     try {
       const r = await fetch("/api/v1/input-transactions", { method: "POST", headers: authHeaders(), body: JSON.stringify({
-        input_id: input.input_id, farm_id: farmId, transaction_type: kind, transaction_date: todayISO(),
-        quantity: Number(qty), unit: input.unit_of_measure,
+        input_id: sel.input_id, farm_id: farmId, transaction_type: kind, transaction_date: todayISO(),
+        quantity: Number(qty), unit,
         ...(receive ? { unit_cost_fjd: cost ? Number(cost) : null, supplier_id: supplier || null } : {}) }) });
       if (!r.ok) throw new Error();
       emitToast(receive ? "Stock received" : "Stock used"); onSaved?.();
@@ -268,11 +319,12 @@ function MoveModal({ farmId, input, kind, suppliers, onClose, onSaved }) {
   return (
     <div className="overlay-backdrop show" onClick={onClose}>
       <div className="overlay-modal" style={{ maxWidth: 460 }} onClick={(e) => e.stopPropagation()}>
-        <div className="overlay-head"><h2>{receive ? "Receive stock" : "Use stock"} — {input.input_name}</h2><button className="overlay-close" onClick={onClose}><X size={14} /></button></div>
+        <div className="overlay-head"><h2>{receive ? "Receive stock" : "Use stock"}{input ? ` — ${input.input_name}` : ""}</h2><button className="overlay-close" onClick={onClose}><X size={14} /></button></div>
         <div className="overlay-body">
-          <div style={{ fontSize: 12.5, color: "var(--muted)", marginBottom: 12 }}>On hand: {num(input.current_stock_qty)} {input.unit_of_measure}. {receive ? "Receiving adds to" : "Using subtracts from"} on-hand stock.</div>
+          {!input && <Field label="Item"><select value={inputId} onChange={(e) => setInputId(e.target.value)}><option value="">Pick an item…</option>{(items || []).map((i) => <option key={i.input_id} value={i.input_id}>{i.input_name} · {num(i.current_stock_qty)}{i.unit_of_measure}</option>)}</select></Field>}
+          {sel && <div style={{ fontSize: 12.5, color: "var(--muted)", margin: "10px 0 12px" }}>On hand: {num(sel.current_stock_qty)} {unit}. {receive ? "Receiving adds to" : "Using subtracts from"} on-hand stock.</div>}
           <div className="form-row" style={{ display: "grid", gridTemplateColumns: receive ? "1fr 1fr" : "1fr", gap: 10 }}>
-            <div><label>Quantity ({input.unit_of_measure})</label><input type="number" min="0" step="0.01" value={qty} onChange={(e) => setQty(e.target.value)} autoFocus /></div>
+            <div><label>Quantity ({unit})</label><input type="number" min="0" step="0.01" value={qty} onChange={(e) => setQty(e.target.value)} autoFocus /></div>
             {receive && <div><label>Unit cost (FJD)</label><input type="number" min="0" step="0.01" value={cost} onChange={(e) => setCost(e.target.value)} /></div>}
           </div>
           {receive && <Field label="Supplier"><select value={supplier} onChange={(e) => setSupplier(e.target.value)}><option value="">—</option>{suppliers.map((s) => <option key={s.supplier_id} value={s.supplier_id}>{s.supplier_name}</option>)}</select></Field>}
