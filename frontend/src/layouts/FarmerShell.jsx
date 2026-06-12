@@ -33,7 +33,6 @@ import { firePings, AnnouncementBanner } from "../utils/useFlags.jsx";
 import LogSheet from "../components/launcher/LogSheet";
 import { LeftRailProvider, useLeftRail } from "../context/LeftRailContext";
 import { LauncherProvider, useLauncher } from "../context/LauncherContext";
-import { useEffectiveMode } from "../hooks/useEffectiveMode";
 
 const C = {
   soil:    "#5C4033",
@@ -198,14 +197,6 @@ function TisFab({ unread, onClick, active }) {
 
 function ShellContent() {
   const location = useLocation();
-  const { effective: effectiveMode } = useEffectiveMode();
-
-  // Mode-aware bounce: SOLO users land at /solo for the FARM pillar only.
-  // Home (community) + Classroom now render inside this shell too and must stay
-  // reachable for SOLO users, so the bounce is scoped to /farm.
-  if (effectiveMode === "SOLO" && location.pathname.startsWith("/farm")) {
-    return <Navigate to="/solo" replace />;
-  }
 
   const onTisRoute = location.pathname.startsWith("/tis");
   const showFab = !onTisRoute;

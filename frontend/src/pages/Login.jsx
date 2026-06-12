@@ -74,12 +74,6 @@ export default function Login() {
       const data = await res.json();
       setStoredTokens(data.access_token, data.refresh_token);
 
-      // Stash the derived mode for useEffectiveMode and the SOLO redirect
-      // below. Login response carries `mode` per Phase A1b-pre.
-      if (data.mode) {
-        try { localStorage.setItem("tfos_mode", data.mode); } catch { /* noop */ }
-      }
-
       // Redirect based on role
       if (data.role === "ADMIN") {
         navigate("/admin", { replace: true });
@@ -107,18 +101,14 @@ export default function Login() {
         /* keep cached value on network error */
       }
 
-      // Mode-aware default: SOLO mode lands at /solo (no chrome, single
-      // task card per MBI Part 19). Every other onboarded user lands on their
-      // OWN profile (/me) so they can review/complete it before entering the
-      // platform (Operator-directed 2026-06-10). Deep-link intent ("from")
-      // wins, and not-yet-onboarded users still go through onboarding first.
+      // Unified experience: every onboarded user lands on their OWN profile (/me)
+      // — their home base / one-stop shop. Deep-link intent ("from") wins, and
+      // not-yet-onboarded users still go through onboarding first.
       let destination;
       if (from && from !== "/login" && from !== "/register") {
         destination = from;
       } else if (!onboardingComplete) {
         destination = "/onboarding";
-      } else if (data.mode === "SOLO") {
-        destination = "/solo";
       } else {
         destination = "/me";
       }

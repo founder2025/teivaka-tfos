@@ -121,8 +121,6 @@ const Covenant      = lazy(() => import("./pages/Covenant"));
 const ControlRoom   = lazy(() => import("./pages/admin/ControlRoom"));
 
 // ── Phase A1 — Solo mode surface (MBI Part 19) ────────────────────────────────
-const SoloShell    = lazy(() => import("./layouts/SoloShell"));
-const SoloTaskCard = lazy(() => import("./pages/solo/SoloTaskCard"));
 
 // ── Day 3a — Nav v2.1 structural stubs ───────────────────────────────────────
 import ComingSoon from "./pages/ComingSoon";
@@ -379,10 +377,6 @@ export default function App() {
             <Route path="/covenant"             element={<Covenant />} />
 
             <Route path="/stub/phase-:phaseNum" element={<ComingSoon dynamic />} />
-          </Route>
-          {/* Solo mode — full-screen single-task surface, no nav */}
-          <Route element={<PrivateRoute><SoloShell /></PrivateRoute>}>
-            <Route path="/solo" element={<SoloTaskCard />} />
           </Route>
 
           <Route path="/harvest" element={
