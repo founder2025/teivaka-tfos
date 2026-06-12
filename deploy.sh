@@ -20,7 +20,7 @@
 set -uo pipefail
 
 BRANCH="${1:-claude/beautiful-fermi-F0dLX}"
-EXPECTED_HEAD="${2:-124_customer_buyer_fields}"
+EXPECTED_HEAD="${2:-125_buyers_crm}"
 ROOT="/opt/teivaka"
 COMPOSE="docker compose -f ${ROOT}/04_environment/docker-compose.yml"
 PSQL="docker exec -i teivaka_db psql -v ON_ERROR_STOP=1 -tA -U teivaka -d teivaka_db"
@@ -80,6 +80,12 @@ BUYERCOMM="$($PSQL -c "SELECT to_regclass('tenant.buyer_communications') IS NOT 
 [ "$BUYERCOMM" = "t" ] && ok "buyer_communications table present" || bad "buyer_communications missing (migration 123)"
 COMMEVT="$($PSQL -c "SELECT pg_get_constraintdef(oid) LIKE '%COMMUNICATION_LOGGED%' FROM pg_constraint WHERE conname='events_event_type_check';" 2>/dev/null | tr -d '[:space:]')"
 [ "$COMMEVT" = "t" ] && ok "audit.events CHECK includes COMMUNICATION_LOGGED" || bad "COMMUNICATION_LOGGED not in audit CHECK"
+CUSTFIELDS="$($PSQL -c "SELECT count(*) FROM information_schema.columns WHERE table_schema='tenant' AND table_name='customers' AND column_name IN ('ferry_dependent','distance_km','contact_role','preferred_channel');" 2>/dev/null | tr -d '[:space:]')"
+[ "${CUSTFIELDS:-0}" = "4" ] && ok "customers buyer-fields present (124)" || bad "customers buyer-fields missing (migration 124 — add-buyer would fail)"
+CRM="$($PSQL -c "SELECT (to_regclass('tenant.buyer_demand_signals') IS NOT NULL)::int + (to_regclass('tenant.buyer_leads') IS NOT NULL)::int + (to_regclass('tenant.buyer_disputes') IS NOT NULL)::int;" 2>/dev/null | tr -d '[:space:]')"
+[ "${CRM:-0}" = "3" ] && ok "Buyers CRM tables present (125)" || bad "Buyers CRM tables missing (${CRM}/3 — migration 125)"
+DISPEVT="$($PSQL -c "SELECT pg_get_constraintdef(oid) LIKE '%DISPUTE_LOGGED%' FROM pg_constraint WHERE conname='events_event_type_check';" 2>/dev/null | tr -d '[:space:]')"
+[ "$DISPEVT" = "t" ] && ok "audit.events CHECK includes DISPUTE_LOGGED" || bad "DISPUTE_LOGGED not in audit CHECK"
 
 # ---------------------------------------------------------------------------
 say "5/7  Bring API up + wait healthy + parity check"

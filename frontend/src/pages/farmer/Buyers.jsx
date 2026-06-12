@@ -48,6 +48,9 @@ async function getCustomers() { const r = await fetch("/api/v1/customers", { hea
 async function getOrders(farmId) { const r = await fetch(`/api/v1/orders${farmId ? `?farm_id=${encodeURIComponent(farmId)}` : ""}`, { headers: authHeaders() }); if (!r.ok) throw new Error(r.status); return (await r.json())?.data ?? []; }
 async function getProductions() { const r = await fetch("/api/v1/productions?is_active=true", { headers: authHeaders() }); if (!r.ok) throw new Error(r.status); return (await r.json())?.data?.productions ?? []; }
 async function getCommunications(custId) { const r = await fetch(`/api/v1/customers/${encodeURIComponent(custId)}/communications`, { headers: authHeaders() }); if (!r.ok) throw new Error(r.status); return (await r.json())?.data ?? []; }
+async function getDemandSignals(farmId) { const r = await fetch(`/api/v1/demand-signals${farmId ? `?farm_id=${encodeURIComponent(farmId)}` : ""}`, { headers: authHeaders() }); if (!r.ok) throw new Error(r.status); return (await r.json())?.data ?? []; }
+async function getLeads(farmId) { const r = await fetch(`/api/v1/leads${farmId ? `?farm_id=${encodeURIComponent(farmId)}` : ""}`, { headers: authHeaders() }); if (!r.ok) throw new Error(r.status); return (await r.json())?.data ?? []; }
+async function getDisputes(custId) { const r = await fetch(`/api/v1/disputes?customer_id=${encodeURIComponent(custId)}`, { headers: authHeaders() }); if (!r.ok) throw new Error(r.status); return (await r.json())?.data ?? []; }
 
 function amt(o) { return Number(o.net_amount_fjd ?? o.total_amount_fjd ?? o.total_fjd ?? 0); }
 function reliabilityTier(s) { return s >= 80 ? "high" : s >= 60 ? "medium" : "low"; }
@@ -149,9 +152,13 @@ function BuyersInner() {
   const [orderOpen, setOrderOpen] = useState(false);
   const [payOrder, setPayOrder] = useState(null);
   const [commFor, setCommFor] = useState(null);
+  const [signalOpen, setSignalOpen] = useState(false);
+  const [leadOpen, setLeadOpen] = useState(false);
 
   const customersQ = useQuery({ queryKey: ["customers"], queryFn: getCustomers });
   const ordersQ = useQuery({ queryKey: ["orders", farmId], queryFn: () => getOrders(farmId), enabled: !!farmId });
+  const demandQ = useQuery({ queryKey: ["demand", farmId], queryFn: () => getDemandSignals(farmId), enabled: view === "demand" });
+  const leadsQ = useQuery({ queryKey: ["leads", farmId], queryFn: () => getLeads(farmId), enabled: view === "pipeline" });
   const customers = customersQ.data ?? [];
   const orders = ordersQ.data ?? [];
 
@@ -272,8 +279,10 @@ function BuyersInner() {
 
               {view === "receivables" && <Receivables orders={orders} loading={ordersQ.isLoading} />}
               {view === "analytics" && <Analytics ranked={ranked} totalRev={totalRev} top3pct={top3pct} concCls={concCls} />}
-              {view === "demand" && <EmptyView title="Demand signals" note="This view is ready and will populate from a demand-signal feed (buyer requests, recurring orders, market prices). No numbers shown until that data is real — by design, nothing here is fabricated." />}
-              {view === "pipeline" && <EmptyView title="Pipeline" note="Leads and prospective buyers will appear here once a sales-pipeline endpoint is wired. Honest-empty until then." />}
+              {view === "demand" && <DemandView signals={demandQ.data ?? []} loading={demandQ.isLoading} buyersById={Object.fromEntries(buyers.map((b) => [b.id, b]))} onAdd={() => setSignalOpen(true)}
+                onToggle={async (id, status) => { try { await fetch(`/api/v1/demand-signals/${encodeURIComponent(id)}/status?status=${status}`, { method: "PATCH", headers: authHeaders() }); qc.invalidateQueries({ queryKey: ["demand", farmId] }); } catch { emitToast("Could not update"); } }} />}
+              {view === "pipeline" && <PipelineView leads={leadsQ.data ?? []} loading={leadsQ.isLoading} onAdd={() => setLeadOpen(true)}
+                onStage={async (id, stage) => { try { await fetch(`/api/v1/leads/${encodeURIComponent(id)}/stage?stage=${stage}`, { method: "PATCH", headers: authHeaders() }); qc.invalidateQueries({ queryKey: ["leads", farmId] }); } catch { emitToast("Could not move lead"); } }} />}
             </>
           )}
         </div>
@@ -283,6 +292,8 @@ function BuyersInner() {
       {orderOpen && <NewOrderModal farmId={farmId} customers={customers} onClose={() => setOrderOpen(false)} onSaved={() => { refetchOrders(); setOrderOpen(false); }} />}
       {payOrder && <LogPaymentModal order={payOrder} onClose={() => setPayOrder(null)} onSaved={() => { refetchOrders(); setPayOrder(null); }} />}
       {commFor && <LogCommunicationModal buyer={commFor} onClose={() => setCommFor(null)} onSaved={() => { qc.invalidateQueries({ queryKey: ["communications", commFor.id] }); setCommFor(null); }} />}
+      {signalOpen && <AddDemandSignalModal farmId={farmId} customers={customers} onClose={() => setSignalOpen(false)} onSaved={() => { qc.invalidateQueries({ queryKey: ["demand", farmId] }); setSignalOpen(false); }} />}
+      {leadOpen && <AddLeadModal farmId={farmId} onClose={() => setLeadOpen(false)} onSaved={() => { qc.invalidateQueries({ queryKey: ["leads", farmId] }); setLeadOpen(false); }} />}
     </TfpShell>
   );
 }
@@ -357,10 +368,21 @@ function Analytics({ ranked, totalRev, top3pct, concCls }) {
 const CHANNEL_LABEL = { whatsapp: "WhatsApp", call: "Call", visit: "Visit", email: "Email", sms: "SMS" };
 
 function BuyerDetail({ b, orders, onBack, onNewOrder, advance, onLogPayment, onLogComm }) {
+  const { farmId } = useCurrentFarm();
+  const qc = useQueryClient();
   const live = orders.filter((o) => o.order_status !== "CANCELLED");
   const rel = b.reliability;
   const commsQ = useQuery({ queryKey: ["communications", b.id], queryFn: () => getCommunications(b.id) });
   const comms = commsQ.data ?? [];
+  const disputesQ = useQuery({ queryKey: ["disputes", b.id], queryFn: () => getDisputes(b.id) });
+  const disputes = disputesQ.data ?? [];
+  const [disputeOpen, setDisputeOpen] = useState(false);
+  async function resolve(id) {
+    const note = window.prompt("Resolution (e.g. discounted, accepted, refunded):", "accepted");
+    if (note == null) return;
+    try { await fetch(`/api/v1/disputes/${encodeURIComponent(id)}/resolve`, { method: "PATCH", headers: authHeaders(), body: JSON.stringify({ resolution: note }) }); qc.invalidateQueries({ queryKey: ["disputes", b.id] }); }
+    catch { emitToast("Could not resolve"); }
+  }
   return (
     <>
       <div className="page-header">
@@ -430,7 +452,99 @@ function BuyerDetail({ b, orders, onBack, onNewOrder, advance, onLogPayment, onL
           ))}
       </div>
 
-      <EmptyView title="Disputes · demand signals" note="Per-buyer disputes and demand signals appear here once those feeds are wired (S3). Nothing fabricated until then." />
+      <div className="card" style={{ padding: "12px 16px", marginBottom: 14 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+          <div style={{ fontWeight: 700, color: "var(--soil)" }}>Disputes</div>
+          <button className="btn btn-secondary btn-sm" onClick={() => setDisputeOpen(true)}><Plus size={13} />Log dispute</button>
+        </div>
+        {disputesQ.isLoading ? <div style={{ color: "var(--muted)", fontSize: 12.5 }}>Loading…</div>
+          : disputes.length === 0 ? <div style={{ color: "var(--muted)", fontSize: 12.5 }}>No disputes — a clean record with this buyer.</div>
+          : disputes.map((d) => (
+            <div key={d.dispute_id} className="dispute-card">
+              <div className="dispute-card-head">
+                <span style={{ fontWeight: 600, color: "var(--soil)", fontSize: 13 }}>{(d.reason || "dispute").replace(/-/g, " ")}{d.quantity_kg ? ` · ${d.quantity_kg}kg` : ""}</span>
+                <span className="dispute-reason-pill" style={{ background: d.status === "resolved" ? "rgba(106,168,79,0.18)" : "rgba(163,45,45,0.16)", color: d.status === "resolved" ? "var(--green-dk)" : "var(--red)" }}>{d.status}</span>
+              </div>
+              <div style={{ fontSize: 11.5, color: "var(--muted)" }}>{String(d.dispute_date).slice(0, 10)}{d.financial_impact_fjd ? ` · impact ${fjd0(d.financial_impact_fjd)}` : ""}{d.description ? ` · ${d.description}` : ""}{d.resolution ? ` · resolved: ${d.resolution}` : ""}</div>
+              {d.status !== "resolved" && <div style={{ marginTop: 6 }}><button className="btn btn-secondary btn-sm" onClick={() => resolve(d.dispute_id)}>Mark resolved</button></div>}
+            </div>
+          ))}
+      </div>
+
+      <EmptyView title="Demand signals" note="Per-buyer recurring-demand signals live on the Demand tab. Add one there to feed the forecast." />
+      {disputeOpen && <LogDisputeModal buyer={b} farmId={farmId} orders={live} onClose={() => setDisputeOpen(false)} onSaved={() => { qc.invalidateQueries({ queryKey: ["disputes", b.id] }); setDisputeOpen(false); }} />}
+    </>
+  );
+}
+
+function DemandView({ signals, loading, buyersById, onAdd, onToggle }) {
+  const active = signals.filter((s) => s.status === "active");
+  const byConf = (c) => active.filter((s) => s.confidence === c).length;
+  return (
+    <>
+      <div className="calendar-banner">Demand signals capture what each buyer recurrently wants — they feed the production forecast. Improve confidence by confirming buyer terms in writing.</div>
+      <div style={{ background: "rgba(106,168,79,0.06)", borderLeft: "3px solid var(--green)", borderRadius: 7, padding: "12px 14px", margin: "14px 0", fontSize: 12.5, color: "var(--soil)" }}>
+        <strong>{byConf("high")} signals at high confidence</strong> · {byConf("medium")} medium · {byConf("low")} low.
+      </div>
+      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12 }}><button className="btn btn-primary" onClick={onAdd}><Plus size={14} />Add signal</button></div>
+      {loading ? <div className="card" style={{ padding: 20, color: "var(--muted)" }}>Loading…</div>
+        : signals.length === 0 ? <EmptyView title="No demand signals yet" note="Log what a buyer recurrently wants (crop, grade, quantity, frequency) and it appears here to feed your forecast." />
+        : <div className="demand-grid">{signals.map((d) => {
+          const buyer = buyersById[d.customer_id];
+          return (
+            <div className={`demand-card ${d.status === "paused" ? "paused" : ""}`} key={d.signal_id}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                <div>
+                  <div style={{ fontSize: 12, color: "var(--muted)" }}>{buyer ? buyer.name : d.customer_id}</div>
+                  <div className="demand-card-crop">{d.crop_type || "—"}{d.grade ? ` · ${d.grade}-grade` : ""}</div>
+                </div>
+                <span className={`confidence-pill ${d.confidence}`}>{d.confidence}</span>
+              </div>
+              <div className="demand-card-qty">{d.quantity_kg ? `${d.quantity_kg}kg` : "—"}{d.avg_price_fjd ? <span style={{ fontSize: 12, color: "var(--muted)" }}> @ {fjd2(d.avg_price_fjd)}/kg</span> : null}</div>
+              <div style={{ margin: "6px 0" }}>{d.frequency && <span className="frequency-pill">{d.frequency}</span>}{d.preferred_day ? <span style={{ fontSize: 11, color: "var(--muted)" }}> {d.preferred_day}</span> : null}</div>
+              <button className="btn btn-secondary btn-sm" onClick={() => onToggle(d.signal_id, d.status === "active" ? "paused" : "active")}>{d.status === "active" ? "Pause" : "Resume"}</button>
+            </div>
+          );
+        })}</div>}
+    </>
+  );
+}
+
+const STAGES = [["lead", "Lead"], ["qualified", "Qualified"], ["negotiating", "Negotiating"], ["won", "Won"]];
+const NEXT_STAGE = { lead: "qualified", qualified: "negotiating", negotiating: "won", won: "won" };
+
+function PipelineView({ leads, loading, onAdd, onStage }) {
+  const active = leads.filter((l) => l.stage !== "won" && l.stage !== "lost");
+  const totalValue = active.reduce((s, l) => s + Number(l.potential_monthly_fjd || 0), 0);
+  const won = leads.filter((l) => l.stage === "won");
+  const wonValue = won.reduce((s, l) => s + Number(l.potential_monthly_fjd || 0), 0);
+  return (
+    <>
+      <div className="capital-strip" style={{ gridTemplateColumns: "repeat(3,1fr)", marginTop: 14 }}>
+        <CapitalTile label="Pipeline value" value={fjd0(totalValue)} sub="monthly potential" />
+        <CapitalTile label="Won" value={fjd0(wonValue)} sub={`${won.length} deal${won.length === 1 ? "" : "s"}`} valueColor="var(--green-dk)" />
+        <CapitalTile label="Active leads" value={active.length} sub="in progress" />
+      </div>
+      <div style={{ display: "flex", justifyContent: "flex-end", margin: "12px 0" }}><button className="btn btn-primary" onClick={onAdd}><Plus size={14} />Add lead</button></div>
+      {loading ? <div className="card" style={{ padding: 20, color: "var(--muted)" }}>Loading…</div>
+        : leads.length === 0 ? <EmptyView title="No leads yet" note="Add a prospective buyer and move them through Lead → Qualified → Negotiating → Won." />
+        : <div className="pipeline-kanban">{STAGES.map(([key, label]) => {
+          const col = leads.filter((l) => l.stage === key);
+          return (
+            <div className="pipeline-column" key={key}>
+              <div className="pipeline-column-head"><span>{label}</span><span>{col.length}</span></div>
+              {col.length === 0 ? <div style={{ fontSize: 11, color: "var(--muted)", textAlign: "center", padding: 14 }}>No leads</div>
+                : col.map((l) => (
+                  <div className="pipeline-card" key={l.lead_id} onClick={() => l.stage !== "won" && onStage(l.lead_id, NEXT_STAGE[l.stage])} title="Tap to advance stage">
+                    <div className="pipeline-card-name">{l.prospect_name}</div>
+                    <div style={{ fontSize: 10.5, color: "var(--muted)" }}>{[l.city, l.prospect_type].filter(Boolean).join(" · ")}</div>
+                    {l.potential_monthly_fjd != null && <div className="pipeline-card-value">{fjd0(l.potential_monthly_fjd)}/mo</div>}
+                    {l.next_action && <div className="pipeline-card-action">→ {l.next_action}{l.next_action_date ? <><br /><span style={{ color: "var(--muted)" }}>{String(l.next_action_date).slice(0, 10)}</span></> : null}</div>}
+                  </div>
+                ))}
+            </div>
+          );
+        })}</div>}
     </>
   );
 }
@@ -615,6 +729,126 @@ function LogCommunicationModal({ buyer, onClose, onSaved }) {
           <div className="form-row" style={{ marginTop: 10 }}><label>Notes</label><textarea rows={2} maxLength={500} value={f.notes} onChange={set("notes")} /></div>
         </div>
         <div className="overlay-foot"><button className="btn btn-secondary" onClick={onClose}>Cancel</button><button className="btn btn-primary" onClick={submit} disabled={busy}>{busy ? "Logging…" : "Log communication"}</button></div>
+      </div>
+    </div>
+  );
+}
+
+function AddDemandSignalModal({ farmId, customers, onClose, onSaved }) {
+  const [f, setF] = useState({ customer_id: "", crop_type: "", grade: "A", quantity_kg: "", avg_price_fjd: "", frequency: "weekly", confidence: "medium", notes: "" });
+  const [busy, setBusy] = useState(false);
+  const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }));
+  async function submit() {
+    if (!f.customer_id) { emitToast("Pick a buyer"); return; }
+    setBusy(true);
+    try {
+      const r = await fetch("/api/v1/demand-signals", { method: "POST", headers: authHeaders(), body: JSON.stringify({
+        customer_id: f.customer_id, farm_id: farmId, crop_type: f.crop_type.trim() || null, grade: f.grade,
+        quantity_kg: f.quantity_kg ? Number(f.quantity_kg) : null, avg_price_fjd: f.avg_price_fjd ? Number(f.avg_price_fjd) : null,
+        frequency: f.frequency, confidence: f.confidence, notes: f.notes.trim() || null }) });
+      if (!r.ok) throw new Error();
+      emitToast("Demand signal added"); onSaved?.();
+    } catch { emitToast("Could not add signal"); } finally { setBusy(false); }
+  }
+  return (
+    <div className="overlay-backdrop show" onClick={onClose}>
+      <div className="overlay-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="overlay-head"><h2>Add demand signal</h2><button onClick={onClose} className="overlay-close"><X size={14} /></button></div>
+        <div className="overlay-body">
+          <Field label="Buyer"><select value={f.customer_id} onChange={set("customer_id")}><option value="">Pick a buyer…</option>{customers.map((c) => <option key={c.customer_id} value={c.customer_id}>{c.customer_name}</option>)}</select></Field>
+          <div className="form-row" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
+            <div><label>Crop</label><input value={f.crop_type} onChange={set("crop_type")} placeholder="e.g. eggplant" /></div>
+            <div><label>Grade</label><select value={f.grade} onChange={set("grade")}><option>A</option><option>B</option><option>C</option></select></div>
+            <div><label>Qty (kg)</label><input type="number" min="0" value={f.quantity_kg} onChange={set("quantity_kg")} /></div>
+          </div>
+          <div className="form-row" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginTop: 10 }}>
+            <div><label>Price/kg</label><input type="number" min="0" step="0.10" value={f.avg_price_fjd} onChange={set("avg_price_fjd")} /></div>
+            <div><label>Frequency</label><select value={f.frequency} onChange={set("frequency")}><option value="weekly">weekly</option><option value="fortnightly">fortnightly</option><option value="monthly">monthly</option><option value="one_off">one-off</option></select></div>
+            <div><label>Confidence</label><select value={f.confidence} onChange={set("confidence")}><option value="high">high</option><option value="medium">medium</option><option value="low">low</option></select></div>
+          </div>
+          <div className="form-row" style={{ marginTop: 10 }}><label>Notes</label><textarea rows={2} value={f.notes} onChange={set("notes")} /></div>
+        </div>
+        <div className="overlay-foot"><button className="btn btn-secondary" onClick={onClose}>Cancel</button><button className="btn btn-primary" onClick={submit} disabled={busy}>{busy ? "Adding…" : "Add signal"}</button></div>
+      </div>
+    </div>
+  );
+}
+
+function AddLeadModal({ farmId, onClose, onSaved }) {
+  const [f, setF] = useState({ prospect_name: "", prospect_type: "SUPERMARKET", city: "", potential_monthly_fjd: "", stage: "lead", next_action: "", next_action_date: "", notes: "" });
+  const [busy, setBusy] = useState(false);
+  const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }));
+  async function submit() {
+    if (!f.prospect_name.trim()) { emitToast("Prospect name is required"); return; }
+    setBusy(true);
+    try {
+      const r = await fetch("/api/v1/leads", { method: "POST", headers: authHeaders(), body: JSON.stringify({
+        prospect_name: f.prospect_name.trim(), farm_id: farmId, prospect_type: f.prospect_type, city: f.city.trim() || null,
+        potential_monthly_fjd: f.potential_monthly_fjd ? Number(f.potential_monthly_fjd) : null, stage: f.stage,
+        next_action: f.next_action.trim() || null, next_action_date: f.next_action_date || null, notes: f.notes.trim() || null }) });
+      if (!r.ok) throw new Error();
+      emitToast("Lead added"); onSaved?.();
+    } catch { emitToast("Could not add lead"); } finally { setBusy(false); }
+  }
+  return (
+    <div className="overlay-backdrop show" onClick={onClose}>
+      <div className="overlay-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="overlay-head"><h2>Add lead</h2><button onClick={onClose} className="overlay-close"><X size={14} /></button></div>
+        <div className="overlay-body">
+          <div className="form-row" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+            <div><label>Prospect name</label><input value={f.prospect_name} onChange={set("prospect_name")} placeholder="e.g. Tappoo Hotel" /></div>
+            <div><label>Type</label><select value={f.prospect_type} onChange={set("prospect_type")}>{TYPE_OPTIONS.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}</select></div>
+          </div>
+          <div className="form-row" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginTop: 10 }}>
+            <div><label>City</label><input value={f.city} onChange={set("city")} /></div>
+            <div><label>Potential FJD/mo</label><input type="number" min="0" value={f.potential_monthly_fjd} onChange={set("potential_monthly_fjd")} /></div>
+            <div><label>Stage</label><select value={f.stage} onChange={set("stage")}><option value="lead">Lead</option><option value="qualified">Qualified</option><option value="negotiating">Negotiating</option><option value="won">Won</option></select></div>
+          </div>
+          <div className="form-row" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 10 }}>
+            <div><label>Next action</label><input value={f.next_action} onChange={set("next_action")} placeholder="e.g. Send sample" /></div>
+            <div><label>By date</label><input type="date" value={f.next_action_date} onChange={set("next_action_date")} /></div>
+          </div>
+          <div className="form-row" style={{ marginTop: 10 }}><label>Notes</label><textarea rows={2} value={f.notes} onChange={set("notes")} /></div>
+        </div>
+        <div className="overlay-foot"><button className="btn btn-secondary" onClick={onClose}>Cancel</button><button className="btn btn-primary" onClick={submit} disabled={busy}>{busy ? "Adding…" : "Add lead"}</button></div>
+      </div>
+    </div>
+  );
+}
+
+function LogDisputeModal({ buyer, farmId, orders, onClose, onSaved }) {
+  const [f, setF] = useState({ order_id: "", dispute_date: todayISO(), reason: "quality-rejection", quantity_kg: "", financial_impact_fjd: "", description: "" });
+  const [busy, setBusy] = useState(false);
+  const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }));
+  async function submit() {
+    setBusy(true);
+    try {
+      const r = await fetch("/api/v1/disputes", { method: "POST", headers: authHeaders(), body: JSON.stringify({
+        customer_id: buyer.id, farm_id: farmId, order_id: f.order_id || null, dispute_date: f.dispute_date,
+        reason: f.reason, quantity_kg: f.quantity_kg ? Number(f.quantity_kg) : null,
+        financial_impact_fjd: f.financial_impact_fjd ? Number(f.financial_impact_fjd) : null, description: f.description.trim() || null }) });
+      if (!r.ok) throw new Error();
+      emitToast("Dispute logged"); onSaved?.();
+    } catch { emitToast("Could not log dispute"); } finally { setBusy(false); }
+  }
+  return (
+    <div className="overlay-backdrop show" onClick={onClose}>
+      <div className="overlay-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="overlay-head"><h2>Log dispute</h2><button onClick={onClose} className="overlay-close"><X size={14} /></button></div>
+        <div className="overlay-body">
+          <div style={{ fontSize: 12.5, color: "var(--muted)", marginBottom: 12 }}>With {buyer.name}. Hash-chained to this buyer.</div>
+          <div className="form-row" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+            <div><label>Reason</label><select value={f.reason} onChange={set("reason")}><option value="quality-rejection">Quality rejection</option><option value="quantity-shortfall">Quantity shortfall</option><option value="late-delivery">Late delivery</option><option value="payment">Payment</option><option value="other">Other</option></select></div>
+            <div><label>Date</label><input type="date" value={f.dispute_date} onChange={set("dispute_date")} /></div>
+          </div>
+          <div className="form-row" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 10 }}>
+            <div><label>Qty affected (kg)</label><input type="number" min="0" value={f.quantity_kg} onChange={set("quantity_kg")} /></div>
+            <div><label>Financial impact (FJD)</label><input type="number" min="0" value={f.financial_impact_fjd} onChange={set("financial_impact_fjd")} /></div>
+          </div>
+          {orders.length > 0 && <Field label="Related order (optional)"><select value={f.order_id} onChange={set("order_id")}><option value="">—</option>{orders.map((o) => <option key={o.order_id} value={o.order_id}>{o.order_id} · {fjd2(amt(o))}</option>)}</select></Field>}
+          <div className="form-row" style={{ marginTop: 10 }}><label>Description</label><textarea rows={2} value={f.description} onChange={set("description")} placeholder="What went wrong" /></div>
+        </div>
+        <div className="overlay-foot"><button className="btn btn-secondary" onClick={onClose}>Cancel</button><button className="btn btn-primary" onClick={submit} disabled={busy}>{busy ? "Logging…" : "Log dispute"}</button></div>
       </div>
     </div>
   );
