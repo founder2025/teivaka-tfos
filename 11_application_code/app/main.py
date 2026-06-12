@@ -18,6 +18,7 @@ from app.routers import (
     admin,
     analytics,
     buyers_crm,
+    partners,
     equipment_records,
     farms,
     zones,
@@ -329,6 +330,7 @@ app.include_router(apiculture.router,         prefix=f"{PREFIX}/apiculture",    
 app.include_router(price_master.router,       prefix=f"{PREFIX}/price-master",       tags=["Price Master"])
 app.include_router(orders.router,             prefix=f"{PREFIX}/orders",             tags=["Orders"])
 app.include_router(buyers_crm.router,         prefix=PREFIX,                         tags=["Buyers CRM"])
+app.include_router(partners.router,           prefix=PREFIX,                         tags=["Partner Network"])
 app.include_router(equipment_records.router,  prefix=PREFIX,                         tags=["Equipment Records"])
 app.include_router(profit_share.router,       prefix=f"{PREFIX}/profit-share",       tags=["Profit Share"])
 app.include_router(financials.router,         prefix=f"{PREFIX}/financials",         tags=["Financial Reports"])

@@ -20,7 +20,7 @@
 set -uo pipefail
 
 BRANCH="${1:-claude/beautiful-fermi-F0dLX}"
-EXPECTED_HEAD="${2:-126_equipment_records}"
+EXPECTED_HEAD="${2:-127_farm_partners}"
 ROOT="/opt/teivaka"
 COMPOSE="docker compose -f ${ROOT}/04_environment/docker-compose.yml"
 PSQL="docker exec -i teivaka_db psql -v ON_ERROR_STOP=1 -tA -U teivaka -d teivaka_db"
@@ -86,6 +86,10 @@ CRM="$($PSQL -c "SELECT (to_regclass('tenant.buyer_demand_signals') IS NOT NULL)
 [ "${CRM:-0}" = "3" ] && ok "Buyers CRM tables present (125)" || bad "Buyers CRM tables missing (${CRM}/3 — migration 125)"
 DISPEVT="$($PSQL -c "SELECT pg_get_constraintdef(oid) LIKE '%DISPUTE_LOGGED%' FROM pg_constraint WHERE conname='events_event_type_check';" 2>/dev/null | tr -d '[:space:]')"
 [ "$DISPEVT" = "t" ] && ok "audit.events CHECK includes DISPUTE_LOGGED" || bad "DISPUTE_LOGGED not in audit CHECK"
+FPART="$($PSQL -c "SELECT to_regclass('tenant.farm_partners') IS NOT NULL;" 2>/dev/null | tr -d '[:space:]')"
+[ "$FPART" = "t" ] && ok "farm_partners table present (127)" || bad "farm_partners missing (migration 127 — Partnerships adds would fail)"
+PARTEVT="$($PSQL -c "SELECT pg_get_constraintdef(oid) LIKE '%PARTNER_ADDED%' FROM pg_constraint WHERE conname='events_event_type_check';" 2>/dev/null | tr -d '[:space:]')"
+[ "$PARTEVT" = "t" ] && ok "audit.events CHECK includes PARTNER_ADDED" || bad "PARTNER_ADDED not in audit CHECK"
 
 # ---------------------------------------------------------------------------
 say "5/7  Bring API up + wait healthy + parity check"
