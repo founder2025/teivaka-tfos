@@ -52,6 +52,38 @@ async def create_input(body: InputCreate, user: dict = Depends(get_current_user)
     return {"data": {"input_id": input_id, "input_name": body.input_name.strip()}}
 
 
+class InputPatch(BaseModel):
+    input_name: Optional[str] = None
+    input_category: Optional[str] = None
+    unit_of_measure: Optional[str] = None
+    reorder_point_qty: Optional[Decimal] = None
+    reorder_qty: Optional[Decimal] = None
+    unit_cost_fjd: Optional[Decimal] = None
+    preferred_supplier_id: Optional[str] = None
+    storage_location: Optional[str] = None
+    notes: Optional[str] = None
+
+
+@router.patch("/{input_id}")
+async def update_input(input_id: str, body: InputPatch, user: dict = Depends(get_current_user)):
+    """Correct an item's details. current_stock_qty is NOT editable here — it's
+    maintained by the input-transactions trigger; adjust stock via a movement."""
+    updates = body.model_dump(exclude_unset=True)
+    if "input_category" in updates and updates["input_category"] not in VALID_INPUT_CATEGORIES:
+        raise HTTPException(400, detail=f"input_category must be one of {sorted(VALID_INPUT_CATEGORIES)}")
+    if not updates:
+        raise HTTPException(400, detail="No fields to update")
+    if updates.get("preferred_supplier_id") == "":
+        updates["preferred_supplier_id"] = None
+    cols = ", ".join(f"{k} = :{k}" for k in updates)
+    params = {**updates, "iid": input_id, "tid": str(user["tenant_id"])}
+    async with get_rls_db(str(user["tenant_id"])) as db:
+        r = await db.execute(text(f"UPDATE tenant.inputs SET {cols}, updated_at = now() WHERE input_id = :iid AND tenant_id = :tid RETURNING input_id"), params)
+        if not r.first():
+            raise HTTPException(404, detail="Input not found")
+    return {"data": {"input_id": input_id}}
+
+
 @router.get("")
 async def list_inputs(farm_id: str = None, user: dict = Depends(get_current_user)):
     async with get_rls_db(str(user["tenant_id"])) as db:

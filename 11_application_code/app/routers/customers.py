@@ -94,6 +94,42 @@ async def create_customer(body: CustomerCreate, user: dict = Depends(get_current
     return {"data": {"customer_id": customer_id, "customer_name": body.customer_name.strip()}}
 
 
+class CustomerPatch(BaseModel):
+    customer_name: Optional[str] = None
+    customer_type: Optional[str] = None
+    contact_name: Optional[str] = None
+    contact_role: Optional[str] = None
+    phone: Optional[str] = None
+    whatsapp_number: Optional[str] = None
+    email: Optional[str] = None
+    address: Optional[str] = None
+    island: Optional[str] = None
+    distance_km: Optional[float] = None
+    preferred_channel: Optional[str] = None
+    ferry_dependent: Optional[bool] = None
+    payment_terms_days: Optional[int] = None
+    notes: Optional[str] = None
+
+
+@router.patch("/{customer_id}")
+async def update_customer(customer_id: str, body: CustomerPatch, user: dict = Depends(get_current_user)):
+    """Correct a buyer's details. Partial — only sent fields change."""
+    updates = body.model_dump(exclude_unset=True)
+    if "customer_type" in updates and updates["customer_type"] not in VALID_CUSTOMER_TYPES:
+        raise HTTPException(400, detail=f"customer_type must be one of {sorted(VALID_CUSTOMER_TYPES)}")
+    if "customer_name" in updates and not (updates["customer_name"] or "").strip():
+        raise HTTPException(400, detail="customer_name cannot be empty")
+    if not updates:
+        raise HTTPException(400, detail="No fields to update")
+    cols = ", ".join(f"{k} = :{k}" for k in updates)
+    params = {**updates, "cid": customer_id, "tid": str(user["tenant_id"])}
+    async with get_rls_db(str(user["tenant_id"])) as db:
+        r = await db.execute(text(f"UPDATE tenant.customers SET {cols}, updated_at = now() WHERE customer_id = :cid AND tenant_id = :tid RETURNING customer_id"), params)
+        if not r.first():
+            raise HTTPException(404, detail="Customer not found")
+    return {"data": {"customer_id": customer_id}}
+
+
 _CHANNELS = ("whatsapp", "call", "visit", "email", "sms")
 _DIRECTIONS = ("inbound", "outbound")
 

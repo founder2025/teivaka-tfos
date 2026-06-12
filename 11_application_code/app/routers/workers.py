@@ -116,3 +116,35 @@ async def update_worker_rate(worker_id: str, daily_rate_fjd: Decimal, user: dict
             {"rate": daily_rate_fjd, "worker_id": worker_id, "tid": str(user["tenant_id"])}
         )
     return {"data": {"worker_id": worker_id, "daily_rate_fjd": str(daily_rate_fjd)}}
+
+
+_WORKER_TYPES = {"PERMANENT", "CASUAL", "CONTRACT", "FAMILY"}
+
+
+class WorkerPatch(BaseModel):
+    full_name: Optional[str] = None
+    worker_type: Optional[str] = None
+    daily_rate_fjd: Optional[Decimal] = None
+    contact_number: Optional[str] = None   # → phone column
+    whatsapp_number: Optional[str] = None
+
+
+@router.patch("/{worker_id}")
+async def update_worker(worker_id: str, body: WorkerPatch, user: dict = Depends(get_current_user)):
+    """Correct a worker's details (name, type, rate, contacts)."""
+    sent = body.model_dump(exclude_unset=True)
+    if "worker_type" in sent and sent["worker_type"] not in _WORKER_TYPES:
+        raise HTTPException(400, detail=f"worker_type must be one of {sorted(_WORKER_TYPES)}")
+    # map API field → DB column
+    colmap = {"full_name": "full_name", "worker_type": "worker_type", "daily_rate_fjd": "daily_rate_fjd",
+              "contact_number": "phone", "whatsapp_number": "whatsapp_number"}
+    updates = {colmap[k]: v for k, v in sent.items() if k in colmap}
+    if not updates:
+        raise HTTPException(400, detail="No fields to update")
+    cols = ", ".join(f"{k} = :{k}" for k in updates)
+    params = {**updates, "wid": worker_id, "tid": str(user["tenant_id"])}
+    async with get_rls_db(str(user["tenant_id"])) as db:
+        r = await db.execute(text(f"UPDATE tenant.workers SET {cols}, updated_at = now() WHERE worker_id = :wid AND tenant_id = :tid RETURNING worker_id"), params)
+        if not r.first():
+            raise HTTPException(404, detail="Worker not found")
+    return {"data": {"worker_id": worker_id}}

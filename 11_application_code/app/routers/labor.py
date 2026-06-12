@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import text
 from app.db.session import get_rls_db
 from app.middleware.rls import get_current_user
@@ -76,3 +76,24 @@ async def list_labor(farm_id: str = None, worker_id: str = None, user: dict = De
             params["worker_id"] = worker_id
         result = await db.execute(text(q + " ORDER BY la.work_date DESC LIMIT 100"), params)
         return {"data": [dict(r) for r in result.mappings().all()]}
+
+
+class LaborPatch(BaseModel):
+    hours_worked: Optional[Decimal] = None
+    total_pay_fjd: Optional[Decimal] = None
+    task_description: Optional[str] = None
+
+
+@router.patch("/{attendance_id}")
+async def update_labor(attendance_id: str, body: LaborPatch, user: dict = Depends(get_current_user)):
+    """Correct a logged day (hours / pay / task). work_date + worker stay fixed (identity)."""
+    updates = body.model_dump(exclude_unset=True)
+    if not updates:
+        raise HTTPException(400, detail="No fields to update")
+    cols = ", ".join(f"{k} = :{k}" for k in updates)
+    params = {**updates, "aid": attendance_id, "tid": str(user["tenant_id"])}
+    async with get_rls_db(str(user["tenant_id"])) as db:
+        r = await db.execute(text(f"UPDATE tenant.labor_attendance SET {cols} WHERE attendance_id = :aid AND tenant_id = :tid RETURNING attendance_id"), params)
+        if not r.first():
+            raise HTTPException(404, detail="Attendance record not found")
+    return {"data": {"attendance_id": attendance_id}}

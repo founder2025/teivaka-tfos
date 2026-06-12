@@ -81,3 +81,40 @@ async def create_equipment(body: EquipmentCreate, user: dict = Depends(get_curre
             "created_by": str(user["user_id"]),
         })
     return {"data": {"equipment_id": equipment_id}}
+
+
+_EQUIP_TYPES = {"TRACTOR", "IRRIGATION", "TOOL", "VEHICLE", "PROCESSING", "STORAGE", "OTHER"}
+_EQUIP_CONDITIONS = {"EXCELLENT", "GOOD", "FAIR", "POOR", "DECOMMISSIONED"}
+
+
+class EquipmentPatch(BaseModel):
+    equipment_name: Optional[str] = None
+    equipment_type: Optional[str] = None
+    condition: Optional[str] = None
+    brand: Optional[str] = None
+    model: Optional[str] = None
+    serial_number: Optional[str] = None
+    purchase_date: Optional[datetime] = None
+    purchase_cost_fjd: Optional[Decimal] = None
+    current_value_fjd: Optional[Decimal] = None
+    last_service_date: Optional[datetime] = None
+    next_service_date: Optional[datetime] = None
+    notes: Optional[str] = None
+
+
+@router.patch("/{equipment_id}")
+async def update_equipment(equipment_id: str, body: EquipmentPatch, user: dict = Depends(get_current_user)):
+    updates = body.model_dump(exclude_unset=True)
+    if "equipment_type" in updates and updates["equipment_type"] not in _EQUIP_TYPES:
+        raise HTTPException(400, detail=f"equipment_type must be one of {sorted(_EQUIP_TYPES)}")
+    if "condition" in updates and updates["condition"] not in _EQUIP_CONDITIONS:
+        raise HTTPException(400, detail=f"condition must be one of {sorted(_EQUIP_CONDITIONS)}")
+    if not updates:
+        raise HTTPException(400, detail="No fields to update")
+    cols = ", ".join(f"{k} = :{k}" for k in updates)
+    params = {**updates, "eid": equipment_id, "tid": str(user["tenant_id"])}
+    async with get_rls_db(str(user["tenant_id"])) as db:
+        r = await db.execute(text(f"UPDATE tenant.equipment SET {cols}, updated_at = now() WHERE equipment_id = :eid AND tenant_id = :tid RETURNING equipment_id"), params)
+        if not r.first():
+            raise HTTPException(404, detail="Equipment not found")
+    return {"data": {"equipment_id": equipment_id}}
