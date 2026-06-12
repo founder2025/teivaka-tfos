@@ -84,6 +84,15 @@ CAPABILITIES: dict[str, CapSpec] = {
     # Groups
     "JOIN_GROUP":    CapSpec(gate=Gate.OPEN),
     "CREATE_GROUP":  CapSpec(gate=Gate.OPEN),
+    # High-value actions — the progressive-verification watcher (Section 4).
+    # OPEN today: every account provisions into an active, UNVERIFIED workspace and
+    # can use the platform freely. Flip any of these to Gate.HIGH_TRUST to require
+    # identity (kyc_verified): the endpoint then returns 403 IDENTITY_VERIFICATION_
+    # REQUIRED and the UI shows the identity-capture screen. No endpoint/component
+    # change needed to enable — just this one line.
+    "EXTRACT_BANK_EVIDENCE": CapSpec(gate=Gate.OPEN),
+    "EXECUTE_SETTLEMENT":    CapSpec(gate=Gate.OPEN),
+    "FINANCIAL_MATCHING":    CapSpec(gate=Gate.OPEN),
 }
 
 
@@ -127,6 +136,29 @@ def require(capability: str):
                     "code": "CAPABILITY_LOCKED",
                     "capability": capability,
                     "message": "This feature isn't available on your account yet.",
+                },
+            )
+        return user
+    return _dep
+
+
+def require_identity(capability: str):
+    """Progressive-verification watcher dependency.
+
+    Like require(), but on denial emits IDENTITY_VERIFICATION_REQUIRED (vs
+    CAPABILITY_LOCKED) so the frontend shows the identity-capture screen rather than
+    a subscription upsell. Wire onto high-value endpoints (Bank-Evidence extraction,
+    settlement execution, financial matching). Passes while the capability is OPEN;
+    enforces the instant it's flipped to Gate.HIGH_TRUST (requires kyc_verified).
+    """
+    async def _dep(user: dict = Depends(get_current_user)) -> dict:
+        if not can(user, capability):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={
+                    "code": "IDENTITY_VERIFICATION_REQUIRED",
+                    "capability": capability,
+                    "message": "Identity verification is required for this action.",
                 },
             )
         return user

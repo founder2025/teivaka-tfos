@@ -39,6 +39,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.audit_chain import emit_audit_event
 from app.middleware.rls import get_current_user, get_tenant_db
+from app.core.capabilities import require_identity
 from app.schemas.envelope import error_envelope
 from app.routers.poultry_bank_evidence import (
     COLOR_SOIL, COLOR_GREEN, COLOR_MUTED, COLOR_RED,
@@ -54,6 +55,7 @@ async def crop_bank_evidence(
     period: Optional[str] = Query(None, description="YYYY-MM (defaults to current month UTC)"),
     farm_id: Optional[str] = Query(None, description="Farm id (defaults to first active farm)"),
     user: dict = Depends(get_current_user),
+    _identity: dict = Depends(require_identity("EXTRACT_BANK_EVIDENCE")),
     db: AsyncSession = Depends(get_tenant_db),
 ):
     """Return crop/whole-farm cashflow + production PDF; emit audit + write export row."""

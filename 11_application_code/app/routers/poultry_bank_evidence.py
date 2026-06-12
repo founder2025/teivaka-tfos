@@ -51,6 +51,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.audit_chain import emit_audit_event
 from app.middleware.rls import get_current_user, get_tenant_db
+from app.core.capabilities import require_identity
 from app.schemas.envelope import error_envelope
 
 router = APIRouter()
@@ -154,6 +155,7 @@ async def poultry_bank_evidence(
         description="YYYY-MM (defaults to current month UTC)",
     ),
     user: dict = Depends(get_current_user),
+    _identity: dict = Depends(require_identity("EXTRACT_BANK_EVIDENCE")),
     db: AsyncSession = Depends(get_tenant_db),
 ):
     """Return cashflow PDF (binary) for the requested period; emit audit + write export row."""

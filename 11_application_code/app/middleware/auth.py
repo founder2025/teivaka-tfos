@@ -132,6 +132,7 @@ class AuthMiddleware:
                         u.avatar_url,
                         u.field_visibility,
                         u.email_verified,
+                        u.kyc_verified,
                         u.cover_url,
                         u.unit_mode,
                         u.pref_currency,
