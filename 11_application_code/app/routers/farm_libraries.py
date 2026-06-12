@@ -19,6 +19,7 @@ PATCH (Phase 6.1b-3) and DELETE blocker (Phase 6.1b-5) ship in subsequent phases
 """
 
 import json
+import logging
 from typing import Optional
 from uuid import UUID
 
@@ -33,18 +34,53 @@ from app.schemas.envelope import error_envelope, success_envelope
 
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 # Strike #80: library types are data-driven via shared.library_type_catalog
 # (FK from farm_libraries.library_type). Adding a type for a new group is a catalog
 # row — no DDL, no code edit here. Validity is resolved from the catalog at runtime.
+#
+# Resilience: the catalog ships in Migration 121. Until that migration is applied this
+# code must NOT break the (previously working) read/add paths — so every catalog read
+# is guarded by to_regclass (never errors / never poisons the txn) and falls back to
+# the canonical POULTRY set, which is exactly what the pre-121 CHECK enforced.
+_FALLBACK_CATALOG = [
+    {"library_type": "POULTRY_BREED",    "group_code": "POULTRY", "label": "Breeds",    "singular_label": "breed",    "placeholder": "e.g. ISA Brown",       "sort_order": 10},
+    {"library_type": "POULTRY_FEED",     "group_code": "POULTRY", "label": "Feeds",     "singular_label": "feed",     "placeholder": "e.g. Layer mash 16%",  "sort_order": 20},
+    {"library_type": "POULTRY_VACCINE",  "group_code": "POULTRY", "label": "Vaccines",  "singular_label": "vaccine",  "placeholder": "e.g. Newcastle",       "sort_order": 30},
+    {"library_type": "POULTRY_SUPPLIER", "group_code": "POULTRY", "label": "Suppliers", "singular_label": "supplier", "placeholder": "e.g. Pacific Feed Co", "sort_order": 40},
+    {"library_type": "POULTRY_BUYER",    "group_code": "POULTRY", "label": "Buyers",    "singular_label": "buyer",    "placeholder": "e.g. Suva Market",     "sort_order": 50},
+]
+_FALLBACK_LIBRARY_TYPES = {r["library_type"] for r in _FALLBACK_CATALOG}
+
+
+async def _catalog_rows(db: AsyncSession) -> list[dict]:
+    """Catalog rows, or the fallback if Migration 121 hasn't landed yet.
+
+    to_regclass returns NULL (no error, no aborted transaction) when the table is
+    absent, so a lagging migration degrades gracefully instead of 500-ing the page.
+    """
+    exists = (await db.execute(text("SELECT to_regclass('shared.library_type_catalog')"))).scalar()
+    if not exists:
+        logger.warning("shared.library_type_catalog absent (Migration 121 not applied) — using fallback")
+        return list(_FALLBACK_CATALOG)
+    rows = await db.execute(
+        text(
+            """
+            SELECT library_type, group_code, label, singular_label, placeholder, sort_order
+            FROM shared.library_type_catalog
+            WHERE is_active = TRUE
+            ORDER BY sort_order, label
+            """
+        )
+    )
+    out = [dict(r) for r in rows.mappings()]
+    return out or list(_FALLBACK_CATALOG)
 
 
 async def _catalog_types(db: AsyncSession) -> set[str]:
-    """Active library types from the catalog (the FK target — single source of truth)."""
-    rows = await db.execute(
-        text("SELECT library_type FROM shared.library_type_catalog WHERE is_active = TRUE")
-    )
-    return {r[0] for r in rows}
+    """Valid library types (catalog or fallback). Never raises on a missing table."""
+    return {r["library_type"] for r in await _catalog_rows(db)}
 
 
 class LibraryAddRequest(BaseModel):
@@ -108,18 +144,12 @@ async def list_library_types(
     user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_tenant_db),
 ):
-    """The library-type catalog (Strike #80) — drives the management UI's tabs/labels."""
-    rows = await db.execute(
-        text(
-            """
-            SELECT library_type, group_code, label, singular_label, placeholder, sort_order
-            FROM shared.library_type_catalog
-            WHERE is_active = TRUE
-            ORDER BY sort_order, label
-            """
-        )
-    )
-    items = [dict(r) for r in rows.mappings()]
+    """The library-type catalog (Strike #80) — drives the management UI's tabs/labels.
+
+    Falls back to the canonical POULTRY set if Migration 121 hasn't landed, so the UI
+    tabs always render.
+    """
+    items = await _catalog_rows(db)
     return success_envelope({"items": items}, meta={"total": len(items)})
 
 
