@@ -109,17 +109,24 @@ only for the listed persona groups (PRODUCER/TRADE/SERVICE/CAPITAL/GOVERNANCE; m
 returns the computed map so the UI can show/hide persona CTAs via `useCan()`.
 
 Current persona capabilities:
-- `CLASSROOM_UPLOAD_MODULE` — `Gate.PERSONA`, groups TRADE/CAPITAL/GOVERNANCE (institutions
-  can contribute course modules). Not wired to an endpoint yet — the UI reads it for the CTA.
-- `ACCESS_FARM`, `TIS_QUERY`, `MARKET_LIST` — kept `Gate.OPEN` today to avoid regressing
-  working cross-persona features. To hard-enforce server-side, flip the gate:
-  ```python
-  "ACCESS_FARM": CapSpec(gate=Gate.PERSONA, groups=("PRODUCER", "GOVERNANCE")),
-  ```
-  then add `Depends(require("ACCESS_FARM"))` to the farm dashboard endpoint. The frontend nav
-  already hides Farm for non-producer personas; this adds the 403 fail-closed.
-  > ⚠️ Before enforcing ACCESS_FARM, confirm Agribusiness / edge-case producers aren't
-  > misclassified out of their own Farm pillar — group buckets are coarse.
+- `CLASSROOM_UPLOAD_MODULE` — `Gate.PERSONA`, groups TRADE/CAPITAL/GOVERNANCE. **Wired:**
+  `ClassroomPillar` shows institutions an institution-framed "Contribute your modules → Apply
+  to contribute" CTA (via the live `TeachCard` / `author-request` flow); others keep the
+  farmer "Apply to teach" copy.
+- `MARKET_LIST` — `Gate.PERSONA`, groups PRODUCER/TRADE/SERVICE. **Wired:** the "New listing"
+  button (`HomePillar`) is hidden for CAPITAL/GOVERNANCE (they don't sell/buy produce).
+- `TIS_QUERY` — `Gate.OPEN` (defined, not yet scoped; flip to `PERSONA groups=("PRODUCER",)`
+  to restrict agronomic queries to producers).
+- `ACCESS_FARM` — `Gate.OPEN`, **deliberately NOT enforced server-side.** The real boundary is
+  already in place: the nav hides Farm for non-producer personas (PillarTabs/FarmerShell,
+  Slice 3) and RLS returns empty farm data to non-producers. A hard 403 is intentionally
+  deferred because the Farm pillar spans ~15 endpoints — several of them **shared, cross-pillar**
+  (`/tasks`, `/me/chain-status`, `/weather/*`) that non-farm personas legitimately use — so
+  gating one is misleading and gating all would break shared use. Full enforcement is a
+  dedicated effort: a `FarmRoute`-style guard over the farm-only endpoints + an explicit
+  Agribusiness-Farm policy decision (group buckets are coarse; the matrix gave Agribusiness
+  Farm-RO but the nav currently hides it). Do this only if/when hard server-side denial is
+  required beyond nav + RLS.
 
 ## 4. Operator actions (external — cannot be done from code)
 
