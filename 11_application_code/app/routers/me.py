@@ -539,8 +539,14 @@ async def my_prefs(
     if int(has or 0) < 3:
         return {"data": {"notify_whatsapp": True, "notify_tasks": True, "notify_weather": True,
                          "preferred_language": user.get("preferred_language") or "en", "degraded": True}}
+    # pref_* unit columns shipped in migration 095 — probe the same way.
+    has_units = (await db.execute(text(
+        "SELECT count(*) FROM information_schema.columns WHERE table_schema='tenant' "
+        "AND table_name='users' AND column_name IN ('pref_weight','pref_currency')"))).scalar()
+    unit_sel = ", pref_weight, pref_currency, whatsapp_number" if int(has_units or 0) >= 2 \
+        else ", NULL AS pref_weight, NULL AS pref_currency, whatsapp_number"
     row = (await db.execute(text(
-        "SELECT notify_whatsapp, notify_tasks, notify_weather, preferred_language "
+        f"SELECT notify_whatsapp, notify_tasks, notify_weather, preferred_language{unit_sel} "
         "FROM tenant.users WHERE user_id = :uid"), {"uid": str(user["user_id"])})).mappings().first()
     return {"data": dict(row) if row else {}}
 

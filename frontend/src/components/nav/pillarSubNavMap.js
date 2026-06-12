@@ -68,7 +68,7 @@ export const PILLAR_SUB_NAV = {
       { path: "/me/library",        label: "My lists",          icon: Bird },
       { path: "/farm/gallery",      label: "Gallery",           icon: Image },
       { path: "/farm/partnerships", label: "Partnerships",      icon: Share2 },
-      { path: "/me/settings",       label: "Settings",          icon: Settings },
+      { path: "/farm/settings",     label: "Settings",          icon: Settings },
     ],
   },
   "/tis": {
