@@ -12,6 +12,7 @@
  */
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
+import { useCapabilities } from "../../utils/capabilities";
 import {
   Home, BookOpen, Tractor, Sparkles, Search, MessageSquare, Bell, ChevronDown,
   Star, Bookmark, Plus, Shield, DollarSign, ShoppingBag, Rss, Users, List as ListIcon, TrendingUp,
@@ -88,6 +89,7 @@ export default function HomePillar() {
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const view = pathname.split("/")[2] || "feed";
+  const { can } = useCapabilities();
   const [posts, setPosts] = useState(null);
   const [listings, setListings] = useState(null);
 
@@ -149,7 +151,7 @@ export default function HomePillar() {
 
   const action = view === "feed"
     ? <button className="btn btn-secondary" onClick={() => navigate("/tfos")}><Shield size={13} />Why TFOS works</button>
-    : view === "marketplace"
+    : view === "marketplace" && can("MARKET_LIST")
     ? <button className="btn btn-primary" onClick={() => window.dispatchEvent(new CustomEvent("tfos:new-listing"))}><Plus size={14} />New listing</button>
     : null;
 

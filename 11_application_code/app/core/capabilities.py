@@ -102,7 +102,7 @@ CAPABILITIES: dict[str, CapSpec] = {
     # features) — flip to PERSONA (with the groups shown) to hard-enforce server-side.
     "ACCESS_FARM":             CapSpec(gate=Gate.OPEN),   # flip → PERSONA groups=("PRODUCER","GOVERNANCE")
     "TIS_QUERY":               CapSpec(gate=Gate.OPEN),   # flip → PERSONA groups=("PRODUCER",)
-    "MARKET_LIST":             CapSpec(gate=Gate.OPEN),   # flip → PERSONA groups=("TRADE","SERVICE","PRODUCER")
+    "MARKET_LIST":             CapSpec(gate=Gate.PERSONA, groups=("PRODUCER", "TRADE", "SERVICE")),  # capital/governance don't sell/buy produce
     # New contribute ability — institutions only. Not wired to an endpoint yet, so
     # gating it now regresses nothing; the UI reads it to show an "upload module" CTA.
     "CLASSROOM_UPLOAD_MODULE": CapSpec(gate=Gate.PERSONA, groups=("TRADE", "CAPITAL", "GOVERNANCE")),
