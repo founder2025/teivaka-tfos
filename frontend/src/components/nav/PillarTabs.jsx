@@ -1,5 +1,7 @@
 import { NavLink } from "react-router-dom";
 import { Home, BookOpen, Tractor, Sparkles } from "lucide-react";
+import { useMe } from "../../hooks/useMe";
+import { navPillarKeys } from "../../utils/personas";
 
 const C = {
   soil:      "#5C4033",
@@ -17,9 +19,14 @@ const PILLARS = [
 ];
 
 export default function PillarTabs() {
+  const me = useMe();
+  // Persona-gated nav: hide pillars this persona doesn't use (e.g. Farm for a
+  // banker). Until /auth/me loads, show all (never hide a pillar on slow load).
+  const allowed = me ? navPillarKeys(me.profession || me.account_type) : null;
+  const pillars = allowed ? PILLARS.filter((p) => allowed.includes(p.key)) : PILLARS;
   return (
     <nav className="flex items-center gap-6" aria-label="Primary">
-      {PILLARS.map(({ key, label, to, Icon }) => (
+      {pillars.map(({ key, label, to, Icon }) => (
         <NavLink
           key={key}
           to={to}

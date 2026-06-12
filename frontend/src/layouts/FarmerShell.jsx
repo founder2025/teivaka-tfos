@@ -18,6 +18,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Navigate, Outlet, useLocation } from "react-router-dom";
 import { Plus, Sparkles } from "lucide-react";
+import { useMe } from "../hooks/useMe";
+import { navPillarKeys } from "../utils/personas";
 
 import TopAppBar from "../components/nav/TopAppBar";
 import BottomNav from "../components/nav/BottomNav";
@@ -197,6 +199,14 @@ function TisFab({ unread, onClick, active }) {
 
 function ShellContent() {
   const location = useLocation();
+  const me = useMe();
+
+  // Persona pillar gating: a persona without the Farm pillar (e.g. a banker) that
+  // lands on /farm is bounced home — no dead-end (the Farm tab is hidden for them).
+  const allowed = me ? navPillarKeys(me.profession || me.account_type) : null;
+  if (allowed && location.pathname.startsWith("/farm") && !allowed.includes("farm")) {
+    return <Navigate to="/home" replace />;
+  }
 
   const onTisRoute = location.pathname.startsWith("/tis");
   const showFab = !onTisRoute;

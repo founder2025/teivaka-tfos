@@ -77,13 +77,29 @@ export const PILLARS_BY_GROUP = {
   PRODUCER:   [PILLAR.home, PILLAR.farm, PILLAR.tis, PILLAR.classroom, PILLAR.market, PILLAR.directory],
   TRADE:      [PILLAR.home, PILLAR.market, PILLAR.directory, PILLAR.classroom, PILLAR.tis],
   SERVICE:    [PILLAR.home, PILLAR.market, PILLAR.directory, PILLAR.classroom, PILLAR.tis],
-  CAPITAL:    [PILLAR.home, PILLAR.directory, PILLAR.classroom, PILLAR.market, PILLAR.verify],
-  GOVERNANCE: [PILLAR.home, PILLAR.directory, PILLAR.classroom, PILLAR.verify, PILLAR.farm],
+  CAPITAL:    [PILLAR.home, PILLAR.directory, PILLAR.classroom, PILLAR.tis, PILLAR.market, PILLAR.verify],
+  GOVERNANCE: [PILLAR.home, PILLAR.directory, PILLAR.classroom, PILLAR.farm, PILLAR.tis, PILLAR.verify],
 };
 
 /** Pillar-launcher tiles for a persona (falls back to PRODUCER's set). */
 export function pillarsFor(v) {
   return PILLARS_BY_GROUP[personaGroup(v)] || PILLARS_BY_GROUP.PRODUCER;
+}
+
+// Top-nav (PillarTabs) visibility per group — which of home/classroom/farm/tis show.
+// Ratified matrix: Farm hidden for TRADE/SERVICE/CAPITAL; TIS shown for all
+// (read-only for non-producers — enforced at content level, not hidden).
+const NAV_PILLARS_BY_GROUP = {
+  PRODUCER:   ["home", "classroom", "farm", "tis"],
+  TRADE:      ["home", "classroom", "tis"],
+  SERVICE:    ["home", "classroom", "tis"],
+  CAPITAL:    ["home", "classroom", "tis"],
+  GOVERNANCE: ["home", "classroom", "farm", "tis"],
+};
+
+/** Top-nav pillar keys a persona may see (falls back to PRODUCER's full set). */
+export function navPillarKeys(v) {
+  return NAV_PILLARS_BY_GROUP[personaGroup(v)] || NAV_PILLARS_BY_GROUP.PRODUCER;
 }
 
 /** True for farm-operating personas (show farm records / TIS / producer copy). */
