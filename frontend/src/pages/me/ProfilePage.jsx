@@ -222,6 +222,40 @@ function EditModal({ me, onClose, onSaved }) {
   );
 }
 
+function BizModal({ biz, onClose, onSaved }) {
+  const [f, setF] = useState({ business_name: biz?.business_name || "", operator_name: biz?.operator_name || "" });
+  const [busy, setBusy] = useState(false);
+  const inp = { width: "100%", padding: "9px 11px", border: `1px solid ${C.line}`, borderRadius: 8, fontSize: 14, boxSizing: "border-box", marginTop: 4 };
+  const save = async () => {
+    if (!f.business_name.trim()) { toast("Business name is required", "error"); return; }
+    setBusy(true);
+    try {
+      await send("PATCH", "/api/v1/me/business", { business_name: f.business_name.trim(), operator_name: f.operator_name.trim() || null });
+      toast("Business profile saved ✓", "success");
+      onSaved();
+    } catch (e) { toast(`Couldn't save: ${e.message || e}`, "error"); }
+    finally { setBusy(false); }
+  };
+  return (
+    <div onMouseDown={(e) => e.target === e.currentTarget && onClose()} style={{ position: "fixed", inset: 0, zIndex: 3000, background: "rgba(40,30,20,.4)", display: "flex", justifyContent: "center", alignItems: "flex-start", paddingTop: "7vh" }}>
+      <div style={{ width: "min(480px, calc(100vw - 24px))", background: "#fff", border: `1px solid ${C.line}`, borderRadius: 12 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 16px", borderBottom: `1px solid ${C.line}` }}>
+          <strong style={{ color: C.soil }}>Business profile</strong>
+          <button onClick={onClose} style={{ border: "none", background: "transparent", cursor: "pointer", color: C.muted }}><X size={18} /></button>
+        </div>
+        <div style={{ padding: 16 }}>
+          <label style={{ fontSize: 12, color: C.muted }}>Registered business / trading name<input style={inp} value={f.business_name} onChange={(e) => setF({ ...f, business_name: e.target.value })} placeholder="e.g. Save-A-Lot Produce Ltd" /></label>
+          <label style={{ fontSize: 12, color: C.muted, display: "block", marginTop: 12 }}>Authorized operator name<input style={inp} value={f.operator_name} onChange={(e) => setF({ ...f, operator_name: e.target.value })} placeholder="e.g. Cody Viliami" /></label>
+        </div>
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, padding: "12px 16px", borderTop: `1px solid ${C.line}` }}>
+          <button onClick={onClose} style={{ border: `1px solid ${C.line}`, background: "#fff", borderRadius: 8, padding: "9px 14px", cursor: "pointer" }}>Cancel</button>
+          <button onClick={save} disabled={busy} style={{ border: "none", background: C.green, color: "#fff", borderRadius: 8, padding: "9px 16px", cursor: "pointer", fontWeight: 600 }}>{busy ? "Saving…" : "Save"}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function ProfilePage({ self = false }) {
   const { id: routeId } = useParams();
   const navigate = useNavigate();
@@ -236,6 +270,8 @@ export default function ProfilePage({ self = false }) {
   const [records, setRecords] = useState(null);
   const [activity, setActivity] = useState(null);
   const [meData, setMeData] = useState(null);
+  const [biz, setBiz] = useState(null);          // own business entity (Company accounts)
+  const [editingBiz, setEditingBiz] = useState(false);
   const [avatarBroken, setAvatarBroken] = useState(false);
   const [avatarPct, setAvatarPct] = useState(null); // null = idle, 0-100 uploading
   const [cropFile, setCropFile] = useState(null);   // file awaiting crop/reposition
@@ -254,6 +290,12 @@ export default function ProfilePage({ self = false }) {
         .then((r) => { const d = r?.data ?? r; setMeData(d); setMeId(d?.user_id); })
         .catch(() => { setMeId(null); setLoadFailed(true); });
     }
+  }, [self, retryTick]);
+
+  // Own business entity (Company accounts) — drives the business-profile variant.
+  useEffect(() => {
+    if (!self) return;
+    getJSON("/api/v1/me/business").then((r) => setBiz(r?.data ?? r)).catch(() => setBiz(null));
   }, [self, retryTick]);
 
   // Never an infinite spinner: if nothing has rendered after 10s, offer Retry.
@@ -381,6 +423,8 @@ export default function ProfilePage({ self = false }) {
 
   const isYou = p.is_you;
   const pub = previewPublic; // own-profile public preview
+  const isBiz = !!(isYou && biz?.is_company);
+  const displayName = (isBiz && biz?.business?.business_name) ? biz.business.business_name : p.full_name;
   // If the stored avatar URL is dead (e.g. an upload that failed server-side
   // before the file was written), fall back to the initials circle instead of
   // the browser's broken-image icon.
@@ -478,10 +522,11 @@ export default function ProfilePage({ self = false }) {
           </label>
           <div style={{ flex: 1, minWidth: 220 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-              <h1 style={{ margin: 0, fontSize: 22, color: C.soil }}>{p.full_name}</h1>
+              <h1 style={{ margin: 0, fontSize: 22, color: C.soil }}>{displayName}</h1>
               {isYou && !pub && <span style={{ background: "rgba(106,168,79,.14)", color: C.greenDk, fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 6 }}>YOU</span>}
               {p.verified && <span style={{ display: "inline-flex", alignItems: "center", gap: 3, background: "rgba(106,168,79,.14)", color: C.greenDk, fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 6 }}><BadgeCheck size={11} /> VERIFIED</span>}
             </div>
+            {isBiz && <div style={{ fontSize: 12.5, color: C.muted, marginTop: 3 }}>Business account · operated by {biz.business?.operator_name || p.full_name}</div>}
             <div style={{ display: "flex", gap: 14, flexWrap: "wrap", fontSize: 12, color: C.muted, marginTop: 6 }}>
               {p.phone && <span><Phone size={12} /> {p.phone}</span>}
               {p.joined && <span><Calendar size={12} /> joined {fmtDate(p.joined)} · {monthsSince(p.joined)}</span>}
@@ -555,6 +600,22 @@ export default function ProfilePage({ self = false }) {
                   </button>
                 ))}
               </div>
+            </div>
+          )}
+          {isYou && biz?.is_company && (
+            <div style={{ ...card, marginBottom: 14, border: `1px solid ${C.green}` }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                <strong style={{ color: C.soil }}>Business profile</strong>
+                <button onClick={() => setEditingBiz(true)} style={{ ...QA, padding: "6px 11px" }}><Pencil size={13} />{biz.business ? "Edit" : "Add details"}</button>
+              </div>
+              {biz.business ? (
+                <div style={{ fontSize: 13.5, color: C.soil }}>
+                  <div style={{ fontWeight: 700 }}>{biz.business.business_name}</div>
+                  <div style={{ fontSize: 12.5, color: C.muted, marginTop: 2 }}>{personaLabel(biz.business.account_type)}{biz.business.operator_name ? ` · operated by ${biz.business.operator_name}` : ""}</div>
+                </div>
+              ) : (
+                <div style={{ fontSize: 13, color: C.muted }}>Add your trading name and authorized operator so buyers and partners recognise your business.</div>
+              )}
             </div>
           )}
           <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 14 }}>
@@ -632,6 +693,7 @@ export default function ProfilePage({ self = false }) {
         </>}
 
         {editing && <EditModal me={{ ...p, field_visibility: p.field_visibility }} onClose={() => setEditing(false)} onSaved={handleSaved} />}
+        {editingBiz && <BizModal biz={biz?.business} onClose={() => setEditingBiz(false)} onSaved={() => { setEditingBiz(false); getJSON("/api/v1/me/business").then((r) => setBiz(r?.data ?? r)).catch(() => {}); }} />}
         {cropFile && <AvatarCropper file={cropFile} onCancel={() => setCropFile(null)} onCropped={uploadAvatar} />}
       </main>
     </div>

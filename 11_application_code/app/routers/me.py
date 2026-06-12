@@ -4,8 +4,9 @@ from passlib.context import CryptContext
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.account_types import normalize_account_type
 from app.db.session import get_db
-from app.middleware.rls import get_current_user
+from app.middleware.rls import get_current_user, get_tenant_db
 
 router = APIRouter()
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -341,10 +342,10 @@ async def update_me(
         if k in data and data[k] is not None:
             v = data[k]
             if k == "account_type":
-                v = str(v).upper().strip()
-                if v == "OTHER":
-                    v = "BUSINESS"
-                if v not in _ACCOUNT_TYPES:
+                # 12-tier ecosystem taxonomy; legacy values up-converted, invalid skipped.
+                try:
+                    v = normalize_account_type(v)
+                except ValueError:
                     continue
             if k == "country":
                 v = str(v).upper().strip()[:2]
@@ -357,6 +358,86 @@ async def update_me(
     await db.execute(text(f"UPDATE tenant.users SET {', '.join(sets)} WHERE user_id = :uid"), params)
     await db.commit()
     return {"data": {"updated": len(sets)}}
+
+
+class BusinessPatch(BaseModel):
+    business_name: str | None = None
+    operator_name: str | None = None
+    region_id: str | None = None
+
+
+@router.get("/business")
+async def get_my_business(
+    user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_tenant_db),
+):
+    """The caller's business entity (Company accounts). RLS-scoped to their tenant."""
+    is_company = (await db.execute(
+        text("SELECT COALESCE(is_company, false) FROM tenant.users WHERE user_id = :uid"),
+        {"uid": str(user["user_id"])},
+    )).scalar()
+    row = (await db.execute(
+        text("""
+            SELECT entity_id, business_name, operator_name, account_type, region_id
+            FROM tenant.business_entities
+            WHERE tenant_id = :tid
+            ORDER BY created_at LIMIT 1
+        """),
+        {"tid": str(user["tenant_id"])},
+    )).mappings().first()
+    return {"data": {"is_company": bool(is_company), "business": dict(row) if row else None}}
+
+
+@router.patch("/business")
+async def update_my_business(
+    body: BusinessPatch,
+    user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_tenant_db),
+):
+    """Create or update the caller's business entity (Company accounts only)."""
+    is_company = (await db.execute(
+        text("SELECT COALESCE(is_company, false) FROM tenant.users WHERE user_id = :uid"),
+        {"uid": str(user["user_id"])},
+    )).scalar()
+    if not is_company:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="This is not a company account.")
+
+    data = body.model_dump(exclude_unset=True)
+    existing = (await db.execute(
+        text("SELECT entity_id FROM tenant.business_entities WHERE tenant_id = :tid ORDER BY created_at LIMIT 1"),
+        {"tid": str(user["tenant_id"])},
+    )).scalar()
+
+    if existing:
+        sets, params = [], {"eid": str(existing)}
+        for k in ("business_name", "operator_name", "region_id"):
+            if k in data:
+                sets.append(f"{k} = :{k}"); params[k] = data[k]
+        if not sets:
+            return {"data": {"updated": 0}}
+        await db.execute(
+            text(f"UPDATE tenant.business_entities SET {', '.join(sets)}, updated_at = now() WHERE entity_id = :eid"),
+            params,
+        )
+    else:
+        bn = (data.get("business_name") or "").strip()
+        if not bn:
+            raise HTTPException(status_code=422, detail="Business name is required.")
+        at = (await db.execute(
+            text("SELECT account_type FROM tenant.users WHERE user_id = :uid"),
+            {"uid": str(user["user_id"])},
+        )).scalar() or "AGRIBUSINESS_ENTERPRISE"
+        await db.execute(
+            text("""
+                INSERT INTO tenant.business_entities
+                    (tenant_id, user_id, business_name, operator_name, account_type, region_id)
+                VALUES (CAST(:tid AS uuid), CAST(:uid AS uuid), :bn, :op, :at, :rid)
+            """),
+            {"tid": str(user["tenant_id"]), "uid": str(user["user_id"]),
+             "bn": bn, "op": data.get("operator_name"), "at": at, "rid": data.get("region_id")},
+        )
+    await db.commit()
+    return {"data": {"updated": 1}}
 
 
 class DeleteAccountBody(BaseModel):
