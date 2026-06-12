@@ -39,7 +39,11 @@ def _exec_each(statements):
 
 def upgrade():
     _exec_each([
-        # 1. Map existing rows old → new (single CASE statement).
+        # 1. Drop the old CHECK FIRST — the remap below writes new values the old
+        #    constraint forbids, so it must be gone before the UPDATE (the original
+        #    order ran the UPDATE first and died on users_account_type_check).
+        "ALTER TABLE tenant.users DROP CONSTRAINT IF EXISTS users_account_type_check",
+        # 2. Map existing rows old → new (single CASE statement).
         """
         UPDATE tenant.users SET account_type = CASE account_type
             WHEN 'FARMER'          THEN 'PRIMARY_PRODUCER'
@@ -54,10 +58,17 @@ def upgrade():
             ELSE account_type END
         WHERE account_type IN ('FARMER','BUYER','SUPPLIER','SERVICE_PROVIDER','BANKER','BUSINESS','EXPORTER','IMPORTER','OTHER')
         """,
-        # 2. Move the column default off a now-invalid value.
+        # 3. Catch-all: any residual non-NULL value outside the 12-tier set (legacy
+        #    taxonomies, hand-edited rows) → AGRIBUSINESS_ENTERPRISE, so the ADD below
+        #    can never fail on an unexpected value. Rows already on a new value are
+        #    untouched (NULLs pass a CHECK and are left alone).
+        f"""
+        UPDATE tenant.users SET account_type = 'AGRIBUSINESS_ENTERPRISE'
+        WHERE account_type IS NOT NULL AND account_type NOT IN ({NEW_VALUES})
+        """,
+        # 4. Move the column default off a now-invalid value.
         "ALTER TABLE tenant.users ALTER COLUMN account_type SET DEFAULT 'PRIMARY_PRODUCER'",
-        # 3. Swap the CHECK constraint to the 12-tier taxonomy.
-        "ALTER TABLE tenant.users DROP CONSTRAINT IF EXISTS users_account_type_check",
+        # 5. Add the 12-tier CHECK.
         f"ALTER TABLE tenant.users ADD CONSTRAINT users_account_type_check CHECK (account_type IN ({NEW_VALUES}))",
     ])
 
