@@ -57,8 +57,8 @@ export default function Privacy() {
   return (
     <LegalDoc title="Privacy Policy" version={PRIVACY_VERSION} updated="June 2026">
       <P>
-        Teivaka PTE Limited ("Teivaka", "we", "us") operates the Teivaka Farm Operating
-        System (TFOS). This policy explains what personal information we collect, how we
+        Teivaka PTE Limited ("Teivaka", "we", "us") operates the Teivaka Agriculture
+        Ecosystem (TAE). This policy explains what personal information we collect, how we
         use and protect it, and the choices you have. By creating an account you agree to
         this policy.
       </P>

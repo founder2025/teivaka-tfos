@@ -4,13 +4,13 @@ export default function Terms() {
   return (
     <LegalDoc title="Terms of Service" version="1.0" updated="June 2026">
       <P>
-        These Terms govern your use of the Teivaka Farm Operating System (TFOS), operated by
+        These Terms govern your use of the Teivaka Agriculture Ecosystem (TAE), operated by
         Teivaka PTE Limited ("Teivaka", "we", "us"). By creating an account or using the
         platform you agree to these Terms. If you do not agree, do not use the service.
       </P>
 
       <H2>1. Eligibility</H2>
-      <P>You must be at least 18 years old and able to form a binding agreement to use TFOS.</P>
+      <P>You must be at least 18 years old and able to form a binding agreement to use TAE.</P>
 
       <H2>2. Your account</H2>
       <P>
@@ -21,14 +21,14 @@ export default function Terms() {
 
       <H2>3. Acceptable use</H2>
       <P>
-        Use TFOS only for lawful agricultural and business purposes. You may not submit false or
+        Use TAE only for lawful agricultural and business purposes. You may not submit false or
         misleading information, send spam, attempt to access other accounts, disrupt the service,
         or use it to break any law. Violations may result in immediate suspension or termination.
       </P>
 
       <H2>4. Farming intelligence (TIS) — advisory only</H2>
       <P>
-        TFOS may provide AI-assisted guidance, agronomic references, market information and
+        TAE may provide AI-assisted guidance, agronomic references, market information and
         reminders. This is provided for information only and is not a substitute for professional
         agronomic, veterinary, financial or legal advice. You are responsible for decisions you
         make on your farm. We do not guarantee yields, prices, or outcomes, and chemical
@@ -53,7 +53,7 @@ export default function Terms() {
 
       <H2>7. Intellectual property</H2>
       <P>
-        The TFOS platform, software, design and content (excluding your own data) are owned by
+        The TAE platform, software, design and content (excluding your own data) are owned by
         Teivaka and protected by law. You may not copy, resell, reverse-engineer or create derivative
         works without our written permission.
       </P>

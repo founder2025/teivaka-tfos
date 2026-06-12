@@ -1,6 +1,6 @@
 // ── src/pages/MarketingPage.jsx ───────────────────────────────────────────────
 // Single component renders all 10 marketing pages (About, What We Do, Impact,
-// Team, Partner, Contact, TIS public, TFOS public, Our Farms, Farms).
+// Team, Partner, Contact, TIS public, TAE public, Our Farms, Farms).
 //
 // Each page shares the same shell (header with logo+Login, footer) and pulls
 // its content from the PAGE_CONTENT map below.
@@ -101,7 +101,7 @@ const PAGE_CONTENT = {
     sections: [
       {
         heading: "Who we are",
-        body: "Teivaka PTE LTD is a Fiji-incorporated agricultural company (Co. No. 2025RC001894) building TFOS — the Teivaka Farm Operating System. We are headquartered in Fiji, with active pilot farms in Korovou (Tailevu Province, mainland) and on Kadavu Island.",
+        body: "Teivaka PTE LTD is a Fiji-incorporated agricultural company (Co. No. 2025RC001894) building the Teivaka Agriculture Ecosystem. We are headquartered in Fiji, with active pilot farms in Korovou (Tailevu Province, mainland) and on Kadavu Island.",
       },
       {
         heading: "Why we exist",
@@ -125,7 +125,7 @@ const PAGE_CONTENT = {
     sections: [
       {
         heading: "How farmers use it",
-        body: "TFOS adapts to the farmer. A subsistence smallholder sees a single task card with voice playback and three buttons. A growing operation sees a five-pillar navigation across Home, Classroom, Farm, TIS, and Me. A commercial operator with multiple farms and many hectares sees analytics, multi-farm rollup, and the full operational depth. The same database. The same audit chain. Three different surfaces.",
+        body: "TAE adapts to the farmer. A subsistence smallholder sees a single task card with voice playback and three buttons. A growing operation sees a five-pillar navigation across Home, Classroom, Farm, TIS, and Me. A commercial operator with multiple farms and many hectares sees analytics, multi-farm rollup, and the full operational depth. The same database. The same audit chain. Three different surfaces.",
       },
       {
         heading: "What it produces",
@@ -138,7 +138,7 @@ const PAGE_CONTENT = {
       },
       {
         heading: "What it does not do",
-        body: "TFOS is not a marketplace. It is not a payments rail. It is not a co-op management system. It is the operational layer underneath farming itself. Other things may sit on top of it later; the core remains the farmer's daily execution.",
+        body: "TAE is not a marketplace. It is not a payments rail. It is not a co-op management system. It is the operational layer underneath farming itself. Other things may sit on top of it later; the core remains the farmer's daily execution.",
       },
     ],
   },
@@ -152,8 +152,8 @@ const PAGE_CONTENT = {
         body: "A smallholder farmer in Fiji, Tonga, or Solomon Islands typically has no verifiable production record. Banks cannot underwrite them, so they cannot access the working capital that would let them buy inputs, scale their operation, or recover from a bad season. The result is that capital flows to large operators while smallholders stay locked out — even when the smallholder is the more reliable, more sustainable producer.",
       },
       {
-        heading: "How TFOS changes that",
-        body: "Every event a farmer logs on TFOS is hash-chained into an immutable audit record. After a season or two of consistent use, that record is no longer a story the farmer tells the bank; it is mathematics the bank can verify in seconds via a public verification endpoint. The farmer scans a QR code from their phone. The banker scans it on the other side of the desk. Both see the same provable production history.",
+        heading: "How TAE changes that",
+        body: "Every event a farmer logs on TAE is hash-chained into an immutable audit record. After a season or two of consistent use, that record is no longer a story the farmer tells the bank; it is mathematics the bank can verify in seconds via a public verification endpoint. The farmer scans a QR code from their phone. The banker scans it on the other side of the desk. Both see the same provable production history.",
       },
       {
         heading: "Who benefits",
@@ -183,11 +183,11 @@ const PAGE_CONTENT = {
     sections: [
       {
         heading: "Lenders and credit providers",
-        body: "TFOS produces auditable, hash-chained production records that can be verified by any third party with a public verification endpoint. If you are a bank, microfinance institution, or rural credit provider trying to underwrite smallholder loans without a paper trail to underwrite against, the audit chain is the asset you have been missing.",
+        body: "TAE produces auditable, hash-chained production records that can be verified by any third party with a public verification endpoint. If you are a bank, microfinance institution, or rural credit provider trying to underwrite smallholder loans without a paper trail to underwrite against, the audit chain is the asset you have been missing.",
       },
       {
         heading: "Buyers, exporters, and supermarket groups",
-        body: "TFOS captures harvest events, grading, and delivery confirmations at the farm level. Buyers can verify chemical compliance windows, harvest provenance, and supply consistency from real data, not paper claims. If you procure from Pacific smallholders and want better data on what you are buying, partner with us.",
+        body: "TAE captures harvest events, grading, and delivery confirmations at the farm level. Buyers can verify chemical compliance windows, harvest provenance, and supply consistency from real data, not paper claims. If you procure from Pacific smallholders and want better data on what you are buying, partner with us.",
       },
       {
         heading: "Donors and development agencies",
@@ -195,7 +195,7 @@ const PAGE_CONTENT = {
       },
       {
         heading: "Government and agricultural ministries",
-        body: "TFOS can serve as the operational layer underneath extension services, subsidy programmes, and biosecurity reporting — without imposing a single new workflow on farmers, because the data is already being captured.",
+        body: "TAE can serve as the operational layer underneath extension services, subsidy programmes, and biosecurity reporting — without imposing a single new workflow on farmers, because the data is already being captured.",
       },
       {
         heading: "How to start the conversation",
@@ -259,12 +259,12 @@ const PAGE_CONTENT = {
   },
 
   tfos: {
-    title: "TFOS — Teivaka Farm Operating System",
+    title: "Teivaka Agriculture Ecosystem",
     tagline: "The full agricultural management platform underneath everything else.",
     sections: [
       {
         heading: "What it is",
-        body: "TFOS is the heart of Teivaka. It is where the farm becomes data. Every event — every planting, every harvest, every chemical application, every cash transaction, every worker check-in, every dead animal — is captured as a structured, time-stamped, audit-anchored record. There is no parallel data entry. There are no spreadsheets running in the background. TFOS is the system of record.",
+        body: "TAE is the heart of Teivaka. It is where the farm becomes data. Every event — every planting, every harvest, every chemical application, every cash transaction, every worker check-in, every dead animal — is captured as a structured, time-stamped, audit-anchored record. There is no parallel data entry. There are no spreadsheets running in the background. TAE is the system of record.",
       },
       {
         heading: "What it tracks",
@@ -281,18 +281,18 @@ const PAGE_CONTENT = {
       },
       {
         heading: "How it adapts",
-        body: "TFOS recognizes three modes — Solo, Growth, and Commercial — derived from how the farm is operating (size, active cycles, tenure). A subsistence farmer never sees the commercial interface. A commercial operator never sees the simplified single-task surface. The same data flows underneath all three.",
+        body: "TAE recognizes three modes — Solo, Growth, and Commercial — derived from how the farm is operating (size, active cycles, tenure). A subsistence farmer never sees the commercial interface. A commercial operator never sees the simplified single-task surface. The same data flows underneath all three.",
       },
       {
         heading: "Why this matters",
-        body: "Smallholder agriculture has been data-poor not because farmers do not have data, but because no one has built a tool that fits how they actually work. TFOS is built farm-up, not boardroom-down. It is being hardened on two real Fiji farms before it is offered to anyone else.",
+        body: "Smallholder agriculture has been data-poor not because farmers do not have data, but because no one has built a tool that fits how they actually work. TAE is built farm-up, not boardroom-down. It is being hardened on two real Fiji farms before it is offered to anyone else.",
       },
     ],
   },
 
   "our-farms": {
     title: "Our farms",
-    tagline: "Two working Fiji farms where TFOS is being hardened against reality.",
+    tagline: "Two working Fiji farms where TAE is being hardened against reality.",
     sections: [
       {
         heading: "Save-A-Lot Farm",
@@ -300,15 +300,15 @@ const PAGE_CONTENT = {
       },
       {
         heading: "Viyasiyasi Farm",
-        body: "Located on Kadavu Island, accessible only by ferry. Eight goats. Viyasiyasi is the reference user for offline-first design — if a TFOS feature breaks on a flaky 3G connection on Kadavu, it is broken everywhere. Every architectural decision is tested against this constraint before it ships.",
+        body: "Located on Kadavu Island, accessible only by ferry. Eight goats. Viyasiyasi is the reference user for offline-first design — if a TAE feature breaks on a flaky 3G connection on Kadavu, it is broken everywhere. Every architectural decision is tested against this constraint before it ships.",
       },
       {
         heading: "Why two farms, not one",
-        body: "Save-A-Lot is the data-dense, road-accessible, multi-crop, multi-buyer farm. Viyasiyasi is the constrained, remote, single-vertical, intermittent-connectivity farm. Building the platform across both means TFOS hardens against the full range of conditions a Pacific smallholder might operate under — not just the easy ones.",
+        body: "Save-A-Lot is the data-dense, road-accessible, multi-crop, multi-buyer farm. Viyasiyasi is the constrained, remote, single-vertical, intermittent-connectivity farm. Building the platform across both means TAE hardens against the full range of conditions a Pacific smallholder might operate under — not just the easy ones.",
       },
       {
         heading: "Real, not theatre",
-        body: "These are operating farms, not demo installations. They earn real revenue, employ real people, and ship to real buyers. The data that flows into TFOS is the data the farms are generating in their normal course of business. That is the only way to build a tool that other farms will trust.",
+        body: "These are operating farms, not demo installations. They earn real revenue, employ real people, and ship to real buyers. The data that flows into TAE is the data the farms are generating in their normal course of business. That is the only way to build a tool that other farms will trust.",
       },
     ],
   },
@@ -330,7 +330,7 @@ const FARMS = {
   "save-a-lot": {
     name: "Save-A-Lot",
     location: "Korovou, Tailevu — Viti Levu",
-    blurb: "Road-accessible, data-dense, multi-buyer. The mainland farm where TFOS gets its high-frequency operational data.",
+    blurb: "Road-accessible, data-dense, multi-buyer. The mainland farm where TAE gets its high-frequency operational data.",
     tags: [
       { icon: "wheat", label: "Crops" },
       { icon: "leaf", label: "Vegetables" },
@@ -343,7 +343,7 @@ const FARMS = {
       ["Access", "Road, year-round"],
       ["Buyers", "Nayans supermarket group + four other institutional buyers"],
       ["Workers", "1 permanent + casuals as cycles demand"],
-      ["Role in TFOS", "Data-dense reference for multi-buyer, multi-crop workflows"],
+      ["Role in TAE", "Data-dense reference for multi-buyer, multi-crop workflows"],
     ],
     verticals: [
       { icon: "wheat", name: "Crops" },
@@ -354,7 +354,7 @@ const FARMS = {
   "viyasiyasi": {
     name: "Viyasiyasi",
     location: "Kadavu Island — ferry only",
-    blurb: "Eleven verticals across one island. The constrained, offline-first farm that every TFOS workflow gets tested against before it ships.",
+    blurb: "Eleven verticals across one island. The constrained, offline-first farm that every TAE workflow gets tested against before it ships.",
     tags: [
       { icon: "livestock", label: "Livestock" },
       { icon: "honey", label: "Honey" },
@@ -368,7 +368,7 @@ const FARMS = {
       ["Location", "Kadavu Island, Fiji"],
       ["Access", "Ferry only — no road shortcuts"],
       ["Connectivity", "Intermittent 3G — every architectural decision is tested here first"],
-      ["Role in TFOS", "Offline-first reference site. If a feature breaks on Kadavu, it's broken everywhere."],
+      ["Role in TAE", "Offline-first reference site. If a feature breaks on Kadavu, it's broken everywhere."],
     ],
     verticals: [
       { icon: "goat", name: "Goats" },
@@ -833,10 +833,10 @@ function OurFarmsPage({ navigate }) {
       <style>{OFP_CSS}</style>
 
       <section className="ofp-hero">
-        <p className="ofp-eyebrow">Where TFOS is built</p>
+        <p className="ofp-eyebrow">Where TAE is built</p>
         <h1>Two farms. Two islands. One thesis.</h1>
         <p className="ofp-sub">
-          Save-A-Lot on Viti Levu's mainland. Viyasiyasi on Kadavu Island. Both operating today — both feeding TFOS the data that makes Pacific smallholders bankable.
+          Save-A-Lot on Viti Levu's mainland. Viyasiyasi on Kadavu Island. Both operating today — both feeding TAE the data that makes Pacific smallholders bankable.
         </p>
       </section>
 
@@ -848,14 +848,14 @@ function OurFarmsPage({ navigate }) {
       <section className="ofp-prose">
         <h2>Why two farms, not one</h2>
         <p>
-          Save-A-Lot is the data-dense, road-accessible, multi-buyer farm. Viyasiyasi is the constrained, remote, offline-first farm. Building the platform across both means TFOS hardens against the full range of conditions a Pacific smallholder might operate under — not just the easy ones.
+          Save-A-Lot is the data-dense, road-accessible, multi-buyer farm. Viyasiyasi is the constrained, remote, offline-first farm. Building the platform across both means TAE hardens against the full range of conditions a Pacific smallholder might operate under — not just the easy ones.
         </p>
       </section>
 
       <section className="ofp-prose">
         <h2>Real, not theatre.</h2>
         <p>
-          These are operating farms, not demo installations. They earn real revenue, employ real people, and ship to real buyers. The data that flows into TFOS is the data the farms are generating in their normal course of business. That is the only way to build a tool that other farms will trust.
+          These are operating farms, not demo installations. They earn real revenue, employ real people, and ship to real buyers. The data that flows into TAE is the data the farms are generating in their normal course of business. That is the only way to build a tool that other farms will trust.
         </p>
       </section>
 
@@ -1081,7 +1081,7 @@ const TVM_CSS = `
 .tvm-trust svg{width:14px;height:14px;color:var(--green-deep)}
 `;
 
-// ── Pillar modal content (TFOS page) ──────────────────────────────────────────
+// ── Pillar modal content (TAE page) ──────────────────────────────────────────
 const TFOS_PILLARS = [
   {
     key: "community",
@@ -1089,7 +1089,7 @@ const TFOS_PILLARS = [
     name: "Community",
     tag: "Pillar 1",
     blurb: "Farmer-to-farmer knowledge, neighbours within ferry-reach, ratings on buyers, marketplace for inputs and outputs.",
-    what: "The social and market layer of TFOS — the part that makes a farmer feel less alone. Connect with neighbours close enough to share a truckload or a ferry run, see how others rate the buyers you both sell to, and trade inputs and produce without a middleman skimming the margin.",
+    what: "The social and market layer of TAE — the part that makes a farmer feel less alone. Connect with neighbours close enough to share a truckload or a ferry run, see how others rate the buyers you both sell to, and trade inputs and produce without a middleman skimming the margin.",
     features: [
       "Farmer-to-farmer knowledge sharing, grounded in what actually worked nearby.",
       "Neighbour discovery within practical ferry-and-road reach.",
@@ -1254,7 +1254,7 @@ const NSG_ROLES = [
 
 const NSG_GET = [
   "Practical lessons from the field",
-  "TFOS progress updates",
+  "TAE progress updates",
   "Pilot programme opportunities",
   "Pacific community stories",
   "Honest farming insights",
@@ -1315,7 +1315,7 @@ function NetworkSignup() {
           <span className="nsg-pill"><Icon name="users" /> Teivaka Community &amp; Farmer Network</span>
           <h2>Stay close to the farmers shaping the future of Pacific agriculture.</h2>
           <p className="nsg-sub">
-            A small but growing network — farmers, students, buyers, partners, and supporters — staying connected through real lessons from the field, TFOS progress, and the work being done across Fiji and the wider Pacific.
+            A small but growing network — farmers, students, buyers, partners, and supporters — staying connected through real lessons from the field, TAE progress, and the work being done across Fiji and the wider Pacific.
           </p>
         </div>
 
@@ -1553,11 +1553,11 @@ function TFOSPage({ navigate }) {
       {/* 1. Hero */}
       <section className="tvm-hero2">
         <div>
-          <p className="tvm-eyebrow">The Farm Operating System</p>
+          <p className="tvm-eyebrow">The Agriculture Ecosystem</p>
           <h1 className="tvm-h1">Built so Pacific farms finally have a record.</h1>
-          <p className="tvm-sub">TFOS guides your daily work, keeps your harvest, cash, and labour straight, and grows with you — from one task at a time to full commercial operations. Built in Fiji, on two working farms, before it touches any other farm.</p>
+          <p className="tvm-sub">TAE guides your daily work, keeps your harvest, cash, and labour straight, and grows with you — from one task at a time to full commercial operations. Built in Fiji, on two working farms, before it touches any other farm.</p>
           <div className="tvm-cta-row">
-            <button type="button" className="tvm-pill-primary" onClick={() => navigate("/contact")}>Start with TFOS <Icon name="arrowRight" /></button>
+            <button type="button" className="tvm-pill-primary" onClick={() => navigate("/contact")}>Start with TAE <Icon name="arrowRight" /></button>
             <button type="button" className="tvm-pill-secondary" onClick={() => navigate("/partner")}>Explore partnership <Icon name="arrowRight" /></button>
           </div>
         </div>
@@ -1592,7 +1592,7 @@ function TFOSPage({ navigate }) {
         <div className="tvm-wrap">
           <p className="tvm-eyebrow">Three modes, derived not chosen</p>
           <h2 className="tvm-h2">One platform that meets every farmer where they are.</h2>
-          <p className="tvm-sub" style={{ maxWidth: 680 }}>TFOS adapts to how your farm is operating — size, active cycles, tenure. A subsistence grower never sees what a commercial operator sees.</p>
+          <p className="tvm-sub" style={{ maxWidth: 680 }}>TAE adapts to how your farm is operating — size, active cycles, tenure. A subsistence grower never sees what a commercial operator sees.</p>
           <div className="tvm-grid-3" style={{ marginTop: 30 }}>
             <div className="tvm-mode">
               <TaskPhone small />
@@ -1637,7 +1637,7 @@ function TFOSPage({ navigate }) {
         <div className="tvm-wrap">
           <p className="tvm-eyebrow">The seven verticals</p>
           <h2 className="tvm-h2">Seven verticals. One system.</h2>
-          <p className="tvm-sub" style={{ maxWidth: 560 }}>Pacific farms aren't monoculture. TFOS isn't either.</p>
+          <p className="tvm-sub" style={{ maxWidth: 560 }}>Pacific farms aren't monoculture. TAE isn't either.</p>
           <div className="tvm-grid-4" style={{ marginTop: 30 }}>
             {TFOS_VERTICALS.map((v) => (
               <div className="tvm-vtile" key={v.name}>
@@ -1655,7 +1655,7 @@ function TFOSPage({ navigate }) {
         <div className="tvm-wrap">
           <p className="tvm-eyebrow light">Why this matters long-term</p>
           <h2 className="tvm-h2">Your farm history, finally something you can prove.</h2>
-          <p className="tvm-sub" style={{ maxWidth: 760, marginBottom: 36 }}>Every action on a TFOS farm becomes one structured record. Over a season, that record is useful. Over years, it becomes something a buyer can trust, a lender can lend against, a government can build programmes on.</p>
+          <p className="tvm-sub" style={{ maxWidth: 760, marginBottom: 36 }}>Every action on a TAE farm becomes one structured record. Over a season, that record is useful. Over years, it becomes something a buyer can trust, a lender can lend against, a government can build programmes on.</p>
           <div className="tvm-darkcard">
             <div className="tvm-chain">
               {[
@@ -1691,8 +1691,8 @@ function TFOSPage({ navigate }) {
           <p className="tvm-eyebrow">See it in action</p>
           <h2 className="tvm-h2">Want to walk through it?</h2>
           <div className="tvm-cta-row">
-            <a className="tvm-pill-primary" href={wa(WA_FOUNDER, "Bula Cody, I want to see TFOS in action.")} target="_blank" rel="noopener noreferrer">Talk to Cody on WhatsApp <Icon name="arrowRight" /></a>
-            <button type="button" className="tvm-pill-secondary" onClick={() => navigate("/our-farms")}>See the farms TFOS runs on <Icon name="arrowRight" /></button>
+            <a className="tvm-pill-primary" href={wa(WA_FOUNDER, "Bula Cody, I want to see TAE in action.")} target="_blank" rel="noopener noreferrer">Talk to Cody on WhatsApp <Icon name="arrowRight" /></a>
+            <button type="button" className="tvm-pill-secondary" onClick={() => navigate("/our-farms")}>See the farms TAE runs on <Icon name="arrowRight" /></button>
           </div>
         </div>
       </section>
@@ -1772,7 +1772,7 @@ function TISPage({ navigate }) {
           <h2 className="tvm-h2">Send a message. See what it can do.</h2>
           <div className="tvm-cta-row">
             <a className="tvm-pill-primary" href={tisLink} target="_blank" rel="noopener noreferrer">Get connected to TIS <Icon name="arrowRight" /></a>
-            <button type="button" className="tvm-pill-secondary" onClick={() => navigate("/tfos")}>See the rest of TFOS <Icon name="arrowRight" /></button>
+            <button type="button" className="tvm-pill-secondary" onClick={() => navigate("/tfos")}>See the rest of TAE <Icon name="arrowRight" /></button>
           </div>
         </div>
       </section>
@@ -1868,12 +1868,12 @@ function PricingPage({ navigate }) {
             <div className="tvm-tier">
               <h3>Premium</h3>
               <p className="tvm-tdesc">Full access to all four pillars across seven verticals. Multi-block, multi-buyer support.</p>
-              <p className="tvm-twho">Farmers operating full TFOS on their own farm.</p>
+              <p className="tvm-twho">Farmers operating full TAE on their own farm.</p>
               <a className="tvm-fullpill outline" href={wa(WA_FOUNDER, "Bula Cody, I'd like to talk about the Premium tier.")} target="_blank" rel="noopener noreferrer">Talk to Cody <Icon name="arrowRight" /></a>
             </div>
             <div className="tvm-tier">
               <h3>Custom</h3>
-              <p className="tvm-tdesc">Profit-share plus full TFOS plus Teivaka's network — input suppliers, mechanization, market access, operational management.</p>
+              <p className="tvm-tdesc">Profit-share plus full TAE plus Teivaka's network — input suppliers, mechanization, market access, operational management.</p>
               <p className="tvm-twho">Landowners, communities and institutions.</p>
               <a className="tvm-fullpill outline" href={wa(WA_FOUNDER, "Bula Cody, I'd like to talk about the Custom tier.")} target="_blank" rel="noopener noreferrer">Talk to Cody <Icon name="arrowRight" /></a>
             </div>
@@ -1923,7 +1923,7 @@ function ContactPage({ navigate }) {
             </div>
             <div className="tvm-contactcard">
               <p className="tvm-eyebrow light">Get going</p>
-              <h2>Already a member? Or new to TFOS?</h2>
+              <h2>Already a member? Or new to TAE?</h2>
               <p>Both doors open from the top nav. If you want to talk to a human first — Cody answers WhatsApp.</p>
               <div className="tvm-cta-row">
                 <a className="tvm-pill-primary" href={wa(WA_FOUNDER, "Bula Cody, I'd like to get in touch.")} target="_blank" rel="noopener noreferrer">Message Cody <Icon name="arrowRight" /></a>
@@ -2094,7 +2094,7 @@ const TWK_PILLARS = [
       ["LIVE", "TIS-Public chatbot on teivaka.com"],
       ["LIVE", "Grounded responses (TIS will not guess prices, dates, or yields)"],
       ["LIVE", "Trilingual capability (Fijian, Hindi, English)"],
-      ["IN BUILD", "TIS embedded inside the TFOS app surface"],
+      ["IN BUILD", "TIS embedded inside the TAE app surface"],
       ["NEXT", "Voice messages (audio in, audio out)"],
       ["PLANNED", "Proactive task suggestions from TIS based on live farm data"],
     ],
@@ -2120,7 +2120,7 @@ const TWK_FARMS = [
     points: [
       "Operating today, generating revenue",
       "Three verticals: crops, vegetables, apiculture",
-      "TFOS tracking: production cycles, cash ledger, labour, harvest, sales",
+      "TAE tracking: production cycles, cash ledger, labour, harvest, sales",
     ],
   },
   {
@@ -2129,7 +2129,7 @@ const TWK_FARMS = [
     points: [
       "Operating today, generating revenue",
       "Eleven verticals across livestock, kava, sandalwood, pineapple, honey, crops, vegetables",
-      "TFOS tracking: same as Save-A-Lot, tested against offline-first constraints",
+      "TAE tracking: same as Save-A-Lot, tested against offline-first constraints",
     ],
   },
 ];
@@ -2460,11 +2460,11 @@ export default function MarketingPage({ pageKey }) {
                 <div className="wwd-lt">Layer 02</div>
                 <h3>TIS — Live Pillar</h3>
                 <div className="wwd-pill wwd-pill-live"><span className="wwd-dot"></span>Live on WhatsApp</div>
-                <p>Teivaka Intelligent System — the live pillar of TFOS — turns Fiji's field-tested production systems into operational guidance on WhatsApp today, in the farmer's own language. No app to download.</p>
+                <p>Teivaka Intelligent System — the live pillar of TAE — turns Fiji's field-tested production systems into operational guidance on WhatsApp today, in the farmer's own language. No app to download.</p>
               </div>
               <div className="wwd-card">
                 <div className="wwd-lt">Layer 03</div>
-                <h3>TFOS — Platform</h3>
+                <h3>TAE — Platform</h3>
                 <div className="wwd-pill wwd-pill-build"><span className="wwd-dot"></span>In active build</div>
                 <p>The full agricultural operating system around four pillars — built on a disciplined, income-funded plan. It turns our proven method into a system every farmer can use.</p>
               </div>
@@ -2565,7 +2565,7 @@ function Header({ navigate }) {
           <a href="#" onClick={go("/about")} style={navLinkStyle}>About</a>
           <a href="#" onClick={go("/what-we-do")} style={navLinkStyle}>What We Do</a>
           <a href="#" onClick={go("/tis-public")} style={navLinkStyle}>TIS</a>
-          <a href="#" onClick={go("/tfos")} style={navLinkStyle}>TFOS</a>
+          <a href="#" onClick={go("/tfos")} style={navLinkStyle}>TAE</a>
           <a href="#" onClick={go("/the-work")} style={navLinkStyle}>The Work</a>
           <a href="#" onClick={go("/our-farms")} style={navLinkStyle}>Farms</a>
           <a href="#" onClick={go("/partner")} style={navLinkStyle}>Partner</a>
@@ -2632,7 +2632,7 @@ function TeivakaFooter({ navigate, copyEmail, openGmail, emailCopied }) {
           <div className="tvf-col">
             <h4>Platform</h4>
             <a href="#" onClick={go("/tis-public")}>TIS</a>
-            <a href="#" onClick={go("/tfos")}>TFOS</a>
+            <a href="#" onClick={go("/tfos")}>TAE</a>
             <a href="#" onClick={go("/our-farms")}>Our Farms</a>
             <a href="#" onClick={(e) => { e.preventDefault(); navigate("/login"); }}>Login</a>
           </div>
