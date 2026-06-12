@@ -50,6 +50,7 @@ _FALLBACK_CATALOG = [
     {"library_type": "POULTRY_VACCINE",  "group_code": "POULTRY", "label": "Vaccines",  "singular_label": "vaccine",  "placeholder": "e.g. Newcastle",       "sort_order": 30},
     {"library_type": "POULTRY_SUPPLIER", "group_code": "POULTRY", "label": "Suppliers", "singular_label": "supplier", "placeholder": "e.g. Pacific Feed Co", "sort_order": 40},
     {"library_type": "POULTRY_BUYER",    "group_code": "POULTRY", "label": "Buyers",    "singular_label": "buyer",    "placeholder": "e.g. Suva Market",     "sort_order": 50},
+    {"library_type": "POULTRY_DISINFECTANT", "group_code": "POULTRY", "label": "Disinfectants", "singular_label": "disinfectant", "placeholder": "e.g. Virkon S", "sort_order": 60},
 ]
 _FALLBACK_LIBRARY_TYPES = {r["library_type"] for r in _FALLBACK_CATALOG}
 

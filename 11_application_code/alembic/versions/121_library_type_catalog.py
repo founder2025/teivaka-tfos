@@ -24,11 +24,12 @@ depends_on = None
 
 # (library_type, group_code, label, singular_label, placeholder, sort_order)
 CATALOG_SEED = [
-    ("POULTRY_BREED",    "POULTRY", "Breeds",    "breed",    "e.g. ISA Brown",        10),
-    ("POULTRY_FEED",     "POULTRY", "Feeds",     "feed",     "e.g. Layer mash 16%",   20),
-    ("POULTRY_VACCINE",  "POULTRY", "Vaccines",  "vaccine",  "e.g. Newcastle",        30),
-    ("POULTRY_SUPPLIER", "POULTRY", "Suppliers", "supplier", "e.g. Pacific Feed Co",  40),
-    ("POULTRY_BUYER",    "POULTRY", "Buyers",    "buyer",    "e.g. Suva Market",      50),
+    ("POULTRY_BREED",        "POULTRY", "Breeds",       "breed",        "e.g. ISA Brown",        10),
+    ("POULTRY_FEED",         "POULTRY", "Feeds",        "feed",         "e.g. Layer mash 16%",   20),
+    ("POULTRY_VACCINE",      "POULTRY", "Vaccines",     "vaccine",      "e.g. Newcastle",        30),
+    ("POULTRY_SUPPLIER",     "POULTRY", "Suppliers",    "supplier",     "e.g. Pacific Feed Co",  40),
+    ("POULTRY_BUYER",        "POULTRY", "Buyers",       "buyer",        "e.g. Suva Market",      50),
+    ("POULTRY_DISINFECTANT", "POULTRY", "Disinfectants", "disinfectant", "e.g. Virkon S",        60),
 ]
 
 
@@ -66,6 +67,25 @@ def upgrade():
         """), {"lt": library_type, "gc": group_code, "lb": label, "sg": singular, "ph": placeholder, "so": sort_order})
 
     conn.execute(sa.text("GRANT SELECT ON shared.library_type_catalog TO teivaka_app;"))
+
+    # 1b. Backfill the catalog with ANY library_type already present in farm_libraries
+    #     that the explicit seed missed (e.g. POULTRY_DISINFECTANT, seeded in Phase
+    #     6.3-11/12). Without this the FK below violates on those existing rows. Labels
+    #     are derived; the Operator can refine them later via a catalog migration.
+    conn.execute(sa.text("""
+        INSERT INTO shared.library_type_catalog
+            (library_type, group_code, label, singular_label, placeholder, sort_order)
+        SELECT DISTINCT
+            fl.library_type,
+            split_part(fl.library_type, '_', 1),
+            initcap(replace(fl.library_type, '_', ' ')),
+            lower(replace(fl.library_type, '_', ' ')),
+            '',
+            999
+        FROM shared.farm_libraries fl
+        WHERE fl.library_type NOT IN (SELECT library_type FROM shared.library_type_catalog)
+        ON CONFLICT (library_type) DO NOTHING
+    """))
 
     # 2. Swap the inline CHECK for an FK to the catalog.
     conn.execute(sa.text("ALTER TABLE shared.farm_libraries DROP CONSTRAINT IF EXISTS farm_libraries_library_type_check;"))
