@@ -1,10 +1,11 @@
 """reference_library.py — read-only Farm Library reference corpus.
 
-Serves shared.reference_library (the prototype's verbatim Fiji corpus — pests, diseases,
-fertilizers, livestock-diseases, vet/vaccines). shared.* reference data, read-only at
-runtime (Inviolable #7). Crops/chemicals are served by their own routers.
+Serves shared.reference_library (the prototype's verbatim Fiji corpus — crops, pests,
+diseases, fertilizers, livestock-diseases, vet/vaccines). shared.* reference data,
+read-only at runtime (Inviolable #7). Chemicals are served by chemicals.py (the
+real WHD-enforcing shared.chemical_library — single source of truth per Inviolable #2).
 
-GET /api/v1/reference-library[?category=PEST|DISEASE|FERTILIZER|LIVESTOCK_DISEASE|VET]
+GET /api/v1/reference-library[?category=CROP|PEST|DISEASE|FERTILIZER|LIVESTOCK_DISEASE|VET]
 """
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import text
@@ -15,7 +16,7 @@ from app.middleware.rls import get_current_user
 
 router = APIRouter()
 
-VALID_CATEGORIES = {"PEST", "DISEASE", "FERTILIZER", "LIVESTOCK_DISEASE", "VET"}
+VALID_CATEGORIES = {"CROP", "PEST", "DISEASE", "FERTILIZER", "LIVESTOCK_DISEASE", "VET"}
 
 
 @router.get("/reference-library")
