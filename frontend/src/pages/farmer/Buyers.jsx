@@ -45,6 +45,7 @@ const VIEW_TABS = [
 async function getCustomers() { const r = await fetch("/api/v1/customers", { headers: authHeaders() }); if (!r.ok) throw new Error(r.status); return (await r.json())?.data ?? []; }
 async function getOrders(farmId) { const r = await fetch(`/api/v1/orders${farmId ? `?farm_id=${encodeURIComponent(farmId)}` : ""}`, { headers: authHeaders() }); if (!r.ok) throw new Error(r.status); return (await r.json())?.data ?? []; }
 async function getProductions() { const r = await fetch("/api/v1/productions?is_active=true", { headers: authHeaders() }); if (!r.ok) throw new Error(r.status); return (await r.json())?.data?.productions ?? []; }
+async function getCommunications(custId) { const r = await fetch(`/api/v1/customers/${encodeURIComponent(custId)}/communications`, { headers: authHeaders() }); if (!r.ok) throw new Error(r.status); return (await r.json())?.data ?? []; }
 
 function amt(o) { return Number(o.net_amount_fjd ?? o.total_amount_fjd ?? o.total_fjd ?? 0); }
 function reliabilityTier(s) { return s >= 80 ? "high" : s >= 60 ? "medium" : "low"; }
@@ -139,6 +140,8 @@ function BuyersInner() {
   const [q, setQ] = useState("");
   const [addOpen, setAddOpen] = useState(false);
   const [orderOpen, setOrderOpen] = useState(false);
+  const [payOrder, setPayOrder] = useState(null);
+  const [commFor, setCommFor] = useState(null);
 
   const customersQ = useQuery({ queryKey: ["customers"], queryFn: getCustomers });
   const ordersQ = useQuery({ queryKey: ["orders", farmId], queryFn: () => getOrders(farmId), enabled: !!farmId });
@@ -197,7 +200,9 @@ function BuyersInner() {
       <main className="main-content">
         <div className="main-inner">
           {detailBuyer ? (
-            <BuyerDetail b={detailBuyer} orders={ordersByCust[detailBuyer.id] || []} onBack={() => setDetailId(null)} onNewOrder={() => setOrderOpen(true)} advance={advance} />
+            <BuyerDetail b={detailBuyer} orders={ordersByCust[detailBuyer.id] || []} onBack={() => setDetailId(null)}
+              onNewOrder={() => setOrderOpen(true)} advance={advance}
+              onLogPayment={(o) => setPayOrder(o)} onLogComm={() => setCommFor(detailBuyer)} />
           ) : (
             <>
               <div className="page-header">
@@ -269,6 +274,8 @@ function BuyersInner() {
 
       {addOpen && <AddBuyerModal onClose={() => setAddOpen(false)} onSaved={() => { refetchCustomers(); setAddOpen(false); }} />}
       {orderOpen && <NewOrderModal farmId={farmId} customers={customers} onClose={() => setOrderOpen(false)} onSaved={() => { refetchOrders(); setOrderOpen(false); }} />}
+      {payOrder && <LogPaymentModal order={payOrder} onClose={() => setPayOrder(null)} onSaved={() => { refetchOrders(); setPayOrder(null); }} />}
+      {commFor && <LogCommunicationModal buyer={commFor} onClose={() => setCommFor(null)} onSaved={() => { qc.invalidateQueries({ queryKey: ["communications", commFor.id] }); setCommFor(null); }} />}
     </TfpShell>
   );
 }
@@ -340,9 +347,13 @@ function Analytics({ ranked, totalRev, top3pct, concCls }) {
   );
 }
 
-function BuyerDetail({ b, orders, onBack, onNewOrder, advance }) {
+const CHANNEL_LABEL = { whatsapp: "WhatsApp", call: "Call", visit: "Visit", email: "Email", sms: "SMS" };
+
+function BuyerDetail({ b, orders, onBack, onNewOrder, advance, onLogPayment, onLogComm }) {
   const live = orders.filter((o) => o.order_status !== "CANCELLED");
   const rel = b.reliability;
+  const commsQ = useQuery({ queryKey: ["communications", b.id], queryFn: () => getCommunications(b.id) });
+  const comms = commsQ.data ?? [];
   return (
     <>
       <div className="page-header">
@@ -351,7 +362,10 @@ function BuyerDetail({ b, orders, onBack, onNewOrder, advance }) {
           <h1>{b.name}</h1>
           <div className="subtitle">{b.typeLabel}{b.city ? ` · ${b.city}` : ""}{b.terms > 0 ? ` · ${b.terms}d terms` : " · cash"}</div>
         </div>
-        <div className="page-actions"><button className="btn btn-primary" onClick={onNewOrder}><Plus size={14} />New order</button></div>
+        <div className="page-actions">
+          <button className="btn btn-secondary" onClick={onLogComm}><Phone size={14} />Log communication</button>
+          <button className="btn btn-primary" onClick={onNewOrder}><Plus size={14} />New order</button>
+        </div>
       </div>
 
       <div className="capital-strip" style={{ gridTemplateColumns: "repeat(4,1fr)", marginBottom: 14 }}>
@@ -377,15 +391,39 @@ function BuyerDetail({ b, orders, onBack, onNewOrder, advance }) {
       <div className="card" style={{ padding: "12px 16px", marginBottom: 14 }}>
         <div style={{ fontWeight: 700, color: "var(--soil)", marginBottom: 8 }}>Orders</div>
         {live.length === 0 ? <div style={{ color: "var(--muted)", fontSize: 12.5 }}>No orders logged for this buyer yet.</div>
-          : live.map((o) => (
-            <div key={o.order_id} className="buyer-history-row" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: "1px solid rgba(92,64,51,0.08)" }}>
-              <div><div style={{ fontWeight: 600, color: "var(--soil)", fontSize: 13 }}>{fjd2(amt(o))}</div><div style={{ fontSize: 11, color: "var(--muted)" }}>{String(o.order_date).slice(0, 10)}</div></div>
-              <StatusPill status={o.order_status} onChange={(s) => advance(o.order_id, s)} />
+          : live.map((o) => {
+            const owed = OWED.includes(o.order_status);
+            return (
+              <div key={o.order_id} className="buyer-history-row" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, padding: "8px 0", borderBottom: "1px solid rgba(92,64,51,0.08)" }}>
+                <div><div style={{ fontWeight: 600, color: "var(--soil)", fontSize: 13 }}>{fjd2(amt(o))}</div><div style={{ fontSize: 11, color: "var(--muted)" }}>{String(o.order_date).slice(0, 10)}</div></div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  {owed && <button className="btn btn-secondary btn-sm" onClick={() => onLogPayment(o)}>Log payment</button>}
+                  <StatusPill status={o.order_status} onChange={(s) => advance(o.order_id, s)} />
+                </div>
+              </div>
+            );
+          })}
+      </div>
+
+      <div className="card" style={{ padding: "12px 16px", marginBottom: 14 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+          <div style={{ fontWeight: 700, color: "var(--soil)" }}>Communication log</div>
+          <button className="btn btn-secondary btn-sm" onClick={onLogComm}><Plus size={13} />Log</button>
+        </div>
+        {commsQ.isLoading ? <div style={{ color: "var(--muted)", fontSize: 12.5 }}>Loading…</div>
+          : comms.length === 0 ? <div style={{ color: "var(--muted)", fontSize: 12.5 }}>No communications logged yet. Record a call, visit or message and it's hash-chained to this buyer.</div>
+          : comms.map((c) => (
+            <div key={c.communication_id} className="buyer-history-row" style={{ padding: "8px 0", borderBottom: "1px solid rgba(92,64,51,0.08)" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
+                <span style={{ fontWeight: 600, color: "var(--soil)", fontSize: 13 }}>{c.topic || CHANNEL_LABEL[c.channel] || c.channel}</span>
+                <span style={{ fontSize: 11, color: "var(--muted)" }}>{String(c.comm_date).slice(0, 10)}{c.comm_time ? ` · ${c.comm_time}` : ""}</span>
+              </div>
+              <div style={{ fontSize: 11.5, color: "var(--muted)" }}>{CHANNEL_LABEL[c.channel] || c.channel} · {c.direction}{c.notes ? ` · ${c.notes}` : ""}</div>
             </div>
           ))}
       </div>
 
-      <EmptyView title="Communication · disputes · demand" note="Per-buyer comms log, payment history, demand signals and disputes appear here once those records are wired (next slice). Nothing fabricated until then." />
+      <EmptyView title="Disputes · demand signals" note="Per-buyer disputes and demand signals appear here once those feeds are wired (S3). Nothing fabricated until then." />
     </>
   );
 }
@@ -461,6 +499,83 @@ function NewOrderModal({ farmId, customers, onClose, onSaved }) {
           </div>
         </div>
         <div className="overlay-foot"><button className="btn btn-secondary" onClick={onClose}>Cancel</button><button className="btn btn-primary" onClick={submit} disabled={busy}>{busy ? "Creating…" : `Create · ${fjd2(total)}`}</button></div>
+      </div>
+    </div>
+  );
+}
+
+function LogPaymentModal({ order, onClose, onSaved }) {
+  const [amount, setAmount] = useState(String(amt(order) || ""));
+  const [date, setDate] = useState(todayISO());
+  const [method, setMethod] = useState("CASH");
+  const [reference, setReference] = useState("");
+  const [busy, setBusy] = useState(false);
+  async function submit() {
+    if (!Number(amount)) { emitToast("Enter the amount received"); return; }
+    setBusy(true);
+    try {
+      const r = await fetch(`/api/v1/orders/${encodeURIComponent(order.order_id)}/payment`, {
+        method: "POST", headers: authHeaders(),
+        body: JSON.stringify({ amount_fjd: Number(amount), payment_date: date, payment_method: method, reference: reference.trim() || null }),
+      });
+      if (!r.ok) throw new Error();
+      emitToast("Payment recorded · order marked PAID"); onSaved?.();
+    } catch { emitToast("Could not record payment"); } finally { setBusy(false); }
+  }
+  return (
+    <div className="overlay-backdrop show" onClick={onClose}>
+      <div className="overlay-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="overlay-head"><h2>Log payment from buyer</h2><button onClick={onClose} className="overlay-close"><X size={14} /></button></div>
+        <div className="overlay-body">
+          <div style={{ fontSize: 12.5, color: "var(--muted)", marginBottom: 12 }}>{order.customer_name} · order {order.order_id} · {fjd2(amt(order))} owed. Recording a payment adds a cash-ledger income row (feeds Bank Evidence) and marks the order PAID.</div>
+          <div className="form-row" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+            <div><label>Amount (FJD)</label><input type="number" min="0" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} /></div>
+            <div><label>Date</label><input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></div>
+          </div>
+          <div className="form-row" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 10 }}>
+            <div><label>Method</label><select value={method} onChange={(e) => setMethod(e.target.value)}><option value="CASH">Cash</option><option value="BANK_TRANSFER">Bank transfer</option><option value="MOBILE_MONEY">Mobile money</option><option value="OTHER">Other</option></select></div>
+            <div><label>Reference (optional)</label><input value={reference} onChange={(e) => setReference(e.target.value)} placeholder="receipt / txn no." /></div>
+          </div>
+        </div>
+        <div className="overlay-foot"><button className="btn btn-secondary" onClick={onClose}>Cancel</button><button className="btn btn-primary" onClick={submit} disabled={busy}>{busy ? "Recording…" : "Record payment"}</button></div>
+      </div>
+    </div>
+  );
+}
+
+function LogCommunicationModal({ buyer, onClose, onSaved }) {
+  const [f, setF] = useState({ comm_date: todayISO(), comm_time: "", channel: "whatsapp", direction: "outbound", topic: "", notes: "" });
+  const [busy, setBusy] = useState(false);
+  const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }));
+  async function submit() {
+    setBusy(true);
+    try {
+      const r = await fetch(`/api/v1/customers/${encodeURIComponent(buyer.id)}/communications`, {
+        method: "POST", headers: authHeaders(),
+        body: JSON.stringify({ ...f, comm_time: f.comm_time || null, topic: f.topic.trim() || null, notes: f.notes.trim() || null }),
+      });
+      if (!r.ok) throw new Error();
+      emitToast("Communication logged"); onSaved?.();
+    } catch { emitToast("Could not log communication"); } finally { setBusy(false); }
+  }
+  return (
+    <div className="overlay-backdrop show" onClick={onClose}>
+      <div className="overlay-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="overlay-head"><h2>Log communication</h2><button onClick={onClose} className="overlay-close"><X size={14} /></button></div>
+        <div className="overlay-body">
+          <div style={{ fontSize: 12.5, color: "var(--muted)", marginBottom: 12 }}>With {buyer.name}. Each entry is hash-chained to this buyer.</div>
+          <div className="form-row" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+            <div><label>Date</label><input type="date" value={f.comm_date} onChange={set("comm_date")} /></div>
+            <div><label>Time (optional)</label><input type="time" value={f.comm_time} onChange={set("comm_time")} /></div>
+          </div>
+          <div className="form-row" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 10 }}>
+            <div><label>Channel</label><select value={f.channel} onChange={set("channel")}><option value="whatsapp">WhatsApp</option><option value="call">Call</option><option value="visit">Visit</option><option value="email">Email</option><option value="sms">SMS</option></select></div>
+            <div><label>Direction</label><select value={f.direction} onChange={set("direction")}><option value="outbound">Outbound</option><option value="inbound">Inbound</option></select></div>
+          </div>
+          <div className="form-row" style={{ marginTop: 10 }}><label>Topic</label><input value={f.topic} onChange={set("topic")} placeholder="e.g. Confirmed Thursday delivery" /></div>
+          <div className="form-row" style={{ marginTop: 10 }}><label>Notes</label><textarea rows={2} maxLength={500} value={f.notes} onChange={set("notes")} /></div>
+        </div>
+        <div className="overlay-foot"><button className="btn btn-secondary" onClick={onClose}>Cancel</button><button className="btn btn-primary" onClick={submit} disabled={busy}>{busy ? "Logging…" : "Log communication"}</button></div>
       </div>
     </div>
   );

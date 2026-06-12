@@ -2,9 +2,10 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import text
 from app.db.session import get_rls_db
 from app.middleware.rls import get_current_user
+from app.core.audit_chain import emit_audit_event
 from pydantic import BaseModel
 from decimal import Decimal
-from datetime import datetime
+from datetime import datetime, date
 from typing import Optional, List
 import uuid
 
@@ -130,3 +131,69 @@ async def update_order_status(order_id: str, order_status: str, notes: str = Non
         if not result.fetchone():
             raise HTTPException(status_code=404, detail="Order not found")
     return {"data": {"order_id": order_id, "order_status": order_status}}
+
+
+_PAYMENT_METHODS = ("CASH", "BANK_TRANSFER", "MOBILE_MONEY", "CREDIT", "OTHER")
+
+
+class PaymentCreate(BaseModel):
+    amount_fjd: Decimal
+    payment_date: Optional[date] = None
+    payment_method: str = "CASH"
+    reference: Optional[str] = None
+    notes: Optional[str] = None
+
+
+@router.post("/{order_id}/payment", status_code=201)
+async def log_payment(order_id: str, body: PaymentCreate, user: dict = Depends(get_current_user)):
+    """Record a buyer payment: a cash_ledger INCOME row (the money source-of-truth Bank
+    Evidence reads) + mark the order PAID + a PAYMENT_RECEIVED audit row. Honest single
+    source — no parallel payments table."""
+    if body.payment_method not in _PAYMENT_METHODS:
+        raise HTTPException(400, detail=f"payment_method must be one of {_PAYMENT_METHODS}")
+    pay_date = body.payment_date or date.today()
+    tid = str(user["tenant_id"])
+    ledger_id = f"CL-{uuid.uuid4().hex[:10].upper()}"
+    async with get_rls_db(tid) as db:
+        order = (await db.execute(
+            text("""SELECT o.order_id, o.farm_id, o.customer_id, o.net_amount_fjd, o.total_amount_fjd,
+                           c.customer_name
+                    FROM tenant.orders o JOIN tenant.customers c ON c.customer_id = o.customer_id
+                    WHERE o.order_id = :oid AND o.tenant_id = :tid"""),
+            {"oid": order_id, "tid": tid},
+        )).mappings().first()
+        if not order:
+            raise HTTPException(404, detail="Order not found")
+
+        await db.execute(
+            text("""
+                INSERT INTO tenant.cash_ledger (
+                    ledger_id, tenant_id, farm_id, transaction_date,
+                    transaction_type, category, description, amount_fjd,
+                    payment_method, reference_id, reference_type, created_by
+                ) VALUES (
+                    :ledger_id, :tid, :farm_id, :tdate,
+                    'INCOME', 'SALES', :descr, :amount,
+                    :method, :order_id, 'ORDER', :uid
+                )
+            """),
+            {
+                "ledger_id": ledger_id, "tid": tid, "farm_id": order["farm_id"], "tdate": pay_date,
+                "descr": f"Payment from {order['customer_name']} · order {order_id}" + (f" · {body.reference}" if body.reference else ""),
+                "amount": body.amount_fjd, "method": body.payment_method, "order_id": order_id, "uid": str(user["user_id"]),
+            },
+        )
+        await db.execute(
+            text("UPDATE tenant.orders SET order_status = 'PAID', updated_at = now() WHERE order_id = :oid AND tenant_id = :tid"),
+            {"oid": order_id, "tid": tid},
+        )
+        event_id, this_hash = await emit_audit_event(
+            db=db, tenant_id=user["tenant_id"], actor_user_id=user["user_id"],
+            event_type="PAYMENT_RECEIVED", entity_type="ORDER", entity_id=order_id,
+            payload={
+                "order_id": order_id, "customer_id": order["customer_id"], "ledger_id": ledger_id,
+                "amount_fjd": str(body.amount_fjd), "payment_method": body.payment_method,
+                "payment_date": pay_date.isoformat(),
+            },
+        )
+    return {"data": {"order_id": order_id, "order_status": "PAID", "ledger_id": ledger_id, "audit_hash": this_hash}}

@@ -20,7 +20,7 @@
 set -uo pipefail
 
 BRANCH="${1:-claude/beautiful-fermi-F0dLX}"
-EXPECTED_HEAD="${2:-122_field_event_photo_hash}"
+EXPECTED_HEAD="${2:-123_buyer_communications}"
 ROOT="/opt/teivaka"
 COMPOSE="docker compose -f ${ROOT}/04_environment/docker-compose.yml"
 PSQL="docker exec -i teivaka_db psql -v ON_ERROR_STOP=1 -tA -U teivaka -d teivaka_db"
@@ -74,6 +74,12 @@ FK="$($PSQL -c "SELECT count(*) FROM pg_constraint WHERE conname='farm_libraries
 [ "${FK:-0}" = "1" ] && ok "farm_libraries → catalog FK present" || bad "farm_libraries_library_type_fkey missing (Strike #80 FK did not apply)"
 AUDIT="$($PSQL -c "SELECT pg_get_constraintdef(oid) LIKE '%LIBRARY_ROW_UPDATED%' FROM pg_constraint WHERE conname='events_event_type_check';" 2>/dev/null | tr -d '[:space:]')"
 [ "$AUDIT" = "t" ] && ok "audit.events CHECK includes LIBRARY_ROW_UPDATED" || bad "LIBRARY_ROW_UPDATED not in audit CHECK (rename edits would 500)"
+PHOTOHASH="$($PSQL -c "SELECT count(*) FROM information_schema.columns WHERE table_schema='tenant' AND table_name='field_events' AND column_name IN ('photo_sha256','audit_hash');" 2>/dev/null | tr -d '[:space:]')"
+[ "${PHOTOHASH:-0}" = "2" ] && ok "field_events photo-hash columns present" || bad "field_events photo_sha256/audit_hash missing (migration 122)"
+BUYERCOMM="$($PSQL -c "SELECT to_regclass('tenant.buyer_communications') IS NOT NULL;" 2>/dev/null | tr -d '[:space:]')"
+[ "$BUYERCOMM" = "t" ] && ok "buyer_communications table present" || bad "buyer_communications missing (migration 123)"
+COMMEVT="$($PSQL -c "SELECT pg_get_constraintdef(oid) LIKE '%COMMUNICATION_LOGGED%' FROM pg_constraint WHERE conname='events_event_type_check';" 2>/dev/null | tr -d '[:space:]')"
+[ "$COMMEVT" = "t" ] && ok "audit.events CHECK includes COMMUNICATION_LOGGED" || bad "COMMUNICATION_LOGGED not in audit CHECK"
 
 # ---------------------------------------------------------------------------
 say "5/7  Bring API up + wait healthy + parity check"
