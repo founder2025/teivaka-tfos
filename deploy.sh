@@ -41,8 +41,18 @@ if git fetch origin "$BRANCH" 2>/tmp/dep_fetch.out; then ok "fetched origin/${BR
 if git reset --hard "origin/${BRANCH}" >/tmp/dep_reset.out 2>&1; then ok "reset to $(git rev-parse --short HEAD)"; else bad "git reset failed"; cat /tmp/dep_reset.out; fi
 
 # ---------------------------------------------------------------------------
-say "2/6  Alembic migrations → head"
-$COMPOSE exec -T api alembic upgrade head > /tmp/dep_alembic.out 2>&1 && ok "alembic upgrade ran" || { bad "alembic upgrade FAILED"; tail -n 25 /tmp/dep_alembic.out; }
+say "2/6  Alembic migrations → head (as table OWNER — Strike #123)"
+# env.py connects alembic with the runtime DATABASE_URL (the non-owner app role), so
+# owner-level DDL (ALTER TABLE tenant.users ...) fails with InsufficientPrivilege. Run
+# the migration step with DATABASE_URL overridden to the owner (POSTGRES_USER), pulled
+# straight from the db container so no secret is typed by hand. Runtime stays app-role.
+PGUSER="$(docker exec teivaka_db printenv POSTGRES_USER 2>/dev/null || echo teivaka)"
+PGPASS="$(docker exec teivaka_db printenv POSTGRES_PASSWORD 2>/dev/null)"
+PGDB="$(docker exec teivaka_db printenv POSTGRES_DB 2>/dev/null || echo teivaka_db)"
+ENCPASS="$(python3 -c 'import urllib.parse,sys;print(urllib.parse.quote(sys.argv[1],safe=""))' "$PGPASS" 2>/dev/null || echo "$PGPASS")"
+OWNER_URL="postgresql+asyncpg://${PGUSER}:${ENCPASS}@db:5432/${PGDB}"
+$COMPOSE exec -T -e DATABASE_URL="$OWNER_URL" api alembic upgrade head > /tmp/dep_alembic.out 2>&1 \
+  && ok "alembic upgrade ran (as ${PGUSER})" || { bad "alembic upgrade FAILED"; tail -n 30 /tmp/dep_alembic.out; }
 HEAD="$($PSQL -c "SELECT version_num FROM tenant.alembic_version;" 2>/dev/null | tr -d '[:space:]')"
 if [ "$HEAD" = "$EXPECTED_HEAD" ]; then ok "alembic head = ${HEAD}"; else bad "alembic head is '${HEAD}', expected '${EXPECTED_HEAD}'"; fi
 
