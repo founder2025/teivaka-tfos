@@ -104,7 +104,7 @@ export default function Library() {
 
   const q = search.trim().toLowerCase();
   const chemRows = useMemo(() => (chems || []).filter((c) => !q || `${c.chem_name} ${c.active_ingredient}`.toLowerCase().includes(q)), [chems, q]);
-  const cropRows = useMemo(() => (crops || []).filter((c) => !q || `${c.production_name} ${c.category || ""}`.toLowerCase().includes(q)), [crops, q]);
+  const cropRows = useMemo(() => (crops || []).filter((c) => !q || `${c.production_name} ${c.local_name || ""} ${c.category || ""} ${c.plant_family || ""}`.toLowerCase().includes(q)), [crops, q]);
   const kbRows = useMemo(() => (kb || []).filter((a) => !q || `${a.title} ${a.category || ""}`.toLowerCase().includes(q)), [kb, q]);
 
   return (
@@ -145,8 +145,11 @@ export default function Library() {
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
             {cropRows.map((c) => (
               <div key={c.production_id} className="rounded-xl border p-3" style={{ borderColor: C.border, background: C.panel }}>
-                <div className="font-semibold" style={{ color: C.soil }}>{c.production_name}</div>
-                <div className="text-[11px] mt-0.5" style={{ color: C.muted }}>{c.category || c.production_category || c.production_id}</div>
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <div className="font-semibold" style={{ color: C.soil }}>{c.production_name}{c.local_name ? <span className="font-normal text-[11px]" style={{ color: C.muted }}> · {c.local_name}</span> : null}</div>
+                  {c.category && <Pill bg={C.greenTint} fg={C.greenDk}>{c.category}</Pill>}
+                </div>
+                <div className="text-[11px] mt-0.5" style={{ color: C.muted }}>{[c.plant_family, c.lifecycle].filter(Boolean).join(" · ") || c.production_id}</div>
               </div>
             ))}
           </div>
