@@ -167,20 +167,33 @@ async def list_connections(user: dict = Depends(get_current_user)):
     uid = str(user["user_id"])
     async with get_db_ctx() as db:
         rows = (await db.execute(text("""
+            WITH peers AS (
+                -- mutual follows (show even before any message is exchanged)
+                SELECT f1.followed_user_id AS peer_id
+                FROM community.follows f1
+                JOIN community.follows f2
+                  ON f2.follower_user_id = f1.followed_user_id
+                 AND f2.followed_user_id = f1.follower_user_id
+                WHERE f1.follower_user_id = :uid
+                UNION
+                -- anyone I already have a thread with, so EVERY inbound message
+                -- surfaces here even if the sender isn't a mutual follow
+                -- (e.g. a marketplace buyer messaging via listing-consent).
+                SELECT CASE WHEN th.user_lo = :uid THEN th.user_hi ELSE th.user_lo END
+                FROM community.chat_threads th
+                WHERE th.user_lo = :uid OR th.user_hi = :uid
+            )
             SELECT u.user_id, u.full_name, u.account_type, u.country, u.avatar_url,
                    th.thread_id, th.last_message_at,
                    (SELECT count(*) FROM community.chat_messages m
                       WHERE m.thread_id = th.thread_id AND m.sender_user_id = u.user_id AND m.read_at IS NULL) AS unread,
                    (SELECT body FROM community.chat_messages m
                       WHERE m.thread_id = th.thread_id ORDER BY m.created_at DESC LIMIT 1) AS last_body
-            FROM community.follows f1
-            JOIN community.follows f2
-              ON f2.follower_user_id = f1.followed_user_id AND f2.followed_user_id = f1.follower_user_id
-            JOIN tenant.users u ON u.user_id = f1.followed_user_id
+            FROM peers pr
+            JOIN tenant.users u ON u.user_id = pr.peer_id AND u.is_active = TRUE
             LEFT JOIN community.chat_threads th
               ON (th.user_lo = :uid AND th.user_hi = u.user_id)
               OR (th.user_lo = u.user_id AND th.user_hi = :uid)
-            WHERE f1.follower_user_id = :uid AND u.is_active = TRUE
             ORDER BY th.last_message_at DESC NULLS LAST, u.full_name
         """), {"uid": uid})).mappings().all()
     conns = [dict(r) for r in rows]

@@ -119,6 +119,7 @@ export default function RightCluster() {
   const [meOpen, setMeOpen] = useState(false);
   const [me, setMe] = useState(null);
   const [communityUnread, setCommunityUnread] = useState(0);
+  const [chatUnread, setChatUnread] = useState(0);
   const { unreadCount } = useTisSse();
   const chat = useChat();
 
@@ -132,6 +133,22 @@ export default function RightCluster() {
       .catch(() => {});
     loadCount();
     const id = setInterval(loadCount, 30_000);
+    return () => { cancelled = true; clearInterval(id); };
+  }, []);
+
+  // Message badge: poll the dedicated unread-count directly so the indicator is
+  // correct even when the floating ChatWidget isn't actively polling. Merged
+  // with chat.unread (ChatWidget's source) so neither can under-report.
+  useEffect(() => {
+    const token = localStorage.getItem("tfos_access_token");
+    if (!token) return undefined;
+    let cancelled = false;
+    const loadChat = () => fetch("/api/v1/community/chat/unread-count", { headers: { Authorization: `Bearer ${token}` } })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((b) => { if (!cancelled && b?.data) setChatUnread(b.data.unread || 0); })
+      .catch(() => {});
+    loadChat();
+    const id = setInterval(loadChat, 15_000);
     return () => { cancelled = true; clearInterval(id); };
   }, []);
 
@@ -166,7 +183,7 @@ export default function RightCluster() {
           title="Messages"
           onClick={chat.toggleDropdown}
           active={chat.dropdownOpen}
-          badgeCount={chat.unread}
+          badgeCount={Math.max(chat.unread || 0, chatUnread)}
         />
         {chat.dropdownOpen && <ChatDropdown />}
       </div>
