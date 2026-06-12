@@ -92,6 +92,15 @@ const HIGH_TRUST = new Set([
   "AGRIBUSINESS_ENTERPRISE", "GOVERNMENT_REGULATOR", "QUALITY_AUDITOR", "MATAQALI_TRUSTEE",
 ]);
 
+// CFO cost-routing mirror — the channel a profile verifies on by default
+// (backend app/core/verification_routing.py is the source of truth).
+const EMAIL_DEFAULT_PROFILES = new Set([
+  "BANKER_COMMERCIAL", "DONOR_DEVELOPMENT", "COMMODITY_EXPORTER", "TRADE_IMPORTER",
+  "AGRIBUSINESS_ENTERPRISE", "GOVERNMENT_REGULATOR", "QUALITY_AUDITOR",
+  "MATAQALI_TRUSTEE", "COMMERCIAL_BUYER",
+]);
+function defaultChannel(t) { return EMAIL_DEFAULT_PROFILES.has(t) ? "email" : "whatsapp"; }
+
 const PRIVACY_POLICY_VERSION = "1.0";
 const CURRENT_YEAR = new Date().getFullYear();
 const BIRTH_YEARS = [];
@@ -228,6 +237,7 @@ function RegistrationForm({ onSuccess }) {
   const [operatorName, setOperatorName] = useState("");
   const [regionId, setRegionId] = useState(null);
   const [birthYear, setBirthYear] = useState("");
+  const [preferredChannel, setPreferredChannel] = useState(""); // "" = use CFO default
   const isCompany = accountKind === "company";
 
   // Step 2 — ecosystem-profile selection.
@@ -236,6 +246,7 @@ function RegistrationForm({ onSuccess }) {
   const selectedProfile = PROFILES.find((p) => p.key === selectedKey) || PROFILES[0];
   const resolvedType = selectedProfile.dropdown ? (subType || null) : selectedProfile.value;
   const isResolved = !!resolvedType;
+  const effectiveChannel = preferredChannel || (resolvedType ? defaultChannel(resolvedType) : "email");
 
   const [policyAccepted, setPolicyAccepted] = useState(false);
 
@@ -313,6 +324,8 @@ function RegistrationForm({ onSuccess }) {
     if (pwErr) e.password = pwErr;
     if (confirmPw !== form.password) e.confirmPw = "Passwords do not match";
     if (fullPhone && !/^\+[1-9]\d{6,14}$/.test(fullPhone)) e.phone_number = "Enter a valid phone number";
+    if ((effectiveChannel === "whatsapp" || effectiveChannel === "sms") && !fullPhone)
+      e.phone_number = "A mobile number is required for WhatsApp / SMS verification";
     if (!birthYear) e.birth_year = "Please confirm your year of birth (18+)";
     if (!policyAccepted) e.policy = "Please accept the Privacy Policy and Terms of Service to continue";
     return e;
@@ -346,6 +359,7 @@ function RegistrationForm({ onSuccess }) {
       business_name: isCompany ? businessName.trim() : null,
       operator_name: isCompany ? operatorName.trim() : null,
       region_id: regionId || null,
+      preferred_verify_channel: effectiveChannel,
       date_of_birth: `${birthYear}-01-01`,
       phone_number: phoneOrNull, whatsapp_number: wa,
       referral_code: form.referral_code.trim() || null,
@@ -547,9 +561,27 @@ function RegistrationForm({ onSuccess }) {
                     </div>
                   </Field>
 
+                  {/* Omnichannel verification channel (CFO cost-routed) */}
+                  <Field label="Verify your registration via" id="verify_channel"
+                    hint={effectiveChannel === "email"
+                      ? "A verification link will be emailed to you."
+                      : "A code will be sent to your mobile (a backup email is also sent)."}>
+                    <div style={{ display: "flex", gap: 8 }}>
+                      {[["whatsapp", "WhatsApp"], ["sms", "SMS Text"], ["email", "Email"]].map(([v, lbl]) => (
+                        <button type="button" key={v} aria-pressed={effectiveChannel === v}
+                          onClick={() => setPreferredChannel(v)} style={kindBtn(effectiveChannel === v)}>
+                          {lbl}
+                        </button>
+                      ))}
+                    </div>
+                  </Field>
+
                   {/* Phone */}
-                  <Field label="Phone number" id="phone_number" error={errors.phone_number}
-                    hint="Optional — used for WhatsApp alerts and two-factor login.">
+                  <Field label={effectiveChannel === "email" ? "Phone number" : "Mobile number *"}
+                    id="phone_number" error={errors.phone_number}
+                    hint={effectiveChannel === "email"
+                      ? "Optional — used for WhatsApp alerts and two-factor login."
+                      : "Required for your chosen verification channel."}>
                     <div ref={phoneDropdownRef} style={{ position: "relative" }}>
                       <div style={{ display: "flex", gap: 8 }}>
                         <button type="button" onClick={() => { setPhoneDropdownOpen(v => !v); setPhoneSearch(""); }}

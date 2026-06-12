@@ -27,6 +27,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.core.account_types import derive_role, normalize_account_type
 from app.core.capabilities import compute_capabilities
+from app.core.verification_routing import dispatch_verification, resolve_channel
 from app.db.session import get_db
 from app.middleware.rls import get_current_user, get_tenant_db
 from app.utils.email import send_password_reset_email, send_verification_email
@@ -110,6 +111,7 @@ class RegisterRequest(BaseModel):
     business_name: str | None = None
     operator_name: str | None = None
     region_id: str | None = None
+    preferred_verify_channel: str | None = None  # whatsapp | sms | email (CFO-routed)
 
     @field_validator("first_name", "last_name")
     @classmethod
@@ -310,6 +312,7 @@ async def register(
     whatsapp_number = whatsapp_raw if whatsapp_raw else None
     privacy_accepted_at = datetime.now(timezone.utc)
     role = derive_role(req.account_type)
+    verify_channel = resolve_channel(req.account_type, req.preferred_verify_channel)
     verification_token = secrets.token_urlsafe(32)
     verification_expires = datetime.now(timezone.utc) + timedelta(hours=24)
     referral_code = await generate_referral_code(db)
@@ -348,7 +351,7 @@ async def register(
                     first_name, last_name, password_hash, role,
                     phone_number, whatsapp_number,
                     date_of_birth, account_type, country,
-                    is_company, region_id,
+                    is_company, region_id, preferred_verify_channel,
                     privacy_accepted_at, privacy_policy_version,
                     registration_ip, registration_user_agent,
                     email_verified, email_verification_token,
@@ -361,7 +364,7 @@ async def register(
                     :first_name, :last_name, :password_hash, :role,
                     :phone_number, :whatsapp_number,
                     :date_of_birth, :account_type, :country,
-                    :is_company, :region_id,
+                    :is_company, :region_id, :preferred_verify_channel,
                     :privacy_accepted_at, :privacy_policy_version,
                     :reg_ip, :reg_ua,
                     false, :verification_token,
@@ -387,6 +390,7 @@ async def register(
                 "country": req.country,
                 "is_company": req.is_company,
                 "region_id": req.region_id,
+                "preferred_verify_channel": verify_channel,
                 "privacy_accepted_at": privacy_accepted_at,
                 "privacy_policy_version": req.privacy_policy_version,
                 "reg_ip": ip_address,
@@ -474,8 +478,12 @@ async def register(
             pass
         await db.commit()
 
-        # Fire-and-forget verification email. Never raises.
-        send_verification_email(email, verification_token, full_name)
+        # Fire-and-forget verification via the CFO-routed channel. Never raises.
+        # (email is live; whatsapp/sms fall back to email until provisioned — Q8.)
+        dispatch_verification(
+            verify_channel, email=email, phone=phone,
+            token=verification_token, name=full_name, logger=logger,
+        )
 
     except HTTPException:
         raise
