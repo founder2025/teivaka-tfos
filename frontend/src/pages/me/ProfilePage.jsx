@@ -12,8 +12,10 @@ import {
   Eye, Layers, Play, Image as ImageIcon, Bookmark, Activity as ActivityIcon, Settings as Cog,
   Rss, Users, Store, Contact, Camera, Pencil, Download, Shield, BadgeCheck, Phone, Calendar,
   Clock, MapPin, MessageCircle, UserPlus, UserCheck, ArrowRight, X, Award, QrCode,
+  PenSquare, Tag,
 } from "lucide-react";
 import { C, getJSON, send, card } from "./_meCommon";
+import { personaOf, personaLabel, pillarsFor, isProducer, PERSONA_OPTIONS } from "../../utils/personas";
 import { getCurrentUser } from "../../utils/auth";
 import { useChat } from "../../context/ChatContext";
 import { uploadMedia } from "../../utils/imageCompress";
@@ -28,7 +30,7 @@ const toast = (message, type) => {
 };
 
 const initials = (n) => (n || "?").split(" ").map((s) => s[0]).slice(0, 2).join("").toUpperCase();
-const PROF = { farmer: "Farmer", buyer: "Buyer", supplier: "Supplier", service_provider: "Service Provider", banker: "Banker", business: "Business", exporter: "Exporter", importer: "Importer" };
+const QA = { display: "inline-flex", alignItems: "center", gap: 6, padding: "9px 13px", border: `1px solid ${C.line}`, borderRadius: 10, background: "#fff", color: C.soil, fontSize: 13, fontWeight: 600, cursor: "pointer" };
 // Guard against null/epoch dates: an unset created_at must read "—", never "01/01/1970".
 const isRealDate = (d) => d instanceof Date && !isNaN(d) && d.getFullYear() > 1971;
 const fmtDate = (iso) => { if (!iso) return "—"; const d = new Date(iso); return isRealDate(d) ? d.toLocaleDateString(undefined, { year: "numeric", month: "2-digit", day: "2-digit" }) : "—"; };
@@ -134,7 +136,7 @@ function SuggestedPeople() {
                 <Avatar src={u.avatar_url} name={u.full_name} size={36} fontScale={0.36} />
                 <span style={{ minWidth: 0 }}>
                   <span style={{ display: "block", fontWeight: 600, color: C.soil, fontSize: 13.5, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{u.full_name}{u.verified ? <BadgeCheck size={12} style={{ display: "inline", marginLeft: 4, color: C.greenDk }} /> : null}</span>
-                  <span style={{ display: "block", fontSize: 11.5, color: C.muted }}>{(PROF[u.profession] || u.profession || "Member")}{u.country ? ` · ${u.country}` : ""}</span>
+                  <span style={{ display: "block", fontSize: 11.5, color: C.muted }}>{personaLabel(u.profession)}{u.country ? ` · ${u.country}` : ""}</span>
                 </span>
               </button>
               <button onClick={() => follow(u)} disabled={busy[u.user_id]} style={{ flexShrink: 0, display: "inline-flex", alignItems: "center", gap: 5, background: C.green, color: "#fff", border: "none", borderRadius: 8, padding: "7px 12px", fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}>
@@ -151,7 +153,7 @@ function SuggestedPeople() {
 function EditModal({ me, onClose, onSaved }) {
   const [f, setF] = useState({
     full_name: me.full_name || "", bio: me.bio || "", whatsapp_number: me.phone || me.whatsapp_number || "",
-    country: me.country || "", account_type: (me.profession || "farmer").toUpperCase(),
+    country: me.country || "", account_type: personaOf(me.profession)?.key || "PRIMARY_PRODUCER",
   });
   const fv = me.field_visibility || {};
   const [vis, setVis] = useState({
@@ -198,7 +200,7 @@ function EditModal({ me, onClose, onSaved }) {
             <label style={{ fontSize: 12, color: C.muted, flex: 1 }}>Phone<input style={inp} value={f.whatsapp_number} onChange={(e) => set("whatsapp_number", e.target.value)} /></label>
             <label style={{ fontSize: 12, color: C.muted, width: 90 }}>Country<input style={inp} maxLength={2} value={f.country} onChange={(e) => set("country", e.target.value.toUpperCase())} /></label>
           </div>
-          <label style={{ fontSize: 12, color: C.muted, display: "block", marginTop: 12 }}>Profession<select style={inp} value={f.account_type} onChange={(e) => set("account_type", e.target.value)}>{["FARMER", "BUYER", "SUPPLIER", "SERVICE_PROVIDER", "BANKER", "BUSINESS", "EXPORTER", "IMPORTER"].map((t) => <option key={t} value={t}>{PROF[t.toLowerCase()]}</option>)}</select></label>
+          <label style={{ fontSize: 12, color: C.muted, display: "block", marginTop: 12 }}>Profession<select style={inp} value={f.account_type} onChange={(e) => set("account_type", e.target.value)}>{PERSONA_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</select></label>
 
           <div style={{ marginTop: 18, fontSize: 12.5, fontWeight: 700, color: C.soil }}>Privacy — who can see</div>
           <div style={{ fontSize: 11, color: C.muted, marginBottom: 8 }}>Everyone · Followers · Connections (mutual) · Only me</div>
@@ -487,7 +489,9 @@ export default function ProfilePage({ self = false }) {
             </div>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8 }}>
               <span style={{ background: C.soil, color: "#fff", fontSize: 10, fontWeight: 700, padding: "3px 9px", borderRadius: 6 }}>{p.role}</span>
-              <span style={{ ...{ background: "rgba(106,168,79,.12)", color: C.greenDk }, fontSize: 10, fontWeight: 700, padding: "3px 9px", borderRadius: 6, display: "inline-flex", gap: 3, alignItems: "center" }}>{(PROF[p.profession] || p.profession).toUpperCase()} {p.verified && <BadgeCheck size={11} />}</span>
+              {(() => { const per = personaOf(p.profession); return (
+                <span style={{ background: `${per?.color || C.greenDk}22`, color: per?.color || C.greenDk, fontSize: 10, fontWeight: 700, padding: "3px 9px", borderRadius: 6, display: "inline-flex", gap: 3, alignItems: "center" }}>{(per?.label || personaLabel(p.profession)).toUpperCase()} {p.verified && <BadgeCheck size={11} />}</span>
+              ); })()}
               {p.country && <span style={{ fontSize: 11, color: C.muted, display: "inline-flex", gap: 3, alignItems: "center" }}><MapPin size={12} /> {p.country}</span>}
             </div>
             {p.bio && <p style={{ fontSize: 13, color: C.soil, marginTop: 10, lineHeight: 1.55 }}>{p.bio}</p>}
@@ -531,6 +535,28 @@ export default function ProfilePage({ self = false }) {
               </div>
             );
           })()}
+          {isYou && (
+            <div style={{ ...card, marginBottom: 14 }}>
+              <strong style={{ color: C.soil, display: "block", marginBottom: 10 }}>Quick actions</strong>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <button onClick={() => navigate("/home")} style={QA}><PenSquare size={15} />Post</button>
+                <button onClick={() => navigate("/home")} style={QA}><ImageIcon size={15} />Story</button>
+                <button onClick={() => navigate("/home/marketplace")} style={QA}><Tag size={15} />List item</button>
+              </div>
+            </div>
+          )}
+          {isYou && (
+            <div style={{ ...card, marginBottom: 14 }}>
+              <strong style={{ color: C.soil, display: "block", marginBottom: 10 }}>Your pillars</strong>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(96px,1fr))", gap: 8 }}>
+                {pillarsFor(p.profession).map((pl) => (
+                  <button key={pl.key} onClick={() => navigate(pl.to)} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, padding: "14px 6px", border: `1px solid ${C.line}`, borderRadius: 12, background: "#fff", cursor: "pointer", color: C.soil }}>
+                    <pl.Icon size={20} color={C.greenDk} /><span style={{ fontSize: 12, fontWeight: 600 }}>{pl.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
           <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 14 }}>
             <Stat n={p.stats?.posts ?? 0} label="Posts" onClick={() => setTab("posts")} />
             <Stat n={p.stats?.followers ?? 0} label="Followers" />
@@ -539,7 +565,7 @@ export default function ProfilePage({ self = false }) {
           </div>
           <div style={{ ...card, textAlign: "center", padding: "22px 16px" }}>
             <Shield size={26} style={{ color: p.verified ? C.green : C.muted }} />
-            <div style={{ fontWeight: 700, color: C.soil, marginTop: 8 }}>{p.verified ? "Verified farmer" : "Not verified yet"}</div>
+            <div style={{ fontWeight: 700, color: C.soil, marginTop: 8 }}>{p.verified ? `Verified ${personaOf(p.profession)?.short || "member"}` : "Not verified yet"}</div>
             <div style={{ fontSize: 12.5, color: C.muted, marginTop: 4 }}>{p.verified ? "Identity and farm verified. Buyers and lenders can trust this record." : "Verification pending — records remain hash-chained and auditable."}</div>
             <a href="/verify" style={{ display: "inline-flex", gap: 6, alignItems: "center", marginTop: 12, border: `1px solid ${C.line}`, borderRadius: 8, padding: "7px 14px", color: C.soil, textDecoration: "none", fontSize: 13 }}>View</a>
           </div>
