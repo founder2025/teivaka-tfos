@@ -400,6 +400,14 @@ async def update_farm(
     if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Farm not found")
 
+    # Control-room trust: farm-profile edits are hash-chained (migration 128).
+    from app.core.audit_chain import emit_audit_event
+    await emit_audit_event(
+        db=db, tenant_id=user["tenant_id"], actor_user_id=user["user_id"],
+        event_type="FARM_PROFILE_UPDATED", entity_type="FARM", entity_id=farm_id,
+        payload={k: (float(v) if isinstance(v, (int, float)) else v)
+                 for k, v in updates.items() if k != "farm_id"})
+
     logger.info(f"Farm {farm_id} updated by user {user['user_id']}")
     return dict(row)
 

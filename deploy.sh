@@ -20,7 +20,7 @@
 set -uo pipefail
 
 BRANCH="${1:-claude/beautiful-fermi-F0dLX}"
-EXPECTED_HEAD="${2:-127_farm_partners}"
+EXPECTED_HEAD="${2:-128_control_room_events}"
 ROOT="/opt/teivaka"
 COMPOSE="docker compose -f ${ROOT}/04_environment/docker-compose.yml"
 PSQL="docker exec -i teivaka_db psql -v ON_ERROR_STOP=1 -tA -U teivaka -d teivaka_db"
@@ -101,6 +101,8 @@ FPART="$($PSQL -c "SELECT to_regclass('tenant.farm_partners') IS NOT NULL;" 2>/d
 [ "$FPART" = "t" ] && ok "farm_partners table present (127)" || bad "farm_partners missing (migration 127 — Partnerships adds would fail)"
 PARTEVT="$($PSQL -c "SELECT pg_get_constraintdef(oid) LIKE '%PARTNER_ADDED%' FROM pg_constraint WHERE conname='events_event_type_check';" 2>/dev/null | tr -d '[:space:]')"
 [ "$PARTEVT" = "t" ] && ok "audit.events CHECK includes PARTNER_ADDED" || bad "PARTNER_ADDED not in audit CHECK"
+CRROOM="$($PSQL -c "SELECT (pg_get_constraintdef(oid) LIKE '%FARM_PROFILE_UPDATED%' AND pg_get_constraintdef(oid) LIKE '%CYCLE_RELABELED%') FROM pg_constraint WHERE conname='events_event_type_check';" 2>/dev/null | tr -d '[:space:]')"
+[ "$CRROOM" = "t" ] && ok "audit.events CHECK includes control-room events (128)" || bad "control-room events (FARM_PROFILE_UPDATED/CYCLE_RELABELED) not in audit CHECK"
 
 # ---------------------------------------------------------------------------
 say "5/7  Bring API up + wait healthy + parity check"

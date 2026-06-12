@@ -4,6 +4,7 @@ from typing import Optional
 from sqlalchemy import text
 from app.db.session import get_rls_db
 from app.middleware.rls import get_current_user
+from app.core.audit_chain import emit_audit_event
 
 router = APIRouter()
 
@@ -56,4 +57,10 @@ async def rename_zone(zone_id: str, body: ZoneRename, user: dict = Depends(get_c
         row = res.mappings().first()
         if not row:
             raise HTTPException(status_code=404, detail="Zone not found")
+        # Control-room trust: rename is hash-chained (migration 128).
+        await emit_audit_event(
+            db=db, tenant_id=user["tenant_id"], actor_user_id=user["user_id"],
+            event_type="ZONE_UPDATED", entity_type="ZONE", entity_id=zone_id,
+            payload={"zone_name": row["zone_name"],
+                     "area_ha": float(row["area_ha"]) if row["area_ha"] is not None else None})
         return {"data": dict(row)}

@@ -321,6 +321,45 @@ async def classify_cycle_layer(
     return success_envelope(dict(row))
 
 
+class CycleRelabel(BaseModel):
+    farmer_label: str = Field(..., min_length=1, max_length=64)
+
+
+@router.patch("/{cycle_id}/relabel", summary="Correct a cycle's farmer-facing label")
+async def relabel_cycle(
+    cycle_id: str,
+    payload: CycleRelabel,
+    user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_tenant_db),
+):
+    """Control-room edit: change the human-facing label only. cycle_id stays the
+    immutable FK anchor (Inviolable referential integrity); production_id stays
+    read-only shared.* (Inviolable #7). Hash-chained via CYCLE_RELABELED."""
+    from app.core.audit_chain import emit_audit_event
+    label = payload.farmer_label.strip()
+    result = await db.execute(
+        text("""
+            UPDATE tenant.production_cycles
+            SET farmer_label = :label, updated_at = NOW()
+            WHERE cycle_id = :cid AND tenant_id = :tid
+            RETURNING cycle_id, farmer_label
+        """),
+        {"label": label, "cid": cycle_id, "tid": str(user["tenant_id"])},
+    )
+    row = result.mappings().first()
+    if not row:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=error_envelope("CYCLE_NOT_FOUND", f"Cycle {cycle_id!r} not found"),
+        )
+    await emit_audit_event(
+        db=db, tenant_id=user["tenant_id"], actor_user_id=user["user_id"],
+        event_type="CYCLE_RELABELED", entity_type="PRODUCTION_CYCLE", entity_id=cycle_id,
+        payload={"farmer_label": label})
+    await db.commit()
+    return success_envelope(dict(row))
+
+
 @router.patch("/{cycle_id}/close", summary="Close production cycle (sugar → PATCH)")
 async def close_cycle(
     cycle_id: str,

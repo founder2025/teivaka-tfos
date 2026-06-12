@@ -7,6 +7,7 @@ from sqlalchemy import text
 from app.db.session import get_rls_db
 from app.middleware.rls import get_current_user
 from app.core.task_engine import emit_task
+from app.core.audit_chain import emit_audit_event
 
 router = APIRouter()
 
@@ -135,6 +136,12 @@ async def rename_production_unit(pu_id: str, body: PURename, user: dict = Depend
                                    await _farm_of_pu(db, pu_id, str(user["tenant_id"])),
                                    pu_id, "BLOCK_RENAMED", f"Block renamed to '{row['pu_name']}'.",
                                    user.get("user_id"))
+        # Control-room trust: block edit is hash-chained (migration 128).
+        await emit_audit_event(
+            db=db, tenant_id=user["tenant_id"], actor_user_id=user["user_id"],
+            event_type="BLOCK_UPDATED", entity_type="PRODUCTION_UNIT", entity_id=pu_id,
+            payload={"pu_name": row["pu_name"],
+                     "area_sqm": float(row["area_sqm"]) if row["area_sqm"] is not None else None})
         return {"data": dict(row)}
 
 

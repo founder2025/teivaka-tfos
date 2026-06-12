@@ -19,7 +19,7 @@
 import { useState } from "react";
 import { QueryClient, QueryClientProvider, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import { Home, Users, Settings as Cog, Link as LinkIcon, Shield, Plus, Check, X, Copy } from "lucide-react";
+import { Home, Users, Settings as Cog, Link as LinkIcon, Shield, Plus, Check, X, Copy, Map as MapIcon, Layers, Sprout, Store, Download, Pencil, BadgeCheck } from "lucide-react";
 import TfpShell from "../../components/farm/TfpShell";
 import { CurrentFarmProvider, useCurrentFarm } from "../../context/CurrentFarmContext";
 import FarmSelector from "../../components/farm/FarmSelector";
@@ -208,6 +208,125 @@ function PlanModal({ current, onClose }) {
   );
 }
 
+// ── Rename modal (zones, blocks) — names/labels only, stable IDs preserved ──
+function RenameModal({ title, label, current, areaLabel, area, endpoint, nameKey, areaKey, onClose, onSaved }) {
+  const [name, setName] = useState(current || "");
+  const [areaVal, setAreaVal] = useState(area ?? "");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  async function save() {
+    if (!name.trim()) { setErr("A name is required."); return; }
+    setBusy(true); setErr("");
+    try {
+      const body = { [nameKey]: name.trim() };
+      if (areaKey && areaVal !== "") body[areaKey] = Number(areaVal);
+      await send(endpoint, "PATCH", body);
+      emitToast("Saved · change recorded in your audit chain");
+      onSaved();
+    } catch (e) { setErr(String(e.message || e)); } finally { setBusy(false); }
+  }
+  return (
+    <div className="overlay-backdrop show" onClick={onClose}>
+      <div className="overlay-modal" style={{ maxWidth: 440 }} onClick={(ev) => ev.stopPropagation()}>
+        <div className="overlay-head"><h2>{title}</h2><button className="overlay-close" onClick={onClose}><X size={14} /></button></div>
+        <div className="overlay-body" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <div style={{ fontSize: 11.5, color: "var(--muted)", lineHeight: 1.5 }}><Shield size={11} /> The code/ID stays the same — only the name changes, and it updates everywhere this is referenced. The edit is hash-chained.</div>
+          <div className="form-row"><label>{label}</label><input value={name} onChange={(e) => setName(e.target.value)} maxLength={64} /></div>
+          {areaKey && <div className="form-row"><label>{areaLabel}</label><input type="number" step="0.01" min="0" value={areaVal} onChange={(e) => setAreaVal(e.target.value)} /></div>}
+          {err && <div style={{ color: "var(--red)", fontSize: 12 }}>{err}</div>}
+        </div>
+        <div className="overlay-foot">
+          <button className="btn btn-secondary" onClick={onClose}>Cancel</button>
+          <button className="btn btn-primary" disabled={busy} onClick={save}>{busy ? "Saving…" : "Save"}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Cycle relabel modal (farmer_label only; cycle_id + production_id stay) ──
+function RelabelModal({ cycle, onClose, onSaved }) {
+  const [label, setLabel] = useState(cycle.farmer_label || "");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  async function save() {
+    if (!label.trim()) { setErr("Give it a name."); return; }
+    setBusy(true); setErr("");
+    try {
+      await send(`/api/v1/cycles/${encodeURIComponent(cycle.cycle_id)}/relabel`, "PATCH", { farmer_label: label.trim() });
+      emitToast("Saved · cycle label updated · hash-chained");
+      onSaved();
+    } catch (e) { setErr(String(e.message || e)); } finally { setBusy(false); }
+  }
+  return (
+    <div className="overlay-backdrop show" onClick={onClose}>
+      <div className="overlay-modal" style={{ maxWidth: 440 }} onClick={(ev) => ev.stopPropagation()}>
+        <div className="overlay-head"><h2>Rename this crop run</h2><button className="overlay-close" onClick={onClose}><X size={14} /></button></div>
+        <div className="overlay-body" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <div style={{ fontSize: 11.5, color: "var(--muted)", lineHeight: 1.5 }}><Shield size={11} /> Your own friendly name for this cycle — e.g. "Eggplant by the mango tree". The crop type and cycle ID stay fixed; this just makes it easy to recognise.</div>
+          <div className="form-row"><label>Your name for it</label><input value={label} onChange={(e) => setLabel(e.target.value)} maxLength={64} placeholder={cycle.production_name || cycle.cycle_id} /></div>
+          {err && <div style={{ color: "var(--red)", fontSize: 12 }}>{err}</div>}
+        </div>
+        <div className="overlay-foot">
+          <button className="btn btn-secondary" onClick={onClose}>Cancel</button>
+          <button className="btn btn-primary" disabled={busy} onClick={save}>{busy ? "Saving…" : "Save"}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Marketplace listing modal (create from the farm pillar) ────────────────
+function ListingModal({ farmId, onClose, onSaved }) {
+  const [title, setTitle] = useState("");
+  const [qty, setQty] = useState("");
+  const [price, setPrice] = useState("");
+  const [grade, setGrade] = useState("");
+  const [neg, setNeg] = useState(true);
+  const [desc, setDesc] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  async function save() {
+    if (!title.trim()) { setErr("Give your listing a title."); return; }
+    setBusy(true); setErr("");
+    try {
+      await send("/api/v1/community/listings", "POST", {
+        farm_id: farmId, category: "PRODUCE", listing_title: title.trim(),
+        listing_description: desc.trim() || null,
+        quantity_available_kg: qty === "" ? null : Number(qty),
+        price_per_kg_fjd: price === "" ? null : Number(price),
+        price_basis: "kg", negotiable: neg, grade: grade.trim() || null,
+      });
+      emitToast("Listed · your produce is now on the marketplace");
+      onSaved();
+    } catch (e) { setErr(String(e.message || e)); } finally { setBusy(false); }
+  }
+  return (
+    <div className="overlay-backdrop show" onClick={onClose}>
+      <div className="overlay-modal" style={{ maxWidth: 460 }} onClick={(ev) => ev.stopPropagation()}>
+        <div className="overlay-head"><h2>List produce for sale</h2><button className="overlay-close" onClick={onClose}><X size={14} /></button></div>
+        <div className="overlay-body" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <div className="form-row"><label>What are you selling?</label><input placeholder="e.g. Fresh eggplant, Grade A" value={title} onChange={(e) => setTitle(e.target.value)} /></div>
+          <div className="form-row" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+            <div><label>Quantity (kg)</label><input type="number" min="0" step="0.5" value={qty} onChange={(e) => setQty(e.target.value)} /></div>
+            <div><label>Price (FJD/kg)</label><input type="number" min="0" step="0.1" value={price} onChange={(e) => setPrice(e.target.value)} /></div>
+          </div>
+          <div className="form-row" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, alignItems: "end" }}>
+            <div><label>Grade (optional)</label><input value={grade} onChange={(e) => setGrade(e.target.value)} /></div>
+            <label style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 13, color: "var(--soil)" }}><input type="checkbox" checked={neg} onChange={(e) => setNeg(e.target.checked)} /> Price negotiable</label>
+          </div>
+          <div className="form-row"><label>Notes (optional)</label><textarea rows={2} value={desc} onChange={(e) => setDesc(e.target.value)} /></div>
+          {err && <div style={{ color: "var(--red)", fontSize: 12 }}>{err}</div>}
+        </div>
+        <div className="overlay-foot">
+          <button className="btn btn-secondary" onClick={onClose}>Cancel</button>
+          <button className="btn btn-primary" disabled={busy} onClick={save}>{busy ? "Listing…" : "List it"}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Page ───────────────────────────────────────────────────────────────────
 function FarmSettingsInner() {
   const navigate = useNavigate();
@@ -217,6 +336,9 @@ function FarmSettingsInner() {
   const [invite, setInvite] = useState(false);
   const [plan, setPlan] = useState(false);
   const [busyPref, setBusyPref] = useState(false);
+  const [renameWhat, setRenameWhat] = useState(null);  // {title,label,current,...,endpoint,nameKey,areaKey}
+  const [relabel, setRelabel] = useState(null);        // cycle row
+  const [listFor, setListFor] = useState(false);
 
   const farmQ = useQuery({ queryKey: ["set-farm", farmId], queryFn: () => get(`/api/v1/farms/${encodeURIComponent(farmId)}`), enabled: !!farmId });
   const teamQ = useQuery({ queryKey: ["set-team"], queryFn: () => get("/api/v1/me/team") });
@@ -228,6 +350,10 @@ function FarmSettingsInner() {
   const recordsQ = useQuery({ queryKey: ["set-records"], queryFn: () => get("/api/v1/me/records") });
   const chainQ = useQuery({ queryKey: ["set-chain"], queryFn: () => get("/api/v1/me/chain-status") });
   const wxQ = useQuery({ queryKey: ["set-wx", farmId], queryFn: () => get(`/api/v1/weather/forecast/${encodeURIComponent(farmId)}?range=daily`).catch(() => ({ data: [] })), enabled: !!farmId });
+  const zonesQ = useQuery({ queryKey: ["set-zones", farmId], queryFn: () => get(`/api/v1/zones?farm_id=${encodeURIComponent(farmId)}`).catch(() => ({ data: [] })), enabled: !!farmId });
+  const puQ = useQuery({ queryKey: ["set-pu", farmId], queryFn: () => get(`/api/v1/production-units?farm_id=${encodeURIComponent(farmId)}`).catch(() => ({ data: [] })), enabled: !!farmId });
+  const listingsQ = useQuery({ queryKey: ["set-listings"], queryFn: () => get("/api/v1/community/listings?mine=true").catch(() => ({ data: [] })) });
+  const verifQ = useQuery({ queryKey: ["set-verif"], queryFn: () => get("/api/v1/me/verification").catch(() => ({ data: {} })) });
 
   const farm = farmQ.data?.data || farmQ.data || {};
   const team = teamQ.data?.data ?? [];
@@ -243,6 +369,11 @@ function FarmSettingsInner() {
   const chain = chainQ.data?.data || {};
   const weatherLive = (wxQ.data?.data ?? []).length > 0;
   const waConnected = !!prefs.whatsapp_number;
+  const zones = zonesQ.data?.data ?? [];
+  const blocks = puQ.data?.data ?? [];
+  const allCycles = cyclesList;
+  const listings = (listingsQ.data?.data ?? []).filter((l) => String(l.listing_status || "").toUpperCase() === "ACTIVE");
+  const verif = verifQ.data?.data ?? {};
 
   async function patchMe(body) {
     setBusyPref(true);
@@ -257,6 +388,21 @@ function FarmSettingsInner() {
     const r = m.role === "FOUNDER" ? "OWNER" : (m.team_role || m.role || "WORKER").toUpperCase();
     return <span style={{ fontSize: 11, fontWeight: 700, color: r === "OWNER" ? "var(--green-dk)" : "var(--muted)", letterSpacing: ".5px" }}>{r}</span>;
   };
+
+  async function closeListing(id) {
+    try { await send(`/api/v1/community/listings/${encodeURIComponent(id)}/close`, "PATCH", {}); emitToast("Listing withdrawn"); qc.invalidateQueries({ queryKey: ["set-listings"] }); }
+    catch (e) { emitToast(`Could not withdraw: ${e.message || e}`); }
+  }
+  async function exportData() {
+    try {
+      const b = await get("/api/v1/me/export");
+      const blob = new Blob([JSON.stringify(b?.data ?? b, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob); const a = document.createElement("a");
+      a.href = url; a.download = `tfos-export-${new Date().toISOString().slice(0, 10)}.json`; a.click(); URL.revokeObjectURL(url);
+      emitToast("Your data exported");
+    } catch (e) { emitToast(`Export failed: ${e.message || e}`); }
+  }
+  const cycleName = (c) => c.farmer_label || c.production_name || c.crop || c.cycle_id;
 
   return (
     <TfpShell>
@@ -309,6 +455,31 @@ function FarmSettingsInner() {
                 <SRow label="Weather alerts" right={<Toggle busy={busyPref} on={!!prefs.notify_weather} onClick={() => patchMe({ notify_weather: !prefs.notify_weather })} />} />
               </SettingsCard>
 
+              {/* ── Structure (zones + blocks) ── */}
+              <SettingsCard icon={Layers} title="Land & structure" desc="Rename your zones and blocks — the code stays, the name updates everywhere">
+                {zones.length === 0 && blocks.length === 0 && <div style={{ padding: "11px 8px", color: "var(--muted)", fontSize: 13 }}>No zones or blocks on this farm yet. Add them in Locations; rename them here any time.</div>}
+                {zones.map((z) => (
+                  <SRow key={z.zone_id} label={z.zone_name || z.zone_id}
+                    sub={`Zone · ${z.zone_id}${z.area_ha ? ` · ${z.area_ha} ha` : ""}`}
+                    right={<button className="btn btn-sm btn-secondary" title="Rename zone" onClick={() => setRenameWhat({ title: "Rename zone", label: "Zone name", current: z.zone_name, areaLabel: "Area (ha)", area: z.area_ha, endpoint: `/api/v1/zones/${encodeURIComponent(z.zone_id)}`, nameKey: "zone_name", areaKey: "area_ha", key: ["set-zones", farmId] })}><Pencil size={11} /></button>} />
+                ))}
+                {blocks.map((b) => (
+                  <SRow key={b.pu_id} label={b.farmer_label || b.pu_name || b.pu_id}
+                    sub={`Block · ${b.pu_id}${b.area_sqm ? ` · ${b.area_sqm} m²` : ""}`}
+                    right={<button className="btn btn-sm btn-secondary" title="Rename block" onClick={() => setRenameWhat({ title: "Rename block", label: "Block name", current: b.pu_name, areaLabel: "Area (m²)", area: b.area_sqm, endpoint: `/api/v1/production-units/${encodeURIComponent(b.pu_id)}`, nameKey: "pu_name", areaKey: "area_sqm", key: ["set-pu", farmId] })}><Pencil size={11} /></button>} />
+                ))}
+              </SettingsCard>
+
+              {/* ── Crop run labels ── */}
+              <SettingsCard icon={Sprout} title="Crop run names" desc="Give each cycle a friendly name — the crop type and ID stay fixed">
+                {allCycles.length === 0 && <div style={{ padding: "11px 8px", color: "var(--muted)", fontSize: 13 }}>No cycles yet. Plant a cycle in Production, then name it here so it's easy to recognise.</div>}
+                {allCycles.slice(0, 20).map((c) => (
+                  <SRow key={c.cycle_id} label={cycleName(c)}
+                    sub={`${c.production_name || c.crop || ""}${c.cycle_status || c.status ? ` · ${c.cycle_status || c.status}` : ""} · ${c.cycle_id}`}
+                    right={<button className="btn btn-sm btn-secondary" title="Rename cycle" onClick={() => setRelabel(c)}><Pencil size={11} /></button>} />
+                ))}
+              </SettingsCard>
+
               {/* ── System ── */}
               <SettingsCard icon={LinkIcon} title="System" desc="Connections, billing, and security">
                 <SRow label="M-PAiSA" sub="Mobile money payments"
@@ -342,12 +513,40 @@ function FarmSettingsInner() {
                   {chain.integrity_ok === true && <span style={{ color: "var(--green-dk)" }}> · integrity verified</span>}
                 </div>
               </SettingsCard>
+
+              {/* ── Marketplace ── */}
+              <SettingsCard icon={Store} title="Marketplace" desc="Sell your produce — list it straight from your farm">
+                <div style={{ padding: 8 }}>
+                  <button className="btn btn-sm btn-primary" onClick={() => setListFor(true)}><Plus size={11} /> List produce for sale</button>
+                </div>
+                {listings.length === 0
+                  ? <div style={{ padding: "11px 8px", color: "var(--muted)", fontSize: 13 }}>Nothing listed right now. List surplus produce and buyers across the network can see it.</div>
+                  : listings.map((l) => (
+                    <SRow key={l.listing_id} label={l.listing_title}
+                      sub={`${l.quantity_available_kg ? `${l.quantity_available_kg}kg` : ""}${l.price_per_kg_fjd ? ` · FJD ${l.price_per_kg_fjd}/kg` : ""}${l.negotiable ? " · negotiable" : ""}`}
+                      right={<button className="btn btn-sm btn-secondary" onClick={() => closeListing(l.listing_id)}>Withdraw</button>} />
+                  ))}
+              </SettingsCard>
+
+              {/* ── Data & account ── */}
+              <SettingsCard icon={BadgeCheck} title="Data & verification" desc="Your verification status and a copy of your records">
+                <SRow label="Identity verification"
+                  sub={verif.kyc_verified ? "Verified" : verif.request ? `Status: ${verif.request.status}` : "Not started"}
+                  right={verif.kyc_verified
+                    ? <span style={{ fontSize: 12, color: "var(--green-dk)", fontWeight: 600 }}><Check size={11} /> Verified</span>
+                    : <button className="btn btn-sm btn-secondary" onClick={() => navigate("/me/verification")}>{verif.request ? "View" : "Verify"}</button>} />
+                <SRow label="Export my data" sub="Download a JSON copy of your profile, farms and records"
+                  right={<button className="btn btn-sm btn-secondary" onClick={exportData}><Download size={11} /> Export</button>} />
+              </SettingsCard>
             </>
           )}
 
           {editFarm && farm.farm_id && <EditFarmModal farm={farm} onClose={() => setEditFarm(false)} onSaved={() => { setEditFarm(false); qc.invalidateQueries({ queryKey: ["set-farm", farmId] }); }} />}
           {invite && <InviteModal farmId={farmId} onClose={() => setInvite(false)} onSaved={() => qc.invalidateQueries({ queryKey: ["set-invites"] })} />}
           {plan && <PlanModal current={sub} onClose={() => setPlan(false)} />}
+          {renameWhat && <RenameModal {...renameWhat} onClose={() => setRenameWhat(null)} onSaved={() => { qc.invalidateQueries({ queryKey: renameWhat.key }); setRenameWhat(null); }} />}
+          {relabel && <RelabelModal cycle={relabel} onClose={() => setRelabel(null)} onSaved={() => { qc.invalidateQueries({ queryKey: ["set-cycles", farmId] }); setRelabel(null); }} />}
+          {listFor && <ListingModal farmId={farmId} onClose={() => setListFor(false)} onSaved={() => { qc.invalidateQueries({ queryKey: ["set-listings"] }); setListFor(false); }} />}
         </div>
       </main>
     </TfpShell>
