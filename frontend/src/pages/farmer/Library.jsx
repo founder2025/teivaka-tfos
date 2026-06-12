@@ -25,12 +25,58 @@ function authHeaders() {
 async function getJSON(u) { const r = await fetch(u, { headers: authHeaders() }); if (!r.ok) throw new Error(String(r.status)); return r.json(); }
 
 const TABS = [
-  ["chemicals", "Chemicals", "Cited withholding"],
   ["crops", "Crops", "Catalog"],
+  ["chemicals", "Chemicals", "Cited withholding"],
+  ["pests", "Pests", "Reference"],
+  ["diseases", "Diseases", "Reference"],
+  ["fertilizers", "Fertilizers", "Reference"],
+  ["livestock", "Livestock diseases", "Reference"],
+  ["vet", "Vet & vaccines", "Reference"],
   ["nutrition", "Nutrition", "Cited NPK"],
   ["kb", "Knowledge base", "Articles"],
-  ["pests", "Pests & diseases", "Reference"],
 ];
+
+// Generic card for the shared.reference_library corpus (pests/diseases/fertilizers/
+// livestock-diseases/vet) — fields vary per category, shown from `attributes`.
+function ReferenceCard({ row }) {
+  const a = row.attributes || {};
+  const pills = [];
+  if (a.severity) pills.push(["severity", a.severity]);
+  if (a.whd != null) pills.push(["WHD", `${a.whd}d`]);
+  if (a.whd_meat) pills.push(["meat WHD", a.whd_meat]);
+  if (a.npk) pills.push(["NPK", a.npk]);
+  const sub = a.sci || a.pathogen || a.species || a.npk || a.cat || "";
+  const desc = a.symptoms || a.control || a.indication || a.notes || a.usage || a.dosage || a.prevention || "";
+  return (
+    <div className="rounded-xl border p-3" style={{ borderColor: C.border, background: C.panel }}>
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <div className="font-semibold" style={{ color: C.soil }}>{row.name}</div>
+        <div className="flex gap-1 flex-wrap">{pills.map(([k, v]) => <Pill key={k} bg={C.greenTint} fg={C.greenDk}>{k} {v}</Pill>)}</div>
+      </div>
+      {sub && <div className="text-[11px] italic mt-0.5" style={{ color: C.muted }}>{sub}</div>}
+      {desc && <div className="text-xs mt-1" style={{ color: C.muted }}>{desc}</div>}
+    </div>
+  );
+}
+
+function ReferenceTab({ category, search }) {
+  const [rows, setRows] = useState(null);
+  const [error, setError] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    setRows(null); setError(false);
+    getJSON(`/api/v1/reference-library?category=${category}`)
+      .then((r) => { if (alive) setRows(r.data || []); })
+      .catch(() => { if (alive) { setRows([]); setError(true); } });
+    return () => { alive = false; };
+  }, [category]);
+  const q = (search || "").trim().toLowerCase();
+  const filtered = (rows || []).filter((r) => !q || `${r.name} ${JSON.stringify(r.attributes || {})}`.toLowerCase().includes(q));
+  if (rows == null) return <Empty text="Loading…" />;
+  if (error) return <Empty text="Couldn't load this reference right now — check your connection and try again." />;
+  if (filtered.length === 0) return <Empty text="No matches." />;
+  return <div className="space-y-2">{filtered.map((r) => <ReferenceCard key={r.ref_id} row={r} />)}</div>;
+}
 
 function Pill({ children, bg, fg }) { return <span className="text-[11px] font-bold px-2 py-0.5 rounded-full" style={{ background: bg, color: fg }}>{children}</span>; }
 function Empty({ text }) { return <div className="rounded-xl border p-8 text-center text-sm" style={{ borderColor: C.border, background: C.panel, color: C.muted }}>{text}</div>; }
@@ -67,7 +113,7 @@ export default function Library() {
         <h1 className="text-2xl font-bold" style={{ color: C.soil }}>Library</h1>
         <div className="text-xs mt-0.5 mb-3" style={{ color: C.muted }}>Knowledge for your farm — cited, never invented</div>
 
-        {tab !== "nutrition" && tab !== "pests" && (
+        {tab !== "nutrition" && (
           <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search…"
             className="w-full mb-3 rounded-lg border px-3 py-2 text-sm" style={{ borderColor: C.border, background: C.panel, color: C.soil }} />
         )}
@@ -121,7 +167,11 @@ export default function Library() {
             </div>
           ))}
 
-        {tab === "pests" && <Empty text="A cited pest & disease reference is on the roadmap — it isn't shown until it's backed by a real, sourced table (Inviolable #1: no invented agronomy)." />}
+        {tab === "pests" && <ReferenceTab category="PEST" search={search} />}
+        {tab === "diseases" && <ReferenceTab category="DISEASE" search={search} />}
+        {tab === "fertilizers" && <ReferenceTab category="FERTILIZER" search={search} />}
+        {tab === "livestock" && <ReferenceTab category="LIVESTOCK_DISEASE" search={search} />}
+        {tab === "vet" && <ReferenceTab category="VET" search={search} />}
       </div>
     </div>
   );

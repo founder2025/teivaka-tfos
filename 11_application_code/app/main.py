@@ -34,6 +34,7 @@ from app.routers import (
     tis_public,
     chemicals,
     crop_varieties,
+    reference_library,
     cycles,
     rotation,
     harvests,
@@ -285,6 +286,7 @@ app.include_router(verify.html_router,         prefix="",                       
 app.include_router(tis_public.router, prefix=f"{PREFIX}/tis-public", tags=["TIS Public"])
 app.include_router(chemicals.router,           prefix="/api/v1",                      tags=["chemicals"])
 app.include_router(crop_varieties.router,      prefix=f"{PREFIX}/crop-varieties",     tags=["Crop Varieties"])
+app.include_router(reference_library.router,   prefix=PREFIX,                         tags=["Library Reference"])
 app.include_router(cycles.router,             prefix=f"{PREFIX}/cycles",             tags=["Production Cycles"])
 app.include_router(rotation.router,           prefix=f"{PREFIX}/rotation",           tags=["Rotation Engine"])
 app.include_router(harvests.router,           prefix=f"{PREFIX}/harvests",           tags=["Harvests"])
