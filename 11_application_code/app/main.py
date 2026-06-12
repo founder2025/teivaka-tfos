@@ -16,6 +16,7 @@ from app.middleware.auth import AuthMiddleware
 from app.routers import (
     auth,
     admin,
+    analytics,
     buyers_crm,
     equipment_records,
     farms,
@@ -314,6 +315,7 @@ app.include_router(automation_rules.router,   prefix=f"{PREFIX}/automation-rules
 
 # Intelligence
 app.include_router(decision_engine.router,    prefix=f"{PREFIX}/decision-engine",    tags=["Decision Engine"])
+app.include_router(analytics.router,          prefix=f"{PREFIX}/analytics",          tags=["Analytics"])
 app.include_router(tis.router,                prefix=f"{PREFIX}/tis",                tags=["TIS — AI Assistant"])
 # TIS advisory SSE stream + read handler (Option 3 Day 2)
 app.include_router(tis_stream.router,         prefix=f"{PREFIX}/tis",                tags=["TIS — Advisory Stream"])
