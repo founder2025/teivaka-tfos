@@ -102,6 +102,25 @@ _LIVE_CHANNELS = {"email", "whatsapp"}        # add the channel
 ```
 No caller changes — `auth.py` already routes through `dispatch_verification()`.
 
+### 3d. Persona capabilities (Gate.PERSONA)
+`capabilities.py` supports persona-scoped abilities — `Gate.PERSONA` allows a capability
+only for the listed persona groups (PRODUCER/TRADE/SERVICE/CAPITAL/GOVERNANCE; mapping in
+`account_types.py::PERSONA_GROUPS`, mirrored in frontend `utils/personas.js`). `/auth/me`
+returns the computed map so the UI can show/hide persona CTAs via `useCan()`.
+
+Current persona capabilities:
+- `CLASSROOM_UPLOAD_MODULE` — `Gate.PERSONA`, groups TRADE/CAPITAL/GOVERNANCE (institutions
+  can contribute course modules). Not wired to an endpoint yet — the UI reads it for the CTA.
+- `ACCESS_FARM`, `TIS_QUERY`, `MARKET_LIST` — kept `Gate.OPEN` today to avoid regressing
+  working cross-persona features. To hard-enforce server-side, flip the gate:
+  ```python
+  "ACCESS_FARM": CapSpec(gate=Gate.PERSONA, groups=("PRODUCER", "GOVERNANCE")),
+  ```
+  then add `Depends(require("ACCESS_FARM"))` to the farm dashboard endpoint. The frontend nav
+  already hides Farm for non-producer personas; this adds the 403 fail-closed.
+  > ⚠️ Before enforcing ACCESS_FARM, confirm Agribusiness / edge-case producers aren't
+  > misclassified out of their own Farm pillar — group buckets are coarse.
+
 ## 4. Operator actions (external — cannot be done from code)
 
 | Action | Why | Status |

@@ -40,12 +40,14 @@ class Gate(str, Enum):
     SUBSCRIPTION = "SUBSCRIPTION"  # requires tier >= min_tier
     VERIFICATION = "VERIFICATION"  # requires email_verified (later: KYC)
     HIGH_TRUST = "HIGH_TRUST"      # account_type KYC (banker/exporter/…)
+    PERSONA = "PERSONA"            # allowed only for certain persona groups
 
 
 @dataclass(frozen=True)
 class CapSpec:
     gate: Gate = Gate.OPEN
     min_tier: str | None = None
+    groups: tuple = ()            # persona groups allowed when gate == PERSONA
 
 
 # Subscription ordering (low → high). Used only when a SUBSCRIPTION gate is on.
@@ -93,6 +95,17 @@ CAPABILITIES: dict[str, CapSpec] = {
     "EXTRACT_BANK_EVIDENCE": CapSpec(gate=Gate.OPEN),
     "EXECUTE_SETTLEMENT":    CapSpec(gate=Gate.OPEN),
     "FINANCIAL_MATCHING":    CapSpec(gate=Gate.OPEN),
+    # Persona abilities (Slice 4). Gate.PERSONA → allowed only for the listed persona
+    # groups (PRODUCER/TRADE/SERVICE/CAPITAL/GOVERNANCE). The /auth/me capabilities map
+    # carries these so the UI can show/hide persona-specific CTAs. ACCESS_FARM /
+    # TIS_QUERY / MARKET_LIST stay OPEN today (no regression to working cross-persona
+    # features) — flip to PERSONA (with the groups shown) to hard-enforce server-side.
+    "ACCESS_FARM":             CapSpec(gate=Gate.OPEN),   # flip → PERSONA groups=("PRODUCER","GOVERNANCE")
+    "TIS_QUERY":               CapSpec(gate=Gate.OPEN),   # flip → PERSONA groups=("PRODUCER",)
+    "MARKET_LIST":             CapSpec(gate=Gate.OPEN),   # flip → PERSONA groups=("TRADE","SERVICE","PRODUCER")
+    # New contribute ability — institutions only. Not wired to an endpoint yet, so
+    # gating it now regresses nothing; the UI reads it to show an "upload module" CTA.
+    "CLASSROOM_UPLOAD_MODULE": CapSpec(gate=Gate.PERSONA, groups=("TRADE", "CAPITAL", "GOVERNANCE")),
 }
 
 
@@ -112,6 +125,9 @@ def can(user: dict | None, capability: str) -> bool:
         return tier_at_least(user.get("tier") or user.get("subscription_tier"), spec.min_tier)
     if spec.gate == Gate.HIGH_TRUST:
         return bool(user.get("kyc_verified"))
+    if spec.gate == Gate.PERSONA:
+        from app.core.account_types import persona_group
+        return persona_group(user.get("account_type")) in spec.groups
     return False
 
 

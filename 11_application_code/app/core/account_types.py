@@ -77,3 +77,26 @@ def derive_role(account_type: str) -> str:
     did for FARMER/BUYER); every other institutional profile gets VIEWER. Never ADMIN.
     """
     return "FARMER" if account_type in ("PRIMARY_PRODUCER", "COMMERCIAL_BUYER") else "VIEWER"
+
+
+# Persona groups — coarse buckets for persona-aware capabilities + nav.
+# Mirrors the frontend utils/personas.js group assignment.
+PERSONA_GROUPS: dict[str, str] = {
+    "PRIMARY_PRODUCER": "PRODUCER",
+    "COMMERCIAL_BUYER": "TRADE",
+    "AGRI_INPUT_SUPPLIER": "TRADE",
+    "AGRIBUSINESS_ENTERPRISE": "TRADE",
+    "COMMODITY_EXPORTER": "TRADE",
+    "TRADE_IMPORTER": "TRADE",
+    "LOGISTICS_OPERATOR": "SERVICE",
+    "BANKER_COMMERCIAL": "CAPITAL",
+    "DONOR_DEVELOPMENT": "CAPITAL",
+    "MATAQALI_TRUSTEE": "GOVERNANCE",
+    "GOVERNMENT_REGULATOR": "GOVERNANCE",
+    "QUALITY_AUDITOR": "GOVERNANCE",
+}
+
+
+def persona_group(account_type: str | None) -> str | None:
+    """Coarse persona group for an account_type (or None if unknown)."""
+    return PERSONA_GROUPS.get((account_type or "").upper().strip())

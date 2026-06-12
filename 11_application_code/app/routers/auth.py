@@ -193,7 +193,7 @@ async def login(
         text("""
             SELECT u.user_id, u.tenant_id, u.email, u.full_name,
                    u.first_name, u.last_name, u.role, u.password_hash,
-                   u.email_verified,
+                   u.email_verified, u.account_type,
                    t.subscription_tier, t.tis_daily_limit
             FROM tenant.users u
             JOIN tenant.tenants t ON t.tenant_id = u.tenant_id
@@ -235,7 +235,8 @@ async def login(
         ),
         "email_unverified": not bool(user.get("email_verified", False)),
         "capabilities": compute_capabilities(
-            {"role": role, "tier": tier, "email_verified": user.get("email_verified")}
+            {"role": role, "tier": tier, "email_verified": user.get("email_verified"),
+             "account_type": user.get("account_type")}
         ),
     }
 
@@ -510,7 +511,7 @@ async def register(
         "display_name": full_name,
         "email": email,
         "email_unverified": True,
-        "capabilities": compute_capabilities({"role": role, "tier": "BASIC", "email_verified": False}),
+        "capabilities": compute_capabilities({"role": role, "tier": "BASIC", "email_verified": False, "account_type": req.account_type}),
         "message": "Account created. Please check your email to verify your address.",
     }
 
