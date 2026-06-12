@@ -571,7 +571,7 @@ export default function Register() {
                 Hello <strong style={{ color: T.soil }}>{accountData.display_name}</strong> — your farm account is ready.
               </p>
               <div className="mt-4 rounded-xl p-3 text-sm text-left" style={{ background: T.greenTint, color: T.soil }}>
-                <p>Your plan: <strong>{accountData.tier || "BASIC"}</strong> — 14-day trial</p>
+                <p>Your plan: <strong>{accountData.tier || "BASIC"}</strong> — full access</p>
                 <p>TIS queries: <strong>{accountData.tis_daily_limit ?? 20} per day</strong></p>
               </div>
               {accountData.email_unverified && (

@@ -41,31 +41,6 @@ const C = {
   border: "#E0D5C0",
 };
 
-function TrialChip({ trialEndsAt, subscriptionTier }) {
-  if ((subscriptionTier || "").toUpperCase() !== "BASIC") return null;
-  if (!trialEndsAt) return null;
-  const ends = new Date(trialEndsAt);
-  if (isNaN(ends.getTime())) return null;
-  const now = new Date();
-  if (now >= ends) return null;
-  const msPerDay = 86400000;
-  const daysLeft = Math.max(1, Math.ceil((ends - now) / msPerDay));
-  const isAmber = daysLeft <= 3;
-  const bg = isAmber ? "#D4A017" : C.green;
-  const label = isAmber
-    ? `Trial ends in ${daysLeft} day${daysLeft === 1 ? "" : "s"}`
-    : `BASIC trial — ${daysLeft} day${daysLeft === 1 ? "" : "s"} left`;
-  return (
-    <span
-      className="hidden md:inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold text-white whitespace-nowrap mr-1"
-      style={{ background: bg }}
-      title={`Trial ends ${ends.toLocaleDateString()}`}
-    >
-      {label}
-    </span>
-  );
-}
-
 function NotificationBell({ count }) {
   return (
     <button className="relative p-2 rounded-full hover:bg-black/10 transition-colors">
@@ -159,23 +134,6 @@ function UserDropdown({ user, onLogout }) {
 export default function FarmerLayout({ children }) {
   const navigate = useNavigate();
   const user = getCurrentUser();
-  const [trialEndsAt, setTrialEndsAt] = useState(null);
-  const [subscriptionTier, setSubscriptionTier] = useState(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    const token = localStorage.getItem("tfos_access_token");
-    if (!token) return;
-    fetch("/api/v1/auth/me", { headers: { Authorization: `Bearer ${token}` } })
-      .then(r => r.ok ? r.json() : null)
-      .then(json => {
-        if (cancelled || !json?.data) return;
-        if (json.data.trial_ends_at) setTrialEndsAt(json.data.trial_ends_at);
-        if (json.data.subscription_tier) setSubscriptionTier(json.data.subscription_tier);
-      })
-      .catch(() => { /* silent — chip just won't render */ });
-    return () => { cancelled = true; };
-  }, []);
 
   function handleLogout() {
     clearStoredTokens();
@@ -222,7 +180,6 @@ export default function FarmerLayout({ children }) {
 
           {/* Right icons */}
           <div className="flex items-center gap-1 shrink-0 text-[#5C4033]">
-            <TrialChip trialEndsAt={trialEndsAt} subscriptionTier={subscriptionTier} />
             <MessagesIcon count={3} />
             <NotificationBell count={7} />
             <UserDropdown user={user} onLogout={handleLogout} />

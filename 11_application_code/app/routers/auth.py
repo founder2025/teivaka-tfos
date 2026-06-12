@@ -25,6 +25,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
+from app.core.capabilities import compute_capabilities
 from app.db.session import get_db
 from app.middleware.rls import get_current_user, get_tenant_db
 from app.utils.email import send_password_reset_email, send_verification_email
@@ -231,6 +232,9 @@ async def login(
             else user["full_name"]
         ),
         "email_unverified": not bool(user.get("email_verified", False)),
+        "capabilities": compute_capabilities(
+            {"role": role, "tier": tier, "email_verified": user.get("email_verified")}
+        ),
     }
 
 
@@ -320,9 +324,8 @@ async def register(
         if referrer_row:
             referred_by_user_id = str(referrer_row[0])
 
-    trial_started_at = datetime.now(timezone.utc)
-    trial_ends_at = trial_started_at + timedelta(days=14)
-
+    # Free trials removed (migration 114) — new users are full members, no
+    # trial window. trial_started_at / trial_ends_at are left NULL.
     try:
         await db.execute(
             text("""
@@ -350,7 +353,6 @@ async def register(
                     email_verification_expires,
                     is_active,
                     referral_code, referred_by_user_id, referral_source,
-                    trial_started_at, trial_ends_at,
                     created_at, updated_at
                 ) VALUES (
                     :user_id, :tenant_id, :email, :full_name,
@@ -363,7 +365,6 @@ async def register(
                     :verification_expires,
                     true,
                     :referral_code, :referred_by_user_id, :referral_source,
-                    :trial_started_at, :trial_ends_at,
                     NOW(), NOW()
                 )
             """),
@@ -390,8 +391,6 @@ async def register(
                 "referral_code": referral_code,
                 "referred_by_user_id": referred_by_user_id,
                 "referral_source": req.referral_source,
-                "trial_started_at": trial_started_at,
-                "trial_ends_at": trial_ends_at,
             }
         )
 
@@ -473,6 +472,7 @@ async def register(
         "display_name": full_name,
         "email": email,
         "email_unverified": True,
+        "capabilities": compute_capabilities({"role": role, "tier": "BASIC", "email_verified": False}),
         "message": "Account created. Please check your email to verify your address.",
     }
 
@@ -969,6 +969,7 @@ async def get_me(
             **user,
             "mode": computed_mode,
             "mode_signals": mode_signals,
+            "capabilities": compute_capabilities(user),
         }
     }
 
