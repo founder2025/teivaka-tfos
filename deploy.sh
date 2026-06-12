@@ -35,12 +35,23 @@ bad() { echo "   ❌ $1"; fail=1; }
 
 # ---------------------------------------------------------------------------
 say "1/7  Sync repo → ${BRANCH}"
+SELF_SHA_BEFORE="$(sha256sum "${ROOT}/deploy.sh" 2>/dev/null | cut -d' ' -f1)"
 if ! git diff --quiet || ! git diff --cached --quiet; then
   snap="server-snapshot-$(date +%Y%m%d-%H%M%S)"
   git branch "$snap" >/dev/null 2>&1 && echo "   ↳ dirty tree preserved on local branch ${snap}"
 fi
 if git fetch origin "$BRANCH" 2>/tmp/dep_fetch.out; then ok "fetched origin/${BRANCH}"; else bad "git fetch failed (see /tmp/dep_fetch.out)"; cat /tmp/dep_fetch.out; fi
 if git reset --hard "origin/${BRANCH}" >/tmp/dep_reset.out 2>&1; then ok "reset to $(git rev-parse --short HEAD)"; else bad "git reset failed"; cat /tmp/dep_reset.out; fi
+
+# Self-update guard: if the pull changed THIS script, the copy bash already
+# loaded (and its baked-in defaults like EXPECTED_HEAD) is stale — re-exec the
+# fresh script once with the caller's original args. Surfaced 2026-06-12 when
+# the old default head (126) judged a correctly-applied 127 as a failure.
+SELF_SHA_AFTER="$(sha256sum "${ROOT}/deploy.sh" 2>/dev/null | cut -d' ' -f1)"
+if [ "$SELF_SHA_BEFORE" != "$SELF_SHA_AFTER" ] && [ "${TFOS_DEPLOY_REEXEC:-0}" != "1" ]; then
+  echo "   ↳ deploy.sh itself changed in this pull — re-running the fresh script"
+  TFOS_DEPLOY_REEXEC=1 exec bash "${ROOT}/deploy.sh" "$@"
+fi
 
 # ---------------------------------------------------------------------------
 say "2/7  Clean API rebuild (--no-cache, B78) — bakes fresh migration files"
