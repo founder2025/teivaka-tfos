@@ -199,7 +199,7 @@ function ListingDetail({ l, onClose, onChanged }) {
   };
   const message = () => {
     if (!l.created_by) return;
-    chat.openWith({ user_id: String(l.created_by), full_name: l.seller_name || "Seller", profession: "farmer" });
+    chat.openWith({ user_id: String(l.created_by), full_name: l.seller_name || "Seller", profession: l.seller_profession || undefined });
     chat.setDropdownOpen?.(false);
     onClose();
   };

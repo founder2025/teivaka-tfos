@@ -631,7 +631,8 @@ export default function ProfilePage({ self = false }) {
             <a href="/verify" style={{ display: "inline-flex", gap: 6, alignItems: "center", marginTop: 12, border: `1px solid ${C.line}`, borderRadius: 8, padding: "7px 14px", color: C.soil, textDecoration: "none", fontSize: 13 }}>View</a>
           </div>
 
-          {/* Verified record — what this farmer has built (prototype parity). */}
+          {/* Verified record — producer-only (farm activity buyers/lenders can check). */}
+          {isProducer(p.profession) && (
           <div style={{ ...card, border: `1px solid ${C.green}`, background: "rgba(106,168,79,0.05)" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
               <Shield size={16} style={{ color: C.greenDk }} />
@@ -649,6 +650,7 @@ export default function ProfilePage({ self = false }) {
             <div style={{ fontSize: 12, color: C.muted, margin: "12px 0" }}>✓ Activity is recorded as it happens and can be independently verified.</div>
             <a href="/verify" style={{ display: "inline-flex", gap: 6, alignItems: "center", background: C.green, color: "#fff", borderRadius: 8, padding: "9px 16px", textDecoration: "none", fontSize: 13.5, fontWeight: 600 }}><Shield size={14} />Verify this record</a>
           </div>
+          )}
 
           <ProfileCertificates userId={p.user_id || targetId} />
 
