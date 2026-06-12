@@ -10,17 +10,25 @@ import uuid
 
 router = APIRouter()
 
+VALID_CUSTOMER_TYPES = {
+    "DIRECT", "WHOLESALE", "RESTAURANT", "SUPERMARKET", "EXPORT", "RELATED_PARTY",
+    "HOTEL", "MUNICIPAL", "COOP", "ROADSIDE", "INDIVIDUAL",
+}
+
+
 class CustomerCreate(BaseModel):
     customer_name: str
-    customer_type: str = "MARKET_VENDOR"  # MARKET_VENDOR, HOTEL, RESTAURANT, SUPERMARKET, EXPORT, INDIVIDUAL
-    contact_person: Optional[str] = None
+    customer_type: str = "DIRECT"
+    contact_name: Optional[str] = None
+    contact_role: Optional[str] = None
     phone: Optional[str] = None
+    whatsapp_number: Optional[str] = None
     email: Optional[str] = None
     address: Optional[str] = None
-    island: Optional[str] = None
-    market_location: Optional[str] = None  # e.g. SUVA_MUNICIPAL, NAUSORI, LAUTOKA
-    tin_number: Optional[str] = None
-    credit_limit_fjd: Optional[str] = None
+    island: Optional[str] = None  # city / island
+    distance_km: Optional[float] = None
+    preferred_channel: Optional[str] = None
+    ferry_dependent: bool = False
     payment_terms_days: int = 0  # 0 = cash on delivery
     notes: Optional[str] = None
 
@@ -50,35 +58,40 @@ async def get_customer(customer_id: str, user: dict = Depends(get_current_user))
 @router.post("")
 async def create_customer(body: CustomerCreate, user: dict = Depends(get_current_user)):
     import uuid
+    if body.customer_type not in VALID_CUSTOMER_TYPES:
+        raise HTTPException(status_code=400, detail=f"customer_type must be one of {sorted(VALID_CUSTOMER_TYPES)}")
+    if not body.customer_name.strip():
+        raise HTTPException(status_code=400, detail="customer_name is required")
     customer_id = f"CST-{uuid.uuid4().hex[:6].upper()}"
     async with get_rls_db(str(user["tenant_id"])) as db:
         await db.execute(text("""
             INSERT INTO tenant.customers
-                (customer_id, tenant_id, customer_name, customer_type, contact_person,
-                 phone, email, address, island, market_location, tin_number,
-                 credit_limit_fjd, payment_terms_days, notes, created_by)
+                (customer_id, tenant_id, customer_name, customer_type, contact_name, contact_role,
+                 phone, whatsapp_number, email, address, island, distance_km,
+                 preferred_channel, ferry_dependent, payment_terms_days, notes)
             VALUES
-                (:customer_id, :tenant_id, :customer_name, :customer_type, :contact_person,
-                 :phone, :email, :address, :island, :market_location, :tin_number,
-                 :credit_limit_fjd, :payment_terms_days, :notes, :created_by)
+                (:customer_id, :tenant_id, :customer_name, :customer_type, :contact_name, :contact_role,
+                 :phone, :whatsapp_number, :email, :address, :island, :distance_km,
+                 :preferred_channel, :ferry_dependent, :payment_terms_days, :notes)
         """), {
             "customer_id": customer_id,
             "tenant_id": str(user["tenant_id"]),
-            "customer_name": body.customer_name,
+            "customer_name": body.customer_name.strip(),
             "customer_type": body.customer_type,
-            "contact_person": body.contact_person,
+            "contact_name": body.contact_name,
+            "contact_role": body.contact_role,
             "phone": body.phone,
+            "whatsapp_number": body.whatsapp_number,
             "email": body.email,
             "address": body.address,
             "island": body.island,
-            "market_location": body.market_location,
-            "tin_number": body.tin_number,
-            "credit_limit_fjd": body.credit_limit_fjd,
+            "distance_km": body.distance_km,
+            "preferred_channel": body.preferred_channel,
+            "ferry_dependent": body.ferry_dependent,
             "payment_terms_days": body.payment_terms_days,
             "notes": body.notes,
-            "created_by": str(user["user_id"]),
         })
-    return {"data": {"customer_id": customer_id, "customer_name": body.customer_name}}
+    return {"data": {"customer_id": customer_id, "customer_name": body.customer_name.strip()}}
 
 
 _CHANNELS = ("whatsapp", "call", "visit", "email", "sms")

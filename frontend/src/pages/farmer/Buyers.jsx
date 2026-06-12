@@ -29,9 +29,11 @@ function fjd0(v) { const n = Number(v ?? 0); return `FJD ${Math.round(Math.abs(n
 function fjd2(v) { const n = Number(v ?? 0); return `FJD ${Math.abs(n).toLocaleString("en-FJ", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`; }
 function initials(name) { return (name || "?").split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join("").toUpperCase() || "?"; }
 
+// Must match tenant.customers.customer_type CHECK (migration 124).
 const TYPE_LABEL = {
-  MARKET_VENDOR: "Market vendor", HOTEL: "Hotel", RESTAURANT: "Restaurant",
-  SUPERMARKET: "Supermarket", EXPORT: "Export agent", INDIVIDUAL: "Individual",
+  SUPERMARKET: "Supermarket", RESTAURANT: "Restaurant", WHOLESALE: "Wholesaler",
+  MUNICIPAL: "Municipal market", COOP: "Co-op", ROADSIDE: "Roadside", HOTEL: "Hotel",
+  EXPORT: "Export agent", DIRECT: "Direct retail", INDIVIDUAL: "Individual", RELATED_PARTY: "Related party",
 };
 const TYPE_OPTIONS = Object.entries(TYPE_LABEL).map(([value, label]) => ({ value, label }));
 const ORDER_STATUSES = ["PENDING", "CONFIRMED", "PICKING", "DISPATCHED", "DELIVERED", "CANCELLED", "INVOICED", "PAID"];
@@ -81,7 +83,7 @@ function BuyerCard({ b, onOpen }) {
   const rel = b.reliability;
   const tier = rel ? reliabilityTier(rel.score) : null;
   return (
-    <div className="buyer-card" onClick={onOpen}>
+    <div className={`buyer-card ${b.ferry ? "ferry" : ""}`} onClick={onOpen}>
       <div className="buyer-card-head">
         <div className={`buyer-avatar ${b.typeKey}`}>{initials(b.name)}</div>
         <div style={{ flex: 1 }}>
@@ -90,7 +92,12 @@ function BuyerCard({ b, onOpen }) {
             <span className={`buyer-type-pill ${b.typeKey}`}>{b.typeLabel}</span>{" "}
             <span className="buyer-status-pill active">active</span>
           </div>
-          {b.city && <div className="buyer-card-loc"><MapPin size={11} />{b.city}</div>}
+          {(b.city || b.distanceKm != null || b.ferry) && (
+            <div className="buyer-card-loc">
+              <MapPin size={11} />{b.city || "—"}{b.distanceKm != null ? ` · ${b.distanceKm}km` : ""}
+              {b.ferry && <span className="ferry-chip"><Truck size={9} />ferry</span>}
+            </div>
+          )}
         </div>
         <div className="buyer-card-reliability">
           {rel ? (
@@ -160,8 +167,8 @@ function BuyersInner() {
     return {
       id: c.customer_id, name: c.customer_name, typeKey: (c.customer_type || "").toLowerCase().replace(/_/g, "-"),
       typeLabel: TYPE_LABEL[c.customer_type] || c.customer_type || "—",
-      city: c.island || c.market_location || c.address || "", phone: c.phone, terms: Number(c.payment_terms_days) || 0,
-      contact: c.contact_person, raw: c,
+      city: c.island || c.address || "", phone: c.phone, terms: Number(c.payment_terms_days) || 0,
+      contact: c.contact_name, ferry: !!c.ferry_dependent, distanceKm: c.distance_km != null ? Number(c.distance_km) : null, raw: c,
       ytdRevenue: live.reduce((s, o) => s + amt(o), 0),
       receivable: co.filter((o) => OWED.includes(o.order_status)).reduce((s, o) => s + amt(o), 0),
       orderCount: live.length, reliability: deriveReliability(co),
@@ -431,15 +438,30 @@ function BuyerDetail({ b, orders, onBack, onNewOrder, advance, onLogPayment, onL
 function Field({ label, children }) { return <div className="form-row"><label>{label}</label>{children}</div>; }
 
 function AddBuyerModal({ onClose, onSaved }) {
-  const [f, setF] = useState({ customer_name: "", customer_type: "MARKET_VENDOR", contact_person: "", phone: "", island: "", payment_terms_days: "0", notes: "" });
+  const { farmId } = useCurrentFarm();
+  const [f, setF] = useState({
+    customer_name: "", customer_type: "SUPERMARKET", island: "", distance_km: "",
+    contact_name: "", contact_role: "", phone: "", whatsapp_number: "",
+    payment_terms_days: "0", preferred_channel: "whatsapp", ferry_dependent: false, notes: "",
+  });
   const [busy, setBusy] = useState(false);
   const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }));
   async function submit() {
     if (!f.customer_name.trim()) { emitToast("Buyer name is required"); return; }
     setBusy(true);
     try {
-      const r = await fetch("/api/v1/customers", { method: "POST", headers: authHeaders(), body: JSON.stringify({ ...f, payment_terms_days: Number(f.payment_terms_days) || 0 }) });
-      if (!r.ok) throw new Error();
+      const r = await fetch("/api/v1/customers", {
+        method: "POST", headers: authHeaders(),
+        body: JSON.stringify({
+          customer_name: f.customer_name.trim(), customer_type: f.customer_type,
+          island: f.island.trim() || null, distance_km: f.distance_km ? Number(f.distance_km) : null,
+          contact_name: f.contact_name.trim() || null, contact_role: f.contact_role.trim() || null,
+          phone: f.phone.trim() || null, whatsapp_number: f.whatsapp_number.trim() || null,
+          preferred_channel: f.preferred_channel, ferry_dependent: !!f.ferry_dependent,
+          payment_terms_days: Number(f.payment_terms_days) || 0, notes: f.notes.trim() || null,
+        }),
+      });
+      if (!r.ok) { let msg = "Could not add buyer"; try { const b = await r.json(); if (b?.detail) msg = typeof b.detail === "string" ? b.detail : msg; } catch {} emitToast(msg); return; }
       emitToast("Buyer added"); onSaved?.();
     } catch { emitToast("Could not add buyer"); } finally { setBusy(false); }
   }
@@ -448,17 +470,34 @@ function AddBuyerModal({ onClose, onSaved }) {
       <div className="overlay-modal" onClick={(e) => e.stopPropagation()}>
         <div className="overlay-head"><h2>Add new buyer</h2><button onClick={onClose} className="overlay-close"><X size={14} /></button></div>
         <div className="overlay-body">
+          <div className="form-event-anchors">
+            <div className="anchors-block-head">Anchors · Farm + Operator</div>
+            <div className="anchor-row"><span className="anchor-row-label">Farm</span><span className="anchor-row-value">{farmId || "—"}</span></div>
+          </div>
           <div className="form-row" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
             <div><label>Buyer name</label><input value={f.customer_name} onChange={set("customer_name")} placeholder="e.g. Nayans Supermarkets" /></div>
             <div><label>Type</label><select value={f.customer_type} onChange={set("customer_type")}>{TYPE_OPTIONS.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}</select></div>
           </div>
           <div className="form-row" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 10 }}>
-            <div><label>City / island</label><input value={f.island} onChange={set("island")} placeholder="e.g. Suva" /></div>
-            <div><label>Contact name</label><input value={f.contact_person} onChange={set("contact_person")} /></div>
+            <div><label>City</label><input value={f.island} onChange={set("island")} placeholder="e.g. Suva" /></div>
+            <div><label>Distance (km)</label><input type="number" min="0" value={f.distance_km} onChange={set("distance_km")} /></div>
+          </div>
+          <div className="form-row" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 10 }}>
+            <div><label>Contact name</label><input value={f.contact_name} onChange={set("contact_name")} /></div>
+            <div><label>Role</label><input value={f.contact_role} onChange={set("contact_role")} placeholder="e.g. Buyer, Manager" /></div>
           </div>
           <div className="form-row" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 10 }}>
             <div><label>Phone</label><input value={f.phone} onChange={set("phone")} placeholder="9XX XXXX" /></div>
+            <div><label>WhatsApp</label><input value={f.whatsapp_number} onChange={set("whatsapp_number")} placeholder="9XX XXXX" /></div>
+          </div>
+          <div className="form-row" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 10 }}>
             <div><label>Payment terms</label><select value={f.payment_terms_days} onChange={set("payment_terms_days")}><option value="0">Cash</option><option value="7">Net 7d</option><option value="14">Net 14d</option><option value="30">Net 30d</option></select></div>
+            <div><label>Preferred channel</label><select value={f.preferred_channel} onChange={set("preferred_channel")}><option value="whatsapp">whatsapp</option><option value="call">call</option><option value="visit">visit</option><option value="email">email</option></select></div>
+          </div>
+          <div className="form-row" style={{ marginTop: 10 }}>
+            <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12 }}>
+              <input type="checkbox" checked={f.ferry_dependent} onChange={(e) => setF((s) => ({ ...s, ferry_dependent: e.target.checked }))} />Ferry-dependent buyer (island delivery)
+            </label>
           </div>
           <div className="form-row" style={{ marginTop: 10 }}><label>Internal notes</label><textarea rows={2} maxLength={500} value={f.notes} onChange={set("notes")} placeholder="Preferences, payment habits..." /></div>
         </div>
