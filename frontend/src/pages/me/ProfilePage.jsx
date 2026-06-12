@@ -423,8 +423,11 @@ export default function ProfilePage({ self = false }) {
 
   const isYou = p.is_you;
   const pub = previewPublic; // own-profile public preview
-  const isBiz = !!(isYou && biz?.is_company);
-  const displayName = (isBiz && biz?.business?.business_name) ? biz.business.business_name : p.full_name;
+  // Business identity from the owner's /me/business (self) OR the public profile (others).
+  const bizName = (isYou && biz?.business?.business_name) || p.business_name;
+  const bizOperator = (isYou && biz?.business?.operator_name) || p.operator_name;
+  const isBiz = !!((isYou && biz?.is_company) || p.is_company);
+  const displayName = (isBiz && bizName) ? bizName : p.full_name;
   // If the stored avatar URL is dead (e.g. an upload that failed server-side
   // before the file was written), fall back to the initials circle instead of
   // the browser's broken-image icon.
@@ -526,7 +529,7 @@ export default function ProfilePage({ self = false }) {
               {isYou && !pub && <span style={{ background: "rgba(106,168,79,.14)", color: C.greenDk, fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 6 }}>YOU</span>}
               {p.verified && <span style={{ display: "inline-flex", alignItems: "center", gap: 3, background: "rgba(106,168,79,.14)", color: C.greenDk, fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 6 }}><BadgeCheck size={11} /> VERIFIED</span>}
             </div>
-            {isBiz && <div style={{ fontSize: 12.5, color: C.muted, marginTop: 3 }}>Business account · operated by {biz.business?.operator_name || p.full_name}</div>}
+            {isBiz && <div style={{ fontSize: 12.5, color: C.muted, marginTop: 3 }}>Business account · operated by {bizOperator || p.full_name}</div>}
             <div style={{ display: "flex", gap: 14, flexWrap: "wrap", fontSize: 12, color: C.muted, marginTop: 6 }}>
               {p.phone && <span><Phone size={12} /> {p.phone}</span>}
               {p.joined && <span><Calendar size={12} /> joined {fmtDate(p.joined)} · {monthsSince(p.joined)}</span>}

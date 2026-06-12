@@ -436,6 +436,15 @@ async def update_my_business(
             {"tid": str(user["tenant_id"]), "uid": str(user["user_id"]),
              "bn": bn, "op": data.get("operator_name"), "at": at, "rid": data.get("region_id")},
         )
+    # Keep the denormalized public-profile copy on tenant.users in sync so the
+    # business name/operator show on the PUBLIC profile (business_entities is RLS).
+    sync, sparams = [], {"uid": str(user["user_id"])}
+    if "business_name" in data:
+        sync.append("business_name = :bn"); sparams["bn"] = data.get("business_name")
+    if "operator_name" in data:
+        sync.append("operator_name = :op"); sparams["op"] = data.get("operator_name")
+    if sync:
+        await db.execute(text(f"UPDATE tenant.users SET {', '.join(sync)} WHERE user_id = :uid"), sparams)
     await db.commit()
     return {"data": {"updated": 1}}
 
