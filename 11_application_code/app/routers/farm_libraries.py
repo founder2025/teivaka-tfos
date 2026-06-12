@@ -34,19 +34,21 @@ from app.schemas.envelope import error_envelope, success_envelope
 
 router = APIRouter()
 
-# Mirror of DB CHECK on library_type. Update both in lockstep when adding new
-# library types per group (Phase X.1 of each subsequent group).
-VALID_LIBRARY_TYPES = {
-    "POULTRY_VACCINE",
-    "POULTRY_BREED",
-    "POULTRY_FEED",
-    "POULTRY_SUPPLIER",
-    "POULTRY_BUYER",
-}
+# Strike #80: library types are data-driven via shared.library_type_catalog
+# (FK from farm_libraries.library_type). Adding a type for a new group is a catalog
+# row — no DDL, no code edit here. Validity is resolved from the catalog at runtime.
+
+
+async def _catalog_types(db: AsyncSession) -> set[str]:
+    """Active library types from the catalog (the FK target — single source of truth)."""
+    rows = await db.execute(
+        text("SELECT library_type FROM shared.library_type_catalog WHERE is_active = TRUE")
+    )
+    return {r[0] for r in rows}
 
 
 class LibraryAddRequest(BaseModel):
-    library_type: str = Field(..., description="One of VALID_LIBRARY_TYPES")
+    library_type: str = Field(..., description="A library_type from shared.library_type_catalog")
     name: str = Field(..., min_length=1, max_length=255)
     attributes: Optional[dict] = Field(default_factory=dict)
 
@@ -101,6 +103,26 @@ def _resolve_tenant_uuid(user: dict) -> UUID:
         )
 
 
+@router.get("/farm-library-types")
+async def list_library_types(
+    user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_tenant_db),
+):
+    """The library-type catalog (Strike #80) — drives the management UI's tabs/labels."""
+    rows = await db.execute(
+        text(
+            """
+            SELECT library_type, group_code, label, singular_label, placeholder, sort_order
+            FROM shared.library_type_catalog
+            WHERE is_active = TRUE
+            ORDER BY sort_order, label
+            """
+        )
+    )
+    items = [dict(r) for r in rows.mappings()]
+    return success_envelope({"items": items}, meta={"total": len(items)})
+
+
 @router.get("/farm-libraries")
 async def list_libraries(
     library_type: Optional[str] = Query(None, description="Filter to one library type"),
@@ -110,12 +132,13 @@ async def list_libraries(
 ):
     """List globals (tenant_id IS NULL) + own farm-private rows. RLS enforces visibility."""
 
-    if library_type is not None and library_type not in VALID_LIBRARY_TYPES:
+    if library_type is not None and library_type not in await _catalog_types(db):
+        valid = sorted(await _catalog_types(db))
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=error_envelope(
                 code="invalid_library_type",
-                message=f"library_type must be one of {sorted(VALID_LIBRARY_TYPES)}",
+                message=f"library_type must be one of {valid}",
             ),
         )
 
@@ -176,12 +199,12 @@ async def add_library_row(
     enforces tenant_id matching session var. Migration is the only path for globals.
     """
 
-    if payload.library_type not in VALID_LIBRARY_TYPES:
+    if payload.library_type not in await _catalog_types(db):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=error_envelope(
                 code="invalid_library_type",
-                message=f"library_type must be one of {sorted(VALID_LIBRARY_TYPES)}",
+                message=f"library_type must be one of {sorted(await _catalog_types(db))}",
             ),
         )
 
@@ -287,12 +310,19 @@ async def add_library_row(
 
 
 class LibraryPatchRequest(BaseModel):
-    """PATCH v1 supports is_active toggle ONLY.
+    """PATCH supports two mutation shapes (Strike #80 / Slice 6):
 
-    Attribute editing deferred to Phase 6.1b-4 (requires LIBRARY_ROW_UPDATED
-    event type registered in shared.event_type_catalog).
+    * Activation toggle — `is_active` only (Hide / Restore). Emits
+      LIBRARY_ROW_DEACTIVATED / LIBRARY_ROW_REACTIVATED (idempotent).
+    * Edit — `name` and/or `attributes` (rename + note/attribute capture). Emits
+      LIBRARY_ROW_UPDATED. `is_active` may also be supplied in the same edit.
+
+    At least one field must be present. `attributes`, when given, REPLACES the row's
+    attributes (the client sends the full intended object).
     """
-    is_active: bool = Field(..., description="Target state. true=reactivate, false=deactivate.")
+    is_active: Optional[bool] = Field(None, description="true=reactivate, false=deactivate.")
+    name: Optional[str] = Field(None, min_length=1, max_length=255)
+    attributes: Optional[dict] = Field(None, description="Replaces the row's attributes JSONB.")
 
 
 @router.patch("/farm-libraries/{library_id}")
@@ -302,21 +332,29 @@ async def patch_library_row(
     user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_tenant_db),
 ):
-    """Toggle is_active on a farm-private library row.
+    """Update a farm-private library row (activation toggle OR rename/attribute edit).
 
     Globals (tenant_id IS NULL) cannot be patched — RLS UPDATE policy excludes them
     silently; handler returns 404 when zero rows updated.
     Other farm's rows are similarly excluded by RLS → 404.
-    Idempotent: state-already-target returns 200 with no_change=true and no audit emission.
     """
 
     tenant_uuid = _resolve_tenant_uuid(user)
     actor_uuid = _resolve_actor_uuid(user)
 
+    if payload.is_active is None and payload.name is None and payload.attributes is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=error_envelope(
+                code="empty_patch",
+                message="Provide at least one of: is_active, name, attributes.",
+            ),
+        )
+
     # Read current state first (RLS will return None if row is global or other-tenant)
     current_result = await db.execute(
         text("""
-            SELECT library_id, library_type, name, is_active
+            SELECT library_id, library_type, name, is_active, attributes
             FROM shared.farm_libraries
             WHERE library_id = :lid
         """),
@@ -334,6 +372,14 @@ async def patch_library_row(
             ),
         )
 
+    # ---- Edit path: rename and/or attribute change (LIBRARY_ROW_UPDATED) ----
+    if payload.name is not None or payload.attributes is not None:
+        return await _edit_library_row(
+            db=db, tenant_uuid=tenant_uuid, actor_uuid=actor_uuid,
+            library_id=library_id, current_row=current_row, payload=payload,
+        )
+
+    # ---- Activation toggle path (unchanged) ----
     current_is_active = current_row.is_active
     target_is_active = payload.is_active
 
@@ -413,6 +459,110 @@ async def patch_library_row(
             "event_type": event_type,
         },
         meta={"updated": True, "no_change": False},
+    )
+
+
+async def _edit_library_row(*, db, tenant_uuid, actor_uuid, library_id, current_row, payload):
+    """Rename and/or replace attributes on a farm-private row → LIBRARY_ROW_UPDATED.
+
+    Globals are already excluded by RLS (current_row would be None). Name changes are
+    duplicate-guarded against the farm's other active rows of the same type.
+    """
+    import json as _json
+
+    new_name = current_row.name
+    name_changed = False
+    if payload.name is not None:
+        cleaned = payload.name.strip()
+        if not cleaned:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=error_envelope(code="empty_name", message="Library row name cannot be empty."),
+            )
+        if cleaned.lower() != (current_row.name or "").lower():
+            dup = await db.execute(
+                text("""
+                    SELECT library_id FROM shared.farm_libraries
+                    WHERE tenant_id = :tid AND library_type = :lt
+                      AND lower(trim(name)) = lower(trim(:n))
+                      AND is_active = TRUE AND library_id <> :lid
+                    LIMIT 1
+                """),
+                {"tid": tenant_uuid, "lt": current_row.library_type, "n": cleaned, "lid": library_id},
+            )
+            if dup.first() is not None:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=error_envelope(
+                        code="duplicate_name",
+                        message=f"An active {current_row.library_type} named '{cleaned}' already exists for this farm.",
+                    ),
+                )
+        new_name = cleaned
+        name_changed = cleaned != (current_row.name or "")
+
+    attrs_changed = payload.attributes is not None
+    new_attributes = payload.attributes if attrs_changed else None
+    target_is_active = payload.is_active if payload.is_active is not None else current_row.is_active
+
+    updated = await db.execute(
+        text("""
+            UPDATE shared.farm_libraries
+            SET name = :n,
+                attributes = COALESCE(CAST(:attr AS jsonb), attributes),
+                is_active = :ia,
+                updated_at = now()
+            WHERE library_id = :lid
+            RETURNING library_id, library_type, name, is_active
+        """),
+        {
+            "n": new_name,
+            "attr": _json.dumps(new_attributes) if attrs_changed else None,
+            "ia": target_is_active,
+            "lid": library_id,
+        },
+    )
+    updated_row = updated.first()
+    if updated_row is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=error_envelope(code="library_not_found", message=f"Library row {library_id} could not be updated (RLS)."),
+        )
+
+    audit_event_id, audit_hash = await emit_audit_event(
+        db=db,
+        tenant_id=tenant_uuid,
+        actor_user_id=actor_uuid,
+        event_type="LIBRARY_ROW_UPDATED",
+        entity_type="farm_library",
+        entity_id=str(library_id),
+        payload={
+            "library_type": updated_row.library_type,
+            "name": updated_row.name,
+            "name_changed": name_changed,
+            "previous_name": current_row.name,
+            "attributes_changed": attrs_changed,
+        },
+    )
+    if audit_event_id is None or not audit_hash:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=error_envelope(code="audit_emission_failed", message="LIBRARY_ROW_UPDATED emission failed."),
+        )
+
+    await db.commit()
+
+    return success_envelope(
+        {
+            "library_id": str(library_id),
+            "library_type": updated_row.library_type,
+            "name": updated_row.name,
+            "is_active": updated_row.is_active,
+            "audit_event_id": str(audit_event_id),
+            "audit_hash": audit_hash[-8:],
+            "event_type": "LIBRARY_ROW_UPDATED",
+        },
+        meta={"updated": True, "name_changed": name_changed, "attributes_changed": attrs_changed},
     )
 
 

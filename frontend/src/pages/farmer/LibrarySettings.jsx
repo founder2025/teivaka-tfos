@@ -37,12 +37,14 @@ const C = {
   globalBg: '#F4EFE3',
 };
 
-const LIBRARY_TYPES = [
-  { key: 'POULTRY_BREED',    label: 'Breeds',    placeholder: 'e.g. ISA Brown' },
-  { key: 'POULTRY_FEED',     label: 'Feeds',     placeholder: 'e.g. Layer mash 16%' },
-  { key: 'POULTRY_VACCINE',  label: 'Vaccines',  placeholder: 'e.g. Newcastle' },
-  { key: 'POULTRY_SUPPLIER', label: 'Suppliers', placeholder: 'e.g. Pacific Feed Co' },
-  { key: 'POULTRY_BUYER',    label: 'Buyers',    placeholder: 'e.g. Suva Market' },
+// Fallback if the catalog endpoint is unreachable; the live tabs come from
+// GET /farm-library-types (Strike #80 — data-driven, no hardcoded type list).
+const FALLBACK_TYPES = [
+  { key: 'POULTRY_BREED',    label: 'Breeds',    singular: 'breed',    placeholder: 'e.g. ISA Brown' },
+  { key: 'POULTRY_FEED',     label: 'Feeds',     singular: 'feed',     placeholder: 'e.g. Layer mash 16%' },
+  { key: 'POULTRY_VACCINE',  label: 'Vaccines',  singular: 'vaccine',  placeholder: 'e.g. Newcastle' },
+  { key: 'POULTRY_SUPPLIER', label: 'Suppliers', singular: 'supplier', placeholder: 'e.g. Pacific Feed Co' },
+  { key: 'POULTRY_BUYER',    label: 'Buyers',    singular: 'buyer',    placeholder: 'e.g. Suva Market' },
 ];
 
 const NameSchema = z.object({
@@ -65,6 +67,7 @@ function extractList(res, ...keyPaths) {
 
 function LibrarySettingsInner() {
   const navigate = useNavigate();
+  const [types, setTypes] = useState(FALLBACK_TYPES);
   const [activeType, setActiveType] = useState('POULTRY_BREED');
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -74,10 +77,37 @@ function LibrarySettingsInner() {
   // Add-row state
   const [showAdd, setShowAdd] = useState(false);
   const [newName, setNewName] = useState('');
+  const [newNote, setNewNote] = useState('');
   const [addError, setAddError] = useState(null);
+
+  // Inline-edit state
+  const [editingId, setEditingId] = useState(null);
+  const [editName, setEditName] = useState('');
+  const [editNote, setEditNote] = useState('');
+  const [editError, setEditError] = useState(null);
 
   // Confirm-deactivate state
   const [confirmingDelete, setConfirmingDelete] = useState(null);
+
+  // Strike #80: drive the tabs from the catalog (no hardcoded type list).
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await apiClient.get('/farm-library-types');
+        const list = extractList(res, 'data.items', 'data');
+        if (!cancelled && list.length) {
+          setTypes(list.map((t) => ({
+            key: t.library_type,
+            label: t.label,
+            singular: t.singular_label || (t.label || '').toLowerCase().replace(/s$/, ''),
+            placeholder: t.placeholder || '',
+          })));
+        }
+      } catch { /* keep fallback */ }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   // Load list when type changes or after mutation
   useEffect(() => {
@@ -113,9 +143,11 @@ function LibrarySettingsInner() {
       const trimmed = newName.trim();
       const parsed = NameSchema.safeParse({ name: trimmed });
       if (!parsed.success) throw new Error('Name required (1-255 chars)');
+      const note = newNote.trim();
       const result = await apiClient.post('/farm-libraries', {
         library_type: activeType,
         name: trimmed,
+        ...(note ? { attributes: { note } } : {}),
       });
       return result?.data;
     },
@@ -124,6 +156,7 @@ function LibrarySettingsInner() {
         detail: { message: 'Added ✓', type: 'success', hash: data?.audit_hash },
       }));
       setNewName('');
+      setNewNote('');
       setShowAdd(false);
       setAddError(null);
       setRefreshTick((t) => t + 1);
@@ -166,7 +199,37 @@ function LibrarySettingsInner() {
     },
   });
 
-  const activeMeta = LIBRARY_TYPES.find((t) => t.key === activeType);
+  const editMutation = useMutation({
+    mutationFn: async ({ libraryId }) => {
+      const trimmed = editName.trim();
+      const parsed = NameSchema.safeParse({ name: trimmed });
+      if (!parsed.success) throw new Error('Name required (1-255 chars)');
+      const note = editNote.trim();
+      const result = await apiClient.patch(`/farm-libraries/${libraryId}`, {
+        name: trimmed,
+        attributes: note ? { note } : {},
+      });
+      return result?.data;
+    },
+    onSuccess: (data) => {
+      window.dispatchEvent(new CustomEvent('tfos:toast', {
+        detail: { message: 'Saved ✓', type: 'success', hash: data?.audit_hash },
+      }));
+      setEditingId(null);
+      setEditError(null);
+      setRefreshTick((t) => t + 1);
+    },
+    onError: (err) => { setEditError(err.message || 'Could not save'); },
+  });
+
+  const startEdit = (item) => {
+    setEditingId(item.library_id);
+    setEditName(item.name || '');
+    setEditNote((item.attributes && item.attributes.note) || '');
+    setEditError(null);
+  };
+
+  const activeMeta = types.find((t) => t.key === activeType);
 
   return (
     <div className="min-h-screen" style={{ background: C.cream, color: C.soil }}>
@@ -182,10 +245,10 @@ function LibrarySettingsInner() {
       <div className="px-4 py-4 max-w-md mx-auto space-y-4">
         {/* Type tabs */}
         <div className="flex gap-2 overflow-x-auto pb-2">
-          {LIBRARY_TYPES.map((t) => (
+          {types.map((t) => (
             <button
               key={t.key}
-              onClick={() => { setActiveType(t.key); setShowAdd(false); }}
+              onClick={() => { setActiveType(t.key); setShowAdd(false); setEditingId(null); }}
               className="px-3 py-2 rounded-md text-sm whitespace-nowrap"
               style={{
                 background: t.key === activeType ? C.green : C.white,
@@ -220,6 +283,16 @@ function LibrarySettingsInner() {
               style={{ background: C.cream, borderColor: addError ? C.red : C.border }}
               autoFocus
             />
+            <label className="block text-xs mb-1" style={{ color: C.muted }}>Note (optional)</label>
+            <input
+              type="text"
+              value={newNote}
+              onChange={(e) => setNewNote(e.target.value)}
+              maxLength={255}
+              placeholder="e.g. preferred supplier, price, reminder"
+              className="w-full px-3 py-2 rounded-md border text-sm mb-2"
+              style={{ background: C.cream, borderColor: C.border }}
+            />
             {addError && (
               <div className="text-xs mb-2" style={{ color: C.red }}>{addError}</div>
             )}
@@ -236,7 +309,7 @@ function LibrarySettingsInner() {
                 {addMutation.isPending ? 'Adding…' : 'Add'}
               </button>
               <button
-                onClick={() => { setShowAdd(false); setNewName(''); setAddError(null); }}
+                onClick={() => { setShowAdd(false); setNewName(''); setNewNote(''); setAddError(null); }}
                 className="px-3 py-2 rounded-md text-sm"
                 style={{ color: C.muted }}
               >
@@ -266,6 +339,41 @@ function LibrarySettingsInner() {
           {items.map((item) => {
             const isGlobal = !!item.is_global;
             const isInactive = !item.is_active;
+            const note = item.attributes && item.attributes.note;
+
+            if (editingId === item.library_id) {
+              return (
+                <div key={item.library_id} className="px-3 py-3 rounded-md border" style={{ background: C.white, borderColor: C.border }}>
+                  <label className="block text-xs mb-1" style={{ color: C.muted }}>Name</label>
+                  <input
+                    type="text" value={editName} onChange={(e) => setEditName(e.target.value)} maxLength={255}
+                    className="w-full px-3 py-2 rounded-md border text-sm mb-2"
+                    style={{ background: C.cream, borderColor: editError ? C.red : C.border }} autoFocus
+                  />
+                  <label className="block text-xs mb-1" style={{ color: C.muted }}>Note (optional)</label>
+                  <input
+                    type="text" value={editNote} onChange={(e) => setEditNote(e.target.value)} maxLength={255}
+                    placeholder="e.g. preferred supplier, price, reminder"
+                    className="w-full px-3 py-2 rounded-md border text-sm mb-2"
+                    style={{ background: C.cream, borderColor: C.border }}
+                  />
+                  {editError && <div className="text-xs mb-2" style={{ color: C.red }}>{editError}</div>}
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => editMutation.mutate({ libraryId: item.library_id })}
+                      disabled={editMutation.isPending || !editName.trim()}
+                      className="flex-1 px-3 py-2 rounded-md text-sm font-medium"
+                      style={{ background: (editMutation.isPending || !editName.trim()) ? '#A8C997' : C.green, color: C.white }}
+                    >
+                      {editMutation.isPending ? 'Saving…' : 'Save'}
+                    </button>
+                    <button onClick={() => { setEditingId(null); setEditError(null); }} className="px-3 py-2 rounded-md text-sm" style={{ color: C.muted }}>
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              );
+            }
 
             return (
               <div
@@ -279,6 +387,9 @@ function LibrarySettingsInner() {
               >
                 <div className="flex-1 min-w-0">
                   <div className="text-sm truncate">{item.name}</div>
+                  {note && (
+                    <div className="text-xs truncate" style={{ color: C.muted }}>{note}</div>
+                  )}
                   {isGlobal && (
                     <div className="text-xs" style={{ color: C.muted }}>Built-in</div>
                   )}
@@ -287,13 +398,22 @@ function LibrarySettingsInner() {
                   )}
                 </div>
                 {!isInactive && !isGlobal && (
-                  <button
-                    onClick={() => setConfirmingDelete(item)}
-                    className="text-sm px-2 py-1"
-                    style={{ color: C.red }}
-                  >
-                    Remove
-                  </button>
+                  <>
+                    <button
+                      onClick={() => startEdit(item)}
+                      className="text-sm px-2 py-1"
+                      style={{ color: C.soil }}
+                    >
+                      Edit
+                    </button>
+                    <button
+                      onClick={() => setConfirmingDelete(item)}
+                      className="text-sm px-2 py-1"
+                      style={{ color: C.red }}
+                    >
+                      Remove
+                    </button>
+                  </>
                 )}
                 {isInactive && (
                   <button
