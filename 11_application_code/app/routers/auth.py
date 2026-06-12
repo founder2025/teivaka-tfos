@@ -25,6 +25,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
+from app.core.account_types import derive_role, normalize_account_type
 from app.core.capabilities import compute_capabilities
 from app.db.session import get_db
 from app.middleware.rls import get_current_user, get_tenant_db
@@ -97,7 +98,7 @@ class RegisterRequest(BaseModel):
     phone_number: str | None = None
     whatsapp_number: str | None = None
     date_of_birth: date
-    account_type: str = "FARMER"
+    account_type: str = "PRIMARY_PRODUCER"
     country: str = "FJ"
     privacy_accepted: bool
     privacy_policy_version: str = CURRENT_PRIVACY_POLICY_VERSION
@@ -116,13 +117,8 @@ class RegisterRequest(BaseModel):
     @field_validator("account_type")
     @classmethod
     def valid_account_type(cls, v: str) -> str:
-        allowed = {"FARMER", "BUYER", "SUPPLIER", "SERVICE_PROVIDER", "BANKER", "BUSINESS", "EXPORTER", "IMPORTER"}
-        v = v.upper().strip()
-        if v == "OTHER":
-            v = "BUSINESS"
-        if v not in allowed:
-            raise ValueError(f"account_type must be one of: {', '.join(sorted(allowed))}")
-        return v
+        # 12-tier ecosystem taxonomy; legacy 8-value inputs are up-converted.
+        return normalize_account_type(v)
 
     @field_validator("country")
     @classmethod
@@ -308,7 +304,7 @@ async def register(
     whatsapp_raw = (req.whatsapp_number or phone or "").strip()
     whatsapp_number = whatsapp_raw if whatsapp_raw else None
     privacy_accepted_at = datetime.now(timezone.utc)
-    role = "FARMER" if req.account_type in ("FARMER", "BUYER") else "VIEWER"
+    role = derive_role(req.account_type)
     verification_token = secrets.token_urlsafe(32)
     verification_expires = datetime.now(timezone.utc) + timedelta(hours=24)
     referral_code = await generate_referral_code(db)
