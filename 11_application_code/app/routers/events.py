@@ -34,6 +34,39 @@ from app.schemas.events_registry import get_schema_for_event_type, MORTALITY_CAU
 from sqlalchemy.exc import IntegrityError
 
 import json
+import hashlib
+import os
+from pathlib import Path
+
+# Where uploaded photos physically live (mirrors feed.py upload storage).
+_MEDIA_DIR = Path(os.environ.get("TFOS_MEDIA_DIR", "/app/uploads"))
+
+
+def _hash_local_photo(photo_url) -> tuple[Optional[str], Optional[int]]:
+    """SHA-256 + byte size of a locally-stored upload, resolved by filename. Fail-soft.
+
+    Binds the IMAGE CONTENT — not just its URL — into the audit chain: the returned
+    sha256 is folded into the audit payload, so the hash chain covers the exact bytes.
+    A swapped or back-dated file no longer matches its logged hash → tamper-evident
+    evidence. Never raises; returns (None, None) if the file can't be resolved or read
+    (e.g. an external URL), so a photo problem can never block an event submission.
+    """
+    if not photo_url:
+        return None, None
+    try:
+        name = str(photo_url).split("?", 1)[0].rstrip("/").rsplit("/", 1)[-1]
+        if not name:
+            return None, None
+        base = _MEDIA_DIR.resolve()
+        path = (base / name).resolve()
+        if path != base and base not in path.parents:  # path-traversal guard
+            return None, None
+        if not path.is_file():
+            return None, None
+        data = path.read_bytes()
+        return hashlib.sha256(data).hexdigest(), len(data)
+    except Exception:
+        return None, None
 
 
 router = APIRouter()
@@ -901,6 +934,10 @@ async def submit_event(
     payload_dict = validated_payload.model_dump(exclude_none=True)
     payload_json = json.dumps(payload_dict, default=str)
 
+    # Content-bind any attached photo: hash the stored bytes and fold the digest into
+    # the audit payload so the hash chain covers the image itself (tamper-evident).
+    photo_sha256_val, photo_byte_size_val = _hash_local_photo(payload_dict.get("photo_url"))
+
     # 4. Emit audit event FIRST (gets audit_event_id back for FK linkage)
     audit_payload = {
         "event_type": submission.event_type,
@@ -913,6 +950,8 @@ async def submit_event(
         "payload_keys": sorted(payload_dict.keys()),
         "payload_schema_version": schema_version,
     }
+    if photo_sha256_val:
+        audit_payload["photo_sha256"] = photo_sha256_val
 
     # 4b. Pre-generate field_event_id for CROPS branch (Strike #96 Path A — D1: FE-{12-hex})
     field_event_id_text: Optional[str] = None
@@ -981,20 +1020,20 @@ async def submit_event(
                     event_type, event_date,
                     input_id, input_qty_used, input_cost_fjd,
                     labor_hours, labor_cost_fjd,
-                    observation_text, photo_url, gps_lat, gps_lng,
+                    observation_text, photo_url, photo_sha256, photo_byte_size, gps_lat, gps_lng,
                     chemical_application, chemical_id,
                     chemical_dose_per_liter, tank_volume_liters,
-                    created_by, payload_jsonb
+                    created_by, audit_hash, payload_jsonb
                 )
                 VALUES (
                     :event_id, :tid, :cid, :pu, :fid,
                     :etype, :event_date,
                     :input_id, :input_qty_used, :input_cost_fjd,
                     :labor_hours, :labor_cost_fjd,
-                    :observation_text, :photo_url, :gps_lat, :gps_lng,
+                    :observation_text, :photo_url, :photo_sha256, :photo_byte_size, :gps_lat, :gps_lng,
                     :chemical_application, :chemical_id,
                     :chemical_dose_per_liter, :tank_volume_liters,
-                    :created_by, CAST(:payload_jsonb AS jsonb)
+                    :created_by, :audit_hash, CAST(:payload_jsonb AS jsonb)
                 )
             """),
             {
@@ -1012,6 +1051,9 @@ async def submit_event(
                 "labor_cost_fjd": payload_dict.get("labor_cost_fjd"),
                 "observation_text": payload_dict.get("notes"),
                 "photo_url": payload_dict.get("photo_url"),
+                "photo_sha256": photo_sha256_val,
+                "photo_byte_size": photo_byte_size_val,
+                "audit_hash": audit_hash,
                 "gps_lat": payload_dict.get("gps_lat"),
                 "gps_lng": payload_dict.get("gps_lng"),
                 "chemical_application": is_chemical,

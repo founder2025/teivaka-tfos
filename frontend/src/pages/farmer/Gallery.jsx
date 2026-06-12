@@ -16,7 +16,7 @@
  */
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Image as ImageIcon, Download, Share2, Check, MapPin, Sprout, Shield, Package, FileText, X, MessageCircle, Mail } from "lucide-react";
+import { Image as ImageIcon, Download, Share2, Check, MapPin, Sprout, Shield, Package, FileText, X, MessageCircle, Mail, ShieldCheck } from "lucide-react";
 import TfpShell from "../../components/farm/TfpShell";
 
 function authHeaders() {
@@ -59,6 +59,12 @@ function PhotoTile({ p, selected, onOpen, onToggle }) {
       <button className={`gallery-tile-select${selected ? " checked" : ""}`} onClick={(e) => { e.stopPropagation(); onToggle(); }}>
         <span className="check-svg"><Check size={12} /></span>
       </button>
+      {p.sha256 && (
+        <span title="Content-verified · the image bytes are hash-bound to the audit chain"
+          style={{ position: "absolute", top: 6, left: 6, display: "inline-flex", alignItems: "center", gap: 3, background: "rgba(62,123,31,0.92)", color: "#fff", fontSize: 10, fontWeight: 700, padding: "2px 6px", borderRadius: 6 }}>
+          <ShieldCheck size={11} />Verified
+        </span>
+      )}
       <div className="gallery-tile-label"><span>{p.label}</span><span className="gallery-tile-date">{fmtDate(p.date)}</span></div>
     </div>
   );
@@ -95,6 +101,7 @@ export default function Gallery() {
       date: e.event_date, event: titleCase(e.event_type), block: e.pu_id || "",
       cycle_id: e.cycle_id, observation: e.observation_text || "",
       category: photoCategory(e.event_type), group: recordGroup(e.event_type),
+      sha256: e.photo_sha256 || null, auditHash: e.audit_hash || null,
     }))
     .sort((a, b) => String(b.date).localeCompare(String(a.date))), [events]);
 
@@ -334,8 +341,20 @@ function PhotoModal({ p, onClose, onDownload, onOpenEvent }) {
           {p.block && <div className="photo-modal-meta-section"><div className="block-detail-label">Where</div><div className="block-detail-value">{p.block}</div></div>}
           {p.observation && <div className="photo-modal-meta-section"><div className="block-detail-label">Note</div><div className="block-detail-value">{p.observation}</div></div>}
           <div className="photo-modal-meta-section"><div className="block-detail-label">Event ID</div><div className="block-detail-value" style={{ fontFamily: "monospace", fontSize: 12 }}>{String(p.id).slice(0, 8)}</div></div>
+          {p.sha256 ? (
+            <div className="photo-modal-meta-section">
+              <div className="block-detail-label" style={{ display: "flex", alignItems: "center", gap: 5, color: "var(--green-dk)" }}><ShieldCheck size={13} />Content-verified</div>
+              <div className="block-detail-value" style={{ fontSize: 11.5, lineHeight: 1.5 }}>
+                The image bytes are hash-bound into the audit chain — a swapped or back-dated file won't match.
+                <div style={{ fontFamily: "monospace", fontSize: 10.5, color: "var(--muted)", wordBreak: "break-all", marginTop: 4 }}>SHA-256: {p.sha256}</div>
+              </div>
+            </div>
+          ) : (
+            <div className="photo-modal-meta-section"><div className="block-detail-label">Provenance</div><div className="block-detail-value" style={{ fontSize: 11.5, color: "var(--muted)" }}>Logged with its event. Content-hash binding applies to photos logged after this feature shipped.</div></div>
+          )}
           <div className="photo-modal-actions">
             <button className="btn btn-primary" onClick={onDownload}><Download size={14} />Download</button>
+            {p.auditHash && <a className="btn btn-secondary" href={`/verify/${encodeURIComponent(p.auditHash)}`} target="_blank" rel="noopener noreferrer"><ShieldCheck size={14} />Verify</a>}
             {p.cycle_id && <button className="btn btn-secondary" onClick={onOpenEvent}><Share2 size={14} />Open event</button>}
           </div>
         </div>
