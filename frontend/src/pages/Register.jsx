@@ -1,12 +1,16 @@
 /**
- * Register.jsx — Teivaka Agriculture Ecosystem registration.
+ * Register.jsx — Teivaka Agriculture Ecosystem onboarding gateway.
  *
- * Themed to the post-login .tfp system (system sans-serif; cream/soil/green),
- * flat lucide icons. 3x3 ecosystem-profile grid (9 cards). Two cards fan out
- * into a Stage-2 conditional dropdown that must be answered before the rest of
- * the registration fields are exposed, yielding a 12-tier account_type.
+ * Front-door flow (themed to the post-login .tfp system, flat lucide icons):
+ *   Step 1 — Account-type switcher: Individual / Personal vs Company / Agribusiness.
+ *   Step 2 — 3x3 ecosystem-profile grid (9 cards); cards 5 & 9 fan out into a
+ *            Stage-2 governance/capital dropdown (12-tier account_type).
+ *   Step 3 — Conditional fields per account kind + a data-driven geographic
+ *            cascade (Province -> District -> Tikina; levels render only when the
+ *            geo dataset has them). Password spine retained; lightweight 18+ check
+ *            (year-of-birth) replaces the heavy calendar.
  *
- * API: POST /api/v1/auth/register   (account_type = one of the 12 leaves)
+ * API: POST /api/v1/auth/register ; GET /api/v1/geo/regions
  */
 
 import { useState, useEffect, useRef } from "react";
@@ -16,7 +20,7 @@ import {
   Ship, Package, Users, Eye, EyeOff,
 } from "lucide-react";
 
-// In-app (.tfp) palette — mirrors prototype.css light theme tokens.
+// In-app (.tfp) palette.
 const T = {
   cream: "#F8F3E9", cream2: "#EFE8D8", paper: "#FFFFFF",
   green: "#6AA84F", greenDk: "#4F8A37", greenTint: "#E8F0E0",
@@ -39,12 +43,8 @@ const COUNTRY_CODES = [
   { iso: "GB", flag: "🇬🇧", code: "+44", name: "United Kingdom" },
 ];
 
-// ---------------------------------------------------------------------------
-// THE 9-CARD ECOSYSTEM-PROFILE GRID (3x3) — single source of truth for the UI.
-// `value` is the backend account_type sent directly; cards with a `dropdown`
-// (Buttons 5 & 9) resolve their account_type from the chosen dropdown option.
-// Mirrors backend app/core/account_types.py (12 leaf values).
-// ---------------------------------------------------------------------------
+// 9-card ecosystem-profile grid (12 leaf account_type values). Mirrors backend
+// app/core/account_types.py.
 const PROFILES = [
   { key: "PRIMARY_PRODUCER", label: "Primary Producer / Farmer", Icon: Sprout, value: "PRIMARY_PRODUCER",
     sub: "I cultivate commercial crops, manage livestock, or operate a traditional Mataqali farm block." },
@@ -57,7 +57,7 @@ const PROFILES = [
   { key: "INSTITUTIONAL_LENDER", label: "Institutional Lender / Funder", Icon: Landmark, value: null,
     sub: "I represent a commercial bank, national development lender, credit union, or grant donor organization.",
     dropdown: {
-      label: "Select your institutional funding profile:",
+      label: "Select funding profile:",
       options: [
         { label: "Commercial Retail Bank", value: "BANKER_COMMERCIAL" },
         { label: "International Development Bank / Donor Agency", value: "DONOR_DEVELOPMENT" },
@@ -72,7 +72,7 @@ const PROFILES = [
   { key: "INSTITUTIONAL_PARTNER", label: "Institutional Partner / Other", Icon: Users, value: null,
     sub: "I am a Mataqali Trustee, NGO Program Manager, Government Regulator, or third-party Quality Auditor.",
     dropdown: {
-      label: "Select your organizational governance profile:",
+      label: "Select governance profile:",
       options: [
         { label: "Mataqali / Landowning Trustee", value: "MATAQALI_TRUSTEE" },
         { label: "Government Regulator / Border Compliance", value: "GOVERNMENT_REGULATOR" },
@@ -81,20 +81,21 @@ const PROFILES = [
     } },
 ];
 
-// Flat value → human label map (for the success screen). Covers direct + dropdown leaves.
 const PROFILE_LABELS = {};
 PROFILES.forEach((p) => {
   if (p.value) PROFILE_LABELS[p.value] = p.label;
   if (p.dropdown) p.dropdown.options.forEach((o) => { PROFILE_LABELS[o.value] = o.label; });
 });
 
-// Institutional profiles whose privileged features unlock after verification (note only).
 const HIGH_TRUST = new Set([
   "BANKER_COMMERCIAL", "DONOR_DEVELOPMENT", "COMMODITY_EXPORTER", "TRADE_IMPORTER",
   "AGRIBUSINESS_ENTERPRISE", "GOVERNMENT_REGULATOR", "QUALITY_AUDITOR", "MATAQALI_TRUSTEE",
 ]);
 
 const PRIVACY_POLICY_VERSION = "1.0";
+const CURRENT_YEAR = new Date().getFullYear();
+const BIRTH_YEARS = [];
+for (let y = CURRENT_YEAR - 18; y >= 1900; y--) BIRTH_YEARS.push(y);
 
 function extractErrorMessage(detail) {
   if (!detail) return "Registration failed. Please try again.";
@@ -141,17 +142,95 @@ function Field({ label, id, error, hint, children }) {
 }
 
 // ---------------------------------------------------------------------------
+// Geographic cascade — data-driven. Renders Province now; District/Tikina light
+// up automatically once shared.geo_regions has them (no empty/dead pickers).
+// ---------------------------------------------------------------------------
+function RegionCascade({ label, onChange }) {
+  const [provinces, setProvinces] = useState([]);
+  const [districts, setDistricts] = useState([]);
+  const [tikinas, setTikinas] = useState([]);
+  const [province, setProvince] = useState("");
+  const [district, setDistrict] = useState("");
+  const [tikina, setTikina] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/v1/geo/regions?level=PROVINCE")
+      .then((r) => (r.ok ? r.json() : { data: [] }))
+      .then((j) => { if (!cancelled) setProvinces(j.data || []); })
+      .catch(() => { if (!cancelled) setProvinces([]); });
+    return () => { cancelled = true; };
+  }, []);
+
+  function loadChildren(parentId) {
+    return fetch(`/api/v1/geo/regions?parent_id=${encodeURIComponent(parentId)}`)
+      .then((r) => (r.ok ? r.json() : { data: [] }))
+      .then((j) => j.data || [])
+      .catch(() => []);
+  }
+
+  async function pickProvince(id) {
+    setProvince(id); setDistrict(""); setTikina(""); setDistricts([]); setTikinas([]);
+    onChange(id || null);
+    if (id) setDistricts(await loadChildren(id));
+  }
+  async function pickDistrict(id) {
+    setDistrict(id); setTikina(""); setTikinas([]);
+    onChange(id || province || null);
+    if (id) setTikinas(await loadChildren(id));
+  }
+  function pickTikina(id) {
+    setTikina(id);
+    onChange(id || district || province || null);
+  }
+
+  const selectStyle = {
+    width: "100%", border: `1px solid ${T.line}`, borderRadius: 12, padding: "12px 14px",
+    fontSize: 14, outline: "none", fontFamily: FONT, color: T.ink, background: T.paper,
+  };
+
+  return (
+    <Field label={label} id="region">
+      <select value={province} onChange={(e) => pickProvince(e.target.value)} style={selectStyle}>
+        <option value="">— Select province —</option>
+        {provinces.map((p) => <option key={p.region_id} value={p.region_id}>{p.name}</option>)}
+      </select>
+      {districts.length > 0 && (
+        <select value={district} onChange={(e) => pickDistrict(e.target.value)} style={{ ...selectStyle, marginTop: 8 }}>
+          <option value="">— Select district —</option>
+          {districts.map((d) => <option key={d.region_id} value={d.region_id}>{d.name}</option>)}
+        </select>
+      )}
+      {tikinas.length > 0 && (
+        <select value={tikina} onChange={(e) => pickTikina(e.target.value)} style={{ ...selectStyle, marginTop: 8 }}>
+          <option value="">— Select tikina —</option>
+          {tikinas.map((t) => <option key={t.region_id} value={t.region_id}>{t.name}</option>)}
+        </select>
+      )}
+    </Field>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Registration Form
 // ---------------------------------------------------------------------------
 
 function RegistrationForm({ onSuccess }) {
   const [form, setForm] = useState({
     first_name: "", last_name: "", email: "", password: "",
-    phone_number: "", whatsapp_number: "", date_of_birth: "",
+    phone_number: "", whatsapp_number: "",
     country: "FJ", referral_source: "", referral_code: "",
   });
 
-  // Ecosystem-profile selection (3x3 grid + Stage-2 dropdown).
+  // Step 1 — account-type switcher.
+  const [accountKind, setAccountKind] = useState("individual"); // "individual" | "company"
+  const [businessName, setBusinessName] = useState("");
+  const [operatorName, setOperatorName] = useState("");
+  const [regionId, setRegionId] = useState(null);
+  const [birthYear, setBirthYear] = useState("");
+  const isCompany = accountKind === "company";
+
+  // Step 2 — ecosystem-profile selection.
   const [selectedKey, setSelectedKey] = useState("PRIMARY_PRODUCER");
   const [subType, setSubType] = useState("");
   const selectedProfile = PROFILES.find((p) => p.key === selectedKey) || PROFILES[0];
@@ -206,18 +285,13 @@ function RegistrationForm({ onSuccess }) {
     setErrors((e) => ({ ...e, [field]: "" }));
     setServerError("");
   }
+  function clearErr(k) { setErrors((e) => ({ ...e, [k]: "" })); setServerError(""); }
 
   function selectProfile(key) {
-    setSelectedKey(key);
-    setSubType("");
-    setErrors((e) => ({ ...e, account_type: "" }));
-    setServerError("");
+    setSelectedKey(key); setSubType("");
+    clearErr("account_type");
   }
-  function selectSubType(value) {
-    setSubType(value);
-    setErrors((e) => ({ ...e, account_type: "" }));
-    setServerError("");
-  }
+  function selectSubType(value) { setSubType(value); clearErr("account_type"); }
 
   function validate() {
     const e = {};
@@ -226,24 +300,30 @@ function RegistrationForm({ onSuccess }) {
         ? "Please select your profile from the dropdown to continue"
         : "Please choose who you are";
     }
-    if (!form.first_name.trim()) e.first_name = "First name is required";
-    if (!form.last_name.trim())  e.last_name  = "Last name is required";
+    if (isCompany) {
+      if (businessName.trim().length < 2) e.business_name = "Registered business name is required";
+      if (operatorName.trim().length < 2) e.operator_name = "Authorized operator name is required";
+    } else {
+      if (!form.first_name.trim()) e.first_name = "First name is required";
+      if (!form.last_name.trim())  e.last_name  = "Last name is required";
+    }
     if (!form.email.trim())      e.email      = "Email address is required";
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) e.email = "Enter a valid email address";
     const pwErr = passwordComplexityError(form.password);
     if (pwErr) e.password = pwErr;
     if (confirmPw !== form.password) e.confirmPw = "Passwords do not match";
     if (fullPhone && !/^\+[1-9]\d{6,14}$/.test(fullPhone)) e.phone_number = "Enter a valid phone number";
-    if (!form.date_of_birth) e.date_of_birth = "Date of birth is required";
-    if (form.date_of_birth) {
-      const dob = new Date(form.date_of_birth);
-      const today = new Date();
-      const age = today.getFullYear() - dob.getFullYear()
-        - ((today.getMonth() < dob.getMonth() || (today.getMonth() === dob.getMonth() && today.getDate() < dob.getDate())) ? 1 : 0);
-      if (age < 18) e.date_of_birth = "You must be at least 18 years old to register";
-    }
+    if (!birthYear) e.birth_year = "Please confirm your year of birth (18+)";
     if (!policyAccepted) e.policy = "Please accept the Privacy Policy and Terms of Service to continue";
     return e;
+  }
+
+  function deriveNames() {
+    if (!isCompany) return { first_name: form.first_name.trim(), last_name: form.last_name.trim() };
+    const parts = operatorName.trim().split(/\s+/).filter(Boolean);
+    const first = parts[0] || businessName.trim();
+    const last = parts.slice(1).join(" ") || parts[0] || "Operator";
+    return { first_name: first, last_name: last };
   }
 
   async function handleSubmit(e) {
@@ -257,9 +337,16 @@ function RegistrationForm({ onSuccess }) {
     const wa = sameAsPhone ? phoneOrNull : ((form.whatsapp_number || "").trim() || null);
     let anonymousId = null;
     try { anonymousId = localStorage.getItem("teivaka_anon_id"); } catch { /* ignore */ }
+    const { first_name, last_name } = deriveNames();
     const payload = {
       ...form,
+      first_name, last_name,
       account_type: resolvedType,
+      is_company: isCompany,
+      business_name: isCompany ? businessName.trim() : null,
+      operator_name: isCompany ? operatorName.trim() : null,
+      region_id: regionId || null,
+      date_of_birth: `${birthYear}-01-01`,
       phone_number: phoneOrNull, whatsapp_number: wa,
       referral_code: form.referral_code.trim() || null,
       referral_source: form.referral_source || null,
@@ -290,6 +377,12 @@ function RegistrationForm({ onSuccess }) {
     }`;
   const inputStyle = { fontFamily: FONT, color: T.ink };
 
+  const kindBtn = (active) => ({
+    flex: 1, padding: "12px", borderRadius: 12, border: `1px solid ${active ? T.green : T.line}`,
+    background: active ? T.greenTint : T.paper, color: active ? T.greenDk : T.soil,
+    fontWeight: 600, fontSize: 13, cursor: "pointer", fontFamily: FONT,
+  });
+
   return (
     <div className="min-h-screen flex flex-col" style={{ background: T.cream, fontFamily: FONT }}>
       <div className="text-center py-5" style={{ borderBottom: `1px solid ${T.line}` }}>
@@ -303,7 +396,7 @@ function RegistrationForm({ onSuccess }) {
           <div className="rounded-2xl p-7" style={{ background: T.paper, border: `1px solid ${T.line}`, boxShadow: "0 2px 8px rgba(92,64,51,0.08)" }}>
             <div className="text-center mb-6">
               <h1 className="text-2xl font-bold mb-1" style={{ color: T.soil }}>Join the Teivaka Agriculture Ecosystem</h1>
-              <p className="text-sm" style={{ color: T.muted }}>Select your ecosystem profile to begin</p>
+              <p className="text-sm" style={{ color: T.muted }}>Choose your account type and ecosystem profile</p>
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-4">
@@ -314,7 +407,17 @@ function RegistrationForm({ onSuccess }) {
                 </div>
               )}
 
-              {/* 3x3 ecosystem-profile grid */}
+              {/* Step 1 — account-type switcher */}
+              <Field label="Account type" id="account_kind">
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button type="button" aria-pressed={!isCompany} style={kindBtn(!isCompany)}
+                    onClick={() => setAccountKind("individual")}>Individual / Personal</button>
+                  <button type="button" aria-pressed={isCompany} style={kindBtn(isCompany)}
+                    onClick={() => setAccountKind("company")}>Company / Agribusiness</button>
+                </div>
+              </Field>
+
+              {/* Step 2 — 3x3 ecosystem-profile grid */}
               <Field label="I am a…" id="account_type" error={errors.account_type}>
                 <div className="grid grid-cols-3 gap-2 mt-1">
                   {PROFILES.map((p) => {
@@ -336,10 +439,9 @@ function RegistrationForm({ onSuccess }) {
                   })}
                 </div>
 
-                {/* Helper subtext for the selected profile */}
                 <p className="text-xs mt-2" style={{ color: T.muted }}>{selectedProfile.sub}</p>
 
-                {/* Stage-2 conditional dropdown (Buttons 5 & 9) */}
+                {/* Step 3a — Stage-2 conditional dropdown (cards 5 & 9) */}
                 {selectedProfile.dropdown && (
                   <div className="mt-3 p-3 rounded-xl" style={{ background: T.cream, border: `1px solid ${T.line}` }}>
                     <label htmlFor="profile_subtype" className="block text-sm font-semibold mb-1.5" style={{ color: T.soil }}>
@@ -356,26 +458,48 @@ function RegistrationForm({ onSuccess }) {
                 )}
               </Field>
 
-              {/* Stage-2 gate: the rest of the form appears only once a profile resolves */}
+              {/* Gate: rest of the form appears only once a profile resolves */}
               {!isResolved ? (
                 <p className="text-sm text-center py-2" style={{ color: T.muted }}>
                   Choose your profile above to continue your registration.
                 </p>
               ) : (
                 <>
-                  {/* Name row */}
-                  <div className="grid grid-cols-2 gap-3">
-                    <Field label="First name *" id="first_name" error={errors.first_name}>
-                      <input id="first_name" type="text" autoComplete="given-name" value={form.first_name}
-                        onChange={(e) => update("first_name", e.target.value)} placeholder="e.g. Cody"
-                        className={inputCls("first_name")} style={inputStyle} />
-                    </Field>
-                    <Field label="Last name *" id="last_name" error={errors.last_name}>
-                      <input id="last_name" type="text" autoComplete="family-name" value={form.last_name}
-                        onChange={(e) => update("last_name", e.target.value)} placeholder="e.g. Viliami"
-                        className={inputCls("last_name")} style={inputStyle} />
-                    </Field>
-                  </div>
+                  {/* Step 3b — conditional identity fields per account kind */}
+                  {isCompany ? (
+                    <>
+                      <Field label="Registered business / trading name *" id="business_name" error={errors.business_name}>
+                        <input id="business_name" type="text" value={businessName}
+                          onChange={(e) => { setBusinessName(e.target.value); clearErr("business_name"); }}
+                          placeholder="e.g. Save-A-Lot Produce Ltd" className={inputCls("business_name")} style={inputStyle} />
+                      </Field>
+                      <Field label="Authorized system operator name *" id="operator_name" error={errors.operator_name}
+                        hint="The person who will manage this account">
+                        <input id="operator_name" type="text" value={operatorName}
+                          onChange={(e) => { setOperatorName(e.target.value); clearErr("operator_name"); }}
+                          placeholder="e.g. Cody Viliami" className={inputCls("operator_name")} style={inputStyle} />
+                      </Field>
+                    </>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-3">
+                      <Field label="First name *" id="first_name" error={errors.first_name}>
+                        <input id="first_name" type="text" autoComplete="given-name" value={form.first_name}
+                          onChange={(e) => update("first_name", e.target.value)} placeholder="e.g. Cody"
+                          className={inputCls("first_name")} style={inputStyle} />
+                      </Field>
+                      <Field label="Last name *" id="last_name" error={errors.last_name}>
+                        <input id="last_name" type="text" autoComplete="family-name" value={form.last_name}
+                          onChange={(e) => update("last_name", e.target.value)} placeholder="e.g. Viliami"
+                          className={inputCls("last_name")} style={inputStyle} />
+                      </Field>
+                    </div>
+                  )}
+
+                  {/* Geographic cascade (data-driven) */}
+                  <RegionCascade
+                    label={isCompany ? "Headquarters operating location" : "Geographic region"}
+                    onChange={setRegionId}
+                  />
 
                   {/* Email */}
                   <Field label="Email address *" id="email" error={errors.email}
@@ -471,13 +595,15 @@ function RegistrationForm({ onSuccess }) {
                     )}
                   </div>
 
-                  {/* Date of Birth */}
-                  <Field label="Date of birth *" id="date_of_birth" error={errors.date_of_birth}
+                  {/* Lightweight 18+ check — year of birth */}
+                  <Field label="Year of birth *" id="birth_year" error={errors.birth_year}
                     hint="You must be 18 or older to register">
-                    <input id="date_of_birth" type="date"
-                      max={new Date(new Date().setFullYear(new Date().getFullYear() - 18)).toISOString().split("T")[0]}
-                      value={form.date_of_birth} onChange={(e) => update("date_of_birth", e.target.value)}
-                      className={inputCls("date_of_birth")} style={inputStyle} />
+                    <select id="birth_year" value={birthYear}
+                      onChange={(e) => { setBirthYear(e.target.value); clearErr("birth_year"); }}
+                      className={inputCls("birth_year")} style={inputStyle}>
+                      <option value="">— Select year —</option>
+                      {BIRTH_YEARS.map((y) => <option key={y} value={y}>{y}</option>)}
+                    </select>
                   </Field>
 
                   {/* Country */}

@@ -105,6 +105,11 @@ class RegisterRequest(BaseModel):
     referral_source: str | None = None
     referral_code: str | None = None
     anonymous_id: str | None = None
+    # Individual vs Company gateway (capture-only; no heavy KYC at signup).
+    is_company: bool = False
+    business_name: str | None = None
+    operator_name: str | None = None
+    region_id: str | None = None
 
     @field_validator("first_name", "last_name")
     @classmethod
@@ -343,6 +348,7 @@ async def register(
                     first_name, last_name, password_hash, role,
                     phone_number, whatsapp_number,
                     date_of_birth, account_type, country,
+                    is_company, region_id,
                     privacy_accepted_at, privacy_policy_version,
                     registration_ip, registration_user_agent,
                     email_verified, email_verification_token,
@@ -355,6 +361,7 @@ async def register(
                     :first_name, :last_name, :password_hash, :role,
                     :phone_number, :whatsapp_number,
                     :date_of_birth, :account_type, :country,
+                    :is_company, :region_id,
                     :privacy_accepted_at, :privacy_policy_version,
                     :reg_ip, :reg_ua,
                     false, :verification_token,
@@ -378,6 +385,8 @@ async def register(
                 "date_of_birth": req.date_of_birth,
                 "account_type": req.account_type,
                 "country": req.country,
+                "is_company": req.is_company,
+                "region_id": req.region_id,
                 "privacy_accepted_at": privacy_accepted_at,
                 "privacy_policy_version": req.privacy_policy_version,
                 "reg_ip": ip_address,
@@ -389,6 +398,32 @@ async def register(
                 "referral_source": req.referral_source,
             }
         )
+
+        # Company / Agribusiness Entity accounts get a business_entities child row
+        # (Master-Child). RLS is FORCED on this table, so set the tenant context
+        # for this just-created tenant before the WITH CHECK insert. Best-effort.
+        if req.is_company and (req.business_name or "").strip():
+            try:
+                await db.execute(
+                    text("SELECT set_config('app.tenant_id', :tid, true)"),
+                    {"tid": tenant_id},
+                )
+                await db.execute(
+                    text("""
+                        INSERT INTO tenant.business_entities
+                            (tenant_id, user_id, business_name, operator_name, account_type, region_id)
+                        VALUES (CAST(:tid AS uuid), CAST(:uid AS uuid), :bn, :op, :at, :rid)
+                    """),
+                    {
+                        "tid": tenant_id, "uid": user_id,
+                        "bn": req.business_name.strip(),
+                        "op": (req.operator_name or "").strip() or None,
+                        "at": req.account_type,
+                        "rid": req.region_id,
+                    },
+                )
+            except Exception as e:
+                logger.warning("business_entity insert failed during signup (ignored): %s", e)
 
         # Attribution: log SIGNUP and backfill prior LANDING_VIEW events for
         # this anonymous_id. Best-effort — do not block signup on failure.

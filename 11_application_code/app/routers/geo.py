@@ -10,7 +10,10 @@ import time
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.db.session import get_db
 from app.middleware.rls import get_current_user
 
 logger = logging.getLogger("teivaka.geo")
@@ -20,6 +23,34 @@ router = APIRouter()
 # a convenience cache, not a correctness dependency.
 _cache: dict[tuple[float, float], tuple[float, list[str]]] = {}
 _CACHE_TTL = 6 * 3600
+
+
+@router.get("/regions")
+async def list_regions(
+    level: str | None = Query(None, description="DIVISION|PROVINCE|DISTRICT|TIKINA|VILLAGE"),
+    parent_id: str | None = Query(None, description="region_id of the parent to list children of"),
+    db: AsyncSession = Depends(get_db),
+):
+    """Public reference data for the registration region cascade (read-only).
+
+    Drives Province -> District -> Tikina: the frontend asks for level=PROVINCE,
+    then parent_id=<province> for its children, etc. Levels with no data yet
+    (DISTRICT/TIKINA until that dataset is loaded) simply return [] — the UI
+    renders only the levels that have rows. No auth: region names are public.
+    """
+    clauses, params = [], {}
+    if level:
+        clauses.append("level = :level")
+        params["level"] = level.upper().strip()
+    if parent_id:
+        clauses.append("parent_region_id = :pid")
+        params["pid"] = parent_id.strip()
+    where = (" WHERE " + " AND ".join(clauses)) if clauses else ""
+    rows = await db.execute(
+        text(f"SELECT region_id, level, name, parent_region_id FROM shared.geo_regions{where} ORDER BY name"),
+        params,
+    )
+    return {"data": [dict(r) for r in rows.mappings()]}
 
 
 @router.get("/reverse")
