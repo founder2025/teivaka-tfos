@@ -152,6 +152,16 @@ const EVENT_ROUTES = {
   EQUIPMENT_MAINTAINED:  "/farm/poultry/equipment/maintained",
   INCIDENT_REPORTED:     "/farm/poultry/incident/reported",
   SUPPLIES_RECEIVED:     "/farm/poultry/supplies/received",
+  // 129 catalog forensic — medication + livestock pack (Operator-ratified)
+  MEDICATION_GIVEN:      "/farm/poultry/medication/new",
+  LIVESTOCK_BIRTH:       "/farm/livestock/log?type=LIVESTOCK_BIRTH",
+  LIVESTOCK_MORTALITY:   "/farm/livestock/log?type=LIVESTOCK_MORTALITY",
+  LIVESTOCK_ACQUIRED:    "/farm/livestock/log?type=LIVESTOCK_ACQUIRED",
+  LIVESTOCK_SALE:        "/farm/livestock/log?type=LIVESTOCK_SALE",
+  VACCINATION:           "/farm/livestock/log?type=VACCINATION",
+  MILK_COLLECTED:        "/farm/livestock/log?type=MILK_COLLECTED",
+  ANIMAL_MOVED:          "/farm/livestock/log?type=ANIMAL_MOVED",
+  BREEDING_LOGGED:       "/farm/livestock/log?type=BREEDING_LOGGED",
 };
 
 const EVENT_ICONS = {
@@ -173,6 +183,10 @@ const EVENT_ICONS = {
   HIVE_INSPECTION:       Hexagon,
   LIVESTOCK_ACQUIRED:    PlusCircle,
   LIVESTOCK_SALE:        HandCoins,
+  MEDICATION_GIVEN:      Syringe,
+  MILK_COLLECTED:        Droplets,
+  ANIMAL_MOVED:          Replace,
+  BREEDING_LOGGED:       Baby,
   // MONEY
   SELL_CROPS:            HandCoins,
   CASH_OUT:              Wallet,

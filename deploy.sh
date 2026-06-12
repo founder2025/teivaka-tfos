@@ -20,7 +20,7 @@
 set -uo pipefail
 
 BRANCH="${1:-claude/beautiful-fermi-F0dLX}"
-EXPECTED_HEAD="${2:-128_control_room_events}"
+EXPECTED_HEAD="${2:-129_catalog_forensic}"
 ROOT="/opt/teivaka"
 COMPOSE="docker compose -f ${ROOT}/04_environment/docker-compose.yml"
 PSQL="docker exec -i teivaka_db psql -v ON_ERROR_STOP=1 -tA -U teivaka -d teivaka_db"
@@ -103,6 +103,12 @@ PARTEVT="$($PSQL -c "SELECT pg_get_constraintdef(oid) LIKE '%PARTNER_ADDED%' FRO
 [ "$PARTEVT" = "t" ] && ok "audit.events CHECK includes PARTNER_ADDED" || bad "PARTNER_ADDED not in audit CHECK"
 CRROOM="$($PSQL -c "SELECT (pg_get_constraintdef(oid) LIKE '%FARM_PROFILE_UPDATED%' AND pg_get_constraintdef(oid) LIKE '%CYCLE_RELABELED%') FROM pg_constraint WHERE conname='events_event_type_check';" 2>/dev/null | tr -d '[:space:]')"
 [ "$CRROOM" = "t" ] && ok "audit.events CHECK includes control-room events (128)" || bad "control-room events (FARM_PROFILE_UPDATED/CYCLE_RELABELED) not in audit CHECK"
+LVEVT="$($PSQL -c "SELECT to_regclass('tenant.livestock_events') IS NOT NULL;" 2>/dev/null | tr -d '[:space:]')"
+[ "$LVEVT" = "t" ] && ok "livestock_events table present (129)" || bad "livestock_events missing (migration 129 — livestock forms would 500)"
+KILLED="$($PSQL -c "SELECT count(*) FROM shared.event_type_catalog WHERE event_type IN ('FEED_GIVEN','BEDDING_CHANGED','WAGES_PAID','SELL_CROPS') AND is_active = false;" 2>/dev/null | tr -d '[:space:]')"
+[ "${KILLED:-0}" = "4" ] && ok "catalog kills applied (129 — duplicate tiles deactivated)" || bad "catalog kills not applied (${KILLED}/4 — migration 129)"
+MILK="$($PSQL -c "SELECT pg_get_constraintdef(oid) LIKE '%MILK_COLLECTED%' FROM pg_constraint WHERE conname='events_event_type_check';" 2>/dev/null | tr -d '[:space:]')"
+[ "$MILK" = "t" ] && ok "audit.events CHECK includes MILK_COLLECTED (livestock pack)" || bad "MILK_COLLECTED not in audit CHECK"
 
 # ---------------------------------------------------------------------------
 say "5/7  Bring API up + wait healthy + parity check"

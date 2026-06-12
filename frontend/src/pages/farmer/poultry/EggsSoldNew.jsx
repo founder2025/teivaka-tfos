@@ -42,6 +42,7 @@ function Inner() {
   const [buyers, setBuyers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [anchorError, setAnchorError] = useState(null);
+  const [disposition, setDisposition] = useState('SOLD'); // 129: sold / given away-home use
   const [qtyEggs, setQtyEggs] = useState('');
   const [totalRevenue, setTotalRevenue] = useState('');
   const [pricePerDozen, setPricePerDozen] = useState('');
@@ -86,9 +87,10 @@ function Inner() {
 
   async function submit() {
     setErrs({});
+    const given = disposition === 'GIVEN';
     const candidate = {
       qty_eggs: qtyEggs === '' ? NaN : parseInt(qtyEggs, 10),
-      total_revenue_fjd: totalRevenue,
+      total_revenue_fjd: given ? '0' : totalRevenue,
       buyer_id: buyerId === '' ? undefined : buyerId,
       price_fjd_per_dozen: pricePerDozen === '' ? undefined : pricePerDozen,
       sale_date: saleDate,
@@ -100,7 +102,7 @@ function Inner() {
       for (const i of parsed.error.issues) if (i.path[0]) e[i.path[0]] = i.message;
       setErrs(e); return;
     }
-    const payload = { qty_eggs: candidate.qty_eggs, total_revenue_fjd: candidate.total_revenue_fjd, sale_date: candidate.sale_date };
+    const payload = { qty_eggs: candidate.qty_eggs, total_revenue_fjd: candidate.total_revenue_fjd, sale_date: candidate.sale_date, disposition };
     if (candidate.buyer_id) payload.buyer_id = candidate.buyer_id;
     if (candidate.price_fjd_per_dozen) payload.price_fjd_per_dozen = candidate.price_fjd_per_dozen;
     if (candidate.notes) payload.notes = candidate.notes;
@@ -114,7 +116,7 @@ function Inner() {
     <div className="min-h-screen" style={{ background: C.cream, color: C.soil }}>
       <div className="sticky top-0 z-10 px-4 py-3 flex items-center justify-between border-b" style={{ background: C.cream, borderColor: C.border }}>
         <button onClick={() => navigate('/farm')} className="text-sm" style={{ color: C.muted }}>← Cancel</button>
-        <h1 className="text-base font-semibold">Sell eggs</h1>
+        <h1 className="text-base font-semibold">Eggs out</h1>
         <div className="w-12" />
       </div>
       <div className="px-4 py-4 max-w-md mx-auto space-y-5">
@@ -136,26 +138,36 @@ function Inner() {
           </div>
         </section>
         <section style={{ opacity: ready ? 1 : 0.4, pointerEvents: ready ? 'auto' : 'none' }}>
-          <div className="text-xs font-medium uppercase tracking-wide mb-2" style={{ color: C.muted }}>Sale</div>
+          <div className="text-xs font-medium uppercase tracking-wide mb-2" style={{ color: C.muted }}>Eggs out</div>
           <div className="space-y-3">
+            <div className="flex gap-2">
+              {[['SOLD', 'Sold'], ['GIVEN', 'Given away / home use']].map(([v, l]) => (
+                <button key={v} type="button" onClick={() => setDisposition(v)} className="flex-1 px-3 py-2.5 rounded-md border text-sm font-medium"
+                  style={{ background: disposition === v ? C.green : '#fff', color: disposition === v ? '#fff' : C.soil, borderColor: disposition === v ? C.green : C.border }}>{l}</button>
+              ))}
+            </div>
             <div><label className="block text-xs mb-1" style={{ color: C.muted }}>How many eggs *</label>
               <input type="number" inputMode="numeric" value={qtyEggs} onChange={e => setQtyEggs(e.target.value)} min={1} placeholder="e.g. 120"
                 className="w-full px-3 py-3 rounded-md border text-lg" style={{ background: '#fff', borderColor: errs.qty_eggs ? C.red : C.border }} />
               {errs.qty_eggs && <div className="text-xs mt-1" style={{ color: C.red }}>{errs.qty_eggs}</div>}</div>
-            <div><label className="block text-xs mb-1" style={{ color: C.muted }}>Total revenue (FJD) *</label>
-              <input type="text" inputMode="decimal" value={totalRevenue} onChange={e => setTotalRevenue(e.target.value)} placeholder="e.g. 30.00"
-                className="w-full px-3 py-3 rounded-md border text-lg" style={{ background: '#fff', borderColor: errs.total_revenue_fjd ? C.red : C.border }} />
-              {errs.total_revenue_fjd && <div className="text-xs mt-1" style={{ color: C.red }}>{errs.total_revenue_fjd}</div>}</div>
+            {disposition === 'SOLD' && (
+              <div><label className="block text-xs mb-1" style={{ color: C.muted }}>Total revenue (FJD) *</label>
+                <input type="text" inputMode="decimal" value={totalRevenue} onChange={e => setTotalRevenue(e.target.value)} placeholder="e.g. 30.00"
+                  className="w-full px-3 py-3 rounded-md border text-lg" style={{ background: '#fff', borderColor: errs.total_revenue_fjd ? C.red : C.border }} />
+                {errs.total_revenue_fjd && <div className="text-xs mt-1" style={{ color: C.red }}>{errs.total_revenue_fjd}</div>}</div>
+            )}
             <div><label className="block text-xs mb-1" style={{ color: C.muted }}>Date sold *</label>
               <input type="date" value={saleDate} onChange={e => setSaleDate(e.target.value)} className="w-full px-3 py-2 rounded-md border text-sm" style={{ background: '#fff', borderColor: C.border }} /></div>
-            <div><label className="block text-xs mb-1" style={{ color: C.muted }}>Buyer (optional)</label>
-              <select value={buyerId} onChange={e => setBuyerId(e.target.value)} className="w-full px-3 py-2 rounded-md border text-sm" style={{ background: '#fff', borderColor: C.border }}>
-                <option value="">— Not specified —</option>
-                {buyers.map(b => <option key={b.library_id} value={b.library_id}>{b.name}</option>)}
-              </select></div>
-            <div><label className="block text-xs mb-1" style={{ color: C.muted }}>Price per dozen (FJD, optional)</label>
-              <input type="text" inputMode="decimal" value={pricePerDozen} onChange={e => setPricePerDozen(e.target.value)} placeholder="e.g. 3.00"
-                className="w-full px-3 py-2 rounded-md border text-sm" style={{ background: '#fff', borderColor: C.border }} /></div>
+            {disposition === 'SOLD' && (<>
+              <div><label className="block text-xs mb-1" style={{ color: C.muted }}>Buyer (optional)</label>
+                <select value={buyerId} onChange={e => setBuyerId(e.target.value)} className="w-full px-3 py-2 rounded-md border text-sm" style={{ background: '#fff', borderColor: C.border }}>
+                  <option value="">— Not specified —</option>
+                  {buyers.map(b => <option key={b.library_id} value={b.library_id}>{b.name}</option>)}
+                </select></div>
+              <div><label className="block text-xs mb-1" style={{ color: C.muted }}>Price per dozen (FJD, optional)</label>
+                <input type="text" inputMode="decimal" value={pricePerDozen} onChange={e => setPricePerDozen(e.target.value)} placeholder="e.g. 3.00"
+                  className="w-full px-3 py-2 rounded-md border text-sm" style={{ background: '#fff', borderColor: C.border }} /></div>
+            </>)}
             <div><label className="block text-xs mb-1" style={{ color: C.muted }}>Notes (optional)</label>
               <textarea value={notes} onChange={e => setNotes(e.target.value)} maxLength={500} rows={2} className="w-full px-3 py-2 rounded-md border text-sm" style={{ background: '#fff', borderColor: C.border }} /></div>
           </div>
@@ -164,7 +176,7 @@ function Inner() {
         {mutation.isError && <div className="text-sm px-3 py-2 rounded-md" style={{ background: '#FDECEA', color: C.red, border: `1px solid ${C.red}` }}>{mutation.error?.message || 'Submit failed.'}</div>}
         <button onClick={submit} disabled={!ready || mutation.isPending || loading} className="w-full px-4 py-3 rounded-md text-base font-medium"
           style={{ background: (!ready || mutation.isPending) ? '#A8C997' : C.green, color: '#fff', opacity: (!ready || mutation.isPending) ? 0.7 : 1 }}>
-          {mutation.isPending ? 'Logging…' : 'Log sale'}
+          {mutation.isPending ? 'Logging…' : disposition === 'GIVEN' ? 'Log eggs given' : 'Log sale'}
         </button>
       </div>
     </div>

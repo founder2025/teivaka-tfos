@@ -81,10 +81,15 @@ function MortalityLoggedNewInner() {
   const [notes, setNotes] = useState('');
   const [fieldErrors, setFieldErrors] = useState({});
 
+  // 129 catalog forensic: MORTALITY_INVESTIGATED left the (+) grid — the natural
+  // follow-up path is straight from logging the death. Ask, then route.
   const mutation = useEventMutation({
     eventType: 'MORTALITY_LOGGED',
     successMessage: 'Mortality logged ✓',
-    onSuccess: () => setTimeout(() => navigate('/farm'), 800),
+    onSuccess: () => setTimeout(() => {
+      const investigate = window.confirm('Logged. Do you want to record an investigation of this death now? (cause, findings, actions)');
+      navigate(investigate ? '/farm/poultry/mortality/investigated' : '/farm');
+    }, 400),
   });
 
   useEffect(() => {

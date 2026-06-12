@@ -918,6 +918,24 @@ async def submit_event(
                 ),
             )
 
+    # 2dd. MEDICATION_GIVEN-specific: flock_id REQUIRED (129 catalog forensic)
+    if submission.event_type == "MEDICATION_GIVEN":
+        if submission.anchors.flock_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=error_envelope("medication_requires_flock", "MEDICATION_GIVEN requires a flock_id anchor."),
+            )
+
+    # 2ee. LIVESTOCK pack: farm anchor only (validated at step 2); flock_id must NOT
+    #      be sent — livestock events are animal_ref-scoped, not flock-scoped (129).
+    from app.schemas.events_registry import LIVESTOCK_EVENT_TYPES
+    if submission.event_type in LIVESTOCK_EVENT_TYPES:
+        if submission.anchors.flock_id is not None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=error_envelope("livestock_event_no_flock", "Livestock events use animal_ref in the payload, not a poultry flock anchor."),
+            )
+
     # 3. Validate payload against registered schema
     try:
         validated_payload = payload_schema_class(**submission.payload)
@@ -1108,6 +1126,38 @@ async def submit_event(
             },
         )
         event_id = cycle_id_text
+    elif target_table == "tenant.livestock_events":
+        # 5d. LIVESTOCK branch (129 catalog forensic) — animal_ref-scoped events
+        insert_result = await db.execute(
+            text("""
+                INSERT INTO tenant.livestock_events (
+                    tenant_id, farm_id, pu_id, animal_ref, species, created_by,
+                    event_type, occurred_at, payload_jsonb, payload_schema_version, audit_event_id
+                )
+                VALUES (
+                    :tid, :fid, :pu, :aref, :sp, :uid,
+                    :et, :occ, CAST(:p AS jsonb), :ver, :aud
+                )
+                RETURNING event_id
+            """),
+            {
+                "tid": tenant_uuid,
+                "fid": submission.anchors.farm_id,
+                "pu": submission.anchors.pu_id,
+                "aref": payload_dict.get("animal_ref"),
+                "sp": payload_dict.get("species"),
+                "uid": actor_uuid,
+                "et": submission.event_type,
+                "occ": occurred_ts,
+                "p": payload_json,
+                "ver": schema_version,
+                "aud": audit_event_id,
+            },
+        )
+        new_row = insert_result.first()
+        if new_row is None:
+            raise HTTPException(500, error_envelope("insert_failed", "Livestock event insert failed after audit emission."))
+        event_id = new_row.event_id
     else:
         # 5. (existing POULTRY path) INSERT event row with audit_event_id linked (TEXT anchors per Strike #21; flock_id added Phase 6.2-3)
         insert_result = await db.execute(

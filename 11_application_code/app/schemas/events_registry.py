@@ -99,9 +99,12 @@ class FeedUsedPayload(BaseModel):
 
 class EggsSoldPayload(BaseModel):
     """Eggs sold event. flock_id OPTIONAL (eggs may pool from multiple flocks). No side effect.
-    cash_ledger auto-link deferred to Phase 6.5+."""
+    cash_ledger auto-link deferred to Phase 6.5+.
+    disposition (129 catalog forensic): SOLD or GIVEN — given-away/home-use eggs are
+    Food-Security-layer data; revenue 0 is valid for GIVEN."""
     qty_eggs: int = Field(..., ge=1, le=1000000)
     total_revenue_fjd: Decimal = Field(..., ge=0, max_digits=12, decimal_places=2)
+    disposition: Literal["SOLD", "GIVEN"] = Field(default="SOLD", description="Sold for cash, or given away / home use.")
     buyer_id: Optional[str] = Field(default=None, description="Optional UUID of buyer in shared.farm_libraries POULTRY_BUYER.")
     price_fjd_per_dozen: Optional[Decimal] = Field(default=None, ge=0, max_digits=8, decimal_places=2)
     sale_date: str = Field(..., description="Date sold (YYYY-MM-DD).")
@@ -565,6 +568,102 @@ class FieldObservationPayload(BaseModel):
     notes: Optional[str] = Field(default=None, max_length=500)
 
 
+# ── 129 catalog forensic: MEDICATION_GIVEN (poultry) + livestock pack ────────
+
+class MedicationGivenPayload(BaseModel):
+    """MEDICATION_GIVEN — medicine/dewormer given to a flock. flock_id REQUIRED.
+
+    Withholding days recorded per-administration (meat/eggs) so the record stands
+    up to a regulator. Honest scope note: automated sales-blocking enforcement
+    today reads vaccination withholding (Phase 6.6-1); extending the enforcement
+    query to medication is filed work — the RECORD here is complete and chained.
+    """
+    medication_name: str = Field(..., min_length=2, max_length=120)
+    reason: Optional[str] = Field(default=None, max_length=200, description="What it treats (e.g. worms, coccidiosis).")
+    dose: Optional[str] = Field(default=None, max_length=80, description="Dose as written on the label, e.g. 5ml per litre.")
+    route: Literal["DRINKING_WATER", "INJECTION", "ORAL", "SPRAY", "FEED", "OTHER"] = "DRINKING_WATER"
+    withholding_days_meat: Optional[int] = Field(default=None, ge=0, le=365)
+    withholding_days_eggs: Optional[int] = Field(default=None, ge=0, le=365)
+    given_date: str = Field(..., description="Date given (YYYY-MM-DD).")
+    notes: Optional[str] = Field(default=None, max_length=500)
+
+
+class _LivestockBase(BaseModel):
+    """Shared anchor fields for livestock events (cattle/goats/sheep — pigs are
+    excluded from RULE activation per Inviolable #8, but record-keeping is allowed).
+    animal_ref is the farmer's tag/name for the animal or group — free text until
+    an animal register ships."""
+    species: Literal["CATTLE", "GOAT", "SHEEP", "PIG", "HORSE", "OTHER"]
+    animal_ref: Optional[str] = Field(default=None, max_length=80, description="Tag number, name, or group (e.g. 'Brown cow', 'Pen 2').")
+    notes: Optional[str] = Field(default=None, max_length=500)
+
+
+class LivestockBirthPayload(_LivestockBase):
+    qty_born: int = Field(..., ge=1, le=1000)
+    qty_alive: Optional[int] = Field(default=None, ge=0, le=1000)
+    birth_date: str = Field(..., description="YYYY-MM-DD")
+
+
+class LivestockMortalityPayload(_LivestockBase):
+    qty_dead: int = Field(..., ge=1, le=10000)
+    cause: Literal["DISEASE", "PREDATION", "INJURY", "BIRTHING", "OLD_AGE", "UNKNOWN", "OTHER"] = "UNKNOWN"
+    death_date: str = Field(..., description="YYYY-MM-DD")
+
+
+class LivestockAcquiredPayload(_LivestockBase):
+    qty: int = Field(..., ge=1, le=10000)
+    cost_fjd: Optional[Decimal] = Field(default=None, ge=0, max_digits=12, decimal_places=2)
+    source: Optional[str] = Field(default=None, max_length=120, description="Who/where from.")
+    acquired_date: str = Field(..., description="YYYY-MM-DD")
+
+    class Config:
+        json_encoders = {Decimal: str}
+
+
+class LivestockSalePayload(_LivestockBase):
+    qty: int = Field(..., ge=1, le=10000)
+    total_revenue_fjd: Decimal = Field(..., ge=0, max_digits=12, decimal_places=2)
+    buyer_name: Optional[str] = Field(default=None, max_length=120)
+    sale_date: str = Field(..., description="YYYY-MM-DD")
+
+    class Config:
+        json_encoders = {Decimal: str}
+
+
+class LivestockVaccinationPayload(_LivestockBase):
+    vaccine_name: str = Field(..., min_length=2, max_length=120)
+    qty_animals: Optional[int] = Field(default=None, ge=1, le=10000)
+    withholding_days_meat: Optional[int] = Field(default=None, ge=0, le=365)
+    withholding_days_milk: Optional[int] = Field(default=None, ge=0, le=365)
+    given_date: str = Field(..., description="YYYY-MM-DD")
+    next_due_date: Optional[str] = Field(default=None, description="YYYY-MM-DD")
+
+
+class MilkCollectedPayload(_LivestockBase):
+    qty_litres: Decimal = Field(..., gt=0, max_digits=10, decimal_places=2)
+    session: Literal["MORNING", "EVENING", "FULL_DAY"] = "FULL_DAY"
+    collected_date: str = Field(..., description="YYYY-MM-DD")
+
+    class Config:
+        json_encoders = {Decimal: str}
+
+
+class AnimalMovedPayload(_LivestockBase):
+    qty: Optional[int] = Field(default=None, ge=1, le=10000)
+    from_location: Optional[str] = Field(default=None, max_length=120)
+    to_location: str = Field(..., min_length=1, max_length=120, description="Paddock/pen moved to.")
+    reason: Optional[str] = Field(default=None, max_length=200, description="e.g. fresh grass, weaning, quarantine.")
+    moved_date: str = Field(..., description="YYYY-MM-DD")
+
+
+class BreedingLoggedPayload(_LivestockBase):
+    method: Literal["NATURAL", "AI", "PREGNANCY_CHECK"] = "NATURAL"
+    sire_ref: Optional[str] = Field(default=None, max_length=80, description="Bull/buck tag or name (or AI straw).")
+    result: Optional[Literal["MATED", "PREGNANT", "NOT_PREGNANT", "UNKNOWN"]] = None
+    expected_due_date: Optional[str] = Field(default=None, description="YYYY-MM-DD")
+    breeding_date: str = Field(..., description="YYYY-MM-DD")
+
+
 EVENT_TYPE_REGISTRY: dict = {
     "EGGS_COLLECTED":         (EggsCollectedPayload,         "tenant.poultry_event_log", 1),
     "MORTALITY_LOGGED":       (MortalityLoggedPayload,       "tenant.poultry_event_log", 1),
@@ -605,6 +704,22 @@ EVENT_TYPE_REGISTRY: dict = {
     "PEST_SCOUTING":          (PestScoutingPayload,          "tenant.field_events", 1),
     "DISEASE_SCOUTING":       (DiseaseScoutingPayload,       "tenant.field_events", 1),
     "FIELD_OBSERVATION":      (FieldObservationPayload,      "tenant.field_events", 1),
+    # POULTRY — 129 catalog forensic
+    "MEDICATION_GIVEN":       (MedicationGivenPayload,       "tenant.poultry_event_log", 1),
+    # LIVESTOCK — 129 catalog forensic (Operator-ratified Option A pack)
+    "LIVESTOCK_BIRTH":        (LivestockBirthPayload,        "tenant.livestock_events", 1),
+    "LIVESTOCK_MORTALITY":    (LivestockMortalityPayload,    "tenant.livestock_events", 1),
+    "LIVESTOCK_ACQUIRED":     (LivestockAcquiredPayload,     "tenant.livestock_events", 1),
+    "LIVESTOCK_SALE":         (LivestockSalePayload,         "tenant.livestock_events", 1),
+    "VACCINATION":            (LivestockVaccinationPayload,  "tenant.livestock_events", 1),
+    "MILK_COLLECTED":         (MilkCollectedPayload,         "tenant.livestock_events", 1),
+    "ANIMAL_MOVED":           (AnimalMovedPayload,           "tenant.livestock_events", 1),
+    "BREEDING_LOGGED":        (BreedingLoggedPayload,        "tenant.livestock_events", 1),
+}
+
+LIVESTOCK_EVENT_TYPES = {
+    "LIVESTOCK_BIRTH", "LIVESTOCK_MORTALITY", "LIVESTOCK_ACQUIRED",
+    "LIVESTOCK_SALE", "VACCINATION", "MILK_COLLECTED", "ANIMAL_MOVED", "BREEDING_LOGGED",
 }
 
 # Vocabularies (used for app-layer validation in events.py)

@@ -86,7 +86,10 @@ function Inner() {
   const [qtyUsed, setQtyUsed] = useState('');
   const [unit, setUnit] = useState('');
   const [areaM2, setAreaM2] = useState('');
-  const [applicatorRole, setApplicatorRole] = useState('');
+  // 129 field-test fix: smart default (owner applies it themselves in the common
+  // case); the detail fields live behind one "More detail" fold.
+  const [applicatorRole, setApplicatorRole] = useState('OWNER');
+  const [more, setMore] = useState(false);
   const [notes, setNotes] = useState('');
   const [errs, setErrs] = useState({});
 
@@ -244,43 +247,47 @@ function Inner() {
               </div>
             )}
             {errs.method_required && <div className="text-xs" style={{ color: C.red }}>{errs.method_required}</div>}
-            {showChemical && (
-              <>
-                <div>
-                  <label className="block text-xs mb-1" style={{ color: C.muted }}>Quantity used (optional)</label>
-                  <input type="number" inputMode="decimal" value={qtyUsed} onChange={e => setQtyUsed(e.target.value)} min={0.001} step={0.001} placeholder="e.g. 50"
-                    className="w-full px-3 py-3 rounded-md border text-lg" style={{ background: '#fff', borderColor: errs.qty_used ? C.red : C.border }} />
-                  {errs.qty_used && <div className="text-xs mt-1" style={{ color: C.red }}>{errs.qty_used}</div>}
-                </div>
-                {qtyUsed !== '' && (
+            <button type="button" onClick={() => setMore(m => !m)} className="text-sm font-medium" style={{ color: C.green }}>
+              {more ? '− Less detail' : '+ More detail (amount, area, who applied, notes)'}
+            </button>
+            {more && (<>
+              {showChemical && (
+                <>
                   <div>
-                    <label className="block text-xs mb-1" style={{ color: C.muted }}>Unit</label>
-                    <select value={unit} onChange={e => setUnit(e.target.value)} className="w-full px-3 py-3 rounded-md border text-base" style={{ background: '#fff', borderColor: errs.unit ? C.red : C.border }}>
-                      <option value="">— Pick a unit —</option>
-                      {UNITS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                    </select>
+                    <label className="block text-xs mb-1" style={{ color: C.muted }}>Quantity used (optional)</label>
+                    <input type="number" inputMode="decimal" value={qtyUsed} onChange={e => setQtyUsed(e.target.value)} min={0.001} step={0.001} placeholder="e.g. 50"
+                      className="w-full px-3 py-3 rounded-md border text-lg" style={{ background: '#fff', borderColor: errs.qty_used ? C.red : C.border }} />
+                    {errs.qty_used && <div className="text-xs mt-1" style={{ color: C.red }}>{errs.qty_used}</div>}
                   </div>
-                )}
-              </>
-            )}
-            <div>
-              <label className="block text-xs mb-1" style={{ color: C.muted }}>Area treated (m²) — optional</label>
-              <input type="number" inputMode="decimal" value={areaM2} onChange={e => setAreaM2(e.target.value)} min={0.01} step={0.01} placeholder="e.g. 40"
-                className="w-full px-3 py-3 rounded-md border text-lg" style={{ background: '#fff', borderColor: errs.area_treated_m2 ? C.red : C.border }} />
-              {errs.area_treated_m2 && <div className="text-xs mt-1" style={{ color: C.red }}>{errs.area_treated_m2}</div>}
-            </div>
-            <div>
-              <label className="block text-xs mb-1" style={{ color: C.muted }}>Applicator *</label>
-              <select value={applicatorRole} onChange={e => setApplicatorRole(e.target.value)} className="w-full px-3 py-3 rounded-md border text-base" style={{ background: '#fff', borderColor: errs.applicator_role ? C.red : C.border }}>
-                <option value="">Pick…</option>
-                {APPLICATOR_ROLES.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-              </select>
-              {errs.applicator_role && <div className="text-xs mt-1" style={{ color: C.red }}>{errs.applicator_role}</div>}
-            </div>
-            <div>
-              <label className="block text-xs mb-1" style={{ color: C.muted }}>Notes (optional)</label>
-              <textarea value={notes} onChange={e => setNotes(e.target.value)} maxLength={500} rows={2} className="w-full px-3 py-2 rounded-md border text-sm" style={{ background: '#fff', borderColor: C.border }} placeholder="Anything else worth noting?" />
-            </div>
+                  {qtyUsed !== '' && (
+                    <div>
+                      <label className="block text-xs mb-1" style={{ color: C.muted }}>Unit</label>
+                      <select value={unit} onChange={e => setUnit(e.target.value)} className="w-full px-3 py-3 rounded-md border text-base" style={{ background: '#fff', borderColor: errs.unit ? C.red : C.border }}>
+                        <option value="">— Pick a unit —</option>
+                        {UNITS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                      </select>
+                    </div>
+                  )}
+                </>
+              )}
+              <div>
+                <label className="block text-xs mb-1" style={{ color: C.muted }}>Area treated (m²) — optional</label>
+                <input type="number" inputMode="decimal" value={areaM2} onChange={e => setAreaM2(e.target.value)} min={0.01} step={0.01} placeholder="e.g. 40"
+                  className="w-full px-3 py-3 rounded-md border text-lg" style={{ background: '#fff', borderColor: errs.area_treated_m2 ? C.red : C.border }} />
+                {errs.area_treated_m2 && <div className="text-xs mt-1" style={{ color: C.red }}>{errs.area_treated_m2}</div>}
+              </div>
+              <div>
+                <label className="block text-xs mb-1" style={{ color: C.muted }}>Who applied it</label>
+                <select value={applicatorRole} onChange={e => setApplicatorRole(e.target.value)} className="w-full px-3 py-3 rounded-md border text-base" style={{ background: '#fff', borderColor: errs.applicator_role ? C.red : C.border }}>
+                  {APPLICATOR_ROLES.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </select>
+                {errs.applicator_role && <div className="text-xs mt-1" style={{ color: C.red }}>{errs.applicator_role}</div>}
+              </div>
+              <div>
+                <label className="block text-xs mb-1" style={{ color: C.muted }}>Notes (optional)</label>
+                <textarea value={notes} onChange={e => setNotes(e.target.value)} maxLength={500} rows={2} className="w-full px-3 py-2 rounded-md border text-sm" style={{ background: '#fff', borderColor: C.border }} placeholder="Anything else worth noting?" />
+              </div>
+            </>)}
           </div>
         </section>
         {anchorError && <div className="text-sm px-3 py-2 rounded-md" style={{ background: '#FDECEA', color: C.red, border: `1px solid ${C.red}` }}>{anchorError}</div>}
