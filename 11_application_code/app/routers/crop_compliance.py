@@ -120,3 +120,80 @@ async def get_crop_compliance(
         "upcoming_clearances": upcoming,
         "checked_cycles": int(checked),
     })
+
+
+@router.get("/crops/compliance/{farm_id}/register")
+async def get_chemical_register(
+    farm_id: str,
+    db: AsyncSession = Depends(get_tenant_db),
+    current_user: dict = Depends(get_current_user),
+):
+    """Chemical-application register for the Compliance > Chemical register tab.
+    Every chemical event on the farm joined to its WHD, newest first. Read-only."""
+    rows = (await db.execute(
+        text("""
+            SELECT fe.event_id::text                                          AS event_id,
+                   fe.event_date::date                                        AS applied_date,
+                   cl.chem_name                                               AS chemical,
+                   fe.pu_id                                                   AS block_id,
+                   pu.pu_name                                                 AS block_name,
+                   p.production_name                                          AS crop,
+                   COALESCE(cl.withholding_period_days, 0)                    AS whd_days,
+                   (fe.event_date::date + COALESCE(cl.withholding_period_days,0)) AS clear_date,
+                   fe.chemical_dose_per_liter                                 AS dose,
+                   fe.audit_hash                                              AS hash
+            FROM tenant.field_events fe
+            JOIN shared.chemical_library cl ON cl.chemical_id = fe.chemical_id
+            LEFT JOIN tenant.production_units pu ON pu.pu_id = fe.pu_id
+            LEFT JOIN tenant.production_cycles pc ON pc.cycle_id = fe.cycle_id
+            LEFT JOIN shared.productions p ON p.production_id = pc.production_id
+            WHERE fe.farm_id = :fid
+              AND fe.chemical_application = true
+              AND fe.chemical_id IS NOT NULL
+            ORDER BY fe.event_date DESC
+            LIMIT 500
+        """),
+        {"fid": farm_id},
+    )).mappings().all()
+    today = date.today()
+    out = []
+    for r in rows:
+        d = dict(r)
+        clear = d["clear_date"]
+        d["applied_date"] = str(d["applied_date"]) if d["applied_date"] else None
+        d["clear_date"] = str(clear) if clear else None
+        d["active"] = bool(clear and clear > today)
+        d["hash"] = (d["hash"] or "")[-8:]
+        out.append(d)
+    return success_envelope({"applications": out, "count": len(out)})
+
+
+@router.get("/crops/compliance/{farm_id}/overrides")
+async def get_compliance_overrides(
+    farm_id: str,
+    db: AsyncSession = Depends(get_tenant_db),
+    current_user: dict = Depends(get_current_user),
+):
+    """FOUNDER override ledger for the Compliance > Overrides tab. Real rows from
+    tenant.harvest_compliance_overrides (write-once; each is a permanent ding)."""
+    rows = (await db.execute(
+        text("""
+            SELECT o.override_id::text          AS override_id,
+                   o.reason                     AS reason,
+                   o.attempted_at               AS attempted_at,
+                   o.approved                   AS approved,
+                   o.harvest_id::text           AS harvest_id,
+                   u.full_name                  AS authorized_by
+            FROM tenant.harvest_compliance_overrides o
+            LEFT JOIN tenant.users u ON u.user_id = o.attempted_by_user_id
+            ORDER BY o.attempted_at DESC
+            LIMIT 200
+        """),
+    )).mappings().all()
+    out = []
+    for r in rows:
+        d = dict(r)
+        d["attempted_at"] = d["attempted_at"].isoformat() if d["attempted_at"] else None
+        out.append(d)
+    ytd = sum(1 for d in out if (d["attempted_at"] or "") >= "2026-01-01")
+    return success_envelope({"overrides": out, "total": len(out), "ytd": ytd})
