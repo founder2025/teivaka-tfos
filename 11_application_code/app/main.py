@@ -58,8 +58,6 @@ from app.routers import (
     decision_engine,
     tis,
     voice,
-    livestock,
-    apiculture,
     price_master,
     orders,
     profit_share,
@@ -323,8 +321,6 @@ app.include_router(tis_stream.router,         prefix=f"{PREFIX}/tis",           
 app.include_router(voice.router,              prefix=f"{PREFIX}/voice",              tags=["Voice Pipeline"])
 
 # Specialised farm types
-app.include_router(livestock.router,          prefix=f"{PREFIX}/livestock",          tags=["Livestock"])
-app.include_router(apiculture.router,         prefix=f"{PREFIX}/apiculture",         tags=["Apiculture"])
 
 # Commerce
 app.include_router(price_master.router,       prefix=f"{PREFIX}/price-master",       tags=["Price Master"])
