@@ -105,13 +105,10 @@ export default function Tasks() {
   });
 
   return (
-    <div style={{ background: C.cream, minHeight: "100%" }}>
+    <div className="tfp" style={{ background: C.cream, minHeight: "100%" }}>
       <div style={{ maxWidth: 1200, margin: "0 auto", padding: 24 }}>
-        <div className="mb-5">
-          <h1 className="text-2xl font-bold" style={{ color: C.soil }}>Tasks</h1>
-          <p className="text-sm mt-1" style={{ color: C.muted }}>
-            What to do next — ranked by what matters most
-          </p>
+        <div className="page-header">
+          <div><h1>Tasks</h1><div className="subtitle">What to do next — ranked by what matters most</div></div>
         </div>
 
         <div className="flex gap-1 mb-4">

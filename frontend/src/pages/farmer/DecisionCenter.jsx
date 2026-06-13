@@ -165,14 +165,10 @@ function DecisionInner() {
   const farmName = farmId || "your farm";
 
   return (
-    <div className="space-y-3">
-      {/* 1. Title bar */}
-      <div className="flex items-start justify-between gap-2 flex-wrap">
-        <div>
-          <h1 className="text-2xl font-bold" style={{ color: C.soil }}>Decision Center</h1>
-          <div className="text-xs mt-0.5" style={{ color: C.muted }}>What the whole farm is telling you, most important first · {farmName}</div>
-        </div>
-        <div className="flex items-center gap-2 flex-wrap"><FarmSelector /><ModeDropdown /></div>
+    <div className="tfp space-y-3">
+      <div className="page-header">
+        <div><h1>Decision Center</h1><div className="subtitle">What the whole farm is telling you, most important first · {farmName}</div></div>
+        <div className="page-actions"><FarmSelector /><ModeDropdown /></div>
       </div>
 
       {/* 2. THE CALL RIGHT NOW */}

@@ -671,12 +671,11 @@ function ReportsInner() {
   }
 
   return (
-    <div className="space-y-4">
-      <div>
-        <h1 className="text-2xl font-bold" style={{ color: C.soil }}>Reports</h1>
-        <div className="text-xs mt-0.5" style={{ color: C.muted }}>documents a bank or buyer can read — every number from logged activity</div>
+    <div className="tfp space-y-4">
+      <div className="page-header">
+        <div><h1>Reports</h1><div className="subtitle">documents a bank or buyer can read — every number from logged activity</div></div>
+        <div className="page-actions"><FarmSelector /><ModeDropdown /></div>
       </div>
-      <div className="flex items-center justify-between gap-2 flex-wrap"><FarmSelector /><ModeDropdown /></div>
       <div className="flex gap-1 overflow-x-auto border-b" style={{ borderColor: C.border }}>
         {TABS.map((t) => (
           <button key={t.id} onClick={() => setTab(t.id)} className="px-3 py-2 text-sm font-medium whitespace-nowrap flex flex-col items-start shrink-0"

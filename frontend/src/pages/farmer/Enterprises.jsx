@@ -775,15 +775,12 @@ function EnterprisesInner() {
     : <InvestorTab D={D} onOpen={openEntOrRoute} navigate={navigate} />;
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-start justify-between gap-2 flex-wrap">
-        <div>
-          <h1 className="text-2xl font-bold" style={{ color: C.soil }}>Enterprises</h1>
-          <div className="text-xs mt-0.5" style={{ color: C.muted }}>Your farm as a portfolio of businesses · {farmId || "your farm"}</div>
-        </div>
-        <div className="flex items-center gap-2 flex-wrap">
+    <div className="tfp space-y-4">
+      <div className="page-header">
+        <div><h1>Enterprises</h1><div className="subtitle">Your farm as a portfolio of businesses · {farmId || "your farm"}</div></div>
+        <div className="page-actions">
           <FarmSelector /><ModeDropdown />
-          <button onClick={() => setAddOpen(true)} className={`text-sm px-3 py-2 rounded-lg text-white flex items-center gap-1.5 hover:brightness-95 ${FOCUS}`} style={{ background: C.greenDk }}><Plus size={14} />Add enterprise</button>
+          <button onClick={() => setAddOpen(true)} className="btn btn-primary"><Plus size={14} />Add enterprise</button>
         </div>
       </div>
 

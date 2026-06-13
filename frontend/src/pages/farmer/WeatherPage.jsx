@@ -183,15 +183,12 @@ function WeatherInner() {
   const cg = cropGuide(latest);
 
   return (
-    <div className="space-y-3">
-      <div className="flex items-start justify-between gap-2 flex-wrap">
-        <div>
-          <h1 className="text-2xl font-bold" style={{ color: C.soil }}>Weather</h1>
-          <div className="text-xs mt-0.5" style={{ color: C.muted }}>Every weather decision in one place · crops + animals · {farmId || "your farm"}</div>
-        </div>
-        <div className="flex items-center gap-2 flex-wrap">
+    <div className="tfp space-y-3">
+      <div className="page-header">
+        <div><h1>Weather</h1><div className="subtitle">Every weather decision in one place · crops + animals · {farmId || "your farm"}</div></div>
+        <div className="page-actions">
           <FarmSelector /><ModeDropdown />
-          <button onClick={() => setLogOpen(true)} className={`text-sm px-3 py-2 rounded-lg text-white flex items-center gap-1.5 hover:brightness-95 ${FOCUS}`} style={{ background: C.greenDk }}><Plus size={14} />Log today's weather</button>
+          <button onClick={() => setLogOpen(true)} className="btn btn-primary"><Plus size={14} />Log today's weather</button>
         </div>
       </div>
 

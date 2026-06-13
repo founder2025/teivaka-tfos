@@ -281,13 +281,10 @@ function HistoryInner() {
   useEffect(() => { setRender(60); }, [filter, search, from, to]);
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-start justify-between gap-2 flex-wrap">
-        <div>
-          <h1 className="text-2xl font-bold" style={{ color: C.soil }}>Farm History</h1>
-          <div className="text-xs mt-0.5" style={{ color: C.muted }}>Everything you have ever logged on {farmId || "your farm"}, by the day it happened · hash-stamped, nothing lost</div>
-        </div>
-        <div className="flex items-center gap-2 flex-wrap"><FarmSelector /><ModeDropdown /></div>
+    <div className="tfp space-y-4">
+      <div className="page-header">
+        <div><h1>Farm History</h1><div className="subtitle">Everything you have ever logged on {farmId || "your farm"}, by the day it happened · hash-stamped, nothing lost</div></div>
+        <div className="page-actions"><FarmSelector /><ModeDropdown /></div>
       </div>
 
       {/* chain + retention + export */}
