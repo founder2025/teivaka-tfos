@@ -22,7 +22,6 @@ import {
   Coins, DollarSign, Camera, Users, ListChecks, Activity, TrendingUp, Award, Truck, Sparkles,
   Zap, Leaf, LayoutGrid,
 } from "lucide-react";
-import { GuidedTour, useTour, TourReplayButton } from "../../components/tour/GuidedTour";
 
 import { CurrentFarmProvider, useCurrentFarm } from "../../context/CurrentFarmContext";
 import RecentLoggedStrip from "../../components/farm/RecentLoggedStrip";
@@ -390,21 +389,10 @@ function QuickActions({ navigate }) {
 }
 
 // ── page ─────────────────────────────────────────────────────────────
-// Farm Overview first-visit tour — low-literacy, ends by opening the (+).
-const OVERVIEW_TOUR_STEPS = [
-  { Icon: Sprout, title: "Welcome to your farm", body: "This is your farm's home. Everything you do on the farm, you record here." },
-  { Icon: Plus, title: "The green + button", body: "Tap the green + any time to record what you did — a sale, a harvest, money, anything.", spotlight: "log-fab" },
-  { Icon: Zap, title: "Quick actions", body: "These shortcuts log the most common things in one tap." },
-  { Icon: Leaf, title: "What's growing now", body: "Your crops and animals growing right now show here." },
-  { Icon: LayoutGrid, title: "Your farm menu", body: "Each item on the left is a part of your farm — Tasks, Money, Buyers and more." },
-  { Icon: Plus, title: "Let's start", body: "Tap below and log one thing you did today. That's all it takes.", actionLabel: "Log something", action: () => document.querySelector('[data-tour="log-fab"]')?.click() },
-];
-
 function FarmOverview() {
   const { farmId } = useCurrentFarm();
   const qc = useQueryClient();
   const navigate = useNavigate();
-  const tour = useTour("farm.overview");
   const [searchParams, setSearchParams] = useSearchParams();
   const [cycleModalOpen, setCycleModalOpen] = useState(false);
 
@@ -470,8 +458,6 @@ function FarmOverview() {
 
   return (
     <div className="space-y-3">
-      <GuidedTour tour={tour} steps={OVERVIEW_TOUR_STEPS} />
-      <div className="flex justify-end">{tour.ready && <TourReplayButton onReplay={tour.replay} />}</div>
       <HeaderRow />
       <FarmSectionsNav />
       <RecentLoggedStrip farmId={farmId} />

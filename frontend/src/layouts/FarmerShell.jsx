@@ -35,6 +35,8 @@ import { firePings, AnnouncementBanner } from "../utils/useFlags.jsx";
 import LogSheet from "../components/launcher/LogSheet";
 import { LeftRailProvider, useLeftRail } from "../context/LeftRailContext";
 import { LauncherProvider, useLauncher } from "../context/LauncherContext";
+import { GuidedTour, useTour } from "../components/tour/GuidedTour";
+import { FARM_TOURS } from "../config/farmTours";
 
 const C = {
   soil:    "#5C4033",
@@ -359,9 +361,27 @@ function ShellContent() {
       <FarmPillarLogFab />
       <ChatWidget />
       <LauncherSheet />
+      <FarmTourHost />
       <Toast />
     </div>
   );
+}
+
+// Route-keyed first-visit tour host — one mount drives every Farm-pillar
+// destination's guided tour (config in farmTours.js). ActiveTour only mounts
+// when the current route has a tour, so the hooks run only when needed; the
+// `key` remounts it per destination so each tour evaluates its own seen-state.
+function FarmTourHost() {
+  const location = useLocation();
+  const cfg = FARM_TOURS[location.pathname];
+  if (!cfg) return null;
+  return <ActiveTour key={cfg.key} cfg={cfg} />;
+}
+function ActiveTour({ cfg }) {
+  const { open: openLauncher } = useLauncher();
+  const tour = useTour(cfg.key);
+  const steps = cfg.steps.map((s) => (s.openLauncher ? { ...s, action: () => openLauncher() } : s));
+  return <GuidedTour tour={tour} steps={steps} />;
 }
 
 // LogSheet host — reads launcher state from context. Lives at the shell
