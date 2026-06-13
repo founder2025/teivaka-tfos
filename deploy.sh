@@ -20,7 +20,7 @@
 set -uo pipefail
 
 BRANCH="${1:-claude/beautiful-fermi-F0dLX}"
-EXPECTED_HEAD="${2:-131_pu_established_event}"
+EXPECTED_HEAD="${2:-132_audit_chain_seq_seal}"
 ROOT="/opt/teivaka"
 COMPOSE="docker compose -f ${ROOT}/04_environment/docker-compose.yml"
 PSQL="docker exec -i teivaka_db psql -v ON_ERROR_STOP=1 -tA -U teivaka -d teivaka_db"
@@ -107,6 +107,12 @@ LVEVT="$($PSQL -c "SELECT to_regclass('tenant.livestock_events') IS NOT NULL;" 2
 [ "$LVEVT" = "t" ] && ok "livestock_events table present (129)" || bad "livestock_events missing (migration 129 — livestock forms would 500)"
 KILLED="$($PSQL -c "SELECT count(*) FROM shared.event_type_catalog WHERE event_type IN ('FEED_GIVEN','BEDDING_CHANGED','WAGES_PAID','SELL_CROPS') AND is_active = false;" 2>/dev/null | tr -d '[:space:]')"
 [ "${KILLED:-0}" = "4" ] && ok "catalog kills applied (129 — duplicate tiles deactivated)" || bad "catalog kills not applied (${KILLED}/4 — migration 129)"
+CSEQ="$($PSQL -c "SELECT count(*) FROM information_schema.columns WHERE table_schema='audit' AND table_name='events' AND column_name='chain_seq';" 2>/dev/null | tr -d '[:space:]')"
+[ "${CSEQ:-0}" = "1" ] && ok "audit.events.chain_seq present (132)" || bad "chain_seq missing (migration 132 — chain fix)"
+CSEAL="$($PSQL -c "SELECT to_regclass('audit.chain_seal') IS NOT NULL;" 2>/dev/null | tr -d '[:space:]')"
+[ "$CSEAL" = "t" ] && ok "audit.chain_seal present + v1 sealed (132)" || bad "chain_seal missing (migration 132)"
+CBREAKS="$($PSQL -c "SELECT COALESCE(SUM(break_count),0) FROM tenant.tenants t, LATERAL audit.verify_chain_for_tenant(t.tenant_id);" 2>/dev/null | tr -d '[:space:]')"
+[ "${CBREAKS:-x}" = "0" ] && ok "verify_chain_for_tenant reports 0 breaks across all tenants post-seal (132)" || bad "verify still reports breaks='${CBREAKS}' (expected 0 — seal/verify mismatch)"
 PUEST="$($PSQL -c "SELECT pg_get_constraintdef(oid) LIKE '%PRODUCTION_UNIT_ESTABLISHED%' FROM pg_constraint WHERE conname='events_event_type_check';" 2>/dev/null | tr -d '[:space:]')"
 [ "$PUEST" = "t" ] && ok "audit.events CHECK includes PRODUCTION_UNIT_ESTABLISHED (131)" || bad "PRODUCTION_UNIT_ESTABLISHED not in audit CHECK (migration 131 — establish form would 500)"
 VPU="$($PSQL -c "SELECT to_regclass('tenant.v_production_units') IS NOT NULL;" 2>/dev/null | tr -d '[:space:]')"

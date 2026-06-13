@@ -148,9 +148,12 @@ async def emit_audit_event(
     if occurred_at is None:
         occurred_at = datetime.now(timezone.utc)
 
-    # 1. Resolve previous_hash for this tenant.
-    #    RLS ensures we only see our tenant's rows even if the query omits
-    #    the filter. Keeping the explicit filter for defence-in-depth.
+    # 1. Resolve previous_hash for this tenant — the TRUE insertion tip.
+    #    Migration 132: order by chain_seq (strictly monotonic, server-assigned),
+    #    NOT occurred_at (user-supplied + backdatable). occurred_at ordering let
+    #    backdated events link to the wrong predecessor → false verify "breaks".
+    #    RLS ensures we only see our tenant's rows even if the query omits the
+    #    filter. Keeping the explicit filter for defence-in-depth.
     row = (
         await db.execute(
             text(
@@ -158,7 +161,7 @@ async def emit_audit_event(
                 SELECT this_hash
                 FROM audit.events
                 WHERE tenant_id = :tid
-                ORDER BY occurred_at DESC, event_id DESC
+                ORDER BY chain_seq DESC
                 LIMIT 1
                 """
             ),

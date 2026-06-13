@@ -185,13 +185,12 @@ async def crop_bank_evidence(
     """), {"tid": tid, "ps": period_start, "pe": period_end})).first()
     chain_first_event = first_row[0] if first_row else None
     chain_last_event = last_row[0] if last_row else None
-    breaks = (await db.execute(text("""
-        WITH chain AS (
-          SELECT previous_hash, LAG(this_hash) OVER (ORDER BY occurred_at, event_id) AS expected_prev
-          FROM audit.events WHERE tenant_id = :tid
-        )
-        SELECT COUNT(*) FROM chain WHERE previous_hash IS DISTINCT FROM expected_prev AND expected_prev IS NOT NULL
-    """), {"tid": tid})).scalar() or 0
+    # Migration 132: single source of truth — the corrected, seal-aware verifier
+    # (chain_seq order, post-seal window). Replaces the inline occurred_at walk
+    # that reported false breaks on backdated events.
+    breaks = (await db.execute(text(
+        "SELECT break_count FROM audit.verify_chain_for_tenant(cast(:tid AS uuid))"
+    ), {"tid": tid})).scalar() or 0
     chain_verified_ok = (int(breaks) == 0)
     chain_verified_at = datetime.now(timezone.utc)
 
