@@ -53,12 +53,12 @@ function gradeColor(g) { return g === "Strong" ? C.green : g === "Steady" ? C.so
 // ── atoms ────────────────────────────────────────────────────────────
 function Section({ icon: Icon, title, link, onLink, children, meta }) {
   return (
-    <section className="rounded-2xl border bg-white" style={{ borderColor: C.border }}>
-      <div className="flex items-center justify-between gap-2 px-4 pt-3.5 pb-1">
-        <h3 className="text-sm font-semibold flex items-center gap-1.5" style={{ color: C.soil }}>{Icon && <Icon size={14} />}{title}</h3>
-        {link ? <button onClick={onLink} className={`text-xs ${FOCUS}`} style={{ color: C.greenDk }}>{link}</button> : meta ? <span className="text-[11px]" style={{ color: C.muted }}>{meta}</span> : null}
+    <section className="card" style={{ marginBottom: 0 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "14px 16px 4px" }}>
+        <h3 style={{ fontSize: 13, fontWeight: 700, color: "var(--soil)", display: "flex", gap: 6, alignItems: "center" }}>{Icon && <Icon size={14} />}{title}</h3>
+        {link ? <button onClick={onLink} className={FOCUS} style={{ fontSize: 12, color: "var(--green-dk)", background: "transparent", border: "none", cursor: "pointer" }}>{link}</button> : meta ? <span style={{ fontSize: 11, color: "var(--muted)" }}>{meta}</span> : null}
       </div>
-      <div className="px-4 pb-4 pt-1">{children}</div>
+      <div style={{ padding: "2px 16px 16px" }}>{children}</div>
     </section>
   );
 }
@@ -66,23 +66,20 @@ function Tile({ label, value, sub, color, onClick, building }) {
   return (
     <div onClick={onClick} role={onClick ? "button" : undefined} tabIndex={onClick ? 0 : undefined}
       onKeyDown={onClick ? (e) => { if (e.key === "Enter") onClick(); } : undefined}
-      className={`rounded-xl border p-3 min-w-0 ${onClick ? `cursor-pointer hover:brightness-95 ${FOCUS}` : ""}`} style={{ background: building ? C.paper : "white", borderColor: C.border }}>
-      <div className="text-[10px] uppercase tracking-wide truncate flex items-center gap-1" style={{ color: C.muted }}>{label}{building && <span className="text-[8px] px-1 rounded" style={{ background: C.cream, color: C.amber }}>building</span>}</div>
-      <div className="text-lg font-bold truncate" style={{ color: color || C.soil }}>{value}</div>
-      {sub && <div className="text-[11px] truncate" style={{ color: C.muted }}>{sub}</div>}
+      className={`capital-tile ${onClick ? FOCUS : ""}`} style={{ cursor: onClick ? "pointer" : "default" }}>
+      <div className="capital-tile-label">{label}{building && <span style={{ fontSize: 8, marginLeft: 4, color: "var(--amber)" }}>building</span>}</div>
+      <div className="capital-tile-value" style={color ? { color, fontSize: 18 } : { fontSize: 18 }}>{value}</div>
+      {sub && <div className="capital-tile-sub">{sub}</div>}
     </div>
   );
 }
 
 function HeaderRow() {
   return (
-    <>
-      <div>
-        <h1 className="text-2xl font-bold" style={{ color: C.soil }}>Overview</h1>
-        <div className="text-xs mt-0.5" style={{ color: C.muted }}>Everything you run, in one place · {new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}</div>
-      </div>
-      <div className="flex items-center justify-between gap-2 flex-wrap"><FarmSelector /><ModeDropdown /></div>
-    </>
+    <div className="page-header">
+      <div><h1>Overview</h1><div className="subtitle">Everything you run, in one place · {new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}</div></div>
+      <div className="page-actions"><FarmSelector /><ModeDropdown /></div>
+    </div>
   );
 }
 
@@ -457,7 +454,7 @@ function FarmOverview() {
   const taskAction = async (id, action) => { try { await postJSON(`/api/v1/tasks/${id}/${action}`); emitToast(action === "complete" ? "Task done" : "Task skipped"); qc.invalidateQueries({ queryKey: ["ov-tasks"] }); } catch { emitToast("Couldn't update the task — try again"); } };
 
   return (
-    <div className="space-y-3">
+    <div className="tfp space-y-3">
       <HeaderRow />
       <FarmSectionsNav />
       <RecentLoggedStrip farmId={farmId} />
