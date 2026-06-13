@@ -20,7 +20,7 @@
 set -uo pipefail
 
 BRANCH="${1:-claude/beautiful-fermi-F0dLX}"
-EXPECTED_HEAD="${2:-129_catalog_forensic}"
+EXPECTED_HEAD="${2:-130_universal_production_unit}"
 ROOT="/opt/teivaka"
 COMPOSE="docker compose -f ${ROOT}/04_environment/docker-compose.yml"
 PSQL="docker exec -i teivaka_db psql -v ON_ERROR_STOP=1 -tA -U teivaka -d teivaka_db"
@@ -107,6 +107,12 @@ LVEVT="$($PSQL -c "SELECT to_regclass('tenant.livestock_events') IS NOT NULL;" 2
 [ "$LVEVT" = "t" ] && ok "livestock_events table present (129)" || bad "livestock_events missing (migration 129 — livestock forms would 500)"
 KILLED="$($PSQL -c "SELECT count(*) FROM shared.event_type_catalog WHERE event_type IN ('FEED_GIVEN','BEDDING_CHANGED','WAGES_PAID','SELL_CROPS') AND is_active = false;" 2>/dev/null | tr -d '[:space:]')"
 [ "${KILLED:-0}" = "4" ] && ok "catalog kills applied (129 — duplicate tiles deactivated)" || bad "catalog kills not applied (${KILLED}/4 — migration 129)"
+VPU="$($PSQL -c "SELECT to_regclass('tenant.v_production_units') IS NOT NULL;" 2>/dev/null | tr -d '[:space:]')"
+[ "$VPU" = "t" ] && ok "v_production_units unified view present (130)" || bad "v_production_units missing (migration 130 — Slice A keystone)"
+ENT="$($PSQL -c "SELECT count(*) FROM information_schema.columns WHERE table_schema='tenant' AND table_name='production_units' AND column_name IN ('enterprise_type','unit_of_measure');" 2>/dev/null | tr -d '[:space:]')"
+[ "${ENT:-0}" = "2" ] && ok "production_units enterprise_type + unit_of_measure present (130)" || bad "production_units keystone columns missing (${ENT}/2 — migration 130)"
+NONULL="$($PSQL -c "SELECT count(*) FROM tenant.production_units WHERE enterprise_type IS NULL;" 2>/dev/null | tr -d '[:space:]')"
+[ "${NONULL:-1}" = "0" ] && ok "all production_units backfilled with enterprise_type (130)" || bad "production_units rows with NULL enterprise_type = ${NONULL} (backfill incomplete)"
 MILK="$($PSQL -c "SELECT pg_get_constraintdef(oid) LIKE '%MILK_COLLECTED%' FROM pg_constraint WHERE conname='events_event_type_check';" 2>/dev/null | tr -d '[:space:]')"
 [ "$MILK" = "t" ] && ok "audit.events CHECK includes MILK_COLLECTED (livestock pack)" || bad "MILK_COLLECTED not in audit CHECK"
 

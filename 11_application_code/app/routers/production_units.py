@@ -98,6 +98,41 @@ async def list_production_units(farm_id: str = None, zone_id: str = None, user: 
         result = await db.execute(text(q + " ORDER BY pu.pu_id"), params)
         return {"data": [dict(r) for r in result.mappings().all()]}
 
+
+@router.get("/unified")
+async def list_unified_production_units(
+    farm_id: str = None,
+    enterprise_type: str = None,
+    user: dict = Depends(get_current_user),
+):
+    """Slice A — every production unit across EVERY enterprise (crop blocks,
+    flocks, nursery batches, and future verticals) from tenant.v_production_units.
+
+    This is the enterprise-agnostic read model the Tier-2 dashboards consume in
+    Slice D so Overview / Enterprises / Analytics stop being crop-and-flock shaped.
+    Optional filters: farm_id, enterprise_type (CROPS|POULTRY|AQUACULTURE|...).
+    """
+    async with get_rls_db(str(user["tenant_id"])) as db:
+        q = "SELECT * FROM tenant.v_production_units WHERE tenant_id = :tid"
+        params = {"tid": str(user["tenant_id"])}
+        if farm_id:
+            q += " AND farm_id = :farm_id"
+            params["farm_id"] = farm_id
+        if enterprise_type:
+            q += " AND enterprise_type = :ent"
+            params["ent"] = enterprise_type.upper()
+        result = await db.execute(text(q + " ORDER BY enterprise_type, label"), params)
+        rows = [dict(r) for r in result.mappings().all()]
+        # Lightweight per-enterprise rollup for dashboard headers.
+        summary: dict = {}
+        for r in rows:
+            e = r["enterprise_type"]
+            s = summary.setdefault(e, {"enterprise_type": e, "units": 0, "active": 0})
+            s["units"] += 1
+            if str(r["status"]).upper() not in ("INACTIVE", "CLOSED", "RETIRED", "TRANSPLANTED"):
+                s["active"] += 1
+        return {"data": {"units": rows, "by_enterprise": list(summary.values())}}
+
 @router.get("/{pu_id}")
 async def get_production_unit(pu_id: str, user: dict = Depends(get_current_user)):
     async with get_rls_db(str(user["tenant_id"])) as db:
