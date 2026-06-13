@@ -107,7 +107,7 @@ LVEVT="$($PSQL -c "SELECT to_regclass('tenant.livestock_events') IS NOT NULL;" 2
 [ "$LVEVT" = "t" ] && ok "livestock_events table present (129)" || bad "livestock_events missing (migration 129 — livestock forms would 500)"
 KILLED="$($PSQL -c "SELECT count(*) FROM shared.event_type_catalog WHERE event_type IN ('FEED_GIVEN','BEDDING_CHANGED','WAGES_PAID','SELL_CROPS') AND is_active = false;" 2>/dev/null | tr -d '[:space:]')"
 [ "${KILLED:-0}" = "4" ] && ok "catalog kills applied (129 — duplicate tiles deactivated)" || bad "catalog kills not applied (${KILLED}/4 — migration 129)"
-CROPVERB="$($PSQL -c "SELECT pg_get_constraintdef(oid) LIKE '%CROP_SALE%' FROM pg_constraint WHERE conname='field_events_event_type_check';" 2>/dev/null | tr -d '[:space:]')"
+CROPVERB="$($PSQL -c "SELECT bool_or(pg_get_constraintdef(oid) LIKE '%CROP_SALE%') FROM pg_constraint WHERE conname='field_events_event_type_check';" 2>/dev/null | tr -d '[:space:]')"
 [ "$CROPVERB" = "t" ] && ok "field_events CHECK has CROPS G3 verbs (134 — 15 crop forms unlocked)" || bad "CROP_SALE verb missing from field_events CHECK (migration 134)"
 TOURS="$($PSQL -c "SELECT to_regclass('tenant.user_tours') IS NOT NULL;" 2>/dev/null | tr -d '[:space:]')"
 [ "$TOURS" = "t" ] && ok "user_tours table present (133 — guided tours)" || bad "user_tours missing (migration 133)"
