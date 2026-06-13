@@ -12,19 +12,20 @@
  */
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Fish, Trees, TreeDeciduous, PawPrint, Hexagon, Sparkles, Bell, Check, ArrowLeft } from "lucide-react";
+import { Fish, Trees, TreeDeciduous, PawPrint, Hexagon, Sparkles, Bell, Check, ArrowLeft, Plus } from "lucide-react";
 import TfpShell from "../../components/farm/TfpShell";
 import { CurrentFarmProvider, useCurrentFarm } from "../../context/CurrentFarmContext";
 
 const ICONS = { AQUACULTURE: Fish, FORESTRY: Trees, PERENNIALS: TreeDeciduous, LIVESTOCK: PawPrint, APICULTURE: Hexagon, SPECIALTY: Sparkles };
 
+// addLabel: the unit a farmer can establish today (Slice E). null = no unit kind yet.
 const COPY = {
-  AQUACULTURE: { label: "Fish & sea", line: "Pond, tank, cage and seaweed management — stocking, water quality, feeding (FCR), and harvest — is being built." },
-  FORESTRY:    { label: "Forestry",   line: "Timber and agroforestry management — planting, growth tracking (DBH/height), thinning and harvest volume — is being built." },
-  PERENNIALS:  { label: "Trees & vines", line: "Tree-crop and perennial management — orchards, fruit and vines across multi-year seasons — is being built." },
-  LIVESTOCK:   { label: "Livestock",  line: "Cattle, goat and sheep management — herds, breeding, milk and weight — is being built. You can already log animal events from the (+) menu." },
-  APICULTURE:  { label: "Bees",       line: "Apiary management — hives, inspections, honey harvest and swarm tracking — is being built." },
-  SPECIALTY:   { label: "Specialty",  line: "Greenhouse, hydroponics, nursery and protected-agriculture management is being built." },
+  AQUACULTURE: { label: "Fish & sea", addLabel: "Add your first pond or cage", line: "Pond, tank, cage and seaweed management — stocking, water quality, feeding (FCR), and harvest — is being built. You can set up your ponds now and log money, feed and harvests against them today." },
+  FORESTRY:    { label: "Forestry",   addLabel: "Add your first woodlot", line: "Timber and agroforestry management — planting, growth tracking (DBH/height), thinning and harvest volume — is being built. You can register your woodlots now." },
+  PERENNIALS:  { label: "Trees & vines", addLabel: "Add your first orchard or stand", line: "Tree-crop and perennial management — orchards, fruit and vines across multi-year seasons — is being built." },
+  LIVESTOCK:   { label: "Livestock",  addLabel: "Add your first paddock", line: "Cattle, goat and sheep management — herds, breeding, milk and weight — is being built. You can set up paddocks and already log animal events from the (+) menu." },
+  APICULTURE:  { label: "Bees",       addLabel: "Add your first hive stand", line: "Apiary management — hives, inspections, honey harvest and swarm tracking — is being built." },
+  SPECIALTY:   { label: "Specialty",  addLabel: "Add your first greenhouse or nursery", line: "Greenhouse, hydroponics, nursery and protected-agriculture management is being built." },
 };
 
 function authHeaders() {
@@ -74,6 +75,13 @@ function StubInner({ vertical }) {
             </div>
             <div style={{ fontSize: 18, fontWeight: 700, color: "var(--soil)", marginBottom: 8 }}>{c.label} is coming</div>
             <div style={{ fontSize: 13.5, color: "var(--muted)", lineHeight: 1.6, marginBottom: 20 }}>{c.line}</div>
+            {c.addLabel && (
+              <div style={{ marginBottom: 14 }}>
+                <button className="btn btn-primary" onClick={() => navigate(`/farm/unit/new?enterprise=${vertical}`)}>
+                  <Plus size={15} />{c.addLabel}
+                </button>
+              </div>
+            )}
             {sent ? (
               <div style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 13.5, color: "var(--green-dk)", fontWeight: 600 }}>
                 <Check size={16} /> You're on the list — we'll be in touch.

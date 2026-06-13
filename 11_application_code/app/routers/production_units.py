@@ -8,6 +8,7 @@ from app.db.session import get_rls_db
 from app.middleware.rls import get_current_user
 from app.core.task_engine import emit_task
 from app.core.audit_chain import emit_audit_event
+from app.services.onboarding_service import next_pu_id, next_zone_id
 
 router = APIRouter()
 
@@ -97,6 +98,92 @@ async def list_production_units(farm_id: str = None, zone_id: str = None, user: 
             params["zone_id"] = zone_id
         result = await db.execute(text(q + " ORDER BY pu.pu_id"), params)
         return {"data": [dict(r) for r in result.mappings().all()]}
+
+
+# Slice E — universal establish: which physical unit kinds belong to each
+# enterprise, and the default unit-of-measure. The single source the frontend
+# picker mirrors. pu_type values are the migration-130 widened CHECK set.
+ENTERPRISE_UNIT_KINDS = {
+    "CROPS":       (["BED", "PLOT"], "kg"),
+    "PERENNIALS":  (["STAND", "PLOT"], "kg"),
+    "AQUACULTURE": (["POND", "TANK", "CAGE"], "kg"),
+    "FORESTRY":    (["WOODLOT", "STAND"], "m3"),
+    "LIVESTOCK":   (["PADDOCK"], "head"),
+    "APICULTURE":  (["HIVE_STAND"], "hives"),
+    "SPECIALTY":   (["GREENHOUSE", "NURSERY_TRAY", "FLOWER_BED"], "units"),
+}
+
+
+class EstablishUnit(BaseModel):
+    farm_id: str
+    enterprise_type: str
+    pu_type: str
+    pu_name: str
+    area_sqm: Optional[float] = None
+    unit_of_measure: Optional[str] = None
+    notes: Optional[str] = None
+
+
+@router.get("/unit-kinds")
+async def unit_kinds(user: dict = Depends(get_current_user)):
+    """The enterprise → unit-kind + default uom map the establish form mirrors."""
+    return {"data": {k: {"unit_kinds": v[0], "default_uom": v[1]} for k, v in ENTERPRISE_UNIT_KINDS.items()}}
+
+
+@router.post("", status_code=201)
+async def establish_production_unit(body: EstablishUnit, user: dict = Depends(get_current_user)):
+    """Universal establish — create a production unit for ANY enterprise (pond,
+    cage, woodlot, hive, paddock, bed). Resolves/creates a default zone, writes
+    the Slice-A enterprise_type + unit_of_measure, hash-chains the creation.
+    The unit then flows into tenant.v_production_units → the portfolio (Slice D).
+    """
+    ent = body.enterprise_type.upper()
+    if ent not in ENTERPRISE_UNIT_KINDS:
+        raise HTTPException(400, detail=f"enterprise_type must be one of {sorted(ENTERPRISE_UNIT_KINDS)}")
+    kinds, default_uom = ENTERPRISE_UNIT_KINDS[ent]
+    if body.pu_type.upper() not in kinds:
+        raise HTTPException(400, detail=f"pu_type for {ent} must be one of {kinds}")
+    if not body.pu_name.strip():
+        raise HTTPException(422, detail="A name is required")
+    tid = str(user["tenant_id"])
+    async with get_rls_db(tid) as db:
+        farm = (await db.execute(
+            text("SELECT farm_id FROM tenant.farms WHERE farm_id = :fid AND tenant_id = :tid"),
+            {"fid": body.farm_id, "tid": tid})).mappings().first()
+        if not farm:
+            raise HTTPException(404, detail="Farm not found")
+
+        # Resolve a zone (default one per farm — same pattern as onboarding).
+        zrow = (await db.execute(
+            text("SELECT zone_id FROM tenant.zones WHERE farm_id = :fid ORDER BY zone_id ASC LIMIT 1"),
+            {"fid": body.farm_id})).mappings().first()
+        if zrow:
+            zone_id = zrow["zone_id"]
+        else:
+            zone_id = await next_zone_id(db, body.farm_id)
+            await db.execute(text("""
+                INSERT INTO tenant.zones (zone_id, tenant_id, farm_id, zone_name, zone_type)
+                VALUES (:zid, :tid, :fid, 'Main zone', 'MIXED')
+            """), {"zid": zone_id, "tid": tid, "fid": body.farm_id})
+
+        pu_id = await next_pu_id(db, body.farm_id)
+        uom = (body.unit_of_measure or default_uom)
+        await db.execute(text("""
+            INSERT INTO tenant.production_units
+                (pu_id, tenant_id, zone_id, farm_id, pu_name, pu_type,
+                 enterprise_type, unit_of_measure, area_sqm, farmer_label, notes, is_active)
+            VALUES (:pu, :tid, :zid, :fid, :name, :ptype,
+                    :ent, :uom, :area, :name, :notes, TRUE)
+        """), {"pu": pu_id, "tid": tid, "zid": zone_id, "fid": body.farm_id,
+               "name": body.pu_name.strip(), "ptype": body.pu_type.upper(),
+               "ent": ent, "uom": uom, "area": body.area_sqm, "notes": body.notes})
+
+        await emit_audit_event(
+            db=db, tenant_id=user["tenant_id"], actor_user_id=user["user_id"],
+            event_type="PRODUCTION_UNIT_ESTABLISHED", entity_type="PRODUCTION_UNIT", entity_id=pu_id,
+            payload={"enterprise_type": ent, "pu_type": body.pu_type.upper(),
+                     "pu_name": body.pu_name.strip(), "unit_of_measure": uom})
+    return {"data": {"pu_id": pu_id, "enterprise_type": ent, "unit_of_measure": uom}}
 
 
 @router.get("/unified")
