@@ -11,9 +11,9 @@
  * net working capital, ledger feed, category spend. Honest "Building": forecast +
  * reconciliation. Bank Evidence → links to /farm/reports.
  */
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { QueryClient, QueryClientProvider, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Plus, Search, Pencil, Trash2, X, ShieldCheck } from "lucide-react";
 import TfpShell from "../../components/farm/TfpShell";
 import { CurrentFarmProvider, useCurrentFarm } from "../../context/CurrentFarmContext";
@@ -93,6 +93,17 @@ function CashInner() {
   const [q, setQ] = useState("");
   const [form, setForm] = useState(null); // {mode, type, entry}
   const [del, setDel] = useState(null);
+  // Slice F — the (+) universal "Record a sale / purchase" deep-links here with
+  // ?type=in|out and opens the right add-form straight away (one tap, not two).
+  const [searchParams, setSearchParams] = useSearchParams();
+  useEffect(() => {
+    const t = searchParams.get("type");
+    if (t === "in" || t === "out") {
+      setForm({ mode: "create", type: t === "in" ? "INCOME" : "EXPENSE" });
+      searchParams.delete("type");
+      setSearchParams(searchParams, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
 
   const cashQ = useQuery({ queryKey: ["cash", farmId], queryFn: () => getCash(farmId), enabled: !!farmId });
   const ordersQ = useQuery({ queryKey: ["orders", farmId], queryFn: () => getOrders(farmId), enabled: !!farmId });

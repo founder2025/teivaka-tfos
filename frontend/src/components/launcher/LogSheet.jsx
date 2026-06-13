@@ -275,6 +275,40 @@ function VoiceTile() {
   );
 }
 
+// ── Slice F — align the (+): universal cross-cutting actions that work for
+// EVERY enterprise (crops, poultry, aqua, forestry, livestock, bees…),
+// independent of the catalog. Always shown at level-1 so a fish/forestry
+// farmer has real capture the moment they open (+), not just Money/Notes/Other.
+const UNIVERSAL_ACTIONS = [
+  { key: "establish", label: "Add a production unit", sub: "Pond · paddock · woodlot · hive · bed", Icon: PlusCircle, route: "/farm/unit/new", accent: "#3E7B1F" },
+  { key: "sale",      label: "Record a sale",         sub: "Money in — any enterprise",          Icon: HandCoins,  route: "/farm/cash?type=in", accent: "#6AA84F" },
+  { key: "purchase",  label: "Record a purchase",     sub: "Money out — supplies, feed, fuel",   Icon: ShoppingCart, route: "/farm/cash?type=out", accent: "#BF9000" },
+];
+
+function UniversalSection({ navigate, onClose }) {
+  const go = (route) => { onClose(); navigate(route); };
+  return (
+    <div className="mb-4">
+      <div className="text-[11px] font-semibold uppercase tracking-wide mb-2" style={{ color: "#8A7863" }}>Start here · works for any farm</div>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+        {UNIVERSAL_ACTIONS.map(({ key, label, sub, Icon, route, accent }) => (
+          <button key={key} type="button" onClick={() => go(route)}
+            className="flex items-center gap-3 text-left rounded-xl p-3 transition hover:brightness-95"
+            style={{ background: "#FFFFFF", border: "1px solid #E6DED0" }}>
+            <span className="shrink-0 flex items-center justify-center rounded-lg" style={{ width: 38, height: 38, background: "#F8F3E9", color: accent }}>
+              <Icon className="w-5 h-5" />
+            </span>
+            <span className="min-w-0">
+              <span className="block text-sm font-semibold truncate" style={{ color: "#5C4033" }}>{label}</span>
+              <span className="block text-[11px] truncate" style={{ color: "#8A7863" }}>{sub}</span>
+            </span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function EventTile({ event, onClick }) {
   const evtType = event.event_type;
   const label = event.translated?.label || evtType;
@@ -528,6 +562,11 @@ export default function LogSheet({ isOpen, onClose, mode }) {
         <div className="text-center py-8 text-gray-500">
           No events available right now.
         </div>
+      )}
+
+      {/* Slice F — universal actions, always at level-1 for every enterprise */}
+      {!isManage && !isLoading && !error && !isLevel2 && (
+        <UniversalSection navigate={navigate} onClose={onClose} />
       )}
 
       {!isManage && !isLoading && !error && !isLevel2 && visibleGroups.length > 0 && (
