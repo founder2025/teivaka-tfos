@@ -688,9 +688,6 @@ class CropSalePayload(BaseModel):
     sale_date: Optional[str] = None
     notes: Optional[str] = Field(default=None, max_length=500)
 
-    class Config:
-        json_encoders = {Decimal: str}
-
 
 class CropGivenPayload(BaseModel):
     """CROP_GIVEN — produce given away / home use (Food-Security-layer data)."""
@@ -698,9 +695,6 @@ class CropGivenPayload(BaseModel):
     qty_kg: Decimal = Field(..., gt=0, max_digits=12, decimal_places=2)
     recipient: Optional[str] = Field(default=None, max_length=120)
     notes: Optional[str] = Field(default=None, max_length=500)
-
-    class Config:
-        json_encoders = {Decimal: str}
 
 
 EVENT_TYPE_REGISTRY: dict = {
