@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 
 import { CurrentFarmProvider, useCurrentFarm } from "../../context/CurrentFarmContext";
+import { useActiveEnterprises, VERTICAL_CONFIG } from "../../hooks/useActiveEnterprises";
 import FarmSelector from "../../components/farm/FarmSelector";
 import ModeDropdown from "../../components/farm/ModeDropdown";
 import Modal from "../../components/ui/Modal";
@@ -269,7 +270,37 @@ function Chip({ active, label, count, onClick }) {
     </button>
   );
 }
-function PortfolioTab({ D, ents, typeFilter, setTypeFilter, standingFilter, setStandingFilter, search, setSearch, onOpen, setView, onAdd, navigate }) {
+// ── Slice C — "Your enterprises" strip: every declared vertical, each linking
+// to its real dashboard (Crops/Poultry) or its honest stub (Aqua/Forestry/…).
+// This is the entry point that makes a fish/forestry farmer's first visit
+// coherent instead of crop-shaped.
+function EnterpriseStrip({ farmId, navigate }) {
+  const { active, loading } = useActiveEnterprises(farmId);
+  if (loading || !active || active.length === 0) return null;
+  return (
+    <Section title="Your enterprises" meta="What you farm — tap to open">
+      <div className="grid gap-2 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4">
+        {active.map((key) => {
+          const cfg = VERTICAL_CONFIG[key];
+          if (!cfg) return null;
+          const sub = cfg.route.replace(/^\/farm\//, "");
+          return (
+            <button key={key} onClick={() => navigate(sub)}
+              className={`text-left rounded-xl p-3 hover:brightness-95 ${FOCUS}`}
+              style={{ border: `1px solid ${C.border}`, background: C.paper }}>
+              <div className="text-sm font-semibold" style={{ color: C.soil }}>{cfg.label}</div>
+              <div className="text-[11px] mt-0.5" style={{ color: cfg.deep ? C.green : C.muted }}>
+                {cfg.deep ? "Open dashboard →" : "On the roadmap →"}
+              </div>
+            </button>
+          );
+        })}
+      </div>
+    </Section>
+  );
+}
+
+function PortfolioTab({ D, ents, typeFilter, setTypeFilter, standingFilter, setStandingFilter, search, setSearch, onOpen, setView, onAdd, navigate, farmId }) {
   const engines = useMemo(() => { const m = {}; ents.forEach((e) => { m[e.kind] = m[e.kind] || { label: e.engineLabel, n: 0 }; m[e.kind].n++; }); return m; }, [ents]);
   let rows = ents;
   if (typeFilter !== "all") rows = rows.filter((r) => r.kind === typeFilter);
@@ -304,6 +335,7 @@ function PortfolioTab({ D, ents, typeFilter, setTypeFilter, standingFilter, setS
   const grades = ["Strong", "Steady", "Watch", "At risk"];
   return (
     <div className="space-y-3">
+      <EnterpriseStrip farmId={farmId} navigate={navigate} />
       <div className="grid gap-2 grid-cols-2 lg:grid-cols-4">
         <KpiTile label="Enterprises" value={String(D.rows.length)} sub={`${D.counts.active || 0} active${D.counts.paused ? ` · ${D.counts.paused} paused` : ""}`} onClick={() => onAdd()} />
         <KpiTile label="Net this season" value={fjd(D.tot.net)} sub={`earned ${n0(D.tot.inc)} · spent ${n0(D.tot.cost)}`} color={D.tot.net < 0 ? C.red : C.green} low={D.tot.net < 0} onClick={() => navigate("cash")} />
@@ -689,7 +721,7 @@ function EnterprisesInner() {
   if (openEnt) return <EnterpriseDetail e={openEnt} farmId={farmId} onBack={() => setOpenEnt(null)} go={navigate} />;
 
   const tabBody = view === "portfolio"
-    ? <PortfolioTab D={D} ents={ents} typeFilter={typeFilter} setTypeFilter={setTypeFilter} standingFilter={standingFilter} setStandingFilter={setStandingFilter} search={search} setSearch={setSearch} onOpen={setOpenEnt} setView={setView} onAdd={() => setAddOpen(true)} navigate={navigate} />
+    ? <PortfolioTab D={D} ents={ents} typeFilter={typeFilter} setTypeFilter={setTypeFilter} standingFilter={standingFilter} setStandingFilter={setStandingFilter} search={search} setSearch={setSearch} onOpen={setOpenEnt} setView={setView} onAdd={() => setAddOpen(true)} navigate={navigate} farmId={farmId} />
     : view === "rankings" ? <RankingsTab D={D} onOpen={setOpenEnt} />
     : view === "cashrisk" ? <CashRiskTab D={D} onOpen={setOpenEnt} />
     : view === "outlook" ? <OutlookTab D={D} onOpen={setOpenEnt} />

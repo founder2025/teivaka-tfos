@@ -126,3 +126,43 @@ async def capture(
         logger.warning("Attribution capture failed (silently swallowed): %s", e)
 
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+# ── Slice C — vertical-interest lead capture (Stub Dashboard Contract) ───────
+# Authenticated farmer tapping "Notify me when ready" on a not-yet-deep
+# vertical's stub. Writes a real shared.attribution_events row with
+# event_type='vertical_access_requested' (Inviolable #7: attribution_events is
+# runtime-writable). Distinct from the hardcoded LANDING_VIEW tracker above.
+from app.middleware.rls import get_current_user  # noqa: E402
+
+
+class VerticalInterestRequest(BaseModel):
+    vertical: str = Field(..., max_length=32)
+    farm_id: Optional[str] = Field(default=None, max_length=32)
+
+
+@router.post("/vertical-interest", status_code=status.HTTP_204_NO_CONTENT)
+async def capture_vertical_interest(
+    payload: VerticalInterestRequest,
+    user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    import json
+    props = {
+        "vertical": payload.vertical,
+        "farm_id": payload.farm_id,
+        "tenant_id": str(user.get("tenant_id")),
+        "user_id": str(user.get("user_id")),
+    }
+    try:
+        await db.execute(
+            text("""
+                INSERT INTO shared.attribution_events (event_type, landing_path, properties)
+                VALUES ('vertical_access_requested', :path, CAST(:props AS jsonb))
+            """),
+            {"path": f"/farm/{payload.vertical.lower()}", "props": json.dumps(props)},
+        )
+        await db.commit()
+    except Exception as e:
+        logger.warning("Vertical-interest capture failed (swallowed): %s", e)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

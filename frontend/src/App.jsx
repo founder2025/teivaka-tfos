@@ -111,6 +111,7 @@ const FarmLibrary   = lazy(() => import("./pages/farmer/Library"));
 const FarmGallery   = lazy(() => import("./pages/farmer/Gallery"));
 const FarmPartnerships = lazy(() => import("./pages/farmer/Partnerships"));
 const FarmSettings  = lazy(() => import("./pages/farmer/FarmSettings"));
+const VerticalStub  = lazy(() => import("./pages/farmer/VerticalStub"));
 const InventoryList = lazy(() => import("./pages/farmer/InventoryList"));
 const Me            = lazy(() => import("./pages/me/ProfilePage"));
 const Subscription  = lazy(() => import("./pages/me/Subscription"));
@@ -363,6 +364,13 @@ export default function App() {
             <Route path="/farm/gallery"      element={<FarmGallery />} />
             <Route path="/farm/partnerships" element={<FarmPartnerships />} />
             <Route path="/farm/settings"     element={<FarmSettings />} />
+            {/* Slice C — honest stub dashboards for not-yet-deep verticals */}
+            <Route path="/farm/aquaculture"  element={<VerticalStub vertical="AQUACULTURE" />} />
+            <Route path="/farm/forestry"     element={<VerticalStub vertical="FORESTRY" />} />
+            <Route path="/farm/perennials"   element={<VerticalStub vertical="PERENNIALS" />} />
+            <Route path="/farm/livestock"    element={<VerticalStub vertical="LIVESTOCK" />} />
+            <Route path="/farm/apiculture"   element={<VerticalStub vertical="APICULTURE" />} />
+            <Route path="/farm/specialty"    element={<VerticalStub vertical="SPECIALTY" />} />
             <Route path="/farm/locations"    element={<LocationsPage />} />
             <Route path="/farm/manage"       element={<FarmsManage />} />
 
