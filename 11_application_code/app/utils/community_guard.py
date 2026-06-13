@@ -33,15 +33,11 @@ def _get_redis():
 
 
 def require_verified_email(user: dict = Depends(get_current_user)) -> dict:
-    """Gate community write/broadcast actions behind a verified email."""
-    if not user.get("email_verified", False):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=(
-                "Please verify your email before posting to the community. "
-                "Check your inbox, or resend the link from Settings."
-            ),
-        )
+    """Soft helper, kept for any future action that genuinely needs it. NOT used
+    by community_write anymore (2026-06-13): a hard email wall on basic
+    self-expression blocked new farmers from day one, and verification email
+    often never delivers (SMTP unconfigured / +679 SMS broken), making the gate
+    unpassable. Verification is now a dismissible UI nudge, never a 403."""
     return user
 
 
@@ -68,9 +64,12 @@ async def rate_limit(user: dict, action: str, limit: int, window_seconds: int) -
 
 
 def community_write(action: str, limit: int, window_seconds: int = 60):
-    """Dependency factory: requires a verified email AND applies the per-user
-    rate limit for `action`. Returns the user dict like get_current_user."""
-    async def dep(user: dict = Depends(require_verified_email)) -> dict:
+    """Dependency factory for community WRITE actions. As of 2026-06-13 this is
+    rate-limit-ONLY — the email-verification hard gate was removed so a new,
+    unverified farmer can post, comment, upload a profile pic/cover, share a
+    story and list produce from day one. Spam defense is the per-action rate
+    limit (+ auth + RLS + file validation), not an unpassable wall."""
+    async def dep(user: dict = Depends(get_current_user)) -> dict:
         await rate_limit(user, action, limit, window_seconds)
         return user
     return dep
