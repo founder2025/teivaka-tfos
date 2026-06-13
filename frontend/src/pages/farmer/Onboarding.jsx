@@ -21,6 +21,7 @@
 
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { Sprout, TreeDeciduous, PawPrint, Bird, Hexagon, Fish, Trees, Sparkles } from "lucide-react";
 import { authHeader, setOnboardingComplete } from "../../utils/auth";
 
 /**
@@ -109,7 +110,22 @@ const C = {
   border: "#E0D5C0",
 };
 
-const TOTAL_STEPS = 6;
+const TOTAL_STEPS = 7;
+
+// The 8 production verticals — Slice B: wires the previously-orphaned
+// "What do you farm?" picker (PickGroups.jsx) into onboarding so the whole
+// Farm pillar shapes itself to the farmer from first visit. Drives
+// farm_active_groups → the (+) catalog, nav, and dashboards.
+const PRODUCTION_GROUPS = [
+  { key: "CROPS",       label: "Crops",         Icon: Sprout },
+  { key: "PERENNIALS",  label: "Trees & vines", Icon: TreeDeciduous },
+  { key: "LIVESTOCK",   label: "Livestock",     Icon: PawPrint },
+  { key: "POULTRY",     label: "Poultry",       Icon: Bird },
+  { key: "APICULTURE",  label: "Bees",          Icon: Hexagon },
+  { key: "AQUACULTURE", label: "Fish & sea",    Icon: Fish },
+  { key: "FORESTRY",    label: "Forestry",      Icon: Trees },
+  { key: "SPECIALTY",   label: "Specialty",     Icon: Sparkles },
+];
 
 const CROPS_LIST = [
   "Cassava", "Kava", "Yaqona", "Dalo (Taro)", "Sweet Potato", "Capsicum",
@@ -206,6 +222,7 @@ export default function Onboarding() {
     city: "",
     country: "Fiji",
     map_visibility: "city",
+    enterprises: [],
     crops: [],
     profile_photo: null,
   });
@@ -223,6 +240,18 @@ export default function Onboarding() {
     }));
   }
 
+  function toggleEnterprise(key) {
+    setData(d => ({
+      ...d,
+      enterprises: d.enterprises.includes(key)
+        ? d.enterprises.filter(e => e !== key)
+        : [...d.enterprises, key],
+    }));
+  }
+
+  // Whether the crops-selection step is relevant for this farmer.
+  const growsCrops = data.enterprises.includes("CROPS") || data.enterprises.includes("PERENNIALS");
+
   function next() { setStep(s => Math.min(s + 1, TOTAL_STEPS)); }
   function back() { setStep(s => Math.max(s - 1, 1)); }
 
@@ -234,15 +263,38 @@ export default function Onboarding() {
         data.farm_size_ha && parseFloat(data.farm_size_ha) > 0
           ? parseFloat(data.farm_size_ha) / HA_PER_ACRE
           : null;
+      let farmId = null;
       try {
-        await postJson("/api/v1/onboarding/farm-basics", {
+        const fb = await postJson("/api/v1/onboarding/farm-basics", {
           farm_name: data.farm_name,
           area_acres: areaAcres,
           section_term: "BLOCK",
         });
+        farmId = fb?.data?.farm_id || fb?.farm_id || null;
       } catch (err) {
         emitToast(`Couldn't save farm basics: ${err.message}`);
         return;
+      }
+
+      // 1b) active-groups — Slice B: the farmer's declared enterprises become
+      // the source of truth, overriding the presumptive defaults farm-basics
+      // seeded. This is what makes the whole Farm pillar (the (+), nav,
+      // dashboards) shape to a fish / goat / forestry farmer instead of
+      // assuming crops + poultry. Auto-include CROPS if they tagged crops.
+      if (farmId) {
+        const chosen = new Set(data.enterprises);
+        if (data.crops.length > 0) chosen.add("CROPS");
+        try {
+          await postJson(`/api/v1/farms/${encodeURIComponent(farmId)}/active-groups`, {
+            groups: PRODUCTION_GROUPS.map(g => ({
+              catalog_group: g.key,
+              is_active: chosen.has(g.key),
+            })),
+          });
+        } catch (err) {
+          // Non-fatal: defaults stand; farmer can adjust in Settings.
+          console.warn("[onboarding] active-groups save failed", err.message);
+        }
       }
 
       // 2) production-units — empty array allowed if all chips were unmapped.
@@ -415,12 +467,54 @@ export default function Onboarding() {
             </div>
           )}
 
-          {/* ── Step 5: Crops ───────────────────────────────────────────── */}
+          {/* ── Step 5: What do you farm? (enterprises) — Slice B ───────── */}
           {step === 5 && (
             <div>
-              <StepLabel current={5} total={TOTAL_STEPS} title="What do you grow?" />
+              <StepLabel current={5} total={TOTAL_STEPS} title="What do you farm?" />
               <p className="text-gray-500 text-sm mb-6">
-                Select all that apply. This helps connect you with farmers growing the same crops.
+                Pick everything that applies — crops, animals, fish, trees, bees, anything.
+                Your farm screens and the (+) menu shape themselves to what you choose.
+                You can change this anytime in Settings.
+              </p>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                {PRODUCTION_GROUPS.map(({ key, label, Icon }) => {
+                  const selected = data.enterprises.includes(key);
+                  return (
+                    <button key={key} type="button" onClick={() => toggleEnterprise(key)}
+                      aria-pressed={selected}
+                      className="rounded-2xl p-4 flex flex-col items-center justify-center transition-all"
+                      style={{
+                        background: selected ? C.green : "white",
+                        color: selected ? "white" : C.soil,
+                        border: `1px solid ${selected ? C.green : C.border}`,
+                        minHeight: 92,
+                      }}>
+                      <Icon size={26} strokeWidth={1.6} />
+                      <span className="text-xs font-semibold mt-2 text-center"
+                        style={{ color: selected ? "white" : C.soil }}>{label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              {data.enterprises.length > 0 && (
+                <p className="text-xs mt-3" style={{ color: C.green }}>
+                  ✓ {data.enterprises.length} selected
+                </p>
+              )}
+              <NavButtons step={step} onBack={back} onNext={next}
+                disabled={data.enterprises.length === 0} />
+            </div>
+          )}
+
+          {/* ── Step 6: Crops (adaptive — only the crops you grow) ───────── */}
+          {step === 6 && (
+            <div>
+              <StepLabel current={6} total={TOTAL_STEPS}
+                title={growsCrops ? "What do you grow?" : "Any crops too?"} />
+              <p className="text-gray-500 text-sm mb-6">
+                {growsCrops
+                  ? "Select all that apply. This helps connect you with farmers growing the same crops."
+                  : "You didn't tag crops — that's fine. Add any you also grow, or just continue."}
               </p>
               <div className="flex flex-wrap gap-2 mb-2">
                 {CROPS_LIST.map(crop => {
@@ -444,15 +538,16 @@ export default function Onboarding() {
                 </p>
               )}
               <NavButtons step={step} onBack={back} onNext={next}
-                disabled={data.crops.length === 0} />
+                nextLabel={growsCrops || data.crops.length > 0 ? "Continue →" : "Skip — no crops →"}
+                disabled={growsCrops && data.crops.length === 0} />
             </div>
           )}
 
-          {/* ── Step 6: Done ────────────────────────────────────────────── */}
-          {step === 6 && (
+          {/* ── Step 7: Done ────────────────────────────────────────────── */}
+          {step === 7 && (
             <div className="text-center">
               <div className="text-5xl mb-4">🎉</div>
-              <StepLabel current={6} total={TOTAL_STEPS} title={`You're all set, ${data.display_name.split(" ")[0]}!`} />
+              <StepLabel current={7} total={TOTAL_STEPS} title={`You're all set, ${data.display_name.split(" ")[0]}!`} />
               <p className="text-gray-500 text-sm mb-6 leading-relaxed">
                 Your farm profile is ready. You're now part of the Teivaka community — connect
                 with {1284} farmers across the Pacific and beyond.
@@ -476,9 +571,19 @@ export default function Onboarding() {
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-500">Crops</span>
-                  <span className="font-medium" style={{ color: C.soil }}>{data.crops.length} selected</span>
+                  <span className="text-gray-500">You farm</span>
+                  <span className="font-medium text-right" style={{ color: C.soil }}>
+                    {data.enterprises.length > 0
+                      ? data.enterprises.map(k => PRODUCTION_GROUPS.find(g => g.key === k)?.label || k).join(", ")
+                      : "—"}
+                  </span>
                 </div>
+                {data.crops.length > 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Crops</span>
+                    <span className="font-medium" style={{ color: C.soil }}>{data.crops.length} selected</span>
+                  </div>
+                )}
               </div>
 
               <button onClick={finish} disabled={submitting}
