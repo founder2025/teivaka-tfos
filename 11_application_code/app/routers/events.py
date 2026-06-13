@@ -875,10 +875,15 @@ async def submit_event(
         if not isinstance(submission.payload, dict):
             raise HTTPException(400, error_envelope("invalid_payload", "Payload must be a dict."))
 
-    # 2bb. CROPS-specific: cycle_id + pu_id REQUIRED for all 8 CROPS event types (Strike #96)
+    # 2bb. CROPS-specific: cycle_id + pu_id REQUIRED (Strike #96 + 134 G3 unlocks)
     if submission.event_type in {"PLANTING", "IRRIGATION", "CHEMICAL_APPLIED",
                                   "FERTILIZER_APPLIED", "WEED_MANAGEMENT",
-                                  "PRUNING_TRAINING", "TRANSPLANT_LOGGED", "LAND_PREP"}:
+                                  "PRUNING_TRAINING", "TRANSPLANT_LOGGED", "LAND_PREP",
+                                  "MULCHING", "THINNING", "COVER_CROP_PLANTED", "SEED_SAVED",
+                                  "BIOLOGICAL_CONTROL_APPLIED", "CROP_HEALTH_OBSERVATION",
+                                  "PEST_CONFIRMED", "DISEASE_CONFIRMED", "STORAGE_CHECK",
+                                  "STORAGE_LOGGED", "INPUT_INVENTORY_CHECK", "NURSERY_LOSS",
+                                  "CYCLE_ABANDONED", "CROP_SOLD", "CROP_GIVEN"}:
         if submission.anchors.cycle_id is None:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -1027,6 +1032,22 @@ async def submit_event(
             "PEST_SCOUTING":      "PEST_OBSERVE",
             "DISEASE_SCOUTING":   "DISEASE_OBSERVE",
             "FIELD_OBSERVATION":  "INSPECTION",
+            # CROPS G3 (134) — 15 unlocked crop forms
+            "MULCHING":                   "MULCH",
+            "THINNING":                   "THIN",
+            "COVER_CROP_PLANTED":         "COVER_CROP",
+            "SEED_SAVED":                 "SEED_SAVE",
+            "BIOLOGICAL_CONTROL_APPLIED": "BIO_CONTROL",
+            "CROP_HEALTH_OBSERVATION":    "CROP_HEALTH",
+            "PEST_CONFIRMED":             "PEST_OBSERVE",
+            "DISEASE_CONFIRMED":          "DISEASE_OBSERVE",
+            "STORAGE_CHECK":              "STORAGE",
+            "STORAGE_LOGGED":             "STORAGE",
+            "INPUT_INVENTORY_CHECK":      "INSPECTION",
+            "NURSERY_LOSS":               "LOSS",
+            "CYCLE_ABANDONED":            "CYCLE_ABANDON",
+            "CROP_SOLD":                  "CROP_SALE",
+            "CROP_GIVEN":                 "CROP_GIVEN",
         }
         field_event_type = CATALOG_TO_FIELD_VERB[submission.event_type]
         is_chemical = submission.event_type == "CHEMICAL_APPLIED"

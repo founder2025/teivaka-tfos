@@ -664,7 +664,62 @@ class BreedingLoggedPayload(_LivestockBase):
     breeding_date: str = Field(..., description="YYYY-MM-DD")
 
 
+# ── CROPS G3 (134): payloads for the 15 unlocked crop forms ──────────────────
+# field_events overflows unknown keys to payload_jsonb, so these stay permissive
+# (extra allowed); the form supplies the fields, every one lands hash-chained.
+class CropActivityPayload(BaseModel):
+    """Generic crop field activity / observation / check / loss. cycle_id + pu_id
+    come from anchors; all detail is optional and rides payload_jsonb."""
+    model_config = {"extra": "allow"}
+    notes: Optional[str] = Field(default=None, max_length=500)
+    labor_hours: Optional[float] = Field(default=None, ge=0)
+    photo_url: Optional[str] = None
+    gps_lat: Optional[float] = None
+    gps_lng: Optional[float] = None
+
+
+class CropSalePayload(BaseModel):
+    """CROP_SOLD — crop produce sold. qty + revenue required (Bank Evidence input;
+    cash_ledger auto-link is future work, noted not faked)."""
+    model_config = {"extra": "allow"}
+    qty_kg: Decimal = Field(..., gt=0, max_digits=12, decimal_places=2)
+    total_revenue_fjd: Decimal = Field(..., ge=0, max_digits=12, decimal_places=2)
+    buyer: Optional[str] = Field(default=None, max_length=120)
+    sale_date: Optional[str] = None
+    notes: Optional[str] = Field(default=None, max_length=500)
+
+    class Config:
+        json_encoders = {Decimal: str}
+
+
+class CropGivenPayload(BaseModel):
+    """CROP_GIVEN — produce given away / home use (Food-Security-layer data)."""
+    model_config = {"extra": "allow"}
+    qty_kg: Decimal = Field(..., gt=0, max_digits=12, decimal_places=2)
+    recipient: Optional[str] = Field(default=None, max_length=120)
+    notes: Optional[str] = Field(default=None, max_length=500)
+
+    class Config:
+        json_encoders = {Decimal: str}
+
+
 EVENT_TYPE_REGISTRY: dict = {
+    # CROPS G3 (134) — 15 unlocked crop forms onto the polymorphic field_events path.
+    "MULCHING":                (CropActivityPayload,  "tenant.field_events", 1),
+    "THINNING":                (CropActivityPayload,  "tenant.field_events", 1),
+    "COVER_CROP_PLANTED":      (CropActivityPayload,  "tenant.field_events", 1),
+    "SEED_SAVED":              (CropActivityPayload,  "tenant.field_events", 1),
+    "BIOLOGICAL_CONTROL_APPLIED": (CropActivityPayload, "tenant.field_events", 1),
+    "CROP_HEALTH_OBSERVATION": (CropActivityPayload,  "tenant.field_events", 1),
+    "PEST_CONFIRMED":          (CropActivityPayload,  "tenant.field_events", 1),
+    "DISEASE_CONFIRMED":       (CropActivityPayload,  "tenant.field_events", 1),
+    "STORAGE_CHECK":           (CropActivityPayload,  "tenant.field_events", 1),
+    "STORAGE_LOGGED":          (CropActivityPayload,  "tenant.field_events", 1),
+    "INPUT_INVENTORY_CHECK":   (CropActivityPayload,  "tenant.field_events", 1),
+    "NURSERY_LOSS":            (CropActivityPayload,  "tenant.field_events", 1),
+    "CYCLE_ABANDONED":         (CropActivityPayload,  "tenant.field_events", 1),
+    "CROP_SOLD":               (CropSalePayload,      "tenant.field_events", 1),
+    "CROP_GIVEN":              (CropGivenPayload,     "tenant.field_events", 1),
     "EGGS_COLLECTED":         (EggsCollectedPayload,         "tenant.poultry_event_log", 1),
     "MORTALITY_LOGGED":       (MortalityLoggedPayload,       "tenant.poultry_event_log", 1),
     "VACCINATION_GIVEN":      (VaccinationGivenPayload,      "tenant.poultry_event_log", 1),

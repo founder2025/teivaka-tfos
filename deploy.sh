@@ -20,7 +20,7 @@
 set -uo pipefail
 
 BRANCH="${1:-claude/beautiful-fermi-F0dLX}"
-EXPECTED_HEAD="${2:-133_user_tours}"
+EXPECTED_HEAD="${2:-134_field_event_crop_verbs}"
 ROOT="/opt/teivaka"
 COMPOSE="docker compose -f ${ROOT}/04_environment/docker-compose.yml"
 PSQL="docker exec -i teivaka_db psql -v ON_ERROR_STOP=1 -tA -U teivaka -d teivaka_db"
@@ -107,6 +107,8 @@ LVEVT="$($PSQL -c "SELECT to_regclass('tenant.livestock_events') IS NOT NULL;" 2
 [ "$LVEVT" = "t" ] && ok "livestock_events table present (129)" || bad "livestock_events missing (migration 129 — livestock forms would 500)"
 KILLED="$($PSQL -c "SELECT count(*) FROM shared.event_type_catalog WHERE event_type IN ('FEED_GIVEN','BEDDING_CHANGED','WAGES_PAID','SELL_CROPS') AND is_active = false;" 2>/dev/null | tr -d '[:space:]')"
 [ "${KILLED:-0}" = "4" ] && ok "catalog kills applied (129 — duplicate tiles deactivated)" || bad "catalog kills not applied (${KILLED}/4 — migration 129)"
+CROPVERB="$($PSQL -c "SELECT pg_get_constraintdef(oid) LIKE '%CROP_SALE%' FROM pg_constraint WHERE conname='field_events_event_type_check';" 2>/dev/null | tr -d '[:space:]')"
+[ "$CROPVERB" = "t" ] && ok "field_events CHECK has CROPS G3 verbs (134 — 15 crop forms unlocked)" || bad "CROP_SALE verb missing from field_events CHECK (migration 134)"
 TOURS="$($PSQL -c "SELECT to_regclass('tenant.user_tours') IS NOT NULL;" 2>/dev/null | tr -d '[:space:]')"
 [ "$TOURS" = "t" ] && ok "user_tours table present (133 — guided tours)" || bad "user_tours missing (migration 133)"
 CSEQ="$($PSQL -c "SELECT count(*) FROM information_schema.columns WHERE table_schema='audit' AND table_name='events' AND column_name='chain_seq';" 2>/dev/null | tr -d '[:space:]')"

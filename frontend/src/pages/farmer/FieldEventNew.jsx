@@ -308,6 +308,71 @@ const STRIKE_96_FIELDS = {
       ] },
     ],
   },
+  // CROPS G3 (134) — the 15 unlocked crop forms
+  MULCHING: { label: "Mulching", fields: [
+    { name: "material", type: "select", label: "Material", options: ["STRAW","GRASS","PLASTIC","LEAVES","OTHER"], required: true },
+    { name: "area_treated_ha", type: "number", label: "Area (ha)", min: 0 },
+    { name: "labor_hours", type: "number", label: "Labour hours", min: 0 },
+  ] },
+  THINNING: { label: "Thinning", fields: [
+    { name: "plants_removed", type: "int", label: "Plants removed", min: 0 },
+    { name: "labor_hours", type: "number", label: "Labour hours", min: 0 },
+  ] },
+  COVER_CROP_PLANTED: { label: "Cover crop planted", fields: [
+    { name: "cover_crop", type: "text", label: "Cover crop", maxLength: 120, required: true },
+    { name: "area_ha", type: "number", label: "Area (ha)", min: 0 },
+  ] },
+  SEED_SAVED: { label: "Seed saved", fields: [
+    { name: "crop", type: "text", label: "Crop / variety", maxLength: 120, required: true },
+    { name: "qty_kg", type: "number", label: "Quantity (kg)", min: 0 },
+  ] },
+  BIOLOGICAL_CONTROL_APPLIED: { label: "Biological control", fields: [
+    { name: "agent", type: "text", label: "Agent / product", maxLength: 120, required: true },
+    { name: "target_pest", type: "text", label: "Target pest", maxLength: 120 },
+    { name: "area_ha", type: "number", label: "Area (ha)", min: 0 },
+  ] },
+  CROP_HEALTH_OBSERVATION: { label: "Crop health", fields: [
+    { name: "status", type: "select", label: "How does it look?", options: ["HEALTHY","STRESSED","POOR"], required: true },
+    { name: "issue", type: "text", label: "What you noticed", maxLength: 200 },
+  ] },
+  PEST_CONFIRMED: { label: "Pest confirmed", fields: [
+    { name: "pest_type", type: "select", label: "Pest", options: ["Whitefly","Aphid","Cutworm","Fruit fly","Caterpillar","Other"], required: true },
+    { name: "severity", type: "select", label: "Severity", options: ["low","med","high","critical"], required: true },
+  ] },
+  DISEASE_CONFIRMED: { label: "Disease confirmed", fields: [
+    { name: "disease_type", type: "select", label: "Disease", options: ["Early blight","Late blight","Powdery mildew","Bacterial wilt","Mosaic virus","Other"], required: true },
+    { name: "severity", type: "select", label: "Severity", options: ["low","med","high","critical"], required: true },
+  ] },
+  STORAGE_CHECK: { label: "Storage check", fields: [
+    { name: "produce", type: "text", label: "Produce", maxLength: 120, required: true },
+    { name: "condition", type: "select", label: "Condition", options: ["GOOD","FAIR","SPOILING"], required: true },
+    { name: "qty_kg", type: "number", label: "Quantity (kg)", min: 0 },
+  ] },
+  STORAGE_LOGGED: { label: "Put into storage", fields: [
+    { name: "produce", type: "text", label: "Produce", maxLength: 120, required: true },
+    { name: "qty_kg", type: "number", label: "Quantity (kg)", min: 0, required: true },
+    { name: "location", type: "text", label: "Where", maxLength: 120 },
+  ] },
+  INPUT_INVENTORY_CHECK: { label: "Stock check", fields: [
+    { name: "item", type: "text", label: "What you counted", maxLength: 120 },
+    { name: "qty_on_hand", type: "number", label: "Amount on hand", min: 0 },
+  ] },
+  NURSERY_LOSS: { label: "Nursery loss", fields: [
+    { name: "seedlings_lost", type: "int", label: "Seedlings lost", min: 0, required: true },
+    { name: "cause", type: "select", label: "Cause", options: ["DAMPING_OFF","PEST","WEATHER","OTHER"], required: true },
+  ] },
+  CYCLE_ABANDONED: { label: "Cycle abandoned", fields: [
+    { name: "reason", type: "select", label: "Why", options: ["FAILURE","WEATHER","PEST","DECISION","OTHER"], required: true },
+  ] },
+  CROP_SOLD: { label: "Crop sold", fields: [
+    { name: "qty_kg", type: "number", label: "Quantity (kg)", min: 0, required: true },
+    { name: "total_revenue_fjd", type: "number", label: "Money received (FJD)", min: 0, required: true },
+    { name: "buyer", type: "text", label: "Buyer", maxLength: 120 },
+  ] },
+  CROP_GIVEN: { label: "Crop given away", fields: [
+    { name: "qty_kg", type: "number", label: "Quantity (kg)", min: 0, required: true },
+    { name: "recipient", type: "text", label: "Given to", maxLength: 120 },
+  ] },
 };
 
 // Options may be plain strings or {value,label} objects (FIELD_OBSERVATION uses
