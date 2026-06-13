@@ -17,7 +17,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Navigate, Outlet, useLocation } from "react-router-dom";
-import { Plus, Sparkles } from "lucide-react";
+import { Plus, Sparkles, HelpCircle } from "lucide-react";
 import { useMe } from "../hooks/useMe";
 import { navPillarKeys } from "../utils/personas";
 
@@ -381,7 +381,31 @@ function ActiveTour({ cfg }) {
   const { open: openLauncher } = useLauncher();
   const tour = useTour(cfg.key);
   const steps = cfg.steps.map((s) => (s.openLauncher ? { ...s, action: () => openLauncher() } : s));
-  return <GuidedTour tour={tour} steps={steps} />;
+  return (
+    <>
+      <GuidedTour tour={tour} steps={steps} />
+      {/* Global "Show me around" — replays THIS page's tour. One affordance for
+          every destination; hidden while the tour is open. */}
+      {tour.ready && !tour.open && (
+        <button
+          type="button"
+          onClick={tour.replay}
+          aria-label="Show me around this page"
+          className="fixed flex items-center gap-1.5"
+          style={{
+            left: 16, bottom: 84, zIndex: 45,
+            background: "#FFFFFF", color: "#5C4033",
+            border: "1px solid #E6DED0", borderRadius: 999,
+            padding: "7px 12px", fontSize: 12.5, fontWeight: 600,
+            boxShadow: "0 3px 10px rgba(44,26,14,0.12)", cursor: "pointer",
+          }}
+        >
+          <HelpCircle size={15} style={{ color: "#3E7B1F" }} />
+          Show me around
+        </button>
+      )}
+    </>
+  );
 }
 
 // LogSheet host — reads launcher state from context. Lives at the shell
