@@ -52,6 +52,10 @@ function authHeaders() {
 async function getJSON(url) { const r = await fetch(url, { headers: authHeaders() }); if (!r.ok) throw new Error(String(r.status)); return r.json(); }
 const useCrops = (id) => useQuery({ queryKey: ["entcrops", id], queryFn: () => getJSON(`/api/v1/financials/crops/${encodeURIComponent(id)}`), enabled: !!id, retry: 0 });
 const useFlocks = (id) => useQuery({ queryKey: ["entflocks", id], queryFn: () => getJSON(`/api/v1/flocks?farm_id=${encodeURIComponent(id)}&is_active=true`), enabled: !!id, retry: 0 });
+// Slice D — the enterprise-agnostic read model: every production unit across
+// every vertical (ponds, woodlots, hives, herds), so the portfolio stops being
+// crop-and-flock only.
+const useUnified = (id) => useQuery({ queryKey: ["entunified", id], queryFn: () => getJSON(`/api/v1/production-units/unified?farm_id=${encodeURIComponent(id)}`), enabled: !!id, retry: 0 });
 
 function n0(v) { return Math.round(Number(v) || 0); }
 function fjd(v) { const n = n0(v); return `${n < 0 ? "−" : ""}FJD ${Math.abs(n).toLocaleString("en-FJ")}`; }
@@ -92,7 +96,38 @@ function prettyFlockType(t, label) {
   return label || "Flock";
 }
 
-function buildEnterprises(cropData, flockData) {
+// Slice D — non-crop / non-poultry verticals surfaced from the unified view.
+// Crops come from financials/crops, poultry from flocks (both above); this folds
+// in ponds, woodlots, hives, herds, nursery batches as honest enterprise rows —
+// unit counts only, financials build as the farmer logs (doctrine: no fake
+// non-crop analytics while Crops is below 100%).
+const UNIFIED_ENTERPRISE_LABEL = {
+  AQUACULTURE: "Fish & sea", FORESTRY: "Forestry", LIVESTOCK: "Livestock",
+  APICULTURE: "Bees", SPECIALTY: "Specialty", PERENNIALS: "Trees & vines",
+};
+function buildUnifiedEnterprises(unifiedData) {
+  const units = unifiedData?.units ?? [];
+  // Skip what's already counted: CROPS production units (financials/crops) and
+  // FLOCK rows (flocks query). Group the rest by enterprise_type.
+  const byEnt = {};
+  units.forEach((u) => {
+    if (u.enterprise_type === "CROPS" || u.unit_kind === "FLOCK") return;
+    (byEnt[u.enterprise_type] = byEnt[u.enterprise_type] || []).push(u);
+  });
+  return Object.entries(byEnt).map(([ent, list], i) => {
+    const activeN = list.filter((u) => !["INACTIVE", "CLOSED", "RETIRED", "TRANSPLANTED"].includes(String(u.status).toUpperCase())).length;
+    return {
+      id: `vert-${ent}-${i}`, name: UNIFIED_ENTERPRISE_LABEL[ent] || ent, kind: "vertical", engineLabel: UNIFIED_ENTERPRISE_LABEL[ent] || ent,
+      income: 0, costs: 0, net: 0, roi: null, worth: 0, cycles: 0, active: activeN,
+      head: 0, groups: list.length, status: activeN > 0 ? "active" : "closed", holds: 0,
+      units: list.length, uom: list[0]?.unit_of_measure || "unit", enterprise_type: ent,
+      route: (VERTICAL_CONFIG[ent]?.route || "/farm/enterprises").replace(/^\/farm\//, ""),
+      st: { grade: "New", score: null, color: gradeColor("New") },
+    };
+  });
+}
+
+function buildEnterprises(cropData, flockData, unifiedData) {
   const ents = [];
   (cropData ?? []).forEach((r, i) => {
     const income = n0(r.total_income_fjd);
@@ -122,6 +157,8 @@ function buildEnterprises(cropData, flockData) {
       st: { grade, score, color: gradeColor(grade) },
     });
   });
+  // Slice D — fold in every other vertical's production units.
+  buildUnifiedEnterprises(unifiedData).forEach((e) => ents.push(e));
   return ents;
 }
 
@@ -223,7 +260,7 @@ function EntCard({ e, onOpen }) {
               <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: e.status === "active" ? C.greenTint : C.cream, color: e.status === "active" ? C.greenDk : C.amber }}>{e.status}</span>
             </div>
             <div className="text-[11px] flex items-center gap-1" style={{ color: C.muted }}>
-              <Sprout size={11} />{e.kind === "animal" ? `${e.head} head · ${e.groups} group${e.groups === 1 ? "" : "s"}` : `${e.cycles} cycle${e.cycles === 1 ? "" : "s"}`}
+              <Sprout size={11} />{e.kind === "vertical" ? `${e.units} ${e.uom}${e.units === 1 ? "" : "s"}` : e.kind === "animal" ? `${e.head} head · ${e.groups} group${e.groups === 1 ? "" : "s"}` : `${e.cycles} cycle${e.cycles === 1 ? "" : "s"}`}
             </div>
           </div>
           <div className="text-right shrink-0">
@@ -232,15 +269,21 @@ function EntCard({ e, onOpen }) {
             <MiniBar score={e.st.score} />
           </div>
         </div>
-        <div className="grid grid-cols-2 gap-1.5 mt-3">
-          {[["Earned", e.kind === "animal" ? "—" : fjd(e.income)], ["Spent", e.kind === "animal" ? "—" : fjd(e.costs)],
-            ["Net", e.kind === "animal" ? "—" : fjd(e.net), e.net < 0 ? C.red : C.soil], ["ROI", e.kind === "animal" ? "—" : roiTxt(e.roi)]].map(([l, v, col]) => (
-            <div key={l} className="rounded-lg p-2" style={{ background: C.paper }}>
-              <div className="text-[9px] uppercase" style={{ color: C.muted }}>{l}</div>
-              <div className="text-xs font-bold" style={{ color: col || C.soil }}>{v}</div>
-            </div>
-          ))}
-        </div>
+        {e.kind === "vertical" ? (
+          <div className="rounded-lg p-2.5 mt-3 text-[11px]" style={{ background: C.paper, color: C.muted, lineHeight: 1.5 }}>
+            Earnings and costs for this enterprise build as you log against its {e.uom}s. Use the (+) button to record sales, inputs and harvests.
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 gap-1.5 mt-3">
+            {[["Earned", e.kind === "animal" ? "—" : fjd(e.income)], ["Spent", e.kind === "animal" ? "—" : fjd(e.costs)],
+              ["Net", e.kind === "animal" ? "—" : fjd(e.net), e.net < 0 ? C.red : C.soil], ["ROI", e.kind === "animal" ? "—" : roiTxt(e.roi)]].map(([l, v, col]) => (
+              <div key={l} className="rounded-lg p-2" style={{ background: C.paper }}>
+                <div className="text-[9px] uppercase" style={{ color: C.muted }}>{l}</div>
+                <div className="text-xs font-bold" style={{ color: col || C.soil }}>{v}</div>
+              </div>
+            ))}
+          </div>
+        )}
         <div className="text-[11px] mt-2.5" style={{ color: C.muted }}><strong style={{ color: C.soil }}>Next:</strong> nothing scheduled</div>
       </div>
       <div className="flex gap-1.5 px-3 pb-3">
@@ -702,15 +745,19 @@ function EnterprisesInner() {
   const navigate = (sub) => rrNavigate(`/farm/${sub}`);
   const crops = useCrops(farmId);
   const flocks = useFlocks(farmId);
+  const unified = useUnified(farmId);
 
   const [view, setView] = useState("portfolio");
   const [typeFilter, setTypeFilter] = useState("all");
   const [standingFilter, setStandingFilter] = useState("all");
   const [search, setSearch] = useState("");
   const [openEnt, setOpenEnt] = useState(null);
+  // Slice D — vertical rows (ponds/woodlots/hives) open their dashboard/stub;
+  // crop/animal rows open the in-page detail.
+  const openEntOrRoute = (e) => { if (e?.kind === "vertical" && e.route) navigate(e.route); else setOpenEnt(e); };
   const [addOpen, setAddOpen] = useState(false);
 
-  const realEnts = useMemo(() => buildEnterprises(crops.data?.data, flocks.data?.data?.items), [crops.data, flocks.data]);
+  const realEnts = useMemo(() => buildEnterprises(crops.data?.data, flocks.data?.data?.items, unified.data?.data), [crops.data, flocks.data, unified.data]);
   const loading = crops.isLoading || flocks.isLoading;
   const bothErrored = crops.isError && flocks.isError;
   const isPreview = !loading && !bothErrored && realEnts.length === 0;
@@ -721,11 +768,11 @@ function EnterprisesInner() {
   if (openEnt) return <EnterpriseDetail e={openEnt} farmId={farmId} onBack={() => setOpenEnt(null)} go={navigate} />;
 
   const tabBody = view === "portfolio"
-    ? <PortfolioTab D={D} ents={ents} typeFilter={typeFilter} setTypeFilter={setTypeFilter} standingFilter={standingFilter} setStandingFilter={setStandingFilter} search={search} setSearch={setSearch} onOpen={setOpenEnt} setView={setView} onAdd={() => setAddOpen(true)} navigate={navigate} farmId={farmId} />
-    : view === "rankings" ? <RankingsTab D={D} onOpen={setOpenEnt} />
-    : view === "cashrisk" ? <CashRiskTab D={D} onOpen={setOpenEnt} />
-    : view === "outlook" ? <OutlookTab D={D} onOpen={setOpenEnt} />
-    : <InvestorTab D={D} onOpen={setOpenEnt} navigate={navigate} />;
+    ? <PortfolioTab D={D} ents={ents} typeFilter={typeFilter} setTypeFilter={setTypeFilter} standingFilter={standingFilter} setStandingFilter={setStandingFilter} search={search} setSearch={setSearch} onOpen={openEntOrRoute} setView={setView} onAdd={() => setAddOpen(true)} navigate={navigate} farmId={farmId} />
+    : view === "rankings" ? <RankingsTab D={D} onOpen={openEntOrRoute} />
+    : view === "cashrisk" ? <CashRiskTab D={D} onOpen={openEntOrRoute} />
+    : view === "outlook" ? <OutlookTab D={D} onOpen={openEntOrRoute} />
+    : <InvestorTab D={D} onOpen={openEntOrRoute} navigate={navigate} />;
 
   return (
     <div className="space-y-4">
