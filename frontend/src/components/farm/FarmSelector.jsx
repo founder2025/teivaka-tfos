@@ -109,7 +109,7 @@ export default function FarmSelector() {
         style={{ background: "white", color: C.soil, border: `1px solid ${C.border}`, minWidth: 200 }}>
         <Sprout size={15} style={{ color: C.greenDk }} />
         <span className="flex-1 truncate text-left">
-          {current ? <>{current.farm_id} · {current.farm_name}{current.location_island ? ` · ${current.location_island}` : ""}</> : "Select farm…"}
+          {current ? <>{current.farm_name || "Unnamed farm"}{current.location_island ? ` · ${current.location_island}` : ""}</> : "Select farm…"}
         </span>
         <ChevronDown size={15} style={{ color: C.muted, transform: open ? "rotate(180deg)" : "none", transition: "transform .15s" }} />
       </button>

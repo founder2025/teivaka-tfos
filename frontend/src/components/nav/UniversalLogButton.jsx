@@ -36,6 +36,7 @@ export default function UniversalLogButton({ variant = "pill" }) {
         type="button"
         onClick={open}
         aria-label="Open log sheet"
+        data-tour="log-fab"
         className="rounded-full flex items-center justify-center text-white"
         style={{
           width: 56,
@@ -55,6 +56,7 @@ export default function UniversalLogButton({ variant = "pill" }) {
       type="button"
       onClick={open}
       aria-label="Open log sheet"
+      data-tour="log-fab"
       className="inline-flex items-center gap-1 px-3 rounded-full text-sm font-semibold text-white"
       style={{
         height: 32,

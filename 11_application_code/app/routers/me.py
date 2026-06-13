@@ -551,6 +551,53 @@ async def my_prefs(
     return {"data": dict(row) if row else {}}
 
 
+@router.get("/tours")
+async def my_tours(
+    user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_tenant_db),
+):
+    """Tour keys this user has already seen — drives first-visit auto-run.
+    Migration-tolerant: if the table isn't there yet, return empty (no tours
+    block the UI)."""
+    try:
+        rows = (await db.execute(text(
+            "SELECT tour_key FROM tenant.user_tours WHERE user_id = :uid"),
+            {"uid": str(user["user_id"])})).scalars().all()
+        return {"data": {"seen": list(rows)}}
+    except Exception:
+        return {"data": {"seen": []}}
+
+
+@router.post("/tours/{tour_key}/seen")
+async def mark_tour_seen(
+    tour_key: str,
+    user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_tenant_db),
+):
+    """Record that the user finished or dismissed a tour (idempotent)."""
+    await db.execute(text("""
+        INSERT INTO tenant.user_tours (tenant_id, user_id, tour_key)
+        VALUES (cast(:tid AS uuid), :uid, :tk)
+        ON CONFLICT (user_id, tour_key) DO NOTHING
+    """), {"tid": str(user["tenant_id"]), "uid": str(user["user_id"]), "tk": tour_key[:64]})
+    await db.commit()
+    return {"data": {"tour_key": tour_key, "seen": True}}
+
+
+@router.delete("/tours/{tour_key}/seen")
+async def replay_tour(
+    tour_key: str,
+    user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_tenant_db),
+):
+    """Clear a tour's seen-state so the farmer can replay it."""
+    await db.execute(text(
+        "DELETE FROM tenant.user_tours WHERE user_id = :uid AND tour_key = :tk"),
+        {"uid": str(user["user_id"]), "tk": tour_key[:64]})
+    await db.commit()
+    return {"data": {"tour_key": tour_key, "seen": False}}
+
+
 @router.post("/activity")
 async def ping_activity(
     user: dict = Depends(get_current_user),

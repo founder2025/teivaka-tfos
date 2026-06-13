@@ -20,7 +20,7 @@
 set -uo pipefail
 
 BRANCH="${1:-claude/beautiful-fermi-F0dLX}"
-EXPECTED_HEAD="${2:-132_audit_chain_seq_seal}"
+EXPECTED_HEAD="${2:-133_user_tours}"
 ROOT="/opt/teivaka"
 COMPOSE="docker compose -f ${ROOT}/04_environment/docker-compose.yml"
 PSQL="docker exec -i teivaka_db psql -v ON_ERROR_STOP=1 -tA -U teivaka -d teivaka_db"
@@ -107,6 +107,8 @@ LVEVT="$($PSQL -c "SELECT to_regclass('tenant.livestock_events') IS NOT NULL;" 2
 [ "$LVEVT" = "t" ] && ok "livestock_events table present (129)" || bad "livestock_events missing (migration 129 — livestock forms would 500)"
 KILLED="$($PSQL -c "SELECT count(*) FROM shared.event_type_catalog WHERE event_type IN ('FEED_GIVEN','BEDDING_CHANGED','WAGES_PAID','SELL_CROPS') AND is_active = false;" 2>/dev/null | tr -d '[:space:]')"
 [ "${KILLED:-0}" = "4" ] && ok "catalog kills applied (129 — duplicate tiles deactivated)" || bad "catalog kills not applied (${KILLED}/4 — migration 129)"
+TOURS="$($PSQL -c "SELECT to_regclass('tenant.user_tours') IS NOT NULL;" 2>/dev/null | tr -d '[:space:]')"
+[ "$TOURS" = "t" ] && ok "user_tours table present (133 — guided tours)" || bad "user_tours missing (migration 133)"
 CSEQ="$($PSQL -c "SELECT count(*) FROM information_schema.columns WHERE table_schema='audit' AND table_name='events' AND column_name='chain_seq';" 2>/dev/null | tr -d '[:space:]')"
 [ "${CSEQ:-0}" = "1" ] && ok "audit.events.chain_seq present (132)" || bad "chain_seq missing (migration 132 — chain fix)"
 CSEAL="$($PSQL -c "SELECT to_regclass('audit.chain_seal') IS NOT NULL;" 2>/dev/null | tr -d '[:space:]')"

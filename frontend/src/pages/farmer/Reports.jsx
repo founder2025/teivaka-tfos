@@ -93,13 +93,20 @@ const CATS = [
 ];
 const REPORT_COUNT = CATS.reduce((n, c) => n + c.reports.length, 0) + 1; // + Bank Evidence
 
-// FARM_DOC_IDENTITY — per-farm letterhead identity (prototype values).
-const FARM_IDENTITY = {
-  F001: { name: "Save-A-Lot", owner: "Uraia Koroi Kama", location: "Serua, Fiji", phone: "+679 8730866", email: "founder@teivaka.com" },
-  F002: { name: "Viyasiyasi", owner: "Uraia Koroi Kama", location: "Solodamu, Tavuki, Kadavu", phone: "+679 8730866", email: "founder@teivaka.com" },
-};
-function farmIdentity(farmId) {
-  return FARM_IDENTITY[farmId] || { name: farmId || "Your farm", owner: "Owner", location: "", phone: "", email: "" };
+// Letterhead identity — REAL farm + owner, never hardcoded. A bank-evidence
+// document must carry THIS farmer's name/contact, not a pilot's.
+function useFarmIdentity(farmId) {
+  const fq = useQuery({ queryKey: ["rep-farm", farmId], queryFn: () => getJSON(`/api/v1/farms/${encodeURIComponent(farmId)}`), enabled: !!farmId, retry: 0 });
+  const mq = useQuery({ queryKey: ["rep-me"], queryFn: () => getJSON(`/api/v1/me`), retry: 0 });
+  const f = fq.data?.data || fq.data || {};
+  const m = mq.data?.data || mq.data || {};
+  return {
+    name: f.farm_name || "Your farm",
+    owner: m.full_name || "Owner",
+    location: [f.location_name, f.location_island].filter(Boolean).join(", "),
+    phone: m.whatsapp_number || "",
+    email: m.email || "",
+  };
 }
 
 function authHeaders() {
@@ -218,7 +225,7 @@ function BankDocCard({ farmId }) {
   const net = s.net_profit_fjd;
   const cropRows = crops.data?.data ?? [];
   const cycles = cropRows.reduce((a, r) => a + (Number(r.total_cycles) || 0), 0);
-  const farm = farmIdentity(farmId);
+  const farm = useFarmIdentity(farmId);
   const [period, setPeriod] = useState(new Date().toISOString().slice(0, 7)); // YYYY-MM
   const [dl, setDl] = useState(false);
 
@@ -462,7 +469,7 @@ function ReportDocBody({ typeId, farmId }) {
 
 function ReportDocument({ typeId, farmId, onBack }) {
   const kind = REPORT_KINDS[typeId] || { name: "Report", Icon: FileText };
-  const farm = farmIdentity(farmId);
+  const farm = useFarmIdentity(farmId);
   const docId = `TFOS-${farmId || "FARM"}-${new Date().toISOString().slice(0, 10)}`;
   const issued = new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
   const ABtn = ({ onClick, children, primary }) => (

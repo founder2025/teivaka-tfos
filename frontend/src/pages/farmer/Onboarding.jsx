@@ -382,7 +382,7 @@ export default function Onboarding() {
                   <label className="block text-sm font-medium mb-1.5" style={{ color: C.soil }}>Farm name *</label>
                   <input type="text" value={data.farm_name}
                     onChange={e => update("farm_name", e.target.value)}
-                    placeholder="e.g. Save-A-Lot Farm"
+                    placeholder="e.g. Riverside Farm"
                     className="w-full border rounded-xl px-4 py-3 text-sm focus:outline-none"
                     style={{ borderColor: C.border }} />
                 </div>
