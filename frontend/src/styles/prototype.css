@@ -11,7 +11,7 @@
   --amber: #BF9000; --red: #A32D2D; --line: #E2D8C3; --ink: #2A2118; --muted: #7A6E5C;
   --amber-bg: #F7ECCF; --green-tint: #E8F0E0; --danger-bg: #FBE6E2; --muted-bg: #EFE9DC; --img-grad: linear-gradient(135deg, #E8DFC8 0%, #C8B98F 100%); --amber-grad: linear-gradient(135deg, #FFF4E0 0%, #FFEAC8 100%);
   --shadow: 0 2px 8px rgba(92,64,51,0.08); --shadow-lg: 0 8px 28px rgba(92,64,51,0.18);
-  --topbar-h: 56px; --rail-w: 220px;
+  --topbar-h: 56px; --rail-w: 220px; --topbar-bg: #F8F3E9;
   --v-mixed: #7A6E5C; --v-crops: #6AA84F; --v-horticulture: #BF9000; --v-livestock: #5C4033;
   --v-aquaculture: #4F9D87; --v-forestry: #2F5D3A; --v-floriculture: #C57B8B; --v-protected: #5E6D7E;
 }
@@ -20,7 +20,7 @@
   --cream: #16130E; --paper: #232019; --cream-2: #322D24;
   --green: #8FD06E; --green-dk: #A8DD8C; --soil: #EBDEC9; --soil-2: #D2BFA6;
   --amber: #E8BE48; --red: #ED6E68; --line: #4D4537; --ink: #F4EEE2; --muted: #C0B4A0;
-  --amber-bg: #3D3214; --green-tint: #1E2A1A; --danger-bg: #3A1E1B; --muted-bg: #2A2620; --amber-grad: linear-gradient(135deg, #3D3214, #2A2014);
+  --amber-bg: #3D3214; --green-tint: #1E2A1A; --danger-bg: #3A1E1B; --muted-bg: #2A2620; --topbar-bg: #232019; --amber-grad: linear-gradient(135deg, #3D3214, #2A2014);
   --img-grad: linear-gradient(135deg, #2C2820, #1C1813);
   --shadow: 0 1px 0 rgba(255,255,255,0.04), 0 2px 10px rgba(0,0,0,0.5);
   --shadow-lg: 0 1px 0 rgba(255,255,255,0.05), 0 10px 30px rgba(0,0,0,0.65);

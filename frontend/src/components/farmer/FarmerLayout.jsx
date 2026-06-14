@@ -145,7 +145,7 @@ export default function FarmerLayout({ children }) {
 
       {/* ── Fixed Top Nav ──────────────────────────────────────────────── */}
       <header className="fixed top-0 left-0 right-0 z-50 shadow-sm"
-        style={{ background: "var(--cream)", borderBottom: `2px solid ${C.green}` }}>
+        style={{ background: "var(--topbar-bg)", borderBottom: `2px solid ${C.green}` }}>
         <div className="max-w-screen-xl mx-auto px-4 h-14 flex items-center gap-3">
 
           {/* Logo + wordmark + farm dropdown */}

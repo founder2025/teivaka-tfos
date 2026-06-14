@@ -87,9 +87,13 @@ const EMAIL_DEFAULT_PROFILES = new Set([
 function defaultChannel(t) { return EMAIL_DEFAULT_PROFILES.has(t) ? "email" : "whatsapp"; }
 
 const PRIVACY_POLICY_VERSION = "1.0";
-const CURRENT_YEAR = new Date().getFullYear();
-const BIRTH_YEARS = [];
-for (let y = CURRENT_YEAR - 18; y >= 1900; y--) BIRTH_YEARS.push(y);
+// Latest allowable DOB = exactly 18 years ago today (date input `max`), so the
+// native picker can't offer an under-18 date. Age is re-checked in validate().
+const MAX_DOB = (() => {
+  const d = new Date();
+  d.setFullYear(d.getFullYear() - 18);
+  return d.toISOString().slice(0, 10);
+})();
 
 function extractErrorMessage(detail) {
   if (!detail) return "Registration failed. Please try again.";
@@ -244,7 +248,7 @@ function RegistrationForm({ onSuccess }) {
   const [businessName, setBusinessName] = useState("");
   const [operatorName, setOperatorName] = useState("");
   const [regionId, setRegionId] = useState(null);
-  const [birthYear, setBirthYear] = useState("");
+  const [birthDate, setBirthDate] = useState(""); // full YYYY-MM-DD
   const [preferredChannel, setPreferredChannel] = useState(""); // "" = use CFO default
   const isCompany = accountKind === "company";
 
@@ -336,7 +340,21 @@ function RegistrationForm({ onSuccess }) {
     if (fullPhone && !/^\+[1-9]\d{6,14}$/.test(fullPhone)) e.phone_number = "Enter a valid phone number";
     if ((effectiveChannel === "whatsapp" || effectiveChannel === "sms") && !fullPhone)
       e.phone_number = "A mobile number is required for WhatsApp / SMS verification";
-    if (!birthYear) e.birth_year = "Please confirm your year of birth (18+)";
+    if (!birthDate) {
+      e.birth_date = "Please enter your date of birth";
+    } else {
+      const dob = new Date(birthDate);
+      if (Number.isNaN(dob.getTime())) {
+        e.birth_date = "Please enter a valid date of birth";
+      } else {
+        const today = new Date();
+        let age = today.getFullYear() - dob.getFullYear();
+        const m = today.getMonth() - dob.getMonth();
+        if (m < 0 || (m === 0 && today.getDate() < dob.getDate())) age--;
+        if (age < 18) e.birth_date = "You must be at least 18 years old to register";
+        else if (dob.getFullYear() < 1900) e.birth_date = "Please enter a valid date of birth";
+      }
+    }
     if (!policyAccepted) e.policy = "Please accept the Privacy Policy and Terms of Service to continue";
     return e;
   }
@@ -380,7 +398,7 @@ function RegistrationForm({ onSuccess }) {
       // is captured on the profile instead, so signup can never fail on it.
       region_id: null,
       preferred_verify_channel: effectiveChannel,
-      date_of_birth: `${birthYear}-01-01`,
+      date_of_birth: birthDate,
       phone_number: phoneOrNull, whatsapp_number: wa,
       referral_code: form.referral_code.trim() || null,
       referral_source: form.referral_source || null,
@@ -681,15 +699,13 @@ function RegistrationForm({ onSuccess }) {
                     )}
                   </div>
 
-                  {/* Lightweight 18+ check — year of birth */}
-                  <Field label="Year of birth *" id="birth_year" error={errors.birth_year}
+                  {/* Date of birth — full date; 18+ enforced in validate() */}
+                  <Field label="Date of birth *" id="birth_date" error={errors.birth_date}
                     hint="You must be 18 or older to register">
-                    <select id="birth_year" value={birthYear}
-                      onChange={(e) => { setBirthYear(e.target.value); clearErr("birth_year"); }}
-                      className={inputCls("birth_year")} style={inputStyle}>
-                      <option value="">— Select year —</option>
-                      {BIRTH_YEARS.map((y) => <option key={y} value={y}>{y}</option>)}
-                    </select>
+                    <input type="date" id="birth_date" value={birthDate}
+                      max={MAX_DOB} min="1900-01-01"
+                      onChange={(e) => { setBirthDate(e.target.value); clearErr("birth_date"); }}
+                      className={inputCls("birth_date")} style={inputStyle} />
                   </Field>
 
                   {/* Country */}
