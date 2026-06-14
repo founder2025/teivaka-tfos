@@ -98,8 +98,12 @@
         header Cache-Control "no-store"
     }
 
-    # Public audit verification (Phase 9-1; broadened in 9-3 for bare /verify) — server-rendered HTML from FastAPI
-    handle /verify* {
+    # Public audit verification (Phase 9-1; broadened in 9-3 for bare /verify) — server-rendered HTML from FastAPI.
+    # Match ONLY /verify and /verify/<hash>, NOT /verify-email (the SPA email-
+    # verification page) — a bare /verify* prefix wrongly captured /verify-email
+    # and proxied it to the API, which 401'd the verification link.
+    @audit_verify path /verify /verify/*
+    handle @audit_verify {
         reverse_proxy api:8000 {
             health_uri /api/v1/health
         }
