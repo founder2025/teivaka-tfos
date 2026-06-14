@@ -763,7 +763,11 @@ async def follow(target_user_id: str, user: dict = Depends(rate_limit_only("foll
 
 
 @router.delete("/follow/{target_user_id}")
-async def unfollow(target_user_id: str, user: dict = Depends(get_current_user)):
+async def unfollow(target_user_id: str, user: dict = Depends(rate_limit_only("unfollow", 30))):
+    # Symmetric with follow: capping only the follow side leaves the
+    # follow/unfollow CHURN loop (mass-follow → notify-spam → mass-unfollow →
+    # repeat) running uncapped. Same 30/min, verification-free — a human never
+    # hits it, a churn script does.
     async with get_rls_db(str(user["tenant_id"])) as db:
         await db.execute(text("DELETE FROM community.follows WHERE follower_user_id=:me AND followed_user_id=:them"),
                          {"me": str(user["user_id"]), "them": target_user_id})
