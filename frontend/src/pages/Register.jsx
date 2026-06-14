@@ -451,7 +451,13 @@ function RegistrationForm({ onSuccess }) {
                   })}
                 </div>
 
-                <p className="text-xs mt-2" style={{ color: T.muted }}>{selectedProfile.sub}</p>
+                {(() => { const SubIcon = selectedProfile.Icon; return (
+                  <div className="mt-3 flex items-start gap-2.5 rounded-xl px-3.5 py-3"
+                    style={{ background: T.greenTint, border: `1.5px solid ${T.green}` }}>
+                    <SubIcon size={20} strokeWidth={2} color={T.greenDk} style={{ marginTop: 1, flexShrink: 0 }} />
+                    <p className="text-sm font-semibold leading-snug" style={{ color: T.soil }}>{selectedProfile.sub}</p>
+                  </div>
+                ); })()}
 
                 {/* What do you do? — free-text specialty (required for "Other") */}
                 {isResolved && (
