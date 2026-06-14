@@ -1,16 +1,22 @@
 /**
  * Register.jsx — Teivaka Agriculture Ecosystem onboarding gateway.
  *
- * Front-door flow (themed to the post-login .tfp system, flat lucide icons):
- *   Step 1 — Account-type switcher: Individual / Personal vs Company / Agribusiness.
- *   Step 2 — 3x3 ecosystem-profile grid (9 cards); cards 5 & 9 fan out into a
- *            Stage-2 governance/capital dropdown (12-tier account_type).
- *   Step 3 — Conditional fields per account kind + a data-driven geographic
- *            cascade (Province -> District -> Tikina; levels render only when the
- *            geo dataset has them). Password spine retained; lightweight 18+ check
- *            (year-of-birth) replaces the heavy calendar.
+ * Progressive onboarding (Google/LinkedIn method — one decision per card),
+ * themed to the post-login .tfp system. Replaces the single long signup page
+ * with a 4-step wizard, each step a small card with a progress indicator and
+ * back navigation:
+ *   Step 1 — Account: email + password (show/hide; Google slot reserved).
+ *   Step 2 — Who are you?: account-kind toggle + profession grid + specialty.
+ *   Step 3 — About you: name (by kind) + date of birth (18+) + country.
+ *   Step 4 — Verify & finish: phone/WhatsApp (optional, for the verified badge)
+ *            + verify channel + referral/invite + policy, then create account.
  *
- * API: POST /api/v1/auth/register ; GET /api/v1/geo/regions
+ * Identity (profession) stays REQUIRED — lazy verification is about the email
+ * link, not who you are. The submit payload is byte-identical to the old form
+ * so the backend contract is unchanged. Partial answers persist (resume), the
+ * password is never persisted.
+ *
+ * API: POST /api/v1/auth/register
  */
 
 import { useState, useEffect, useRef } from "react";
@@ -140,119 +146,30 @@ function Field({ label, id, error, hint, children }) {
 }
 
 // ---------------------------------------------------------------------------
-// Geographic cascade — data-driven. Renders Province now; District/Tikina light
-// up automatically once shared.geo_regions has them (no empty/dead pickers).
+// Registration Form — progressive 4-step wizard
 // ---------------------------------------------------------------------------
-// Fiji's 14 provinces (yasana) — ids match shared.geo_regions. Built-in so the
-// region dropdown never depends on a backend round-trip / seed state.
-const FIJI_PROVINCES = [
-  { region_id: "FJI-BA", name: "Ba" },
-  { region_id: "FJI-BUA", name: "Bua" },
-  { region_id: "FJI-CAK", name: "Cakaudrove" },
-  { region_id: "FJI-KAD", name: "Kadavu" },
-  { region_id: "FJI-LAU", name: "Lau" },
-  { region_id: "FJI-LOM", name: "Lomaiviti" },
-  { region_id: "FJI-MAC", name: "Macuata" },
-  { region_id: "FJI-NAD", name: "Nadroga-Navosa" },
-  { region_id: "FJI-NAI", name: "Naitasiri" },
-  { region_id: "FJI-NAM", name: "Namosi" },
-  { region_id: "FJI-RA", name: "Ra" },
-  { region_id: "FJI-REW", name: "Rewa" },
-  { region_id: "FJI-SER", name: "Serua" },
-  { region_id: "FJI-TAI", name: "Tailevu" },
-];
 
-function RegionCascade({ label, onChange }) {
-  const [provinces, setProvinces] = useState([]);
-  const [districts, setDistricts] = useState([]);
-  const [tikinas, setTikinas] = useState([]);
-  const [province, setProvince] = useState("");
-  const [district, setDistrict] = useState("");
-  const [tikina, setTikina] = useState("");
-
-  useEffect(() => {
-    let cancelled = false;
-    // Built-in Fiji provinces — the dropdown always loads, no backend dependency.
-    // Canonical ids match shared.geo_regions; the API upgrades the list if it
-    // returns richer data (e.g. once districts are loaded).
-    if (!cancelled) setProvinces(FIJI_PROVINCES);
-    fetch("/api/v1/geo/regions?level=PROVINCE")
-      .then((r) => (r.ok ? r.json() : { data: [] }))
-      .then((j) => { if (!cancelled && Array.isArray(j.data) && j.data.length) setProvinces(j.data); })
-      .catch(() => { /* keep the built-in list */ });
-    return () => { cancelled = true; };
-  }, []);
-
-  function loadChildren(parentId) {
-    return fetch(`/api/v1/geo/regions?parent_id=${encodeURIComponent(parentId)}`)
-      .then((r) => (r.ok ? r.json() : { data: [] }))
-      .then((j) => j.data || [])
-      .catch(() => []);
-  }
-
-  async function pickProvince(id) {
-    setProvince(id); setDistrict(""); setTikina(""); setDistricts([]); setTikinas([]);
-    onChange(id || null);
-    if (id) setDistricts(await loadChildren(id));
-  }
-  async function pickDistrict(id) {
-    setDistrict(id); setTikina(""); setTikinas([]);
-    onChange(id || province || null);
-    if (id) setTikinas(await loadChildren(id));
-  }
-  function pickTikina(id) {
-    setTikina(id);
-    onChange(id || district || province || null);
-  }
-
-  const selectStyle = {
-    width: "100%", border: `1px solid ${T.line}`, borderRadius: 12, padding: "12px 14px",
-    fontSize: 14, outline: "none", fontFamily: FONT, color: T.ink, background: T.paper,
-  };
-
-  return (
-    <Field label={label} id="region">
-      <select value={province} onChange={(e) => pickProvince(e.target.value)} style={selectStyle}>
-        <option value="">— Select province —</option>
-        {provinces.map((p) => <option key={p.region_id} value={p.region_id}>{p.name}</option>)}
-      </select>
-      {districts.length > 0 && (
-        <select value={district} onChange={(e) => pickDistrict(e.target.value)} style={{ ...selectStyle, marginTop: 8 }}>
-          <option value="">— Select district —</option>
-          {districts.map((d) => <option key={d.region_id} value={d.region_id}>{d.name}</option>)}
-        </select>
-      )}
-      {tikinas.length > 0 && (
-        <select value={tikina} onChange={(e) => pickTikina(e.target.value)} style={{ ...selectStyle, marginTop: 8 }}>
-          <option value="">— Select tikina —</option>
-          {tikinas.map((t) => <option key={t.region_id} value={t.region_id}>{t.name}</option>)}
-        </select>
-      )}
-    </Field>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Registration Form
-// ---------------------------------------------------------------------------
+const TOTAL_STEPS = 4;
+const DRAFT_KEY = "teivaka_signup_draft";
+const STEP_TITLES = ["Account", "Who you are", "About you", "Finish"];
 
 function RegistrationForm({ onSuccess }) {
+  const [step, setStep] = useState(1);
+  const headingRef = useRef(null);
+
   const [form, setForm] = useState({
     first_name: "", last_name: "", email: "", password: "",
     phone_number: "", whatsapp_number: "",
     country: "FJ", referral_source: "", referral_code: "",
   });
 
-  // Step 1 — account-type switcher.
   const [accountKind, setAccountKind] = useState("individual"); // "individual" | "company"
   const [businessName, setBusinessName] = useState("");
   const [operatorName, setOperatorName] = useState("");
-  const [regionId, setRegionId] = useState(null);
   const [birthDate, setBirthDate] = useState(""); // full YYYY-MM-DD
   const [preferredChannel, setPreferredChannel] = useState(""); // "" = use CFO default
   const isCompany = accountKind === "company";
 
-  // Step 2 — ecosystem-profile selection.
   const [selectedKey, setSelectedKey] = useState("PRIMARY_PRODUCER");
   const [subType, setSubType] = useState("");
   const [specialty, setSpecialty] = useState("");
@@ -260,19 +177,10 @@ function RegistrationForm({ onSuccess }) {
   const resolvedType = selectedProfile.dropdown ? (subType || null) : selectedProfile.value;
   const isResolved = !!resolvedType;
   const effectiveChannel = preferredChannel || (resolvedType ? defaultChannel(resolvedType) : "email");
+  const workspaceLabel = PROFILE_LABELS[resolvedType] || "";
 
   const [policyAccepted, setPolicyAccepted] = useState(false);
-
-  useEffect(() => {
-    try {
-      const ref = sessionStorage.getItem("teivaka_ref");
-      if (ref) setForm((f) => (f.referral_code ? f : { ...f, referral_code: ref }));
-    } catch { /* ignore */ }
-  }, []);
-
   const [showPassword, setShowPassword] = useState(false);
-  const [confirmPw, setConfirmPw] = useState("");
-  const [showConfirmPw, setShowConfirmPw] = useState(false);
   const [sameAsPhone, setSameAsPhone] = useState(true);
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
@@ -283,6 +191,52 @@ function RegistrationForm({ onSuccess }) {
   const [phoneSearch, setPhoneSearch] = useState("");
   const phoneDropdownRef = useRef(null);
 
+  // referral code prefill from an invite link
+  useEffect(() => {
+    try {
+      const ref = sessionStorage.getItem("teivaka_ref");
+      if (ref) setForm((f) => (f.referral_code ? f : { ...f, referral_code: ref }));
+    } catch { /* ignore */ }
+  }, []);
+
+  // resume a saved draft (everything except password, which is never persisted)
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(DRAFT_KEY);
+      if (!raw) return;
+      const d = JSON.parse(raw);
+      if (d.form) setForm((f) => ({ ...f, ...d.form, password: "" }));
+      if (d.accountKind) setAccountKind(d.accountKind);
+      if (d.selectedKey) setSelectedKey(d.selectedKey);
+      if (typeof d.subType === "string") setSubType(d.subType);
+      if (typeof d.specialty === "string") setSpecialty(d.specialty);
+      if (d.birthDate) setBirthDate(d.birthDate);
+      if (d.phoneCountry) setPhoneCountry(d.phoneCountry);
+      if (typeof d.phoneLocal === "string") setPhoneLocal(d.phoneLocal);
+      if (d.preferredChannel) setPreferredChannel(d.preferredChannel);
+      if (typeof d.sameAsPhone === "boolean") setSameAsPhone(d.sameAsPhone);
+    } catch { /* ignore */ }
+  }, []);
+
+  // persist the draft as the user progresses (password excluded for security)
+  useEffect(() => {
+    try {
+      localStorage.setItem(DRAFT_KEY, JSON.stringify({
+        form: { ...form, password: "" },
+        accountKind, selectedKey, subType, specialty, birthDate,
+        phoneCountry, phoneLocal, preferredChannel, sameAsPhone,
+      }));
+    } catch { /* ignore */ }
+  }, [form, accountKind, selectedKey, subType, specialty, birthDate,
+    phoneCountry, phoneLocal, preferredChannel, sameAsPhone]);
+
+  // a11y: focus the step heading + scroll to top whenever the step changes
+  useEffect(() => {
+    try { window.scrollTo({ top: 0, behavior: "smooth" }); } catch { /* ignore */ }
+    if (headingRef.current) { try { headingRef.current.focus(); } catch { /* ignore */ } }
+  }, [step]);
+
+  // close the phone country dropdown on an outside click
   useEffect(() => {
     function handleClick(e) {
       if (phoneDropdownRef.current && !phoneDropdownRef.current.contains(e.target)) {
@@ -310,53 +264,71 @@ function RegistrationForm({ onSuccess }) {
     setServerError("");
   }
   function clearErr(k) { setErrors((e) => ({ ...e, [k]: "" })); setServerError(""); }
-
-  function selectProfile(key) {
-    setSelectedKey(key); setSubType("");
-    clearErr("account_type");
-  }
+  function selectProfile(key) { setSelectedKey(key); setSubType(""); clearErr("account_type"); }
   function selectSubType(value) { setSubType(value); clearErr("account_type"); }
 
-  function validate() {
+  function dobError() {
+    if (!birthDate) return "Please enter your date of birth";
+    const dob = new Date(birthDate);
+    if (Number.isNaN(dob.getTime())) return "Please enter a valid date of birth";
+    const today = new Date();
+    let age = today.getFullYear() - dob.getFullYear();
+    const m = today.getMonth() - dob.getMonth();
+    if (m < 0 || (m === 0 && today.getDate() < dob.getDate())) age--;
+    if (age < 18) return "You must be at least 18 years old to register";
+    if (dob.getFullYear() < 1900) return "Please enter a valid date of birth";
+    return null;
+  }
+
+  // per-step validation — only gate on the fields visible in that step
+  function validateStep(n) {
     const e = {};
-    if (!isResolved) {
-      e.account_type = selectedProfile.dropdown
-        ? "Please select your profile from the dropdown to continue"
-        : "Please choose who you are";
-    }
-    if (selectedProfile.other && !specialty.trim()) e.specialty = "Please tell us what you do";
-    if (isCompany) {
-      if (businessName.trim().length < 2) e.business_name = "Registered business name is required";
-      if (operatorName.trim().length < 2) e.operator_name = "Authorized operator name is required";
-    } else {
-      if (!form.first_name.trim()) e.first_name = "First name is required";
-      if (!form.last_name.trim())  e.last_name  = "Last name is required";
-    }
-    if (!form.email.trim())      e.email      = "Email address is required";
-    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) e.email = "Enter a valid email address";
-    const pwErr = passwordComplexityError(form.password);
-    if (pwErr) e.password = pwErr;
-    if (confirmPw !== form.password) e.confirmPw = "Passwords do not match";
-    if (fullPhone && !/^\+[1-9]\d{6,14}$/.test(fullPhone)) e.phone_number = "Enter a valid phone number";
-    if ((effectiveChannel === "whatsapp" || effectiveChannel === "sms") && !fullPhone)
-      e.phone_number = "A mobile number is required for WhatsApp / SMS verification";
-    if (!birthDate) {
-      e.birth_date = "Please enter your date of birth";
-    } else {
-      const dob = new Date(birthDate);
-      if (Number.isNaN(dob.getTime())) {
-        e.birth_date = "Please enter a valid date of birth";
-      } else {
-        const today = new Date();
-        let age = today.getFullYear() - dob.getFullYear();
-        const m = today.getMonth() - dob.getMonth();
-        if (m < 0 || (m === 0 && today.getDate() < dob.getDate())) age--;
-        if (age < 18) e.birth_date = "You must be at least 18 years old to register";
-        else if (dob.getFullYear() < 1900) e.birth_date = "Please enter a valid date of birth";
+    if (n === 1) {
+      if (!form.email.trim()) e.email = "Email address is required";
+      else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) e.email = "Enter a valid email address";
+      const pwErr = passwordComplexityError(form.password);
+      if (pwErr) e.password = pwErr;
+    } else if (n === 2) {
+      if (!isResolved) {
+        e.account_type = selectedProfile.dropdown
+          ? "Please select your profile from the dropdown to continue"
+          : "Please choose who you are";
       }
+      if (selectedProfile.other && !specialty.trim()) e.specialty = "Please tell us what you do";
+    } else if (n === 3) {
+      if (isCompany) {
+        if (businessName.trim().length < 2) e.business_name = "Registered business name is required";
+        if (operatorName.trim().length < 2) e.operator_name = "Authorized operator name is required";
+      } else {
+        if (!form.first_name.trim()) e.first_name = "First name is required";
+        if (!form.last_name.trim()) e.last_name = "Last name is required";
+      }
+      const de = dobError();
+      if (de) e.birth_date = de;
+    } else if (n === 4) {
+      if (fullPhone && !/^\+[1-9]\d{6,14}$/.test(fullPhone)) e.phone_number = "Enter a valid phone number";
+      if ((effectiveChannel === "whatsapp" || effectiveChannel === "sms") && !fullPhone)
+        e.phone_number = "A mobile number is required for WhatsApp / SMS verification";
+      if (!policyAccepted) e.policy = "Please accept the Privacy Policy and Terms of Service to continue";
     }
-    if (!policyAccepted) e.policy = "Please accept the Privacy Policy and Terms of Service to continue";
     return e;
+  }
+
+  function next() {
+    const errs = validateStep(step);
+    if (Object.keys(errs).length) {
+      setErrors((p) => ({ ...p, ...errs }));
+      setServerError("Please fix the highlighted fields to continue.");
+      return;
+    }
+    setServerError("");
+    setStep((s) => Math.min(s + 1, TOTAL_STEPS));
+  }
+  function back() { setServerError(""); setStep((s) => Math.max(1, s - 1)); }
+
+  // full safety net at submit (all steps combined)
+  function validate() {
+    return { ...validateStep(1), ...validateStep(2), ...validateStep(3), ...validateStep(4) };
   }
 
   function deriveNames() {
@@ -367,15 +339,16 @@ function RegistrationForm({ onSuccess }) {
     return { first_name: first, last_name: last };
   }
 
-  async function handleSubmit(e) {
-    e.preventDefault();
+  async function handleSubmit() {
     const errs = validate();
     if (Object.keys(errs).length > 0) {
       setErrors(errs);
-      // surface the problem — the button is at the bottom of a long form, so
-      // scroll the user to the first issue instead of "nothing happening".
-      setServerError("Please fix the highlighted fields above to continue.");
-      try { window.scrollTo({ top: 0, behavior: "smooth" }); } catch { /* ignore */ }
+      const stepOf = (k) =>
+        ["email", "password"].includes(k) ? 1 :
+        ["account_type", "specialty"].includes(k) ? 2 :
+        ["first_name", "last_name", "business_name", "operator_name", "birth_date"].includes(k) ? 3 : 4;
+      setStep(Math.min(...Object.keys(errs).map(stepOf)));
+      setServerError("Please fix the highlighted fields to continue.");
       return;
     }
     setLoading(true);
@@ -414,11 +387,11 @@ function RegistrationForm({ onSuccess }) {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         setServerError(extractErrorMessage(data.detail) || `Couldn't create your account (error ${res.status}). Please try again.`);
-        try { window.scrollTo({ top: 0, behavior: "smooth" }); } catch { /* ignore */ }
         return;
       }
       localStorage.setItem("tfos_access_token", data.access_token);
       localStorage.setItem("tfos_refresh_token", data.refresh_token);
+      try { localStorage.removeItem(DRAFT_KEY); } catch { /* ignore */ }
       // capture the free-text specialty (incl. "Other → describe") onto the new
       // profile — non-blocking; account creation already succeeded.
       if (specialty.trim()) {
@@ -438,6 +411,13 @@ function RegistrationForm({ onSuccess }) {
     }
   }
 
+  // Enter / primary button: advance steps, submit on the last step.
+  function onFormSubmit(e) {
+    e.preventDefault();
+    if (step < TOTAL_STEPS) next();
+    else handleSubmit();
+  }
+
   const inputCls = (field) =>
     `w-full rounded-xl px-4 py-3 text-sm border bg-white focus:outline-none focus:ring-2 focus:ring-[var(--green)]/30 ${
       errors[field] ? "border-[var(--red)]" : "border-[var(--line)] focus:border-[var(--green)]"
@@ -449,6 +429,7 @@ function RegistrationForm({ onSuccess }) {
     background: active ? T.greenTint : T.paper, color: active ? T.greenDk : T.soil,
     fontWeight: 600, fontSize: 13, cursor: "pointer", fontFamily: FONT,
   });
+  const h1Cls = "text-2xl font-bold mb-1 outline-none";
 
   return (
     <div className="min-h-screen flex flex-col" style={{ background: T.cream, fontFamily: FONT }}>
@@ -461,12 +442,20 @@ function RegistrationForm({ onSuccess }) {
       <div className="flex-1 flex items-center justify-center p-4">
         <div className="w-full max-w-lg">
           <div className="rounded-2xl p-7" style={{ background: T.paper, border: `1px solid ${T.line}`, boxShadow: "0 2px 8px rgba(92,64,51,0.08)" }}>
-            <div className="text-center mb-6">
-              <h1 className="text-2xl font-bold mb-1" style={{ color: T.soil }}>Join the Teivaka Agriculture Ecosystem</h1>
-              <p className="text-sm" style={{ color: T.muted }}>Choose your account type and ecosystem profile</p>
+
+            {/* progress indicator */}
+            <div className="mb-6">
+              <div className="flex justify-between items-center mb-2">
+                <span className="text-xs font-semibold" style={{ color: T.greenDk }}>Step {step} of {TOTAL_STEPS}</span>
+                <span className="text-xs" style={{ color: T.muted }}>{STEP_TITLES[step - 1]}</span>
+              </div>
+              <div className="h-1.5 rounded-full overflow-hidden" style={{ background: T.line }}
+                role="progressbar" aria-valuenow={step} aria-valuemin={1} aria-valuemax={TOTAL_STEPS}>
+                <div style={{ width: `${(step / TOTAL_STEPS) * 100}%`, height: "100%", background: T.green, borderRadius: 999, transition: "width .3s ease" }} />
+              </div>
             </div>
 
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <form onSubmit={onFormSubmit} className="space-y-4">
               {serverError && (
                 <div className="px-4 py-3 rounded-xl text-sm flex gap-2" role="alert"
                   style={{ background: "#FBEAEA", border: `1px solid ${T.red}33`, color: T.red }}>
@@ -474,84 +463,147 @@ function RegistrationForm({ onSuccess }) {
                 </div>
               )}
 
-              {/* Step 1 — account-type switcher */}
-              <Field label="Account type" id="account_kind">
-                <div style={{ display: "flex", gap: 8 }}>
-                  <button type="button" aria-pressed={!isCompany} style={kindBtn(!isCompany)}
-                    onClick={() => setAccountKind("individual")}>Individual / Personal</button>
-                  <button type="button" aria-pressed={isCompany} style={kindBtn(isCompany)}
-                    onClick={() => setAccountKind("company")}>Company / Agribusiness</button>
-                </div>
-              </Field>
+              {/* ---- Step 1 — Account ---- */}
+              {step === 1 && (
+                <div className="space-y-4">
+                  <div className="text-center">
+                    <h1 ref={headingRef} tabIndex={-1} className={h1Cls} style={{ color: T.soil }}>Create your account</h1>
+                    <p className="text-sm" style={{ color: T.muted }}>Join Fiji's verified farming network — takes under a minute.</p>
+                  </div>
 
-              {/* Step 2 — 3x3 ecosystem-profile grid */}
-              <Field label="I am a…" id="account_type" error={errors.account_type}>
-                <div className="grid grid-cols-3 gap-2 mt-1">
-                  {PROFILES.map((p) => {
-                    const selected = selectedKey === p.key;
-                    const Icon = p.Icon;
-                    return (
-                      <button key={p.key} type="button" aria-pressed={selected} title={p.sub}
-                        onClick={() => selectProfile(p.key)}
-                        className="flex flex-col items-center justify-center text-center py-3 px-1 rounded-xl border text-[11px] leading-tight font-semibold transition-all min-h-[78px]"
-                        style={{
-                          borderColor: selected ? T.green : T.line,
-                          background: selected ? T.greenTint : T.paper,
-                          color: selected ? T.greenDk : T.soil,
-                        }}>
-                        <Icon size={22} strokeWidth={1.75} color={selected ? T.green : T.soil2} style={{ marginBottom: 5 }} />
-                        {p.label}
+                  {/* Google slot — reserved for OAuth wiring (honest "coming soon", not a dead end) */}
+                  <div>
+                    <button type="button" disabled aria-disabled="true"
+                      className="w-full py-3 rounded-xl font-semibold text-sm flex items-center justify-center gap-2"
+                      style={{ background: T.paper, border: `1px solid ${T.line}`, color: T.muted, cursor: "not-allowed", opacity: 0.75 }}>
+                      <span style={{ fontWeight: 800, fontSize: 16 }}>G</span> Continue with Google
+                    </button>
+                    <p className="text-[11px] text-center mt-1" style={{ color: T.muted }}>Google sign-in coming soon</p>
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    <div style={{ flex: 1, height: 1, background: T.line }} />
+                    <span className="text-xs" style={{ color: T.muted }}>or sign up with email</span>
+                    <div style={{ flex: 1, height: 1, background: T.line }} />
+                  </div>
+
+                  <Field label="Email address" id="email" error={errors.email}
+                    hint="Use a permanent email — disposable addresses are not accepted">
+                    <input id="email" type="email" inputMode="email" autoComplete="email" value={form.email}
+                      onChange={(e) => update("email", e.target.value.toLowerCase())} placeholder="you@example.com"
+                      className={inputCls("email")} style={inputStyle} />
+                  </Field>
+
+                  <Field label="Password" id="password" error={errors.password}>
+                    <div className="relative">
+                      <input id="password" type={showPassword ? "text" : "password"} autoComplete="new-password"
+                        value={form.password} onChange={(e) => update("password", e.target.value)}
+                        placeholder="Min 8 chars — uppercase, number & symbol"
+                        className={`${inputCls("password")} pr-11`} style={inputStyle} />
+                      <button type="button" tabIndex={-1} onClick={() => setShowPassword((v) => !v)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2" style={{ color: T.muted }}
+                        aria-label={showPassword ? "Hide password" : "Show password"}>
+                        {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                       </button>
-                    );
-                  })}
+                    </div>
+                    {form.password && (
+                      <div className="mt-1.5">
+                        <div className="h-1 rounded-full overflow-hidden" style={{ background: T.line }}>
+                          <div className="h-full transition-all" style={{ width: `${pwStrength * 25}%`, background: STRENGTH_COLOR }} />
+                        </div>
+                        <p className="text-xs mt-0.5" style={{ color: STRENGTH_COLOR }}>{STRENGTH_LABEL}</p>
+                      </div>
+                    )}
+                  </Field>
                 </div>
+              )}
 
-                {(() => { const SubIcon = selectedProfile.Icon; return (
-                  <div className="mt-3 flex items-start gap-2.5 rounded-xl px-3.5 py-3"
-                    style={{ background: T.greenTint, border: `1.5px solid ${T.green}` }}>
-                    <SubIcon size={20} strokeWidth={2} color={T.greenDk} style={{ marginTop: 1, flexShrink: 0 }} />
-                    <p className="text-sm font-semibold leading-snug" style={{ color: T.soil }}>{selectedProfile.sub}</p>
+              {/* ---- Step 2 — Who are you? ---- */}
+              {step === 2 && (
+                <div className="space-y-4">
+                  <div className="text-center">
+                    <h1 ref={headingRef} tabIndex={-1} className={h1Cls} style={{ color: T.soil }}>Who are you?</h1>
+                    <p className="text-sm" style={{ color: T.muted }}>This sets up the right workspace for you.</p>
                   </div>
-                ); })()}
 
-                {/* What do you do? — free-text specialty (required for "Other") */}
-                {isResolved && (
-                  <div className="mt-3">
-                    <label htmlFor="specialty" className="block text-sm font-semibold mb-1.5" style={{ color: T.soil }}>
-                      {selectedProfile.other ? "Tell us what you do *" : "What do you do? (optional)"}
-                    </label>
-                    <input id="specialty" value={specialty} onChange={(e) => { setSpecialty(e.target.value); clearErr("specialty"); }}
-                      placeholder="e.g. Veterinarian · Irrigation contractor · Co-op manager"
-                      className={inputCls("specialty")} style={inputStyle} />
-                    {errors.specialty && <p className="text-xs mt-1" style={{ color: "var(--red)" }}>{errors.specialty}</p>}
+                  <Field label="Account type" id="account_kind">
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <button type="button" aria-pressed={!isCompany} style={kindBtn(!isCompany)}
+                        onClick={() => setAccountKind("individual")}>Individual / Personal</button>
+                      <button type="button" aria-pressed={isCompany} style={kindBtn(isCompany)}
+                        onClick={() => setAccountKind("company")}>Company / Agribusiness</button>
+                    </div>
+                  </Field>
+
+                  <Field label="I am a…" id="account_type" error={errors.account_type}>
+                    <div className="grid grid-cols-3 gap-2 mt-1">
+                      {PROFILES.map((p) => {
+                        const selected = selectedKey === p.key;
+                        const Icon = p.Icon;
+                        return (
+                          <button key={p.key} type="button" aria-pressed={selected} title={p.sub}
+                            onClick={() => selectProfile(p.key)}
+                            className="flex flex-col items-center justify-center text-center py-3 px-1 rounded-xl border text-[11px] leading-tight font-semibold transition-all min-h-[78px]"
+                            style={{
+                              borderColor: selected ? T.green : T.line,
+                              background: selected ? T.greenTint : T.paper,
+                              color: selected ? T.greenDk : T.soil,
+                            }}>
+                            <Icon size={22} strokeWidth={1.75} color={selected ? T.green : T.soil2} style={{ marginBottom: 5 }} />
+                            {p.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {(() => { const SubIcon = selectedProfile.Icon; return (
+                      <div className="mt-3 flex items-start gap-2.5 rounded-xl px-3.5 py-3"
+                        style={{ background: T.greenTint, border: `1.5px solid ${T.green}` }}>
+                        <SubIcon size={20} strokeWidth={2} color={T.greenDk} style={{ marginTop: 1, flexShrink: 0 }} />
+                        <p className="text-sm font-semibold leading-snug" style={{ color: T.soil }}>{selectedProfile.sub}</p>
+                      </div>
+                    ); })()}
+
+                    {/* What do you do? — free-text specialty (required for "Other") */}
+                    {isResolved && (
+                      <div className="mt-3">
+                        <label htmlFor="specialty" className="block text-sm font-semibold mb-1.5" style={{ color: T.soil }}>
+                          {selectedProfile.other ? "Tell us what you do *" : "What do you do? (optional)"}
+                        </label>
+                        <input id="specialty" value={specialty} onChange={(e) => { setSpecialty(e.target.value); clearErr("specialty"); }}
+                          placeholder="e.g. Veterinarian · Irrigation contractor · Co-op manager"
+                          className={inputCls("specialty")} style={inputStyle} />
+                        {errors.specialty && <p className="text-xs mt-1" style={{ color: "var(--red)" }}>{errors.specialty}</p>}
+                      </div>
+                    )}
+
+                    {/* Stage-2 conditional dropdown (reserved for future fan-out profiles) */}
+                    {selectedProfile.dropdown && (
+                      <div className="mt-3 p-3 rounded-xl" style={{ background: T.cream, border: `1px solid ${T.line}` }}>
+                        <label htmlFor="profile_subtype" className="block text-sm font-semibold mb-1.5" style={{ color: T.soil }}>
+                          {selectedProfile.dropdown.label}
+                        </label>
+                        <select id="profile_subtype" value={subType} onChange={(e) => selectSubType(e.target.value)}
+                          className={inputCls("account_type")} style={inputStyle}>
+                          <option value="">— Select —</option>
+                          {selectedProfile.dropdown.options.map((o) => (
+                            <option key={o.value} value={o.value}>{o.label}</option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+                  </Field>
+                </div>
+              )}
+
+              {/* ---- Step 3 — About you ---- */}
+              {step === 3 && (
+                <div className="space-y-4">
+                  <div className="text-center">
+                    <h1 ref={headingRef} tabIndex={-1} className={h1Cls} style={{ color: T.soil }}>Tell us about you</h1>
+                    <p className="text-sm" style={{ color: T.muted }}>So we can personalise your account.</p>
                   </div>
-                )}
 
-                {/* Step 3a — Stage-2 conditional dropdown (cards 5 & 9) */}
-                {selectedProfile.dropdown && (
-                  <div className="mt-3 p-3 rounded-xl" style={{ background: T.cream, border: `1px solid ${T.line}` }}>
-                    <label htmlFor="profile_subtype" className="block text-sm font-semibold mb-1.5" style={{ color: T.soil }}>
-                      {selectedProfile.dropdown.label}
-                    </label>
-                    <select id="profile_subtype" value={subType} onChange={(e) => selectSubType(e.target.value)}
-                      className={inputCls("account_type")} style={inputStyle}>
-                      <option value="">— Select —</option>
-                      {selectedProfile.dropdown.options.map((o) => (
-                        <option key={o.value} value={o.value}>{o.label}</option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-              </Field>
-
-              {/* Gate: rest of the form appears only once a profile resolves */}
-              {!isResolved ? (
-                <p className="text-sm text-center py-2" style={{ color: T.muted }}>
-                  Choose your profile above to continue your registration.
-                </p>
-              ) : (
-                <>
-                  {/* Step 3b — conditional identity fields per account kind */}
                   {isCompany ? (
                     <>
                       <Field label="Registered business / trading name *" id="business_name" error={errors.business_name}>
@@ -581,57 +633,44 @@ function RegistrationForm({ onSuccess }) {
                     </div>
                   )}
 
-                  {/* Geographic cascade (data-driven) */}
-                  <RegionCascade
-                    label={isCompany ? "Headquarters operating location" : "Geographic region"}
-                    onChange={setRegionId}
-                  />
-
-                  {/* Email */}
-                  <Field label="Email address *" id="email" error={errors.email}
-                    hint="Use a permanent email — disposable addresses are not accepted">
-                    <input id="email" type="email" autoComplete="email" value={form.email}
-                      onChange={(e) => update("email", e.target.value.toLowerCase())} placeholder="you@example.com"
-                      className={inputCls("email")} style={inputStyle} />
+                  {/* Date of birth — full date; 18+ enforced in validateStep */}
+                  <Field label="Date of birth *" id="birth_date" error={errors.birth_date}
+                    hint="You must be 18 or older to register">
+                    <input type="date" id="birth_date" value={birthDate}
+                      max={MAX_DOB} min="1900-01-01"
+                      onChange={(e) => { setBirthDate(e.target.value); clearErr("birth_date"); }}
+                      className={inputCls("birth_date")} style={inputStyle} />
                   </Field>
 
-                  {/* Password */}
-                  <Field label="Password *" id="password" error={errors.password}>
-                    <div className="relative">
-                      <input id="password" type={showPassword ? "text" : "password"} autoComplete="new-password"
-                        value={form.password} onChange={(e) => update("password", e.target.value)}
-                        placeholder="Min 8 chars — uppercase, number & symbol"
-                        className={`${inputCls("password")} pr-11`} style={inputStyle} />
-                      <button type="button" tabIndex={-1} onClick={() => setShowPassword((v) => !v)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2" style={{ color: T.muted }}
-                        aria-label={showPassword ? "Hide password" : "Show password"}>
-                        {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                      </button>
-                    </div>
-                    {form.password && (
-                      <div className="mt-1.5">
-                        <div className="h-1 rounded-full overflow-hidden" style={{ background: T.line }}>
-                          <div className="h-full transition-all" style={{ width: `${pwStrength * 25}%`, background: STRENGTH_COLOR }} />
-                        </div>
-                        <p className="text-xs mt-0.5" style={{ color: STRENGTH_COLOR }}>{STRENGTH_LABEL}</p>
-                      </div>
-                    )}
+                  {/* Country */}
+                  <Field label="Country" id="country" error={errors.country}>
+                    <select id="country" value={form.country} onChange={(e) => update("country", e.target.value)}
+                      className={inputCls("country")} style={inputStyle}>
+                      <option value="FJ">🇫🇯 Fiji</option>
+                      <option value="SB">🇸🇧 Solomon Islands</option>
+                      <option value="VU">🇻🇺 Vanuatu</option>
+                      <option value="TO">🇹🇴 Tonga</option>
+                      <option value="WS">🇼🇸 Samoa</option>
+                      <option value="PG">🇵🇬 Papua New Guinea</option>
+                      <option value="KI">🇰🇮 Kiribati</option>
+                      <option value="AU">🇦🇺 Australia</option>
+                      <option value="NZ">🇳🇿 New Zealand</option>
+                      <option value="OTHER">Other</option>
+                    </select>
                   </Field>
+                </div>
+              )}
 
-                  {/* Confirm Password */}
-                  <Field label="Confirm password *" id="confirm_password" error={errors.confirmPw}>
-                    <div className="relative">
-                      <input id="confirm_password" type={showConfirmPw ? "text" : "password"} autoComplete="new-password"
-                        value={confirmPw}
-                        onChange={(e) => { setConfirmPw(e.target.value); setErrors((er) => ({ ...er, confirmPw: "" })); }}
-                        placeholder="Re-enter your password" className={`${inputCls("confirmPw")} pr-11`} style={inputStyle} />
-                      <button type="button" tabIndex={-1} onClick={() => setShowConfirmPw((v) => !v)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2" style={{ color: T.muted }}
-                        aria-label={showConfirmPw ? "Hide password" : "Show password"}>
-                        {showConfirmPw ? <EyeOff size={18} /> : <Eye size={18} />}
-                      </button>
-                    </div>
-                  </Field>
+              {/* ---- Step 4 — Verify & finish ---- */}
+              {step === 4 && (
+                <div className="space-y-4">
+                  <div className="text-center">
+                    <h1 ref={headingRef} tabIndex={-1} className={h1Cls} style={{ color: T.soil }}>Verify &amp; finish</h1>
+                    <p className="text-sm" style={{ color: T.muted }}>
+                      {workspaceLabel ? <>We'll set up your <strong style={{ color: T.soil }}>{workspaceLabel}</strong> workspace. </> : null}
+                      Add a phone for a verified badge &amp; alerts — or skip for now.
+                    </p>
+                  </div>
 
                   {/* Omnichannel verification channel (CFO cost-routed) */}
                   <Field label="Verify your registration via" id="verify_channel"
@@ -660,7 +699,7 @@ function RegistrationForm({ onSuccess }) {
                           style={{ flexShrink: 0, border: `1px solid ${T.line}`, borderRadius: 12, padding: "12px", background: T.paper, cursor: "pointer", fontSize: 15, display: "flex", alignItems: "center", gap: 6, whiteSpace: "nowrap", color: T.ink }}>
                           {selectedCountry.flag} {selectedCountry.code} ▾
                         </button>
-                        <input type="tel" value={phoneLocal} onChange={e => setPhoneLocal(e.target.value)}
+                        <input type="tel" inputMode="tel" value={phoneLocal} onChange={e => setPhoneLocal(e.target.value)}
                           placeholder="9123456" autoComplete="tel-national"
                           style={{ flex: 1, border: `1px solid ${T.line}`, borderRadius: 12, padding: "12px 16px", fontSize: 15, outline: "none", fontFamily: FONT, color: T.ink }} />
                       </div>
@@ -698,32 +737,6 @@ function RegistrationForm({ onSuccess }) {
                       </Field>
                     )}
                   </div>
-
-                  {/* Date of birth — full date; 18+ enforced in validate() */}
-                  <Field label="Date of birth *" id="birth_date" error={errors.birth_date}
-                    hint="You must be 18 or older to register">
-                    <input type="date" id="birth_date" value={birthDate}
-                      max={MAX_DOB} min="1900-01-01"
-                      onChange={(e) => { setBirthDate(e.target.value); clearErr("birth_date"); }}
-                      className={inputCls("birth_date")} style={inputStyle} />
-                  </Field>
-
-                  {/* Country */}
-                  <Field label="Country" id="country" error={errors.country}>
-                    <select id="country" value={form.country} onChange={(e) => update("country", e.target.value)}
-                      className={inputCls("country")} style={inputStyle}>
-                      <option value="FJ">🇫🇯 Fiji</option>
-                      <option value="SB">🇸🇧 Solomon Islands</option>
-                      <option value="VU">🇻🇺 Vanuatu</option>
-                      <option value="TO">🇹🇴 Tonga</option>
-                      <option value="WS">🇼🇸 Samoa</option>
-                      <option value="PG">🇵🇬 Papua New Guinea</option>
-                      <option value="KI">🇰🇮 Kiribati</option>
-                      <option value="AU">🇦🇺 Australia</option>
-                      <option value="NZ">🇳🇿 New Zealand</option>
-                      <option value="OTHER">Other</option>
-                    </select>
-                  </Field>
 
                   {/* Referral */}
                   <Field label="How did you hear about Teivaka? (optional)" id="referral_source">
@@ -767,23 +780,32 @@ function RegistrationForm({ onSuccess }) {
                     </label>
                     {errors.policy && <p className="text-xs mt-1" style={{ color: T.red }} role="alert">⚠ {errors.policy}</p>}
                   </div>
-
-                  {/* Submit */}
-                  <button type="submit" disabled={loading}
-                    className="w-full py-3 rounded-xl text-white font-semibold text-sm transition-all disabled:opacity-50 mt-1"
-                    style={{ background: T.green }}>
-                    {loading ? (
-                      <span className="flex items-center justify-center gap-2">
-                        <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
-                        </svg>
-                        Creating your account…
-                      </span>
-                    ) : "Create my account →"}
-                  </button>
-                </>
+                </div>
               )}
+
+              {/* ---- Navigation ---- */}
+              <div className="flex gap-3 pt-1">
+                {step > 1 && (
+                  <button type="button" onClick={back}
+                    className="py-3 px-5 rounded-xl font-semibold text-sm"
+                    style={{ background: T.paper, border: `1px solid ${T.line}`, color: T.soil }}>
+                    ← Back
+                  </button>
+                )}
+                <button type="submit" disabled={loading}
+                  className="flex-1 py-3 rounded-xl text-white font-semibold text-sm transition-all disabled:opacity-50"
+                  style={{ background: T.green }}>
+                  {step < TOTAL_STEPS ? "Continue →" : (loading ? (
+                    <span className="flex items-center justify-center gap-2">
+                      <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                      </svg>
+                      Creating your account…
+                    </span>
+                  ) : "Create my account →")}
+                </button>
+              </div>
             </form>
 
             <p className="text-center text-sm mt-6" style={{ color: T.muted }}>
@@ -810,8 +832,8 @@ export default function Register() {
 }
 
 // ---------------------------------------------------------------------------
-// Post-signup success — a clean "verify your email" prompt. No dashboard entry
-// before verification; resend is the primary action for when mail doesn't land.
+// Post-signup success — lazy verification: the user enters the app immediately;
+// the email link is a nudge, not a gate. Resend is the secondary action.
 // ---------------------------------------------------------------------------
 function AccountCreated({ data }) {
   const highTrust = HIGH_TRUST.has(data.account_type);
