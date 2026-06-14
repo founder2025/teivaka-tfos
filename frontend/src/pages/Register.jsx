@@ -352,7 +352,14 @@ function RegistrationForm({ onSuccess }) {
   async function handleSubmit(e) {
     e.preventDefault();
     const errs = validate();
-    if (Object.keys(errs).length > 0) { setErrors(errs); return; }
+    if (Object.keys(errs).length > 0) {
+      setErrors(errs);
+      // surface the problem — the button is at the bottom of a long form, so
+      // scroll the user to the first issue instead of "nothing happening".
+      setServerError("Please fix the highlighted fields above to continue.");
+      try { window.scrollTo({ top: 0, behavior: "smooth" }); } catch { /* ignore */ }
+      return;
+    }
     setLoading(true);
     setServerError("");
 
@@ -383,8 +390,12 @@ function RegistrationForm({ onSuccess }) {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-      const data = await res.json();
-      if (!res.ok) { setServerError(extractErrorMessage(data.detail)); return; }
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setServerError(extractErrorMessage(data.detail) || `Couldn't create your account (error ${res.status}). Please try again.`);
+        try { window.scrollTo({ top: 0, behavior: "smooth" }); } catch { /* ignore */ }
+        return;
+      }
       localStorage.setItem("tfos_access_token", data.access_token);
       localStorage.setItem("tfos_refresh_token", data.refresh_token);
       // capture the free-text specialty (incl. "Other → describe") onto the new
