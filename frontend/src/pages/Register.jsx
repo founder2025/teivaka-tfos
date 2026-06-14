@@ -375,7 +375,10 @@ function RegistrationForm({ onSuccess }) {
       is_company: isCompany,
       business_name: isCompany ? businessName.trim() : null,
       operator_name: isCompany ? operatorName.trim() : null,
-      region_id: regionId || null,
+      // region_id intentionally NOT sent at signup — it is a FK to
+      // shared.geo_regions and an unseeded id was 500-ing registration. Region
+      // is captured on the profile instead, so signup can never fail on it.
+      region_id: null,
       preferred_verify_channel: effectiveChannel,
       date_of_birth: `${birthYear}-01-01`,
       phone_number: phoneOrNull, whatsapp_number: wa,
