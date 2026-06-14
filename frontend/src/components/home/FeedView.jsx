@@ -672,7 +672,9 @@ export default function FeedView({ initialFilter = "all", groupId = null }) {
     if (!focusId) { setFocusPost(null); return; }
     setFocusLoading(true); setFocusPost(null);
     getJSON(`${API}/feed?post_id=${encodeURIComponent(focusId)}`)
-      .then((r) => setFocusPost((r.data || [])[0] || null))
+      // match the exact id — if an older backend ignores ?post_id and returns
+      // the whole feed, .find avoids showing the wrong post
+      .then((r) => setFocusPost((r.data || []).find((x) => x.post_id === focusId) || null))
       .catch(() => setFocusPost(null))
       .finally(() => setFocusLoading(false));
     try { window.scrollTo({ top: 0, behavior: "smooth" }); } catch { /* ignore */ }
@@ -707,40 +709,45 @@ export default function FeedView({ initialFilter = "all", groupId = null }) {
 
   return (
     <div className="cm-feed">
-      {focusId && (
-        <div className="card" style={{ padding: 12, marginBottom: 12, border: "2px solid var(--green)" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-            <strong style={{ color: "var(--soil)", fontSize: 13 }}>Viewing a post</strong>
+      {focusId ? (
+        // Single-post view (notification deep-link). Show ONLY this post — not
+        // the composer/filters/whole feed — so it reads as "the exact post".
+        <>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+            <strong style={{ color: "var(--soil)", fontSize: 14 }}>Post</strong>
             <button className="btn btn-sm btn-secondary" onClick={clearFocus}>← Back to feed</button>
           </div>
           {focusLoading ? <div className="cm-empty">Loading…</div>
             : focusPost ? <PostCard post={focusPost} me={me} onChange={() => {}} onRemoved={clearFocus} />
             : <div className="cm-empty">This post isn’t available — it may have been deleted.</div>}
-        </div>
+        </>
+      ) : (
+        <>
+          <Composer me={me} groupId={groupId} onPosted={() => { if (!groupId) setFilter("all"); load(); }} />
+
+          {!groupId && <div className="cm-filter-row">
+            {FILTERS.map(([id, label]) => (
+              <button key={id} className={`cm-pill ${filter === id ? "cm-pill-active" : ""}`} onClick={() => setFilter(id)}>{label}</button>
+            ))}
+            <div className="cm-pill-spacer" />
+            <button className={`cm-pill cm-pill-verified ${verifiedOnly ? "cm-pill-active" : ""}`} onClick={() => setVerifiedOnly(!verifiedOnly)}><Check size={11} /> Verified only</button>
+            <button className="cm-pill" onClick={() => setTopicsOpen(true)}><Rss size={11} /> Manage topics</button>
+          </div>}
+
+          {posts == null ? <div className="cm-empty">Loading feed…</div> :
+            posts.length === 0 ? <div className="cm-empty">No posts match your filter yet. Share the first update.</div> :
+              <>
+                {posts.map((p) => <PostCard key={p.post_id} post={p} me={me} onChange={() => load(true)} onRemoved={(id) => setPosts((l) => l.filter((x) => x.post_id !== id))} />)}
+                {!end && (
+                  <button className="btn btn-secondary" style={{ alignSelf: "center", margin: "4px auto" }} disabled={more} onClick={loadMore}>
+                    {more ? "Loading…" : "Load more"}
+                  </button>
+                )}
+              </>}
+
+          {topicsOpen && <TopicsModal onClose={() => setTopicsOpen(false)} />}
+        </>
       )}
-      <Composer me={me} groupId={groupId} onPosted={() => { if (!groupId) setFilter("all"); load(); }} />
-
-      {!groupId && <div className="cm-filter-row">
-        {FILTERS.map(([id, label]) => (
-          <button key={id} className={`cm-pill ${filter === id ? "cm-pill-active" : ""}`} onClick={() => setFilter(id)}>{label}</button>
-        ))}
-        <div className="cm-pill-spacer" />
-        <button className={`cm-pill cm-pill-verified ${verifiedOnly ? "cm-pill-active" : ""}`} onClick={() => setVerifiedOnly(!verifiedOnly)}><Check size={11} /> Verified only</button>
-        <button className="cm-pill" onClick={() => setTopicsOpen(true)}><Rss size={11} /> Manage topics</button>
-      </div>}
-
-      {posts == null ? <div className="cm-empty">Loading feed…</div> :
-        posts.length === 0 ? <div className="cm-empty">No posts match your filter yet. Share the first update.</div> :
-          <>
-            {posts.map((p) => <PostCard key={p.post_id} post={p} me={me} onChange={() => load(true)} onRemoved={(id) => setPosts((l) => l.filter((x) => x.post_id !== id))} />)}
-            {!end && (
-              <button className="btn btn-secondary" style={{ alignSelf: "center", margin: "4px auto" }} disabled={more} onClick={loadMore}>
-                {more ? "Loading…" : "Load more"}
-              </button>
-            )}
-          </>}
-
-      {topicsOpen && <TopicsModal onClose={() => setTopicsOpen(false)} />}
     </div>
   );
 }

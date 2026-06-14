@@ -192,7 +192,7 @@ export function Convo({ conn, onActivity }) {
 
   return (
     <>
-      <div style={{ flex: 1, overflowY: "auto", padding: 10, display: "flex", flexDirection: "column", gap: 6, background: C.cream, WebkitOverflowScrolling: "touch" }}>
+      <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: 10, display: "flex", flexDirection: "column", gap: 6, background: C.cream, WebkitOverflowScrolling: "touch" }}>
         {msgs == null ? <div style={{ color: C.muted, fontSize: 12, textAlign: "center", marginTop: 16 }}>Loading…</div>
           : msgs.length === 0 ? <div style={{ color: C.muted, fontSize: 12, textAlign: "center", marginTop: 16 }}>Say hello to {conn.full_name.split(" ")[0]}.</div>
           : msgs.map((m) => {
