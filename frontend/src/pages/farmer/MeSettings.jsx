@@ -20,7 +20,7 @@ const toast = (message, type) => { try { window.dispatchEvent(new CustomEvent("t
 // Prototype "Settings" section links + Money & units (3-mode + per-field selects),
 // persisted to tenant.users via PATCH /me (unit_mode, pref_*).
 function SettingsSections() {
-  const G = { soil: "#5C4033", muted: "#8A8678", line: "#E6E1D6", green: "#3F7427" };
+  const G = { soil: "var(--soil)", muted: "var(--muted)", line: "var(--line)", green: "var(--green-dk)" };
   const rows = [
     { to: "/me", Icon: Pencil, label: "Edit profile basics" },
     { to: "/me", Icon: Shield, label: "Privacy & visibility" },
@@ -29,7 +29,7 @@ function SettingsSections() {
     { to: "/me/data", Icon: Download, label: "Export my data" },
   ];
   return (
-    <section style={{ margin: "12px 20px", background: "white", border: `1px solid ${G.line}`, borderRadius: 12, overflow: "hidden" }}>
+    <section style={{ margin: "12px 20px", background: "var(--paper)", border: `1px solid ${G.line}`, borderRadius: 12, overflow: "hidden" }}>
       {rows.map((r, i) => (
         <Link key={r.label} to={r.to} style={{ display: "flex", alignItems: "center", gap: 10, padding: "13px 14px", color: G.soil, textDecoration: "none", borderTop: i ? `1px solid ${G.line}` : "none", fontSize: 14, minHeight: 44 }}>
           <r.Icon size={16} style={{ color: G.muted }} /> {r.label}
@@ -39,11 +39,11 @@ function SettingsSections() {
   );
 }
 
-const G = { soil: "#5C4033", muted: "#8A8678", line: "#E6E1D6", green: "#6AA84F", greenDk: "#3F7427" };
+const G = { soil: "var(--soil)", muted: "var(--muted)", line: "var(--line)", green: "var(--green)", greenDk: "var(--green-dk)" };
 
 function SettingsCard({ Icon, title, desc, children }) {
   return (
-    <section style={{ margin: "12px 20px", background: "white", border: `1px solid ${G.line}`, borderRadius: 12, padding: 16 }}>
+    <section style={{ margin: "12px 20px", background: "var(--paper)", border: `1px solid ${G.line}`, borderRadius: 12, padding: 16 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
         <Icon size={16} style={{ color: G.muted }} />
         <strong style={{ color: G.soil, fontSize: 15 }}>{title}</strong>
@@ -203,7 +203,7 @@ const UNIT_OPTS = {
 };
 
 function MoneyUnits() {
-  const G = { soil: "#5C4033", muted: "#8A8678", line: "#E6E1D6", green: "#6AA84F", greenDk: "#3F7427" };
+  const G = { soil: "var(--soil)", muted: "var(--muted)", line: "var(--line)", green: "var(--green)", greenDk: "var(--green-dk)" };
   const [mode, setMode] = useState("country");
   const [vals, setVals] = useState({ pref_currency: "FJD", pref_weight: "kg", pref_area: "ha", pref_temp: "C" });
   const [loaded, setLoaded] = useState(false);
@@ -229,7 +229,7 @@ function MoneyUnits() {
   );
   const sel = { padding: "7px 9px", border: `1px solid ${G.line}`, borderRadius: 8, fontSize: 13.5, minWidth: 150 };
   return (
-    <section style={{ margin: "12px 20px", background: "white", border: `1px solid ${G.line}`, borderRadius: 12, padding: 16 }}>
+    <section style={{ margin: "12px 20px", background: "var(--paper)", border: `1px solid ${G.line}`, borderRadius: 12, padding: 16 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}><Coins size={16} style={{ color: G.muted }} /><strong style={{ color: G.soil }}>Money & units</strong></div>
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
         {pill("country", "My country")}{pill("choice", "My choice")}{pill("universal", "Universal")}
@@ -255,9 +255,9 @@ function MoneyUnits() {
 
 const C = {
   cream:   "#F8F3E9",
-  soil:    "#5C4033",
-  muted:   "#8A8678",
-  border:  "#E6E1D6",
+  soil:    "var(--soil)",
+  muted:   "var(--muted)",
+  border:  "var(--line)",
   red:     "#A32D2D",
   redBg:   "#FDECEA",
 };
@@ -290,13 +290,13 @@ function DangerZone() {
   };
 
   return (
-    <section style={{ margin: "20px", padding: 16, background: "white", border: `1px solid ${C.red}`, borderRadius: 12 }}>
+    <section style={{ margin: "20px", padding: 16, background: "var(--paper)", border: `1px solid ${C.red}`, borderRadius: 12 }}>
       <h2 style={{ margin: "0 0 4px", color: C.red, fontSize: 16 }}>Danger zone</h2>
       <p style={{ margin: "0 0 12px", color: C.muted, fontSize: 13.5 }}>
         Delete your account. This anonymises your personal information, removes your community posts, and disables sign-in. Your farm's hash-chained audit records are kept (de-identified) so existing Bank Evidence stays verifiable. This cannot be undone.
       </p>
       {!open ? (
-        <button onClick={() => setOpen(true)} style={{ background: "white", color: C.red, border: `1px solid ${C.red}`, borderRadius: 8, padding: "9px 14px", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
+        <button onClick={() => setOpen(true)} style={{ background: "var(--paper)", color: C.red, border: `1px solid ${C.red}`, borderRadius: 8, padding: "9px 14px", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
           Delete my account
         </button>
       ) : (
@@ -312,7 +312,7 @@ function DangerZone() {
             <button onClick={del} disabled={busy || !password} style={{ background: C.red, color: "white", border: "none", borderRadius: 8, padding: "9px 14px", fontSize: 14, fontWeight: 600, cursor: "pointer", opacity: busy || !password ? 0.5 : 1 }}>
               {busy ? "Deleting…" : "Permanently delete"}
             </button>
-            <button onClick={() => { setOpen(false); setPassword(""); setErr(""); }} disabled={busy} style={{ background: "white", color: C.soil, border: `1px solid ${C.border}`, borderRadius: 8, padding: "9px 14px", fontSize: 14, cursor: "pointer" }}>
+            <button onClick={() => { setOpen(false); setPassword(""); setErr(""); }} disabled={busy} style={{ background: "var(--paper)", color: C.soil, border: `1px solid ${C.border}`, borderRadius: 8, padding: "9px 14px", fontSize: 14, cursor: "pointer" }}>
               Cancel
             </button>
           </div>
@@ -365,7 +365,7 @@ export default function MeSettings() {
       <header style={{
         padding: "24px 20px 12px",
         borderBottom: `1px solid ${C.border}`,
-        background: "white",
+        background: "var(--paper)",
       }}>
         <h1 style={{ margin: 0, color: C.soil, fontSize: 24 }}>Settings</h1>
         <p style={{ margin: "4px 0 0", color: C.muted, fontSize: 14 }}>

@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
-import { Bell, MessageSquare, ChevronDown } from "lucide-react";
+import { Bell, MessageSquare, ChevronDown, Sun, Moon } from "lucide-react";
 import NotificationsPanel from "./NotificationsPanel";
 import MeMenu from "./MeMenu";
 import { useTisSse } from "../../hooks/useTisSse";
 import { useChat } from "../../context/ChatContext";
 import ChatDropdown from "../chat/ChatDropdown";
 import Avatar from "../ui/Avatar";
+import { resolvedMode, setThemePref } from "../../utils/theme";
 
 const C = {
   soil:    "#5C4033",
@@ -86,6 +87,25 @@ function IconButton({ icon: Icon, label, onClick, disabled, title, badgeCount, a
         </span>
       )}
     </button>
+  );
+}
+
+/* Quick Light/Dark toggle in the top bar (full System/Light/Dark lives in Settings). */
+function ThemeToggleButton() {
+  const [mode, setMode] = useState(() => resolvedMode());
+  useEffect(() => {
+    const on = (e) => setMode(e?.detail?.mode || resolvedMode());
+    window.addEventListener("tfos-theme-changed", on);
+    return () => window.removeEventListener("tfos-theme-changed", on);
+  }, []);
+  const dark = mode === "dark";
+  return (
+    <IconButton
+      icon={dark ? Sun : Moon}
+      label="Toggle dark mode"
+      title={dark ? "Switch to light mode" : "Switch to dark mode"}
+      onClick={() => setThemePref(dark ? "light" : "dark")}
+    />
   );
 }
 
@@ -175,6 +195,8 @@ export default function RightCluster() {
 
   return (
     <div className="flex items-center flex-shrink-0" style={{ gap: 8 }}>
+
+      <ThemeToggleButton />
 
       <div className="relative" data-chat-toggle>
         <IconButton
