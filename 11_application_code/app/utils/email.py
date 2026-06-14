@@ -146,16 +146,16 @@ def send_password_reset_email(to_email: str, token: str, name: str) -> bool:
     Same pattern as send_verification_email — never raises.
     Only supports Resend for now because DigitalOcean blocks outbound SMTP.
     """
-    if not _smtp_configured():
+    # Resend is the only live path (DO blocks SMTP). It needs just the API key,
+    # so gate on _is_resend() — not _smtp_configured() which requires an
+    # smtp_host the key-only prod env doesn't set.
+    if not _is_resend():
         reset_url = f"{settings.frontend_url.rstrip('/')}/reset-password?token={quote(token)}"
         logger.warning(
-            "SMTP not configured — password reset email for %s not sent. Reset URL: %s",
+            "Email not configured (no Resend key) — password reset email for %s "
+            "not sent. Reset URL: %s",
             to_email, reset_url,
         )
-        return False
-
-    if not _is_resend():
-        logger.warning("Password reset email only supports Resend — skipping for %s", to_email)
         return False
 
     reset_url = f"{settings.frontend_url.rstrip('/')}/reset-password?token={quote(token)}"
@@ -211,7 +211,7 @@ def send_task_digest_email(
     Resend's message id when available — recorded in tenant.task_notifications
     so the send is auditable and (per PR.2) receipt-verifiable.
     """
-    if not _smtp_configured() or not _is_resend():
+    if not _is_resend():
         logger.warning("Task digest email skipped for %s — Resend not configured", to_email)
         return (False, None)
 
@@ -383,19 +383,23 @@ def send_verification_email(to_email: str, token: str, name: str) -> bool:
     SMTP is unconfigured (message is logged in that case — not an error).
     Never raises; callers must be able to complete registration regardless.
     """
+    # Prefer Resend's HTTPS REST API whenever a Resend key is present — most VPS
+    # hosts (DigitalOcean, Linode, etc.) block outbound SMTP ports, so Resend is
+    # the live path. It needs only the API key (smtp_password, "re_..."), NOT an
+    # smtp_host — so this is checked BEFORE _smtp_configured(), otherwise a
+    # key-only prod env (the health-monitor alert path, PR.2) silently skips
+    # sending verification mail.
+    if _is_resend():
+        return _send_via_resend(to_email, token, name)
+
     if not _smtp_configured():
         verify_url = f"{settings.frontend_url.rstrip('/')}/verify-email?token={quote(token)}"
         logger.warning(
-            "SMTP not configured — verification email for %s not sent. "
-            "Verification URL: %s",
+            "Email not configured (no Resend key, no SMTP host) — verification "
+            "email for %s not sent. Verification URL: %s",
             to_email, verify_url,
         )
         return False
-
-    # Prefer Resend's HTTPS REST API when configured — most VPS hosts
-    # (DigitalOcean, Linode, etc.) block outbound SMTP ports by default.
-    if _is_resend():
-        return _send_via_resend(to_email, token, name)
 
     try:
         msg = _build_verification_message(to_email, token, name)
