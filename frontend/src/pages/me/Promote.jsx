@@ -6,7 +6,8 @@
  * and mirrors the real SponsorCorner card in the preview (WYSIWYG).
  */
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Megaphone, ExternalLink, ImagePlus, X, Copy, ShieldCheck, Check } from "lucide-react";
+import { Megaphone, ExternalLink, ImagePlus, X, Copy, ShieldCheck, Check, Pause, Play, RefreshCw } from "lucide-react";
+import { CATEGORIES } from "../../utils/personas";
 
 const API = "/api/v1/community";
 const tok = () => localStorage.getItem("tfos_access_token");
@@ -18,7 +19,7 @@ async function uploadFile(file) { const t = tok(); const fd = new FormData(); fd
 const C = { soil: "#5C4033", green: "#6AA84F", greenDk: "#3E7B1F", line: "#E8E2D4", cream: "#F8F3E9", muted: "#8A7B6F", red: "#D4442E", gold: "#BF9000" };
 const PERIOD_DAYS = { DAILY: 1, WEEKLY: 7, MONTHLY: 30 };
 const PERIOD_LABEL = { DAILY: "Daily", WEEKLY: "Weekly", MONTHLY: "Monthly" };
-const blankForm = { title: "", blurb: "", sponsor_logo: "", image_url: "", cta_label: "", cta_url: "", billing_period: "WEEKLY", target_country: "" };
+const blankForm = { title: "", blurb: "", sponsor_logo: "", image_url: "", cta_label: "", cta_url: "", billing_period: "WEEKLY", target_country: "", target_account_type: "" };
 
 const STATUS_CHIP = {
   PENDING_REVIEW: { label: "In review", bg: "#FBF3DC", fg: C.gold },
@@ -126,9 +127,14 @@ export default function Promote() {
   };
 
   const duplicate = (a) => {
-    setF({ title: a.title || "", blurb: a.blurb || "", sponsor_logo: a.sponsor_logo || "", image_url: a.image_url || "", cta_label: a.cta_label || "", cta_url: a.cta_url || "", billing_period: a.billing_period && PERIOD_DAYS[a.billing_period] ? a.billing_period : "WEEKLY", target_country: a.target_country || "" });
+    setF({ title: a.title || "", blurb: a.blurb || "", sponsor_logo: a.sponsor_logo || "", image_url: a.image_url || "", cta_label: a.cta_label || "", cta_url: a.cta_url || "", billing_period: a.billing_period && PERIOD_DAYS[a.billing_period] ? a.billing_period : "WEEKLY", target_country: a.target_country || "", target_account_type: a.target_account_type || "" });
     toast("Copied into the form — review and submit.", "success");
     try { window.scrollTo({ top: 0, behavior: "smooth" }); } catch { /* ignore */ }
+  };
+
+  const act = async (id, verb, okMsg) => {
+    try { await postJSON(`${API}/me/ads/${id}/${verb}`, {}); toast(okMsg, "success"); load(); }
+    catch (e) { toast(e.message || "Couldn't do that — try again.", "error"); }
   };
 
   return (
@@ -182,9 +188,20 @@ export default function Promote() {
               {/* 4 — reach */}
               <div className="card" style={{ padding: 16, marginBottom: 16 }}>
                 <div style={sectionTitle}>4 · Where it shows</div>
-                <span style={lbl}>Target country</span>
-                <input placeholder="Leave blank to reach everyone (e.g. FJ)" value={f.target_country} onChange={(e) => set("target_country", e.target.value.toUpperCase())} maxLength={2} style={inp} />
-                <div style={{ ...hint, marginTop: -6 }}>Blank = shown to your whole region. Audience targeting by role is coming soon.</div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                  <div>
+                    <span style={lbl}>Target country</span>
+                    <input placeholder="Blank = everyone (e.g. FJ)" value={f.target_country} onChange={(e) => set("target_country", e.target.value.toUpperCase())} maxLength={2} style={inp} />
+                  </div>
+                  <div>
+                    <span style={lbl}>Who sees it</span>
+                    <select value={f.target_account_type} onChange={(e) => set("target_account_type", e.target.value)} style={inp}>
+                      <option value="">Everyone</option>
+                      {CATEGORIES.map((c) => <option key={c.key} value={c.key}>{c.label}s</option>)}
+                    </select>
+                  </div>
+                </div>
+                <div style={{ ...hint, marginTop: -6 }}>Pick an audience to reach only that group (e.g. show input deals to Farmers). "Everyone" reaches your whole region.</div>
               </div>
 
               {/* 5 — duration + price */}
@@ -251,7 +268,10 @@ export default function Promote() {
                     {a.status === "PENDING_PAYMENT" && <div style={{ fontSize: 11.5, color: C.gold, marginTop: 3 }}>Approved — we'll confirm payment to start it.</div>}
                   </div>
                   <span style={{ background: chip.bg, color: chip.fg, borderRadius: 999, padding: "3px 10px", fontSize: 11, fontWeight: 700, flexShrink: 0 }}>{chip.label}</span>
-                  <button className="btn btn-secondary btn-sm" onClick={() => duplicate(a)} title="Copy into the form to re-run" style={{ display: "inline-flex", alignItems: "center", gap: 5 }}><Copy size={13} /> {["ENDED", "REJECTED"].includes(a.status) ? "Renew" : "Duplicate"}</button>
+                  {a.status === "ACTIVE" && <button className="btn btn-secondary btn-sm" onClick={() => act(a.placement_id, "pause", "Ad paused")} style={{ display: "inline-flex", alignItems: "center", gap: 5 }}><Pause size={13} /> Pause</button>}
+                  {a.status === "PAUSED" && <button className="btn btn-secondary btn-sm" onClick={() => act(a.placement_id, "resume", "Ad resumed")} style={{ display: "inline-flex", alignItems: "center", gap: 5 }}><Play size={13} /> Resume</button>}
+                  {["PAUSED", "ENDED"].includes(a.status) && <button className="btn btn-secondary btn-sm" onClick={() => act(a.placement_id, "extend", "Sent for another period — we'll confirm payment")} style={{ display: "inline-flex", alignItems: "center", gap: 5 }}><RefreshCw size={13} /> Extend</button>}
+                  <button className="btn btn-secondary btn-sm" onClick={() => duplicate(a)} title="Copy into the form to re-run" style={{ display: "inline-flex", alignItems: "center", gap: 5 }}><Copy size={13} /> Duplicate</button>
                   {a.status === "ACTIVE" && a.cta_url && <a href={a.cta_url} target="_blank" rel="noopener noreferrer" className="btn btn-secondary btn-sm" style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>Open <ExternalLink size={12} /></a>}
                 </div>
               );

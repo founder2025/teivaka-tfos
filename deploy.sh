@@ -20,7 +20,7 @@
 set -uo pipefail
 
 BRANCH="${1:-claude/beautiful-fermi-F0dLX}"
-EXPECTED_HEAD="${2:-145_chat_reply_to}"
+EXPECTED_HEAD="${2:-146_ad_role_targeting}"
 ROOT="/opt/teivaka"
 COMPOSE="docker compose -f ${ROOT}/04_environment/docker-compose.yml"
 PSQL="docker exec -i teivaka_db psql -v ON_ERROR_STOP=1 -tA -U teivaka -d teivaka_db"
@@ -147,6 +147,8 @@ PROVINCES="$($PSQL -c "SELECT count(*) FROM shared.geo_regions WHERE level='PROV
 [ "${PROVINCES:-0}" -ge 14 ] 2>/dev/null && ok "geo_regions provinces seeded = ${PROVINCES} (144 — region dropdown)" || bad "Fiji provinces missing (${PROVINCES}/14 — migration 144)"
 REPLYTO="$($PSQL -c "SELECT count(*) FROM information_schema.columns WHERE table_schema='community' AND table_name='chat_messages' AND column_name='reply_to_message_id';" 2>/dev/null | tr -d '[:space:]')"
 [ "${REPLYTO:-0}" = "1" ] && ok "chat reply_to_message_id present (145 — reply to message)" || bad "reply_to_message_id missing (migration 145)"
+ADROLE="$($PSQL -c "SELECT count(*) FROM information_schema.columns WHERE table_schema='community' AND table_name='sponsor_placements' AND column_name='target_account_type';" 2>/dev/null | tr -d '[:space:]')"
+[ "${ADROLE:-0}" = "1" ] && ok "sponsor target_account_type present (146 — role targeting)" || bad "target_account_type missing (migration 146)"
 
 # ---------------------------------------------------------------------------
 say "5/7  Bring API up + wait healthy + parity check"

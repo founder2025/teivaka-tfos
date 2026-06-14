@@ -27,7 +27,7 @@ router = APIRouter()
 
 _FIELDS = ["sponsor_name", "sponsor_logo", "title", "blurb", "image_url", "cta_label",
            "cta_url", "placement_type", "priority", "target_country", "target_vertical",
-           "starts_at", "ends_at", "status"]
+           "target_account_type", "starts_at", "ends_at", "status"]
 
 
 class SponsorIn(BaseModel):
@@ -42,6 +42,7 @@ class SponsorIn(BaseModel):
     priority: int | None = 0
     target_country: str | None = None
     target_vertical: str | None = None
+    target_account_type: str | None = None
     starts_at: str | None = None
     ends_at: str | None = None
     status: str | None = "ACTIVE"
@@ -82,6 +83,7 @@ class AdIn(BaseModel):
     billing_period: str = "WEEKLY"      # DAILY | WEEKLY | MONTHLY
     target_country: str | None = None
     target_vertical: str | None = None
+    target_account_type: str | None = None   # general-category key; NULL = everyone
     starts_at: str | None = None
 
 
@@ -113,9 +115,20 @@ def _row(m):
 async def list_sponsors(limit: int = Query(4, ge=1, le=10), user: dict = Depends(get_current_user)):
     """Active placements for the viewer's country (NULL target = everyone),
     highest priority first, randomised tiebreak. Bumps impressions."""
+    from app.core.account_types import category_of, clean_also_categories
     uid = str(user["user_id"])
     async with get_rls_db(str(user["tenant_id"])) as db:
-        vc = (await db.execute(text("SELECT country FROM tenant.users WHERE user_id = cast(:u AS uuid)"), {"u": uid})).scalar()
+        vrow = (await db.execute(text("SELECT country, account_type, also_account_types FROM tenant.users WHERE user_id = cast(:u AS uuid)"), {"u": uid})).mappings().first()
+        vc = vrow["country"] if vrow else None
+        # the viewer's category set (primary + 'I also do' tags) for role targeting
+        cats = []
+        if vrow:
+            pc = category_of(vrow["account_type"])
+            if pc:
+                cats.append(pc)
+            for k in clean_also_categories(list(vrow["also_account_types"] or [])):
+                if k not in cats:
+                    cats.append(k)
         rows = (await db.execute(text("""
             SELECT placement_id, sponsor_name, sponsor_logo, title, blurb, image_url, cta_label, cta_url
             FROM community.sponsor_placements
@@ -125,9 +138,10 @@ async def list_sponsors(limit: int = Query(4, ge=1, le=10), user: dict = Depends
               AND (starts_at IS NULL OR starts_at <= now())
               AND (ends_at   IS NULL OR ends_at   >= now())
               AND (target_country IS NULL OR target_country = :vc)
+              AND (target_account_type IS NULL OR target_account_type = ANY(:cats))
             ORDER BY priority DESC, random()
             LIMIT :lim
-        """), {"vc": vc, "lim": limit})).mappings().all()
+        """), {"vc": vc, "cats": cats, "lim": limit})).mappings().all()
         out = [_row(r) for r in rows]
         ids = [r["placement_id"] for r in out]
         if ids:
@@ -179,9 +193,9 @@ async def my_ads(user: dict = Depends(get_current_user)):
     uid = str(user["user_id"])
     async with get_rls_db(str(user["tenant_id"])) as db:
         rows = (await db.execute(text("""
-            SELECT placement_id, title, sponsor_name, blurb, image_url, cta_label, cta_url,
+            SELECT placement_id, title, sponsor_name, sponsor_logo, blurb, image_url, cta_label, cta_url,
                    surface, billing_period, price_fjd, status, payment_status, paid_through,
-                   target_country, starts_at, ends_at, impressions, clicks, review_note, created_at
+                   target_country, target_account_type, starts_at, ends_at, impressions, clicks, review_note, created_at
             FROM community.sponsor_placements
             WHERE owner_user_id = cast(:uid AS uuid)
             ORDER BY created_at DESC
@@ -217,20 +231,82 @@ async def create_my_ad(body: AdIn, user: dict = Depends(get_current_user)):
         if price is None:
             raise HTTPException(status_code=400, detail="No active rate for that surface/duration")
         name = (body.sponsor_name or user.get("full_name") or "Sponsor").strip()
+        from app.core.account_types import CATEGORY_KEYS
+        target_role = (body.target_account_type or "").upper().strip() or None
+        if target_role and target_role not in CATEGORY_KEYS:
+            target_role = None
         row = (await db.execute(text("""
             INSERT INTO community.sponsor_placements
                 (owner_user_id, sponsor_name, sponsor_logo, title, blurb, image_url, cta_label, cta_url,
-                 surface, billing_period, price_fjd, target_country, target_vertical, starts_at,
+                 surface, billing_period, price_fjd, target_country, target_vertical, target_account_type, starts_at,
                  status, payment_status, placement_type, priority)
             VALUES (cast(:uid AS uuid), :name, :logo, :title, :blurb, :image, :clabel, :curl,
-                 :surface, :period, :price, :country, :vertical, :starts,
+                 :surface, :period, :price, :country, :vertical, :trole, :starts,
                  'PENDING_REVIEW', 'UNPAID', 'SELF_SERVE', 0)
             RETURNING placement_id
         """), {"uid": uid, "name": name, "logo": body.sponsor_logo, "title": body.title.strip(),
                "blurb": body.blurb, "image": body.image_url, "clabel": body.cta_label, "curl": cta,
                "surface": surface, "period": period, "price": price,
-               "country": body.target_country, "vertical": body.target_vertical, "starts": body.starts_at})).mappings().first()
+               "country": body.target_country, "vertical": body.target_vertical, "trole": target_role, "starts": body.starts_at})).mappings().first()
     return {"data": {"placement_id": str(row["placement_id"]), "price_fjd": float(price), "status": "PENDING_REVIEW"}}
+
+
+async def _owned(db, placement_id: str, uid: str):
+    row = (await db.execute(text(
+        "SELECT status FROM community.sponsor_placements WHERE placement_id = cast(:id AS uuid) AND owner_user_id = cast(:uid AS uuid)"),
+        {"id": placement_id, "uid": uid})).mappings().first()
+    if not row:
+        raise HTTPException(status_code=404, detail="Ad not found")
+    return row
+
+
+@router.post("/me/ads/{placement_id}/pause")
+async def pause_my_ad(placement_id: str, user: dict = Depends(get_current_user)):
+    """Owner pauses their own running ad (stops serving immediately)."""
+    uid = str(user["user_id"])
+    async with get_rls_db(str(user["tenant_id"])) as db:
+        r = await _owned(db, placement_id, uid)
+        if r["status"] != "ACTIVE":
+            raise HTTPException(status_code=409, detail="Only a live ad can be paused")
+        await db.execute(text("UPDATE community.sponsor_placements SET status = 'PAUSED' WHERE placement_id = cast(:id AS uuid)"), {"id": placement_id})
+    return {"data": {"ok": True, "status": "PAUSED"}}
+
+
+@router.post("/me/ads/{placement_id}/resume")
+async def resume_my_ad(placement_id: str, user: dict = Depends(get_current_user)):
+    """Owner resumes a paused ad — only while it's still paid (within paid_through)."""
+    uid = str(user["user_id"])
+    async with get_rls_db(str(user["tenant_id"])) as db:
+        row = (await db.execute(text(
+            "SELECT status, payment_status, paid_through FROM community.sponsor_placements WHERE placement_id = cast(:id AS uuid) AND owner_user_id = cast(:uid AS uuid)"),
+            {"id": placement_id, "uid": uid})).mappings().first()
+        if not row:
+            raise HTTPException(status_code=404, detail="Ad not found")
+        if row["status"] != "PAUSED":
+            raise HTTPException(status_code=409, detail="Only a paused ad can be resumed")
+        res = await db.execute(text("""
+            UPDATE community.sponsor_placements SET status = 'ACTIVE'
+            WHERE placement_id = cast(:id AS uuid)
+              AND payment_status IN ('PAID','WAIVED')
+              AND (paid_through IS NULL OR paid_through >= now())
+        """), {"id": placement_id})
+        if not res.rowcount:
+            raise HTTPException(status_code=409, detail="This ad's paid period has ended — use Extend to run it again")
+    return {"data": {"ok": True, "status": "ACTIVE"}}
+
+
+@router.post("/me/ads/{placement_id}/extend")
+async def extend_my_ad(placement_id: str, user: dict = Depends(get_current_user)):
+    """Owner re-runs an ENDED/PAUSED ad for another paid period → back into the
+    payment queue. (A LIVE ad is left running — extend it once it ends.) On admin
+    mark-paid the new period stacks onto paid_through (GREATEST logic)."""
+    uid = str(user["user_id"])
+    async with get_rls_db(str(user["tenant_id"])) as db:
+        r = await _owned(db, placement_id, uid)
+        if r["status"] not in ("PAUSED", "ENDED"):
+            raise HTTPException(status_code=409, detail="Extend applies to an ended or paused ad. A live ad is already running — Pause it or wait until it ends.")
+        await db.execute(text("UPDATE community.sponsor_placements SET status = 'PENDING_PAYMENT', payment_status = 'UNPAID' WHERE placement_id = cast(:id AS uuid)"), {"id": placement_id})
+    return {"data": {"ok": True, "status": "PENDING_PAYMENT"}}
 
 
 # ----------------------------------------------------------------------------- admin
@@ -291,11 +367,13 @@ async def admin_mark_paid(placement_id: str, body: MarkPaidIn, admin: dict = Dep
         if not row:
             raise HTTPException(status_code=404, detail="Not found")
         days = _PERIOD_DAYS.get(row["billing_period"], 7)
+        # Stack from the later of now / current paid_through, so EXTEND adds time
+        # to a still-running ad instead of resetting it.
         res = await db.execute(text(f"""
             UPDATE community.sponsor_placements
             SET payment_status = 'PAID', payment_ref = :ref, status = 'ACTIVE',
                 starts_at = COALESCE(starts_at, now()),
-                paid_through = COALESCE(starts_at, now()) + INTERVAL '{days} days'
+                paid_through = GREATEST(COALESCE(paid_through, now()), now()) + INTERVAL '{days} days'
             WHERE placement_id = cast(:id AS uuid)
         """), {"id": placement_id, "ref": (body.payment_ref or "").strip() or None})
         if not res.rowcount:
