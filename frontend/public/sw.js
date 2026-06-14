@@ -1,7 +1,68 @@
-/* Teivaka service worker — Web Push for chat notifications. */
-self.addEventListener("install", (e) => { self.skipWaiting(); });
-self.addEventListener("activate", (e) => { e.waitUntil(self.clients.claim()); });
+/* Teivaka service worker — Web Push (chat notifications) + app-shell caching
+ * for cold offline load.
+ *
+ * Caching strategy (deploy-safe — never serves stale app code):
+ *   - navigations  → NETWORK-FIRST, fall back to the cached shell when offline.
+ *     A fresh deploy is always picked up online; offline still opens the app.
+ *   - hashed assets (/assets/*, images, fonts, css/js) → CACHE-FIRST. Vite
+ *     fingerprints these filenames, so a cached copy is immutable & safe.
+ *   - /api/*  → never cached (writes go through the IndexedDB outbox; reads
+ *     just fail gracefully offline).
+ */
+const CACHE = "tfos-shell-v1";
+const SHELL = ["/", "/teivaka_logo.png", "/teivaka-lockup.png"];
 
+self.addEventListener("install", (e) => {
+  self.skipWaiting();
+  e.waitUntil(
+    caches.open(CACHE).then((c) => Promise.allSettled(SHELL.map((u) => c.add(u)))).catch(() => {}),
+  );
+});
+
+self.addEventListener("activate", (e) => {
+  e.waitUntil((async () => {
+    const keys = await caches.keys();
+    await Promise.all(keys.filter((k) => k.startsWith("tfos-shell-") && k !== CACHE).map((k) => caches.delete(k)));
+    await self.clients.claim();
+  })());
+});
+
+self.addEventListener("fetch", (event) => {
+  const req = event.request;
+  if (req.method !== "GET") return;
+  let url;
+  try { url = new URL(req.url); } catch (_) { return; }
+  if (url.origin !== self.location.origin) return;     // 3rd-party: let the browser handle
+  if (url.pathname.startsWith("/api/")) return;        // never cache the API
+
+  // Navigations → network-first, cached shell as offline fallback.
+  if (req.mode === "navigate") {
+    event.respondWith(
+      fetch(req).then((res) => {
+        const copy = res.clone();
+        caches.open(CACHE).then((c) => c.put("/", copy)).catch(() => {});
+        return res;
+      }).catch(() => caches.match(req).then((m) => m || caches.match("/"))),
+    );
+    return;
+  }
+
+  // Hashed/immutable assets → cache-first, runtime-cache new ones.
+  if (url.pathname.startsWith("/assets/") || /\.(png|jpe?g|svg|webp|gif|ico|woff2?|ttf|css|js)$/i.test(url.pathname)) {
+    event.respondWith(
+      caches.match(req).then((cached) => cached || fetch(req).then((res) => {
+        if (res && res.ok) { const copy = res.clone(); caches.open(CACHE).then((c) => c.put(req, copy)).catch(() => {}); }
+        return res;
+      })),
+    );
+    return;
+  }
+
+  // Everything else → network, fall back to any cached copy.
+  event.respondWith(fetch(req).catch(() => caches.match(req)));
+});
+
+/* ----------------------------------------------------------------- Web Push */
 self.addEventListener("push", (event) => {
   let d = {};
   try { d = event.data ? event.data.json() : {}; } catch (_) { d = { body: event.data && event.data.text() }; }
