@@ -26,6 +26,8 @@ import Groups from "../../components/home/Groups";
 import { useFlags, DisabledNotice } from "../../utils/useFlags.jsx";
 import Marketplace from "../../components/home/Marketplace";
 import { StoriesRow, NewsCard } from "../../components/home/FeedExtras";
+import SponsorCorner from "../../components/home/SponsorCorner";
+import { useIsNarrow } from "../../hooks/useIsNarrow";
 import "../../styles/feed.css";
 
 // Shared wrapper: token auto-refresh on 401 + truthful errors.
@@ -90,6 +92,7 @@ export default function HomePillar() {
   const { pathname } = useLocation();
   const view = pathname.split("/")[2] || "feed";
   const { can } = useCapabilities();
+  const wide = !useIsNarrow(1100); // room for the Sponsor Corner right rail
   const [posts, setPosts] = useState(null);
   const [listings, setListings] = useState(null);
 
@@ -122,10 +125,23 @@ export default function HomePillar() {
   if (gateFlag && !flagOn(gateFlag)) {
     body = <DisabledNotice what={head ? head[0] : "This area"} />;
   } else if (view === "feed") {
-    body = (
+    body = wide ? (
+      <div style={{ display: "flex", gap: 20, alignItems: "flex-start" }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <NewsCard />
+          <WeatherStrip />
+          <StoriesRow />
+          <FeedView initialFilter="all" />
+        </div>
+        <aside style={{ width: 300, flexShrink: 0, position: "sticky", top: 72 }}>
+          <SponsorCorner />
+        </aside>
+      </div>
+    ) : (
       <>
         <NewsCard />
         <WeatherStrip />
+        <SponsorCorner compact />
         <StoriesRow />
         <FeedView initialFilter="all" />
       </>

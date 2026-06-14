@@ -84,6 +84,7 @@ from app.routers import (
     affiliate,
     admin_command,
     chat,
+    sponsors,
     subscriptions,
     webhooks,
     reports,
@@ -348,6 +349,7 @@ app.include_router(kb_articles.router,        prefix=f"{PREFIX}/kb/articles",   
 app.include_router(community.router,          prefix=f"{PREFIX}/community",          tags=["Community"])
 app.include_router(feed.router,               prefix=f"{PREFIX}/community",          tags=["Community Feed"])
 app.include_router(chat.router,               prefix=f"{PREFIX}/community",          tags=["Community Chat"])
+app.include_router(sponsors.router,           prefix=f"{PREFIX}/community",          tags=["Sponsor Corner"])
 app.include_router(marketplace.router,        prefix=f"{PREFIX}/marketplace",        tags=["Marketplace"])
 app.include_router(market.router,             prefix=f"{PREFIX}/market",             tags=["Market Intelligence"])
 app.include_router(geo.router,                prefix=f"{PREFIX}/geo",                tags=["Geo"])

@@ -146,6 +146,7 @@ const AdminPestIntelligence = lazy(() => import("./pages/admin/AdminPestIntellig
 const AdminWeatherIntelligence = lazy(() => import("./pages/admin/AdminWeatherIntelligence"));
 const AdminMarketIntelligence = lazy(() => import("./pages/admin/AdminMarketIntelligence"));
 const AdminPlatform = lazy(() => import("./pages/admin/AdminPlatform"));
+const AdminSponsors = lazy(() => import("./pages/admin/AdminSponsors"));
 const AdminRequests = lazy(() => import("./pages/admin/AdminRequests"));
 const AdminWarRoom = lazy(() => import("./pages/admin/AdminWarRoom"));
 const AdminContent   = lazy(() => import("./pages/admin/AdminContent"));
@@ -237,6 +238,9 @@ export default function App() {
           } />
           <Route path="/admin/platform" element={
             <AdminRoute><AdminPlatform /></AdminRoute>
+          } />
+          <Route path="/admin/sponsors" element={
+            <AdminRoute><AdminSponsors /></AdminRoute>
           } />
           <Route path="/admin/requests" element={
             <AdminRoute><AdminRequests /></AdminRoute>
