@@ -10,8 +10,9 @@
  */
 import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { Pencil, Shield, BadgeCheck, FileText, Download, Coins, Home, Users, Settings as Cog, Link as LinkIcon, Plus, Check } from "lucide-react";
+import { Pencil, Shield, BadgeCheck, FileText, Download, Coins, Home, Users, Settings as Cog, Link as LinkIcon, Plus, Check, Moon } from "lucide-react";
 import GroupCatalogSection from "../../components/settings/GroupCatalogSection";
+import ThemeToggle from "../../components/ThemeToggle";
 import { getJSON, send } from "../../utils/api";
 
 const toast = (message, type) => { try { window.dispatchEvent(new CustomEvent("tfos:toast", { detail: { message, type } })); } catch { /* noop */ } };
@@ -392,6 +393,13 @@ export default function MeSettings() {
         </SettingsCard>
         <SettingsSections />
         <MoneyUnits />
+
+        {/* Appearance — Light / Dark / System */}
+        <section style={{ margin: "12px 20px", background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 12, padding: 16 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}><Moon size={16} style={{ color: "var(--muted)" }} /><strong style={{ color: "var(--soil)" }}>Appearance</strong></div>
+          <div style={{ fontSize: 13, color: "var(--muted)", marginBottom: 12 }}>Choose how Teivaka looks. "System" follows your device's day/night setting.</div>
+          <ThemeToggle />
+        </section>
 
         {/* Card 4 — System */}
         <SystemCard />
