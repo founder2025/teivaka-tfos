@@ -139,6 +139,25 @@ function Field({ label, id, error, hint, children }) {
 // Geographic cascade — data-driven. Renders Province now; District/Tikina light
 // up automatically once shared.geo_regions has them (no empty/dead pickers).
 // ---------------------------------------------------------------------------
+// Fiji's 14 provinces (yasana) — ids match shared.geo_regions. Built-in so the
+// region dropdown never depends on a backend round-trip / seed state.
+const FIJI_PROVINCES = [
+  { region_id: "FJI-BA", name: "Ba" },
+  { region_id: "FJI-BUA", name: "Bua" },
+  { region_id: "FJI-CAK", name: "Cakaudrove" },
+  { region_id: "FJI-KAD", name: "Kadavu" },
+  { region_id: "FJI-LAU", name: "Lau" },
+  { region_id: "FJI-LOM", name: "Lomaiviti" },
+  { region_id: "FJI-MAC", name: "Macuata" },
+  { region_id: "FJI-NAD", name: "Nadroga-Navosa" },
+  { region_id: "FJI-NAI", name: "Naitasiri" },
+  { region_id: "FJI-NAM", name: "Namosi" },
+  { region_id: "FJI-RA", name: "Ra" },
+  { region_id: "FJI-REW", name: "Rewa" },
+  { region_id: "FJI-SER", name: "Serua" },
+  { region_id: "FJI-TAI", name: "Tailevu" },
+];
+
 function RegionCascade({ label, onChange }) {
   const [provinces, setProvinces] = useState([]);
   const [districts, setDistricts] = useState([]);
@@ -149,10 +168,14 @@ function RegionCascade({ label, onChange }) {
 
   useEffect(() => {
     let cancelled = false;
+    // Built-in Fiji provinces — the dropdown always loads, no backend dependency.
+    // Canonical ids match shared.geo_regions; the API upgrades the list if it
+    // returns richer data (e.g. once districts are loaded).
+    if (!cancelled) setProvinces(FIJI_PROVINCES);
     fetch("/api/v1/geo/regions?level=PROVINCE")
       .then((r) => (r.ok ? r.json() : { data: [] }))
-      .then((j) => { if (!cancelled) setProvinces(j.data || []); })
-      .catch(() => { if (!cancelled) setProvinces([]); });
+      .then((j) => { if (!cancelled && Array.isArray(j.data) && j.data.length) setProvinces(j.data); })
+      .catch(() => { /* keep the built-in list */ });
     return () => { cancelled = true; };
   }, []);
 

@@ -365,7 +365,7 @@ async def register(
                     :first_name, :last_name, :password_hash, :role,
                     :phone_number, :whatsapp_number,
                     :date_of_birth, :account_type, :country,
-                    :is_company, :region_id, :preferred_verify_channel,
+                    :is_company, (SELECT region_id FROM shared.geo_regions WHERE region_id = :region_id), :preferred_verify_channel,
                     :business_name, :operator_name,
                     :privacy_accepted_at, :privacy_policy_version,
                     :reg_ip, :reg_ua,
@@ -420,7 +420,7 @@ async def register(
                     text("""
                         INSERT INTO tenant.business_entities
                             (tenant_id, user_id, business_name, operator_name, account_type, region_id)
-                        VALUES (CAST(:tid AS uuid), CAST(:uid AS uuid), :bn, :op, :at, :rid)
+                        VALUES (CAST(:tid AS uuid), CAST(:uid AS uuid), :bn, :op, :at, (SELECT region_id FROM shared.geo_regions WHERE region_id = :rid))
                     """),
                     {
                         "tid": tenant_id, "uid": user_id,
