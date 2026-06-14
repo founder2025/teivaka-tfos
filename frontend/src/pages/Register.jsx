@@ -43,42 +43,27 @@ const COUNTRY_CODES = [
   { iso: "GB", flag: "🇬🇧", code: "+44", name: "United Kingdom" },
 ];
 
-// 9-card ecosystem-profile grid (12 leaf account_type values). Mirrors backend
-// app/core/account_types.py.
+// Generalized registration grid — 7 plain-language categories everyone fits into,
+// + "Other → describe". Mirrors backend app/core/account_types.GENERAL_CATEGORIES.
+// Each maps to one canonical account_type key (all already valid; no schema churn).
+// Finer detail is captured by the free-text "What do you do?" field.
 const PROFILES = [
-  { key: "PRIMARY_PRODUCER", label: "Primary Producer / Farmer", Icon: Sprout, value: "PRIMARY_PRODUCER",
-    sub: "I cultivate commercial crops, manage livestock, or operate a traditional Mataqali farm block." },
-  { key: "COMMERCIAL_BUYER", label: "Commercial Buyer / Offtaker", Icon: ShoppingCart, value: "COMMERCIAL_BUYER",
-    sub: "I represent a resort, hotel chain, processing facility, or institutional food service enterprise." },
-  { key: "AGRI_INPUT_SUPPLIER", label: "Agri-Input Supplier", Icon: Factory, value: "AGRI_INPUT_SUPPLIER",
-    sub: "I supply certified seeds, bulk fertilizers, crop nutrition, machinery, or nursery seedlings." },
-  { key: "LOGISTICS_OPERATOR", label: "Logistics & Fleet Operator", Icon: Truck, value: "LOGISTICS_OPERATOR",
-    sub: "I provide transport tracking, tractor operations, cold-chain transport, or contract agricultural labor." },
-  { key: "INSTITUTIONAL_LENDER", label: "Institutional Lender / Funder", Icon: Landmark, value: null,
-    sub: "I represent a commercial bank, national development lender, credit union, or grant donor organization.",
-    dropdown: {
-      label: "Select funding profile:",
-      options: [
-        { label: "Commercial Retail Bank", value: "BANKER_COMMERCIAL" },
-        { label: "International Development Bank / Donor Agency", value: "DONOR_DEVELOPMENT" },
-      ],
-    } },
-  { key: "AGRIBUSINESS_ENTERPRISE", label: "Agribusiness / Enterprise", Icon: Building2, value: "AGRIBUSINESS_ENTERPRISE",
-    sub: "I operate a localized rural trade merchant, value-add processing center, or village cooperative store." },
-  { key: "COMMODITY_EXPORTER", label: "Commodity Exporter", Icon: Ship, value: "COMMODITY_EXPORTER",
-    sub: "I broker, aggregate, and ship high-grade domestic agricultural products to global trade markets." },
-  { key: "TRADE_IMPORTER", label: "Trade Importer", Icon: Package, value: "TRADE_IMPORTER",
-    sub: "I manage the large-scale entry of wholesale goods and international food substitutes into the region." },
-  { key: "INSTITUTIONAL_PARTNER", label: "Institutional Partner / Other", Icon: Users, value: null,
-    sub: "I am a Mataqali Trustee, NGO Program Manager, Government Regulator, or third-party Quality Auditor.",
-    dropdown: {
-      label: "Select governance profile:",
-      options: [
-        { label: "Mataqali / Landowning Trustee", value: "MATAQALI_TRUSTEE" },
-        { label: "Government Regulator / Border Compliance", value: "GOVERNMENT_REGULATOR" },
-        { label: "Third-Party Quality Certifier / Auditor", value: "QUALITY_AUDITOR" },
-      ],
-    } },
+  { key: "PRIMARY_PRODUCER", label: "Farmer / Producer", Icon: Sprout, value: "PRIMARY_PRODUCER",
+    sub: "I grow crops, raise livestock or poultry, fish, keep bees, run a nursery or hatchery." },
+  { key: "COMMERCIAL_BUYER", label: "Buyer / Trader", Icon: ShoppingCart, value: "COMMERCIAL_BUYER",
+    sub: "I buy, sell or move produce — buyer, offtaker, aggregator, co-op, market vendor, exporter or importer." },
+  { key: "AGRI_INPUT_SUPPLIER", label: "Supplier", Icon: Factory, value: "AGRI_INPUT_SUPPLIER",
+    sub: "I supply inputs or products — seeds, fertiliser, feed, tools, an agri-shop, processor or pack-house." },
+  { key: "LOGISTICS_OPERATOR", label: "Service Provider", Icon: Truck, value: "LOGISTICS_OPERATOR",
+    sub: "I provide a service — vet, irrigation, transport, machinery hire, contractor, agronomist, labour or repairs." },
+  { key: "AGRIBUSINESS_ENTERPRISE", label: "Agribusiness / Company", Icon: Building2, value: "AGRIBUSINESS_ENTERPRISE",
+    sub: "I run a general agri company or a mixed operation spanning several of these." },
+  { key: "BANKER_COMMERCIAL", label: "Finance / Funder", Icon: Landmark, value: "BANKER_COMMERCIAL",
+    sub: "I fund, lend or insure — bank, microfinance, donor, development fund, NGO or insurer." },
+  { key: "GOVERNMENT_REGULATOR", label: "Institution / Government", Icon: Users, value: "GOVERNMENT_REGULATOR",
+    sub: "I regulate, certify, research, train or represent — govt, certifier, research/extension, association or landowning unit." },
+  { key: "OTHER", label: "Other", Icon: Package, value: "AGRIBUSINESS_ENTERPRISE", other: true,
+    sub: "Something else — tell us what you do below and we'll place you right." },
 ];
 
 const PROFILE_LABELS = {};
@@ -243,6 +228,7 @@ function RegistrationForm({ onSuccess }) {
   // Step 2 — ecosystem-profile selection.
   const [selectedKey, setSelectedKey] = useState("PRIMARY_PRODUCER");
   const [subType, setSubType] = useState("");
+  const [specialty, setSpecialty] = useState("");
   const selectedProfile = PROFILES.find((p) => p.key === selectedKey) || PROFILES[0];
   const resolvedType = selectedProfile.dropdown ? (subType || null) : selectedProfile.value;
   const isResolved = !!resolvedType;
@@ -311,6 +297,7 @@ function RegistrationForm({ onSuccess }) {
         ? "Please select your profile from the dropdown to continue"
         : "Please choose who you are";
     }
+    if (selectedProfile.other && !specialty.trim()) e.specialty = "Please tell us what you do";
     if (isCompany) {
       if (businessName.trim().length < 2) e.business_name = "Registered business name is required";
       if (operatorName.trim().length < 2) e.operator_name = "Authorized operator name is required";
@@ -377,6 +364,17 @@ function RegistrationForm({ onSuccess }) {
       if (!res.ok) { setServerError(extractErrorMessage(data.detail)); return; }
       localStorage.setItem("tfos_access_token", data.access_token);
       localStorage.setItem("tfos_refresh_token", data.refresh_token);
+      // capture the free-text specialty (incl. "Other → describe") onto the new
+      // profile — non-blocking; account creation already succeeded.
+      if (specialty.trim()) {
+        try {
+          await fetch("/api/v1/me", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${data.access_token}` },
+            body: JSON.stringify({ specialty: specialty.trim() }),
+          });
+        } catch { /* non-blocking */ }
+      }
       onSuccess({ ...data, account_type: resolvedType });
     } catch {
       setServerError("Network error. Please check your connection and try again.");
@@ -454,6 +452,19 @@ function RegistrationForm({ onSuccess }) {
                 </div>
 
                 <p className="text-xs mt-2" style={{ color: T.muted }}>{selectedProfile.sub}</p>
+
+                {/* What do you do? — free-text specialty (required for "Other") */}
+                {isResolved && (
+                  <div className="mt-3">
+                    <label htmlFor="specialty" className="block text-sm font-semibold mb-1.5" style={{ color: T.soil }}>
+                      {selectedProfile.other ? "Tell us what you do *" : "What do you do? (optional)"}
+                    </label>
+                    <input id="specialty" value={specialty} onChange={(e) => { setSpecialty(e.target.value); clearErr("specialty"); }}
+                      placeholder="e.g. Veterinarian · Irrigation contractor · Co-op manager"
+                      className={inputCls("specialty")} style={inputStyle} />
+                    {errors.specialty && <p className="text-xs mt-1" style={{ color: "#D4442E" }}>{errors.specialty}</p>}
+                  </div>
+                )}
 
                 {/* Step 3a — Stage-2 conditional dropdown (cards 5 & 9) */}
                 {selectedProfile.dropdown && (

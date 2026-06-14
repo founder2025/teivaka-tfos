@@ -30,6 +30,20 @@ export const PERSONAS = {
 // Ordered list of the 12 (for selects). value = canonical UPPER key.
 export const PERSONA_OPTIONS = Object.entries(PERSONAS).map(([value, p]) => ({ value, label: p.label }));
 
+// Generalized registration categories (7) — the plain-language buckets everyone
+// fits into. Mirrors backend app/core/account_types.GENERAL_CATEGORIES. Each is
+// represented by one canonical account_type key; used for the simplified
+// registration grid and the "I also do…" secondary tags.
+export const CATEGORIES = [
+  { key: "PRIMARY_PRODUCER",        label: "Farmer / Producer",        Icon: Sprout,       hint: "I grow crops, raise livestock or poultry, fish, keep bees, run a nursery or hatchery." },
+  { key: "COMMERCIAL_BUYER",        label: "Buyer / Trader",           Icon: ShoppingCart, hint: "I buy, sell or move produce — buyer, offtaker, aggregator, co-op, market vendor, exporter or importer." },
+  { key: "AGRI_INPUT_SUPPLIER",     label: "Supplier",                 Icon: Factory,      hint: "I supply inputs or products — seeds, fertiliser, feed, tools, an agri-shop, processor or pack-house." },
+  { key: "LOGISTICS_OPERATOR",      label: "Service Provider",         Icon: Truck,        hint: "I provide a service — vet, irrigation, transport, machinery hire, contractor, agronomist, labour or repairs." },
+  { key: "AGRIBUSINESS_ENTERPRISE", label: "Agribusiness / Company",   Icon: Building2,    hint: "I run a general agri company or a mixed operation spanning several of these." },
+  { key: "BANKER_COMMERCIAL",       label: "Finance / Funder",         Icon: Landmark,     hint: "I fund, lend or insure — bank, microfinance, donor, development fund, NGO or insurer." },
+  { key: "GOVERNMENT_REGULATOR",    label: "Institution / Government",  Icon: Users,        hint: "I regulate, certify, research, train or represent — govt, certifier, research/extension, association or landowning unit." },
+];
+
 // Legacy 8 lowercase profession keys → canonical (old data / existing users).
 const LEGACY = {
   farmer: "PRIMARY_PRODUCER", buyer: "COMMERCIAL_BUYER", supplier: "AGRI_INPUT_SUPPLIER",

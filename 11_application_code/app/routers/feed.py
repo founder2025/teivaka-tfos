@@ -1248,7 +1248,7 @@ async def get_profile(target_id: str, user: dict = Depends(get_current_user)):
         u = (await db.execute(text(f"""
             SELECT user_id, tenant_id, full_name, email, role, account_type, country,
                    bio, avatar_url, cover_url, whatsapp_number, field_visibility, created_at,
-                   is_company, business_name, operator_name,
+                   is_company, business_name, operator_name, specialty, also_account_types,
                    {vexpr} AS verified
             FROM tenant.users WHERE user_id = cast(:id AS uuid) AND is_active = TRUE
         """), {"id": target_id})).mappings().first()
@@ -1327,6 +1327,7 @@ async def get_profile(target_id: str, user: dict = Depends(get_current_user)):
         return {"data": {
             "user_id": str(u["user_id"]), "full_name": u["full_name"],
             "profession": prof, "role": u["role"],
+            "specialty": u["specialty"], "also_account_types": list(u["also_account_types"] or []),
             "is_company": bool(u["is_company"]), "business_name": u["business_name"], "operator_name": u["operator_name"],
             "country": (u["country"] if allowed("location") else None),
             "bio": (u["bio"] if allowed("bio") else None),

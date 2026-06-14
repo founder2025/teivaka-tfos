@@ -15,7 +15,7 @@ import {
   PenSquare, Tag, Megaphone,
 } from "lucide-react";
 import { C, getJSON, send, card } from "./_meCommon";
-import { personaOf, personaLabel, pillarsFor, isProducer, PERSONA_OPTIONS } from "../../utils/personas";
+import { personaOf, personaLabel, pillarsFor, isProducer, PERSONA_OPTIONS, CATEGORIES } from "../../utils/personas";
 import { getCurrentUser } from "../../utils/auth";
 import { useChat } from "../../context/ChatContext";
 import { uploadMedia } from "../../utils/imageCompress";
@@ -155,7 +155,10 @@ function EditModal({ me, onClose, onSaved }) {
   const [f, setF] = useState({
     full_name: me.full_name || "", bio: me.bio || "", whatsapp_number: me.phone || me.whatsapp_number || "",
     country: me.country || "", account_type: personaOf(me.profession)?.key || "PRIMARY_PRODUCER",
+    specialty: me.specialty || "",
   });
+  const [also, setAlso] = useState(Array.isArray(me.also_account_types) ? me.also_account_types : []);
+  const toggleAlso = (k) => setAlso((cur) => cur.includes(k) ? cur.filter((x) => x !== k) : [...cur, k]);
   const fv = me.field_visibility || {};
   const [vis, setVis] = useState({
     phone: fv.phone || "connections", joined: fv.joined || "public",
@@ -173,6 +176,7 @@ function EditModal({ me, onClose, onSaved }) {
       await send("PATCH", "/api/v1/me", {
         full_name: f.full_name, bio: f.bio, whatsapp_number: f.whatsapp_number,
         country: f.country, account_type: f.account_type,
+        specialty: f.specialty, also_account_types: also,
         field_visibility: merged,
       });
       toast("Profile saved ✓", "success");
@@ -181,6 +185,7 @@ function EditModal({ me, onClose, onSaved }) {
       onSaved({
         full_name: f.full_name, bio: f.bio, phone: f.whatsapp_number,
         country: f.country, profession: (f.account_type || "").toLowerCase(),
+        specialty: f.specialty, also_account_types: also,
         field_visibility: merged,
       });
     } catch (e) {
@@ -202,6 +207,19 @@ function EditModal({ me, onClose, onSaved }) {
             <label style={{ fontSize: 12, color: C.muted, width: 90 }}>Country<input style={inp} maxLength={2} value={f.country} onChange={(e) => set("country", e.target.value.toUpperCase())} /></label>
           </div>
           <label style={{ fontSize: 12, color: C.muted, display: "block", marginTop: 12 }}>Profession<select style={inp} value={f.account_type} onChange={(e) => set("account_type", e.target.value)}>{PERSONA_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</select></label>
+          <label style={{ fontSize: 12, color: C.muted, display: "block", marginTop: 12 }}>What do you do?<input style={inp} value={f.specialty} onChange={(e) => set("specialty", e.target.value)} placeholder="e.g. Veterinarian · Irrigation contractor · Co-op manager" /></label>
+          <div style={{ fontSize: 12, color: C.muted, marginTop: 14 }}>I also do… <span style={{ fontSize: 11 }}>(pick any that apply)</span></div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 6 }}>
+            {CATEGORIES.map((c) => {
+              const on = also.includes(c.key);
+              return (
+                <button key={c.key} type="button" onClick={() => toggleAlso(c.key)}
+                  style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "5px 10px", borderRadius: 999, border: `1px solid ${on ? C.green : C.line}`, background: on ? "rgba(106,168,79,0.12)" : "#fff", color: on ? C.greenDk : C.soil, fontSize: 12, fontWeight: on ? 700 : 500, cursor: "pointer" }}>
+                  <c.Icon size={13} />{c.label}
+                </button>
+              );
+            })}
+          </div>
 
           <div style={{ marginTop: 18, fontSize: 12.5, fontWeight: 700, color: C.soil }}>Privacy — who can see</div>
           <div style={{ fontSize: 11, color: C.muted, marginBottom: 8 }}>Everyone · Followers · Connections (mutual) · Only me</div>
@@ -543,6 +561,16 @@ export default function ProfilePage({ self = false }) {
               ); })()}
               {p.country && <span style={{ fontSize: 11, color: C.muted, display: "inline-flex", gap: 3, alignItems: "center" }}><MapPin size={12} /> {p.country}</span>}
             </div>
+            {p.specialty && <div style={{ fontSize: 12.5, color: C.soil, marginTop: 7 }}>{p.specialty}</div>}
+            {Array.isArray(p.also_account_types) && p.also_account_types.length > 0 && (
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 7, alignItems: "center" }}>
+                <span style={{ fontSize: 11, color: C.muted }}>Also:</span>
+                {p.also_account_types.map((k) => {
+                  const cat = CATEGORIES.find((c) => c.key === k);
+                  return <span key={k} style={{ fontSize: 10.5, fontWeight: 600, color: C.greenDk, background: "rgba(106,168,79,0.10)", border: `1px solid ${C.line}`, borderRadius: 999, padding: "2px 8px" }}>{cat ? cat.label : k}</span>;
+                })}
+              </div>
+            )}
             {p.bio && <p style={{ fontSize: 13, color: C.soil, marginTop: 10, lineHeight: 1.55 }}>{p.bio}</p>}
           </div>
         </div>

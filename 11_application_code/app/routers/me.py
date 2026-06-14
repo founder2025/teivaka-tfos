@@ -321,11 +321,13 @@ class ProfilePatch(BaseModel):
     notify_tasks: bool | None = None
     notify_weather: bool | None = None
     field_visibility: dict | None = None
+    specialty: str | None = None
+    also_account_types: list[str] | None = None
 
 
 _EDITABLE = ("full_name", "whatsapp_number", "country", "preferred_language", "account_type", "bio",
              "avatar_url", "cover_url", "unit_mode", "pref_currency", "pref_weight", "pref_area", "pref_temp",
-             "notify_whatsapp", "notify_tasks", "notify_weather")
+             "notify_whatsapp", "notify_tasks", "notify_weather", "specialty")
 _ACCOUNT_TYPES = {"FARMER", "BUYER", "SUPPLIER", "SERVICE_PROVIDER", "BANKER", "BUSINESS", "EXPORTER", "IMPORTER"}
 
 
@@ -353,6 +355,9 @@ async def update_me(
     if "field_visibility" in data and isinstance(data["field_visibility"], dict):
         import json
         sets.append("field_visibility = cast(:fv AS jsonb)"); params["fv"] = json.dumps(data["field_visibility"])
+    if "also_account_types" in data and data["also_account_types"] is not None:
+        from app.core.account_types import clean_also_categories
+        sets.append("also_account_types = :also"); params["also"] = clean_also_categories(data["also_account_types"])
     if not sets:
         return {"data": {"updated": 0}}
     await db.execute(text(f"UPDATE tenant.users SET {', '.join(sets)} WHERE user_id = :uid"), params)

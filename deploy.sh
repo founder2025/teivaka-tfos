@@ -20,7 +20,7 @@
 set -uo pipefail
 
 BRANCH="${1:-claude/beautiful-fermi-F0dLX}"
-EXPECTED_HEAD="${2:-141_self_serve_ads}"
+EXPECTED_HEAD="${2:-142_user_multirole}"
 ROOT="/opt/teivaka"
 COMPOSE="docker compose -f ${ROOT}/04_environment/docker-compose.yml"
 PSQL="docker exec -i teivaka_db psql -v ON_ERROR_STOP=1 -tA -U teivaka -d teivaka_db"
@@ -139,6 +139,8 @@ SPONSOR="$($PSQL -c "SELECT to_regclass('community.sponsor_placements') IS NOT N
 [ "$SPONSOR" = "t" ] && ok "sponsor_placements table present (140 — Sponsor Corner)" || bad "sponsor_placements missing (migration 140)"
 ADRATES="$($PSQL -c "SELECT (to_regclass('community.ad_rates') IS NOT NULL)::int + (SELECT count(*) FROM information_schema.columns WHERE table_schema='community' AND table_name='sponsor_placements' AND column_name='owner_user_id')::int;" 2>/dev/null | tr -d '[:space:]')"
 [ "${ADRATES:-0}" = "2" ] && ok "ad_rates + owner_user_id present (141 — self-serve ads)" || bad "self-serve ad schema missing (${ADRATES}/2 — migration 141)"
+MULTIROLE="$($PSQL -c "SELECT count(*) FROM information_schema.columns WHERE table_schema='tenant' AND table_name='users' AND column_name IN ('also_account_types','specialty');" 2>/dev/null | tr -d '[:space:]')"
+[ "${MULTIROLE:-0}" = "2" ] && ok "users also_account_types + specialty present (142 — multi-role)" || bad "multi-role columns missing (${MULTIROLE}/2 — migration 142)"
 
 # ---------------------------------------------------------------------------
 say "5/7  Bring API up + wait healthy + parity check"

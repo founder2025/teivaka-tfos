@@ -100,3 +100,52 @@ PERSONA_GROUPS: dict[str, str] = {
 def persona_group(account_type: str | None) -> str | None:
     """Coarse persona group for an account_type (or None if unknown)."""
     return PERSONA_GROUPS.get((account_type or "").upper().strip())
+
+
+# Generalized registration categories (7) — the plain-language buckets everyone
+# self-identifies into. Each is represented by one canonical account_type key;
+# the finer 12 values roll up to these for display + targeting (CATEGORY_OF).
+# Used by the simplified registration grid and the "I also do…" secondary tags.
+GENERAL_CATEGORIES = [
+    {"key": "PRIMARY_PRODUCER",        "label": "Farmer / Producer"},
+    {"key": "COMMERCIAL_BUYER",        "label": "Buyer / Trader"},
+    {"key": "AGRI_INPUT_SUPPLIER",     "label": "Supplier"},
+    {"key": "LOGISTICS_OPERATOR",      "label": "Service Provider"},
+    {"key": "AGRIBUSINESS_ENTERPRISE", "label": "Agribusiness / Company"},
+    {"key": "BANKER_COMMERCIAL",       "label": "Finance / Funder"},
+    {"key": "GOVERNMENT_REGULATOR",    "label": "Institution / Government"},
+]
+CATEGORY_KEYS: set[str] = {c["key"] for c in GENERAL_CATEGORIES}
+
+# Every account_type (incl. the finer legacy/12 values) rolls up to one of the 7.
+CATEGORY_OF: dict[str, str] = {
+    "PRIMARY_PRODUCER": "PRIMARY_PRODUCER",
+    "COMMERCIAL_BUYER": "COMMERCIAL_BUYER",
+    "COMMODITY_EXPORTER": "COMMERCIAL_BUYER",
+    "TRADE_IMPORTER": "COMMERCIAL_BUYER",
+    "AGRI_INPUT_SUPPLIER": "AGRI_INPUT_SUPPLIER",
+    "LOGISTICS_OPERATOR": "LOGISTICS_OPERATOR",
+    "AGRIBUSINESS_ENTERPRISE": "AGRIBUSINESS_ENTERPRISE",
+    "BANKER_COMMERCIAL": "BANKER_COMMERCIAL",
+    "DONOR_DEVELOPMENT": "BANKER_COMMERCIAL",
+    "MATAQALI_TRUSTEE": "GOVERNMENT_REGULATOR",
+    "GOVERNMENT_REGULATOR": "GOVERNMENT_REGULATOR",
+    "QUALITY_AUDITOR": "GOVERNMENT_REGULATOR",
+}
+
+
+def category_of(account_type: str | None) -> str | None:
+    """Roll any account_type up to its general category key."""
+    return CATEGORY_OF.get((account_type or "").upper().strip())
+
+
+def clean_also_categories(values) -> list[str]:
+    """Validate + dedupe a list of secondary 'I also do' category keys."""
+    if not isinstance(values, list):
+        return []
+    out = []
+    for v in values:
+        k = (v or "").upper().strip()
+        if k in CATEGORY_KEYS and k not in out:
+            out.append(k)
+    return out
