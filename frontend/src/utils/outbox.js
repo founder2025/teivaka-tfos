@@ -46,6 +46,17 @@ function announce() {
   count().then((n) => window.dispatchEvent(new CustomEvent("tfos-outbox-changed", { detail: { pending: n } }))).catch(() => {});
 }
 
+// Ask the service worker to replay the outbox in the background — fires even
+// after the tab is closed (Background Sync). No-op where unsupported; the
+// page-side flushOutbox still covers those browsers while the app is open.
+function requestBackgroundSync() {
+  try {
+    if ("serviceWorker" in navigator && "SyncManager" in window) {
+      navigator.serviceWorker.ready.then((reg) => reg.sync.register("tfos-outbox")).catch(() => {});
+    }
+  } catch { /* ignore */ }
+}
+
 export async function pendingCount() { try { return await count(); } catch { return 0; } }
 
 // A failure is "network" (queue it) when we're offline or the fetch itself
@@ -62,19 +73,20 @@ function isNetworkError(err) {
 export async function submitEvent(body) {
   const payload = { ...body };
   if (!payload.idempotency_key) payload.idempotency_key = uuid();
-  if (!navigator.onLine) {
-    await put({ id: payload.idempotency_key, url: "/api/v1/events", method: "POST", body: payload, created_at: Date.now() });
+  // token stored with the record so the SW can replay it tab-closed (it has no
+  // access to localStorage). Best-effort: the page flush always uses a fresh one.
+  const token = localStorage.getItem("tfos_access_token");
+  const enqueue = async () => {
+    await put({ id: payload.idempotency_key, url: "/api/v1/events", method: "POST", body: payload, token, created_at: Date.now() });
     announce();
+    requestBackgroundSync();
     return { data: { queued: true }, _queued: true };
-  }
+  };
+  if (!navigator.onLine) return enqueue();
   try {
     return await apiClient.post("/events", payload);
   } catch (err) {
-    if (isNetworkError(err)) {
-      await put({ id: payload.idempotency_key, url: "/api/v1/events", method: "POST", body: payload, created_at: Date.now() });
-      announce();
-      return { data: { queued: true }, _queued: true };
-    }
+    if (isNetworkError(err)) return enqueue();
     throw err;
   }
 }
