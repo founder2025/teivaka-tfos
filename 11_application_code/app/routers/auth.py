@@ -44,11 +44,12 @@ from app.utils.fraud_guard import (
 logger = logging.getLogger("teivaka.auth")
 
 # In-memory per-email rate limit for resend-verification.
-# Humane policy: a short cooldown between sends + a generous hourly cap, so a
-# real "my email didn't arrive" user is never wall-blocked, but abuse is capped.
-# Process-local; resets on restart — good enough for now, swap for Redis later.
-_RESEND_LIMIT_PER_HOUR = 5
-_RESEND_MIN_INTERVAL_SECONDS = 30
+# Deliberately light: a short cooldown to stop accidental double-clicks, plus a
+# high hourly ceiling that only a genuine abuser would reach. A real user who
+# didn't get the email must never be wall-blocked. Process-local; resets on
+# restart — swap for Redis later.
+_RESEND_LIMIT_PER_HOUR = 20
+_RESEND_MIN_INTERVAL_SECONDS = 15
 _resend_history: dict[str, list[datetime]] = {}
 
 # Same pattern for forgot-password — 3 reset requests per email per hour.
