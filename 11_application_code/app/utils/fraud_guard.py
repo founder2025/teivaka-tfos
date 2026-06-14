@@ -139,13 +139,12 @@ _SUSPICIOUS_EMAIL_PATTERNS: list[re.Pattern] = [
     re.compile(r"^spam[\+\-\._]?\d*@", re.IGNORECASE),       # spam@
     re.compile(r"^noreply[\+\-\._]?\d*@", re.IGNORECASE),    # noreply@
     re.compile(r"^no-reply[\+\-\._]?\d*@", re.IGNORECASE),   # no-reply@
-    re.compile(r"^admin[\+\-\._]?\d*@", re.IGNORECASE),      # admin@, admin1@
-    re.compile(r"^[a-z]{1,3}\d{4,}@", re.IGNORECASE),        # ab1234@ — sequential bots
-    re.compile(r"^(a+|b+|x+|z+)\d*@", re.IGNORECASE),        # aaaa@, xxx@
-    re.compile(r"^user\d+@", re.IGNORECASE),                   # user1@, user999@
-    re.compile(r"^temp\d*@", re.IGNORECASE),                   # temp@, temp123@
-    re.compile(r"^[0-9]+@", re.IGNORECASE),                    # 12345@
+    re.compile(r"^temp\d*@", re.IGNORECASE),                  # temp@, temp123@
     re.compile(r"@(example|test|localhost|invalid|local)\.", re.IGNORECASE),  # @example.com
+    # NOTE: removed the letters+digits / repeated-char / all-digits / user\d+ /
+    # admin heuristics — they wrongly rejected real users (e.g. jo1990@gmail.com,
+    # sam2024@…, kama14@…). Abuse is still covered by duplicate, disposable,
+    # IP-rate-limit and the explicit keyword patterns above.
 ]
 
 # ---------------------------------------------------------------------------
