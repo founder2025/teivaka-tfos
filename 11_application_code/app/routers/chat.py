@@ -80,6 +80,13 @@ class ChatSend(BaseModel):
 _MSG_TYPES = {"text", "image", "video", "audio", "card"}
 _MEDIA_LABEL = {"image": "📷 Photo", "video": "🎬 Video", "audio": "🎙 Voice message", "card": "🔗 Shared item"}
 
+# small curated set; 🙏 doubles as "vinaka / thank you"
+_REACTIONS = {"👍", "❤️", "😂", "😮", "😢", "🙏"}
+
+
+class ReactBody(BaseModel):
+    emoji: str
+
 
 class PushSub(BaseModel):
     endpoint: str
@@ -267,9 +274,31 @@ async def chat_with(other_id: str, after: str = Query(None), user: dict = Depend
             UPDATE community.chat_messages SET read_at = now()
             WHERE thread_id = :tid AND sender_user_id = :other AND read_at IS NULL
         """), {"tid": tid, "other": other_id})
-    return {"data": {"thread_id": tid, "messages": [
+        # reactions for this page of messages (one query, grouped in python)
+        rmap = {}
+        ids = [str(m["message_id"]) for m in msgs]
+        if ids:
+            rrows = (await db.execute(text("""
+                SELECT message_id::text AS mid, emoji, count(*) AS n, bool_or(user_id = cast(:uid AS uuid)) AS mine
+                FROM community.chat_reactions
+                WHERE message_id::text = ANY(:ids)
+                GROUP BY message_id, emoji
+                ORDER BY emoji
+            """), {"ids": ids, "uid": uid})).mappings().all()
+            for rr in rrows:
+                rmap.setdefault(rr["mid"], []).append({"emoji": rr["emoji"], "count": rr["n"], "mine": bool(rr["mine"])})
+    # is the other party typing? (ephemeral Redis key on the user pair)
+    lo, hi = _pair(uid, other_id)
+    other_typing = False
+    try:
+        rc = await _r()
+        other_typing = (await rc.get(f"typing:{lo}:{hi}:{other_id}")) is not None
+    except Exception:  # noqa: BLE001
+        pass
+    return {"data": {"thread_id": tid, "other_typing": other_typing, "messages": [
         {**dict(m), "message_id": str(m["message_id"]), "sender_user_id": str(m["sender_user_id"]),
-         "mine": str(m["sender_user_id"]) == uid} for m in msgs]}}
+         "mine": str(m["sender_user_id"]) == uid,
+         "reactions": rmap.get(str(m["message_id"]), [])} for m in msgs]}}
 
 
 @router.post("/chat/with/{other_id}")
@@ -317,6 +346,53 @@ async def chat_mark_read(thread_id: str, user: dict = Depends(get_current_user))
             UPDATE community.chat_messages SET read_at = now()
             WHERE thread_id = :tid AND sender_user_id <> :uid AND read_at IS NULL
         """), {"tid": thread_id, "uid": str(user["user_id"])})
+    return {"data": {"ok": True}}
+
+
+# ----------------------------------------------------------------------------- reactions
+@router.put("/chat/message/{message_id}/react")
+async def chat_react(message_id: str, body: ReactBody, user: dict = Depends(get_current_user)):
+    uid = str(user["user_id"])
+    emoji = (body.emoji or "").strip()
+    if emoji not in _REACTIONS:
+        raise HTTPException(status_code=422, detail="Unsupported reaction")
+    async with get_rls_db(str(user["tenant_id"])) as db:
+        # only a participant of the message's thread may react
+        row = (await db.execute(text("""
+            SELECT 1 FROM community.chat_messages m
+            JOIN community.chat_threads th ON th.thread_id = m.thread_id
+            WHERE m.message_id = :mid AND (th.user_lo = cast(:uid AS uuid) OR th.user_hi = cast(:uid AS uuid))
+        """), {"mid": message_id, "uid": uid})).first()
+        if not row:
+            raise HTTPException(status_code=404, detail="Message not found")
+        await db.execute(text("""
+            INSERT INTO community.chat_reactions (message_id, user_id, emoji)
+            VALUES (:mid, :uid, :emoji)
+            ON CONFLICT (message_id, user_id) DO UPDATE SET emoji = EXCLUDED.emoji, created_at = now()
+        """), {"mid": message_id, "uid": uid, "emoji": emoji})
+    return {"data": {"message_id": message_id, "emoji": emoji}}
+
+
+@router.delete("/chat/message/{message_id}/react")
+async def chat_unreact(message_id: str, user: dict = Depends(get_current_user)):
+    async with get_rls_db(str(user["tenant_id"])) as db:
+        await db.execute(text("DELETE FROM community.chat_reactions WHERE message_id = :mid AND user_id = :uid"),
+                         {"mid": message_id, "uid": str(user["user_id"])})
+    return {"data": {"ok": True}}
+
+
+# ----------------------------------------------------------------------------- typing
+@router.post("/chat/with/{other_id}/typing")
+async def chat_typing(other_id: str, user: dict = Depends(get_current_user)):
+    """Set a short-lived 'I am typing' flag on the user pair (Redis, 6s TTL).
+    No DB write — cheap enough to call on keystroke (the client throttles)."""
+    uid = str(user["user_id"])
+    lo, hi = _pair(uid, other_id)
+    try:
+        rc = await _r()
+        await rc.set(f"typing:{lo}:{hi}:{uid}", "1", ex=6)
+    except Exception:  # noqa: BLE001
+        pass
     return {"data": {"ok": True}}
 
 

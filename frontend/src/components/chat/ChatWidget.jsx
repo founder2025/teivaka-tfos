@@ -73,20 +73,44 @@ function Avatar({ name, src, online, size = 36 }) {
 }
 
 /* messages + composer (shared by desktop window and mobile sheet) */
+const REACTIONS = ["👍", "❤️", "😂", "😮", "😢", "🙏"];
+const dayLabel = (iso) => {
+  const d = new Date(iso), today = new Date(), y = new Date(); y.setDate(today.getDate() - 1);
+  const same = (a, b) => a.toDateString() === b.toDateString();
+  if (same(d, today)) return "Today";
+  if (same(d, y)) return "Yesterday";
+  return d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+};
+
 function Convo({ conn, onActivity }) {
   const [msgs, setMsgs] = useState(null);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [recording, setRecording] = useState(false);
+  const [otherTyping, setOtherTyping] = useState(false);
+  const [picker, setPicker] = useState(null); // message_id with an open reaction picker
   const endRef = useRef(null);
   const fileRef = useRef(null);
   const recRef = useRef(null);
   const chunksRef = useRef([]);
-  const load = useCallback(() => getJSON(`${API}/chat/with/${conn.user_id}`).then((r) => { setMsgs(r.data?.messages || []); onActivity?.(); }).catch(() => setMsgs([])), [conn.user_id, onActivity]);
+  const lastTypingRef = useRef(0);
+  const load = useCallback(() => getJSON(`${API}/chat/with/${conn.user_id}`).then((r) => { setMsgs(r.data?.messages || []); setOtherTyping(!!r.data?.other_typing); onActivity?.(); }).catch(() => setMsgs([])), [conn.user_id, onActivity]);
   useEffect(() => { load(); const id = setInterval(load, 4000); return () => clearInterval(id); }, [load]);
-  useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [msgs]);
+  useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [msgs, otherTyping]);
   // stop any in-flight recording if the convo unmounts
   useEffect(() => () => { try { recRef.current?.stream?.getTracks?.().forEach((t) => t.stop()); } catch { /* ignore */ } }, []);
+
+  // tell the other side we're typing — throttled to once / 3s so it's keystroke-safe
+  const notifyTyping = () => { const now = Date.now(); if (now - lastTypingRef.current > 3000) { lastTypingRef.current = now; postJSON(`${API}/chat/with/${conn.user_id}/typing`).catch(() => {}); } };
+
+  const toggleReact = async (m, emoji) => {
+    const mineEmoji = (m.reactions || []).find((r) => r.mine)?.emoji;
+    try {
+      if (mineEmoji === emoji) await fetch(`${API}/chat/message/${m.message_id}/react`, { method: "DELETE", headers: H() });
+      else await fetch(`${API}/chat/message/${m.message_id}/react`, { method: "PUT", headers: H(), body: JSON.stringify({ emoji }) });
+      setPicker(null); await load();
+    } catch { /* ignore */ }
+  };
 
   const send = async () => { if (!text.trim() || busy) return; setBusy(true); const b = text.trim(); setText(""); try { await postJSON(`${API}/chat/with/${conn.user_id}`, { body: b }); await load(); } catch { setText(b); } finally { setBusy(false); } };
 
@@ -134,6 +158,10 @@ function Convo({ conn, onActivity }) {
     return m.body;
   };
 
+  // last of MY messages → drives the Seen/Sent receipt
+  const lastMine = (msgs || []).filter((m) => m.mine).slice(-1)[0];
+  let prevDay = null;
+
   return (
     <>
       <div style={{ flex: 1, overflowY: "auto", padding: 10, display: "flex", flexDirection: "column", gap: 6, background: C.cream, WebkitOverflowScrolling: "touch" }}>
@@ -141,19 +169,41 @@ function Convo({ conn, onActivity }) {
           : msgs.length === 0 ? <div style={{ color: C.muted, fontSize: 12, textAlign: "center", marginTop: 16 }}>Say hello to {conn.full_name.split(" ")[0]}.</div>
           : msgs.map((m) => {
             const isMedia = m.message_type && m.message_type !== "text";
+            const reactions = m.reactions || [];
+            const day = dayLabel(m.created_at); const showDay = day !== prevDay; prevDay = day;
             return (
-              <div key={m.message_id} style={{ alignSelf: m.mine ? "flex-end" : "flex-start", maxWidth: "80%", background: isMedia ? "transparent" : (m.mine ? C.green : "#fff"), color: m.mine ? "#fff" : C.soil, border: (isMedia || m.mine) ? "none" : `1px solid ${C.line}`, borderRadius: 12, padding: isMedia ? 0 : "7px 11px", fontSize: 13, lineHeight: 1.4 }}>
-                {renderBody(m)}<div style={{ fontSize: 9, opacity: 0.7, marginTop: 2, textAlign: "right", color: isMedia ? C.muted : undefined }}>{ago(m.created_at)}</div>
+              <div key={m.message_id} style={{ display: "contents" }}>
+                {showDay && <div style={{ alignSelf: "center", fontSize: 10, color: C.muted, background: "#fff", border: `1px solid ${C.line}`, borderRadius: 10, padding: "1px 10px", margin: "4px 0" }}>{day}</div>}
+                <div style={{ alignSelf: m.mine ? "flex-end" : "flex-start", maxWidth: "85%", display: "flex", flexDirection: "column", alignItems: m.mine ? "flex-end" : "flex-start", gap: 2 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 4, flexDirection: m.mine ? "row-reverse" : "row" }}>
+                    <div style={{ background: isMedia ? "transparent" : (m.mine ? C.green : "#fff"), color: m.mine ? "#fff" : C.soil, border: (isMedia || m.mine) ? "none" : `1px solid ${C.line}`, borderRadius: 12, padding: isMedia ? 0 : "7px 11px", fontSize: 13, lineHeight: 1.4 }}>
+                      {renderBody(m)}<div style={{ fontSize: 9, opacity: 0.7, marginTop: 2, textAlign: "right", color: isMedia ? C.muted : undefined }}>{ago(m.created_at)}</div>
+                    </div>
+                    <button onClick={() => setPicker(picker === m.message_id ? null : m.message_id)} title="React" style={{ ...iconBtn, padding: 2, fontSize: 13, opacity: 0.5, lineHeight: 1 }}>🙂</button>
+                  </div>
+                  {picker === m.message_id && (
+                    <div style={{ display: "flex", gap: 2, background: "#fff", border: `1px solid ${C.line}`, borderRadius: 16, padding: "3px 6px", boxShadow: "0 4px 12px rgba(0,0,0,0.14)" }}>
+                      {REACTIONS.map((e) => <button key={e} onClick={() => toggleReact(m, e)} style={{ border: "none", background: "transparent", cursor: "pointer", fontSize: 16, padding: 2, lineHeight: 1 }}>{e}</button>)}
+                    </div>
+                  )}
+                  {reactions.length > 0 && (
+                    <div style={{ display: "flex", gap: 3, flexWrap: "wrap" }}>
+                      {reactions.map((r) => <button key={r.emoji} onClick={() => toggleReact(m, r.emoji)} title="Tap to toggle" style={{ border: `1px solid ${r.mine ? C.green : C.line}`, background: r.mine ? "#EAF5E5" : "#fff", borderRadius: 10, padding: "0 6px", fontSize: 11, cursor: "pointer", lineHeight: "18px", color: C.soil }}>{r.emoji} {r.count}</button>)}
+                    </div>
+                  )}
+                </div>
               </div>
             );
           })}
+        {otherTyping && <div style={{ alignSelf: "flex-start", background: "#fff", border: `1px solid ${C.line}`, borderRadius: 12, padding: "7px 12px", fontSize: 13, color: C.muted, fontStyle: "italic" }}>typing…</div>}
+        {lastMine && <div style={{ alignSelf: "flex-end", fontSize: 10, color: C.muted, marginTop: -2 }}>{lastMine.read_at ? "Seen" : "Sent"}</div>}
         <div ref={endRef} />
       </div>
       <div style={{ display: "flex", gap: 6, padding: 8, borderTop: `1px solid ${C.line}`, background: "#fff", alignItems: "center" }}>
         <input ref={fileRef} type="file" accept="image/*,video/*" onChange={onPick} style={{ display: "none" }} />
         <button onClick={() => fileRef.current?.click()} disabled={busy || recording} title="Send photo or video" style={iconBtn}><ImageIcon size={18} /></button>
         <button onClick={recording ? stopRec : startRec} disabled={busy} title={recording ? "Stop & send voice note" : "Record voice note"} style={{ ...iconBtn, color: recording ? C.red : C.muted }}>{recording ? <Square size={16} /> : <Mic size={18} />}</button>
-        <input value={text} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => e.key === "Enter" && send()} placeholder={recording ? "Recording… tap ■ to send" : "Message…"} disabled={recording} style={{ flex: 1, border: `1px solid ${C.line}`, borderRadius: 18, padding: "9px 13px", fontSize: 14, outline: "none", background: recording ? C.cream : "#fff" }} />
+        <input value={text} onChange={(e) => { setText(e.target.value); notifyTyping(); }} onKeyDown={(e) => e.key === "Enter" && send()} placeholder={recording ? "Recording… tap ■ to send" : "Message…"} disabled={recording} style={{ flex: 1, border: `1px solid ${C.line}`, borderRadius: 18, padding: "9px 13px", fontSize: 14, outline: "none", background: recording ? C.cream : "#fff" }} />
         <button onClick={send} disabled={busy || recording || !text.trim()} style={{ border: "none", background: C.green, color: "#fff", borderRadius: "50%", width: 40, height: 40, flexShrink: 0, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><Send size={16} /></button>
       </div>
     </>

@@ -20,7 +20,7 @@
 set -uo pipefail
 
 BRANCH="${1:-claude/beautiful-fermi-F0dLX}"
-EXPECTED_HEAD="${2:-136_chat_media}"
+EXPECTED_HEAD="${2:-137_chat_reactions}"
 ROOT="/opt/teivaka"
 COMPOSE="docker compose -f ${ROOT}/04_environment/docker-compose.yml"
 PSQL="docker exec -i teivaka_db psql -v ON_ERROR_STOP=1 -tA -U teivaka -d teivaka_db"
@@ -129,6 +129,8 @@ MILK="$($PSQL -c "SELECT pg_get_constraintdef(oid) LIKE '%MILK_COLLECTED%' FROM 
 [ "$MILK" = "t" ] && ok "audit.events CHECK includes MILK_COLLECTED (livestock pack)" || bad "MILK_COLLECTED not in audit CHECK"
 CHATMEDIA="$($PSQL -c "SELECT count(*) FROM information_schema.columns WHERE table_schema='community' AND table_name='chat_messages' AND column_name IN ('message_type','media_url','media_meta');" 2>/dev/null | tr -d '[:space:]')"
 [ "${CHATMEDIA:-0}" = "3" ] && ok "chat_messages media columns present (136 — chat photo/voice)" || bad "chat_messages media columns missing (${CHATMEDIA}/3 — migration 136)"
+CHATRX="$($PSQL -c "SELECT to_regclass('community.chat_reactions') IS NOT NULL;" 2>/dev/null | tr -d '[:space:]')"
+[ "$CHATRX" = "t" ] && ok "chat_reactions table present (137 — reactions)" || bad "chat_reactions missing (migration 137 — chat reactions would fail)"
 
 # ---------------------------------------------------------------------------
 say "5/7  Bring API up + wait healthy + parity check"
