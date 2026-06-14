@@ -5,11 +5,12 @@
  */
 import { useEffect, useRef, useState } from "react";
 import { NavLink } from "react-router-dom";
-import { X, Volume2, VolumeX, Bell } from "lucide-react";
+import { X, Volume2, VolumeX, Bell, PenSquare } from "lucide-react";
 import { useChat } from "../../context/ChatContext";
 import { enablePush } from "../../utils/push";
 import { useIsNarrow } from "../../hooks/useIsNarrow";
 import Avatar from "../ui/Avatar";
+import NewChatModal from "./NewChatModal";
 
 const API = "/api/v1/community";
 const tok = () => localStorage.getItem("tfos_access_token");
@@ -25,6 +26,7 @@ export default function ChatDropdown() {
   const [local, setLocal] = useState(chat.conns);
   const [muted, setMuted] = useState(localStorage.getItem("tfos_chat_muted") === "1");
   const [perm, setPerm] = useState(typeof Notification !== "undefined" ? Notification.permission : "unsupported");
+  const [compose, setCompose] = useState(false);
 
   useEffect(() => { setLocal(chat.conns); }, [chat.conns]);
   useEffect(() => { if (chat.conns == null) getJSON(`${API}/connections`).then((r) => setLocal(r.data || [])).catch(() => setLocal([])); }, []); // eslint-disable-line
@@ -55,6 +57,7 @@ export default function ChatDropdown() {
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 12px", borderBottom: `1px solid ${C.line}` }}>
         <span style={{ fontSize: 14, fontWeight: 600 }}>Messages</span>
         <span style={{ display: "flex", gap: 2 }}>
+          <button onClick={() => setCompose(true)} title="New message" style={{ border: "none", background: "transparent", cursor: "pointer", color: C.greenDk, width: 32, height: 32 }}><PenSquare size={17} /></button>
           <button onClick={toggleMute} title={muted ? "Unmute" : "Mute"} style={{ border: "none", background: "transparent", cursor: "pointer", color: C.muted, width: 32, height: 32 }}>{muted ? <VolumeX size={17} /> : <Volume2 size={17} />}</button>
           <button onClick={() => chat.setDropdownOpen(false)} aria-label="Close" style={{ border: "none", background: "transparent", cursor: "pointer", color: C.muted, width: 32, height: 32 }}><X size={18} /></button>
         </span>
@@ -96,6 +99,16 @@ export default function ChatDropdown() {
           View all messages
         </NavLink>
       </div>
+      {compose && (
+        <NewChatModal
+          onClose={() => setCompose(false)}
+          onPick={(p) => {
+            chat.openWith({ user_id: p.user_id, full_name: p.full_name, avatar_url: p.avatar_url, profession: (p.account_type || "").toLowerCase(), online: false, unread: 0 });
+            setCompose(false);
+            chat.setDropdownOpen(false);
+          }}
+        />
+      )}
     </div>
   );
 }

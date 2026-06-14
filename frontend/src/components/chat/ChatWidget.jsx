@@ -15,7 +15,8 @@
  * VAPID provisioning — see summary), not here.
  */
 import { useEffect, useRef, useState, useCallback } from "react";
-import { X, Send, Minus, ArrowLeft, Image as ImageIcon, Mic, Square, MoreVertical, SmilePlus } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { X, Send, Minus, ArrowLeft, Image as ImageIcon, Mic, Square, MoreVertical, SmilePlus, User, UserPlus } from "lucide-react";
 import { useChat } from "../../context/ChatContext";
 
 const API = "/api/v1/community";
@@ -281,9 +282,15 @@ const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 
 /* kebab menu shared by desktop + mobile headers: mute / report / block */
 function ConvoMenu({ conn, onClose }) {
+  const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [muted, setMuted] = useState(() => isConvMuted(conn.user_id));
   const toggleMute = () => { const v = !muted; setConvMuted(conn.user_id, v); setMuted(v); setOpen(false); };
+  const profile = () => { setOpen(false); navigate(`/u/${conn.user_id}`); };
+  const follow = async () => {
+    setOpen(false);
+    try { await fetch(`${API}/follow/${conn.user_id}`, { method: "POST", headers: H() }); window.dispatchEvent(new CustomEvent("tfos:toast", { detail: { message: `Following ${conn.full_name} ✓`, type: "success" } })); } catch { /* ignore */ }
+  };
   const report = async () => {
     setOpen(false);
     const reason = window.prompt(`Report ${conn.full_name}. What's the problem?`);
@@ -302,7 +309,9 @@ function ConvoMenu({ conn, onClose }) {
       {open && (
         <>
           <div onClick={(e) => { e.stopPropagation(); setOpen(false); }} style={{ position: "fixed", inset: 0, zIndex: 1399 }} />
-          <div style={{ position: "absolute", right: 0, top: 26, zIndex: 1400, background: "#fff", border: `1px solid ${C.line}`, borderRadius: 8, boxShadow: "0 8px 24px rgba(0,0,0,0.16)", minWidth: 160, overflow: "hidden" }}>
+          <div style={{ position: "absolute", right: 0, top: 26, zIndex: 1400, background: "#fff", border: `1px solid ${C.line}`, borderRadius: 8, boxShadow: "0 8px 24px rgba(0,0,0,0.16)", minWidth: 170, overflow: "hidden" }}>
+            <button onClick={profile} style={{ ...menuItem, display: "flex", alignItems: "center", gap: 8 }}><User size={14} />View profile</button>
+            <button onClick={follow} style={{ ...menuItem, display: "flex", alignItems: "center", gap: 8 }}><UserPlus size={14} />Follow</button>
             <button onClick={toggleMute} style={menuItem}>{muted ? "Unmute notifications" : "Mute notifications"}</button>
             <button onClick={report} style={menuItem}>Report…</button>
             <button onClick={block} style={{ ...menuItem, color: C.red, borderTop: `1px solid ${C.line}` }}>Block</button>
