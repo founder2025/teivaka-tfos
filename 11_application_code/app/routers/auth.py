@@ -43,10 +43,12 @@ from app.utils.fraud_guard import (
 
 logger = logging.getLogger("teivaka.auth")
 
-# In-memory per-email rate limit for resend-verification (3/hour).
-# This is intentionally process-local and resets on restart — good enough
-# for prototype; swap for Redis later.
-_RESEND_LIMIT_PER_HOUR = 3
+# In-memory per-email rate limit for resend-verification.
+# Humane policy: a short cooldown between sends + a generous hourly cap, so a
+# real "my email didn't arrive" user is never wall-blocked, but abuse is capped.
+# Process-local; resets on restart — good enough for now, swap for Redis later.
+_RESEND_LIMIT_PER_HOUR = 5
+_RESEND_MIN_INTERVAL_SECONDS = 30
 _resend_history: dict[str, list[datetime]] = {}
 
 # Same pattern for forgot-password — 3 reset requests per email per hour.
@@ -790,10 +792,23 @@ async def resend_verification(
     now = datetime.now(timezone.utc)
     cutoff = now - timedelta(hours=1)
     history = [t for t in _resend_history.get(email, []) if t > cutoff]
+    # Short cooldown between sends (anti-double-click / anti-spam).
+    if history:
+        elapsed = (now - max(history)).total_seconds()
+        if elapsed < _RESEND_MIN_INTERVAL_SECONDS:
+            wait = int(_RESEND_MIN_INTERVAL_SECONDS - elapsed) + 1
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=f"Please wait {wait}s before requesting another email.",
+                headers={"Retry-After": str(wait)},
+            )
+    # Generous hourly cap.
     if len(history) >= _RESEND_LIMIT_PER_HOUR:
+        wait = int((min(history) + timedelta(hours=1) - now).total_seconds()) + 1
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail="Too many verification emails requested. Please wait an hour and try again.",
+            detail="You've requested several emails recently. Please wait a little while and try again.",
+            headers={"Retry-After": str(max(wait, 1))},
         )
     history.append(now)
     _resend_history[email] = history

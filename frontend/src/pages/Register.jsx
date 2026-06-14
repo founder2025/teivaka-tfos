@@ -23,7 +23,7 @@ import { useState, useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 import {
   Sprout, ShoppingCart, Factory, Truck, Landmark, Building2,
-  Ship, Package, Users, Eye, EyeOff,
+  Ship, Package, Users, Eye, EyeOff, Mail, Check, ShieldCheck,
 } from "lucide-react";
 
 // In-app (.tfp) palette.
@@ -946,10 +946,21 @@ function AccountCreated({ data }) {
   const highTrust = HIGH_TRUST.has(data.account_type);
   const profileLabel = PROFILE_LABELS[data.account_type] || data.account_type;
   const needsVerify = data.email_unverified !== false; // Google accounts arrive verified
+  const firstName = (data.display_name || "").trim().split(/\s+/)[0] || "there";
+
   const [state, setState] = useState("idle"); // idle | sending | sent | error
   const [msg, setMsg] = useState("");
+  const [cooldown, setCooldown] = useState(0); // seconds until resend is allowed again
+
+  // tick the cooldown down to zero
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    const t = setInterval(() => setCooldown((c) => Math.max(0, c - 1)), 1000);
+    return () => clearInterval(t);
+  }, [cooldown]);
 
   async function resend() {
+    if (cooldown > 0 || state === "sending") return;
     setState("sending"); setMsg("");
     try {
       const res = await fetch("/api/v1/auth/resend-verification", {
@@ -957,22 +968,27 @@ function AccountCreated({ data }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: data.email }),
       });
+      const d = await res.json().catch(() => ({}));
+      const retry = parseInt(res.headers.get("Retry-After") || "0", 10);
       if (res.status === 429) {
-        const d = await res.json().catch(() => ({}));
         setState("error");
-        setMsg(d.detail || "Too many requests — please wait an hour and try again.");
+        setMsg(d.detail || "Please wait a little before requesting another email.");
+        setCooldown(retry > 0 ? retry : 60);
         return;
       }
       setState("sent");
-      setMsg("Verification email sent — check your inbox and spam folder.");
+      setMsg("Sent — check your inbox, plus spam/promotions.");
+      setCooldown(retry > 0 ? retry : 30);
     } catch {
       setState("error");
       setMsg("Couldn't send right now. Please try again in a moment.");
     }
   }
 
-  const btnLabel =
+  const resendDisabled = state === "sending" || cooldown > 0;
+  const resendLabel =
     state === "sending" ? "Sending…"
+    : cooldown > 0 ? `Resend available in ${cooldown}s`
     : state === "sent" ? "Resend again"
     : "Resend verification email";
 
@@ -981,74 +997,84 @@ function AccountCreated({ data }) {
       <div className="text-center py-5" style={{ borderBottom: `1px solid ${T.line}` }}>
         <img src="/teivaka_logo.png" alt="Teivaka" style={{ height: 72, width: "auto", display: "block", margin: "0 auto" }} />
       </div>
+
       <div className="flex-1 flex items-center justify-center p-4">
         <div className="w-full max-w-md">
-          <div className="rounded-2xl p-8 text-center" style={{ background: T.paper, border: `1px solid ${T.line}`, boxShadow: "0 2px 8px rgba(92,64,51,0.08)" }}>
-            {/* success check */}
-            <div style={{ width: 64, height: 64, borderRadius: "50%", background: T.greenTint, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 18px" }}>
-              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke={T.greenDk} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <polyline points="20 6 9 17 4 12" />
-              </svg>
+          <div className="rounded-2xl p-8" style={{ background: T.paper, border: `1px solid ${T.line}`, boxShadow: "0 4px 16px rgba(92,64,51,0.10)" }}>
+
+            {/* header: icon + headline */}
+            <div className="text-center">
+              <div style={{ width: 60, height: 60, borderRadius: "50%", background: T.greenTint, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px" }}>
+                <Check size={30} strokeWidth={2.75} color={T.greenDk} aria-hidden="true" />
+              </div>
+              <h2 className="text-2xl font-bold" style={{ color: T.soil }}>You're in, {firstName}!</h2>
+              <p className="mt-1.5" style={{ color: T.muted, fontSize: 14.5 }}>Your Teivaka account is ready.</p>
             </div>
-            <h2 className="text-2xl font-bold" style={{ color: T.soil }}>Account created</h2>
-            <p className="mt-1.5" style={{ color: T.muted, fontSize: 14.5 }}>
-              Welcome, <strong style={{ color: T.soil }}>{data.display_name}</strong>.
-            </p>
 
-            {/* verify-email block — a nudge, not a gate (lazy verification).
-                Google accounts arrive already verified, so we confirm instead. */}
-            {needsVerify ? (
-              <div className="mt-6 rounded-xl p-4 text-left" style={{ background: T.greenTint, border: `1px solid ${T.line}` }}>
-                <p style={{ color: T.soil, fontWeight: 700, fontSize: 15 }}>Verify your email when you can</p>
-                <p style={{ color: T.soil, fontSize: 13.5, marginTop: 6, lineHeight: 1.5 }}>
-                  We sent a link to <strong>{data.email}</strong>. You can start using Teivaka now —
-                  verifying just secures your account and unlocks bank-evidence &amp; selling later.
-                </p>
-              </div>
-            ) : (
-              <div className="mt-6 rounded-xl p-4 text-left" style={{ background: T.greenTint, border: `1px solid ${T.green}` }}>
-                <p style={{ color: T.greenDk, fontWeight: 700, fontSize: 15 }}>✓ Email verified via Google</p>
-                <p style={{ color: T.soil, fontSize: 13.5, marginTop: 6, lineHeight: 1.5 }}>
-                  <strong>{data.email}</strong> is confirmed — you're all set.
-                </p>
-              </div>
-            )}
-
-            {/* primary: straight into the app — no link-clicking required to start */}
-            <Link to="/home" className="mt-5 block w-full py-3 rounded-xl font-semibold text-center" style={{ background: T.green, color: "#fff" }}>
+            {/* primary action — straight into the app (lazy verification) */}
+            <Link to="/home" className="mt-6 flex items-center justify-center w-full py-3.5 rounded-xl font-semibold"
+              style={{ background: T.green, color: "#fff", fontSize: 15.5 }}>
               Continue to Teivaka →
             </Link>
 
-            {/* secondary: resend, only needed if the email hasn't arrived */}
-            {needsVerify && (
-              <>
+            {/* verify section — secondary; or a confirmation for Google accounts */}
+            {needsVerify ? (
+              <div className="mt-6 rounded-xl p-4" style={{ background: T.cream, border: `1px solid ${T.line}` }}>
+                <div className="flex items-center gap-2.5">
+                  <Mail size={18} strokeWidth={2} color={T.greenDk} />
+                  <p style={{ color: T.soil, fontWeight: 700, fontSize: 14.5 }}>Verify your email</p>
+                </div>
+                <p className="mt-2" style={{ color: T.soil2, fontSize: 13, lineHeight: 1.55 }}>
+                  Sent to <strong style={{ color: T.soil }}>{data.email}</strong>. Optional now — it secures your
+                  account and unlocks Bank Evidence &amp; selling later.
+                </p>
+
                 <button
                   type="button"
                   onClick={resend}
-                  disabled={state === "sending"}
+                  disabled={resendDisabled}
                   className="mt-3 w-full py-2.5 rounded-xl font-medium"
-                  style={{ background: "transparent", color: T.greenDk, border: `1px solid ${T.line}`, cursor: state === "sending" ? "default" : "pointer", opacity: state === "sending" ? 0.7 : 1 }}
+                  style={{
+                    background: resendDisabled ? T.cream : T.paper,
+                    color: resendDisabled ? T.muted : T.greenDk,
+                    border: `1px solid ${T.line}`,
+                    cursor: resendDisabled ? "default" : "pointer",
+                    fontSize: 14,
+                  }}
                 >
-                  {btnLabel}
+                  {resendLabel}
                 </button>
 
                 {msg && (
-                  <p className="mt-3" style={{ fontSize: 13, color: state === "error" ? T.red : T.greenDk }}>{msg}</p>
+                  <div className="mt-2.5 flex items-start gap-1.5" style={{ fontSize: 12.5, color: state === "error" ? T.red : T.greenDk }}>
+                    {state === "sent" && <Check size={14} strokeWidth={3} style={{ marginTop: 1, flexShrink: 0 }} />}
+                    <span>{msg}</span>
+                  </div>
                 )}
 
-                <p className="mt-3" style={{ fontSize: 12.5, color: T.muted, lineHeight: 1.5 }}>
-                  Didn't get the email? Check your spam or promotions folder. You can verify anytime from your account.
+                <p className="mt-2.5" style={{ fontSize: 12, color: T.muted, lineHeight: 1.5 }}>
+                  Didn't get it? Check spam/promotions — you can also verify anytime from your account.
                 </p>
-              </>
-            )}
-
-            {highTrust && (
-              <div className="mt-4 rounded-xl p-3 text-sm text-left" style={{ background: "var(--muted-bg)", border: `1px solid ${T.line}`, color: T.soil }}>
-                🔒 Your <strong>{profileLabel}</strong> features unlock after we verify your account. We'll be in touch shortly.
+              </div>
+            ) : (
+              <div className="mt-6 rounded-xl p-4 flex items-center gap-2.5" style={{ background: T.greenTint, border: `1px solid ${T.green}` }}>
+                <ShieldCheck size={20} strokeWidth={2} color={T.greenDk} style={{ flexShrink: 0 }} />
+                <p style={{ color: T.soil, fontSize: 13.5, lineHeight: 1.5 }}>
+                  <strong style={{ color: T.greenDk }}>Email verified via Google.</strong> {data.email} is confirmed — you're all set.
+                </p>
               </div>
             )}
 
-            <div className="mt-6 pt-5" style={{ borderTop: `1px solid ${T.line}` }}>
+            {highTrust && (
+              <div className="mt-4 rounded-xl p-3 flex items-start gap-2 text-left" style={{ background: "var(--muted-bg)", border: `1px solid ${T.line}` }}>
+                <ShieldCheck size={16} strokeWidth={2} color={T.soil2} style={{ marginTop: 1, flexShrink: 0 }} />
+                <p style={{ fontSize: 12.5, color: T.soil, lineHeight: 1.5 }}>
+                  Your <strong>{profileLabel}</strong> features unlock after we verify your account. We'll be in touch shortly.
+                </p>
+              </div>
+            )}
+
+            <div className="mt-6 pt-5 text-center" style={{ borderTop: `1px solid ${T.line}` }}>
               <p style={{ fontSize: 13.5, color: T.muted }}>
                 Already verified?{" "}
                 <Link to="/login" className="font-medium hover:underline" style={{ color: T.greenDk }}>Sign in</Link>
