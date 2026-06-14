@@ -20,7 +20,7 @@
 set -uo pipefail
 
 BRANCH="${1:-claude/beautiful-fermi-F0dLX}"
-EXPECTED_HEAD="${2:-137_chat_reactions}"
+EXPECTED_HEAD="${2:-138_chat_safety}"
 ROOT="/opt/teivaka"
 COMPOSE="docker compose -f ${ROOT}/04_environment/docker-compose.yml"
 PSQL="docker exec -i teivaka_db psql -v ON_ERROR_STOP=1 -tA -U teivaka -d teivaka_db"
@@ -131,6 +131,8 @@ CHATMEDIA="$($PSQL -c "SELECT count(*) FROM information_schema.columns WHERE tab
 [ "${CHATMEDIA:-0}" = "3" ] && ok "chat_messages media columns present (136 — chat photo/voice)" || bad "chat_messages media columns missing (${CHATMEDIA}/3 — migration 136)"
 CHATRX="$($PSQL -c "SELECT to_regclass('community.chat_reactions') IS NOT NULL;" 2>/dev/null | tr -d '[:space:]')"
 [ "$CHATRX" = "t" ] && ok "chat_reactions table present (137 — reactions)" || bad "chat_reactions missing (migration 137 — chat reactions would fail)"
+CHATSAFE="$($PSQL -c "SELECT (to_regclass('community.chat_blocks') IS NOT NULL)::int + (to_regclass('community.chat_reports') IS NOT NULL)::int;" 2>/dev/null | tr -d '[:space:]')"
+[ "${CHATSAFE:-0}" = "2" ] && ok "chat_blocks + chat_reports present (138 — safety)" || bad "chat safety tables missing (${CHATSAFE}/2 — migration 138)"
 
 # ---------------------------------------------------------------------------
 say "5/7  Bring API up + wait healthy + parity check"

@@ -25,6 +25,12 @@ import redis.asyncio as aioredis
 from app.db.session import get_db, get_rls_db, get_db_ctx
 from app.middleware.rls import get_current_user
 from app.config import settings
+from app.utils.community_guard import rate_limit_only
+
+# Cold-DM to these account types requires the sender to have a verified email
+# (the trust-ladder: a stranger can't cold-message a lender/exporter unverified).
+# Replies inside an existing thread, and DMs to farmers/buyers/etc., are open.
+_SENSITIVE_RECIPIENTS = {"BANKER", "EXPORTER", "IMPORTER"}
 
 logger = logging.getLogger(__name__)
 
@@ -45,13 +51,20 @@ async def _connected(db, a, b) -> bool:
     """Messaging is allowed when there is a relationship signal between the two
     users: EITHER party follows the other (you can DM anyone you follow, and
     reply to anyone who follows you) OR either party has an ACTIVE marketplace
-    listing. Recipients always see inbound threads via /connections."""
+    listing — AND neither party has blocked the other. Recipients always see
+    inbound threads via /connections."""
     return bool((await db.execute(text("""
-        SELECT EXISTS (SELECT 1 FROM community.follows WHERE follower_user_id=:a AND followed_user_id=:b)
+        SELECT (
+            EXISTS (SELECT 1 FROM community.follows WHERE follower_user_id=:a AND followed_user_id=:b)
             OR EXISTS (SELECT 1 FROM community.follows WHERE follower_user_id=:b AND followed_user_id=:a)
             OR EXISTS (SELECT 1 FROM community.listings cl
                        WHERE cl.created_by IN (cast(:a AS uuid), cast(:b AS uuid))
                          AND cl.listing_status = 'ACTIVE' AND cl.sold_at IS NULL)
+        ) AND NOT EXISTS (
+            SELECT 1 FROM community.chat_blocks bk
+            WHERE (bk.blocker_user_id=cast(:a AS uuid) AND bk.blocked_user_id=cast(:b AS uuid))
+               OR (bk.blocker_user_id=cast(:b AS uuid) AND bk.blocked_user_id=cast(:a AS uuid))
+        )
     """), {"a": str(a), "b": str(b)})).scalar())
 
 
@@ -86,6 +99,12 @@ _REACTIONS = {"👍", "❤️", "😂", "😮", "😢", "🙏"}
 
 class ReactBody(BaseModel):
     emoji: str
+
+
+class ReportChatBody(BaseModel):
+    reported_user_id: str
+    message_id: str | None = None
+    reason: str
 
 
 class PushSub(BaseModel):
@@ -210,6 +229,9 @@ async def list_connections(user: dict = Depends(get_current_user)):
                       WHERE m.thread_id = th.thread_id ORDER BY m.created_at DESC LIMIT 1) AS last_body
             FROM peers pr
             JOIN tenant.users u ON u.user_id = pr.peer_id AND u.is_active = TRUE
+              AND NOT EXISTS (SELECT 1 FROM community.chat_blocks bk
+                              WHERE (bk.blocker_user_id = cast(:uid AS uuid) AND bk.blocked_user_id = u.user_id)
+                                 OR (bk.blocker_user_id = u.user_id AND bk.blocked_user_id = cast(:uid AS uuid)))
             LEFT JOIN community.chat_threads th
               ON (th.user_lo = :uid AND th.user_hi = u.user_id)
               OR (th.user_lo = u.user_id AND th.user_hi = :uid)
@@ -302,7 +324,7 @@ async def chat_with(other_id: str, after: str = Query(None), user: dict = Depend
 
 
 @router.post("/chat/with/{other_id}")
-async def chat_send(other_id: str, body: ChatSend, user: dict = Depends(get_current_user)):
+async def chat_send(other_id: str, body: ChatSend, user: dict = Depends(rate_limit_only("chat", 60))):
     uid = str(user["user_id"])
     mt = (body.message_type or "text").strip().lower()
     if mt not in _MSG_TYPES:
@@ -324,9 +346,25 @@ async def chat_send(other_id: str, body: ChatSend, user: dict = Depends(get_curr
     # what the push notification + connection-list preview shows
     preview = text_body or _MEDIA_LABEL.get(mt, "New message")
 
+    # Trust-ladder cold-DM gate: opening a NEW thread to a lender/exporter/
+    # importer requires a verified email. Cross-tenant reads need the non-RLS
+    # context (same as /connections). Replies to an existing thread are exempt.
+    lo, hi = _pair(uid, other_id)
+    async with get_db_ctx() as ck:
+        info = (await ck.execute(text("""
+            SELECT (SELECT account_type FROM tenant.users WHERE user_id = cast(:other AS uuid)) AS other_type,
+                   (SELECT email_verified FROM tenant.users WHERE user_id = cast(:uid AS uuid)) AS sender_verified,
+                   (SELECT thread_id FROM community.chat_threads WHERE user_lo = :lo AND user_hi = :hi) AS tid
+        """), {"other": other_id, "uid": uid, "lo": lo, "hi": hi})).mappings().first()
+    if info and info["tid"] is None and (info["other_type"] or "") in _SENSITIVE_RECIPIENTS and not info["sender_verified"]:
+        raise HTTPException(
+            status_code=403,
+            detail="Verify your email to message a verified banker, exporter or importer directly.",
+        )
+
     async with get_rls_db(str(user["tenant_id"])) as db:
         if not await _connected(db, uid, other_id):
-            raise HTTPException(status_code=403, detail="Connect first — you can only chat with mutual connections")
+            raise HTTPException(status_code=403, detail="You can't message this person — connect first, or they may have blocked you.")
         tid = await _thread_id(db, uid, other_id, create=True)
         row = (await db.execute(text("""
             INSERT INTO community.chat_messages (thread_id, sender_user_id, body, message_type, media_url, media_meta)
@@ -394,6 +432,53 @@ async def chat_typing(other_id: str, user: dict = Depends(get_current_user)):
     except Exception:  # noqa: BLE001
         pass
     return {"data": {"ok": True}}
+
+
+# ----------------------------------------------------------------------------- block / report
+@router.post("/chat/block/{other_id}")
+async def chat_block(other_id: str, user: dict = Depends(get_current_user)):
+    me = str(user["user_id"])
+    if other_id == me:
+        raise HTTPException(status_code=422, detail="You can't block yourself")
+    async with get_rls_db(str(user["tenant_id"])) as db:
+        await db.execute(text("""
+            INSERT INTO community.chat_blocks (blocker_user_id, blocked_user_id)
+            VALUES (cast(:me AS uuid), cast(:them AS uuid)) ON CONFLICT DO NOTHING
+        """), {"me": me, "them": other_id})
+    return {"data": {"blocked": other_id}}
+
+
+@router.delete("/chat/block/{other_id}")
+async def chat_unblock(other_id: str, user: dict = Depends(get_current_user)):
+    async with get_rls_db(str(user["tenant_id"])) as db:
+        await db.execute(text("""
+            DELETE FROM community.chat_blocks
+            WHERE blocker_user_id = cast(:me AS uuid) AND blocked_user_id = cast(:them AS uuid)
+        """), {"me": str(user["user_id"]), "them": other_id})
+    return {"data": {"unblocked": other_id}}
+
+
+@router.get("/chat/blocks")
+async def chat_blocks(user: dict = Depends(get_current_user)):
+    async with get_rls_db(str(user["tenant_id"])) as db:
+        rows = (await db.execute(text(
+            "SELECT blocked_user_id::text AS id FROM community.chat_blocks WHERE blocker_user_id = cast(:me AS uuid)"),
+            {"me": str(user["user_id"])})).mappings().all()
+    return {"data": [r["id"] for r in rows]}
+
+
+@router.post("/chat/report")
+async def chat_report(body: ReportChatBody, user: dict = Depends(get_current_user)):
+    reason = (body.reason or "").strip()
+    if not reason:
+        raise HTTPException(status_code=422, detail="A reason is required")
+    async with get_rls_db(str(user["tenant_id"])) as db:
+        await db.execute(text("""
+            INSERT INTO community.chat_reports (reporter_user_id, reported_user_id, message_id, reason)
+            VALUES (cast(:r AS uuid), cast(:t AS uuid), cast(:m AS uuid), :reason)
+        """), {"r": str(user["user_id"]), "t": body.reported_user_id,
+               "m": body.message_id, "reason": reason})
+    return {"data": {"reported": True}}
 
 
 @router.get("/chat/unread-count")

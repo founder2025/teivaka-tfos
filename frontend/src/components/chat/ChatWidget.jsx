@@ -15,7 +15,7 @@
  * VAPID provisioning — see summary), not here.
  */
 import { useEffect, useRef, useState, useCallback } from "react";
-import { X, Send, Minus, ArrowLeft, Image as ImageIcon, Mic, Square } from "lucide-react";
+import { X, Send, Minus, ArrowLeft, Image as ImageIcon, Mic, Square, MoreVertical } from "lucide-react";
 import { useChat } from "../../context/ChatContext";
 
 const API = "/api/v1/community";
@@ -35,6 +35,10 @@ async function uploadFile(file) {
 
 const C = { soil: "#5C4033", green: "#6AA84F", greenDk: "#3E7B1F", line: "#E8E2D4", cream: "#F8F3E9", muted: "#8A7B6F", red: "#D4442E" };
 const iconBtn = { border: "none", background: "transparent", cursor: "pointer", color: "#8A7B6F", padding: 6, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 };
+const menuItem = { display: "block", width: "100%", textAlign: "left", padding: "9px 12px", border: "none", background: "transparent", cursor: "pointer", fontSize: 13, color: "#5C4033", whiteSpace: "nowrap" };
+const convMuteKey = (id) => `tfos_chat_mute_${id}`;
+const isConvMuted = (id) => { try { return localStorage.getItem(convMuteKey(id)) === "1"; } catch { return false; } };
+const setConvMuted = (id, v) => { try { if (v) localStorage.setItem(convMuteKey(id), "1"); else localStorage.removeItem(convMuteKey(id)); } catch { /* ignore */ } };
 const initials = (n) => (n || "?").split(" ").map((s) => s[0]).slice(0, 2).join("").toUpperCase();
 const ago = (iso) => { if (!iso) return ""; const s = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000); if (s < 60) return "just now"; if (s < 3600) return `${Math.floor(s / 60)}m`; if (s < 86400) return `${Math.floor(s / 3600)}h`; return `${Math.floor(s / 86400)}d`; };
 const isMuted = () => localStorage.getItem("tfos_chat_muted") === "1";
@@ -219,6 +223,40 @@ function loadState(id, index) {
 function saveState(id, s) { try { localStorage.setItem(posKey(id), JSON.stringify(s)); } catch { /* ignore */ } }
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 
+/* kebab menu shared by desktop + mobile headers: mute / report / block */
+function ConvoMenu({ conn, onClose }) {
+  const [open, setOpen] = useState(false);
+  const [muted, setMuted] = useState(() => isConvMuted(conn.user_id));
+  const toggleMute = () => { const v = !muted; setConvMuted(conn.user_id, v); setMuted(v); setOpen(false); };
+  const report = async () => {
+    setOpen(false);
+    const reason = window.prompt(`Report ${conn.full_name}. What's the problem?`);
+    if (!reason || !reason.trim()) return;
+    try { await fetch(`${API}/chat/report`, { method: "POST", headers: H(), body: JSON.stringify({ reported_user_id: conn.user_id, reason: reason.trim() }) }); window.alert("Thanks — our team will review this."); } catch { /* ignore */ }
+  };
+  const block = async () => {
+    setOpen(false);
+    if (!window.confirm(`Block ${conn.full_name}? They won't be able to message you, and this chat will close.`)) return;
+    try { await fetch(`${API}/chat/block/${conn.user_id}`, { method: "POST", headers: H() }); } catch { /* ignore */ }
+    onClose();
+  };
+  return (
+    <div style={{ position: "relative", display: "flex" }} onPointerDown={(e) => e.stopPropagation()}>
+      <button title="More" onClick={(e) => { e.stopPropagation(); setOpen((o) => !o); }} style={{ border: "none", background: "transparent", cursor: "pointer", color: C.muted, display: "flex" }}><MoreVertical size={17} /></button>
+      {open && (
+        <>
+          <div onClick={(e) => { e.stopPropagation(); setOpen(false); }} style={{ position: "fixed", inset: 0, zIndex: 1399 }} />
+          <div style={{ position: "absolute", right: 0, top: 26, zIndex: 1400, background: "#fff", border: `1px solid ${C.line}`, borderRadius: 8, boxShadow: "0 8px 24px rgba(0,0,0,0.16)", minWidth: 160, overflow: "hidden" }}>
+            <button onClick={toggleMute} style={menuItem}>{muted ? "Unmute notifications" : "Mute notifications"}</button>
+            <button onClick={report} style={menuItem}>Report…</button>
+            <button onClick={block} style={{ ...menuItem, color: C.red, borderTop: `1px solid ${C.line}` }}>Block</button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 /* desktop draggable window / bubble */
 function FloatingChat({ conn, index, onClose }) {
   const [st, setSt] = useState(() => loadState(conn.user_id, index));
@@ -278,6 +316,7 @@ function FloatingChat({ conn, index, onClose }) {
           <div style={{ fontWeight: 700, fontSize: 13, color: C.soil, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{conn.full_name}</div>
           <div style={{ fontSize: 10.5, color: conn.online ? C.greenDk : C.muted }}>{conn.online ? "Active now" : "Offline"}</div>
         </div>
+        <ConvoMenu conn={conn} onClose={onClose} />
         <button title="Collapse" onClick={(e) => { e.stopPropagation(); persist({ ...st, collapsed: true }); }} style={{ border: "none", background: "transparent", cursor: "pointer", color: C.muted }}><Minus size={17} /></button>
         <button title="Close" onClick={(e) => { e.stopPropagation(); onClose(); }} style={{ border: "none", background: "transparent", cursor: "pointer", color: C.muted }}><X size={17} /></button>
       </div>
@@ -324,7 +363,7 @@ export default function ChatWidget() {
         const r = await getJSON(`${API}/connections`); if (!alive) return;
         const list = r.data || []; chat.setConns(list);
         let total = 0; const next = {}; const fresh = [];
-        for (const c of list) { const u = c.unread || 0; next[c.user_id] = u; total += u; const had = prevUnread.current ? (prevUnread.current[c.user_id] || 0) : 0; if (prevUnread.current && u > had && !(openIds.current.has(c.user_id))) fresh.push(c); }
+        for (const c of list) { const u = c.unread || 0; next[c.user_id] = u; total += u; const had = prevUnread.current ? (prevUnread.current[c.user_id] || 0) : 0; if (prevUnread.current && u > had && !(openIds.current.has(c.user_id)) && !isConvMuted(c.user_id)) fresh.push(c); }
         if (fresh.length) { chime(); fresh.forEach((c) => { osNotify(c.full_name, c.last_body || "New message"); setToasts((t) => [...t, { id: `${c.user_id}-${Date.now()}`, conn: c }]); }); }
         prevUnread.current = next; chat.setUnread(total);
       } catch { /* ignore */ }
@@ -362,6 +401,7 @@ export default function ChatWidget() {
                 <div style={{ fontWeight: 700, fontSize: 14, color: C.soil }}>{c.full_name}</div>
                 <div style={{ fontSize: 11, color: c.online ? C.greenDk : C.muted }}>{c.online ? "Active now" : "Offline"}</div>
               </div>
+              <ConvoMenu conn={c} onClose={() => { chat.closeChat(c.user_id); setMobileExpanded(null); }} />
               <button onClick={() => { chat.closeChat(mobileExpanded); setMobileExpanded(null); }} aria-label="Close" style={{ border: "none", background: "transparent", cursor: "pointer", color: C.muted, width: 40, height: 40 }}><X size={20} /></button>
             </div>
             <Convo conn={c} />
