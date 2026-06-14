@@ -38,6 +38,15 @@ def _is_resend() -> bool:
     return host == "smtp.resend.com" or pw.startswith("re_")
 
 
+def _logo_url() -> str:
+    """Absolute URL to the real Teivaka lockup (teal leaf-mark + TEIVAKA
+    wordmark, light variant for dark backgrounds) — the same asset the web app
+    and marketing site use. Email clients require an absolute https URL; Caddy
+    serves it from the frontend build at /teivaka-lockup.png. This replaces the
+    old serif text wordmark so transactional email matches the app's brand."""
+    return f"{settings.frontend_url.rstrip('/')}/teivaka-lockup.png"
+
+
 def _send_via_resend(to_email: str, token: str, name: str) -> bool:
     """Dispatch via Resend's HTTPS REST API. Uses the same credential (SMTP_PASSWORD)."""
     verify_url = f"{settings.frontend_url.rstrip('/')}/verify-email?token={quote(token)}"
@@ -91,10 +100,9 @@ def _verification_html(name: str, verify_url: str) -> str:
     <tr><td align="center">
       <table role="presentation" width="560" cellpadding="0" cellspacing="0"
              style="max-width:560px;background:#ffffff;border:1px solid #E0D5C0;border-radius:12px;overflow:hidden;">
-        <tr><td style="background:#2C1A0E;padding:28px 40px;">
-          <div style="font-family:'Playfair Display',Georgia,serif;font-size:26px;color:#F5EFE0;letter-spacing:-0.5px;">
-            Teivaka<span style="color:#3D8C40;">.</span>
-          </div>
+        <tr><td style="background:#2C1A0E;padding:24px 40px;">
+          <img src="{_logo_url()}" alt="Teivaka" width="170" height="37"
+               style="display:block;width:170px;height:37px;border:0;outline:none;text-decoration:none;-ms-interpolation-mode:bicubic;color:#F5EFE0;font-family:Georgia,serif;font-size:24px;font-weight:bold;letter-spacing:0.5px;" />
         </td></tr>
         <tr><td style="padding:40px;">
           <h1 style="font-family:'Playfair Display',Georgia,serif;font-size:28px;color:#2C1A0E;margin:0 0 20px 0;line-height:1.25;">
@@ -262,10 +270,9 @@ def _task_digest_html(name: str, farm_label: str, bullet_html: str, tasks_url: s
     <tr><td align="center">
       <table role="presentation" width="560" cellpadding="0" cellspacing="0"
              style="max-width:560px;background:#ffffff;border:1px solid #E0D5C0;border-radius:12px;overflow:hidden;">
-        <tr><td style="background:#2C1A0E;padding:28px 40px;">
-          <div style="font-family:'Playfair Display',Georgia,serif;font-size:26px;color:#F5EFE0;letter-spacing:-0.5px;">
-            Teivaka<span style="color:#3D8C40;">.</span>
-          </div>
+        <tr><td style="background:#2C1A0E;padding:24px 40px;">
+          <img src="{_logo_url()}" alt="Teivaka" width="170" height="37"
+               style="display:block;width:170px;height:37px;border:0;outline:none;text-decoration:none;-ms-interpolation-mode:bicubic;color:#F5EFE0;font-family:Georgia,serif;font-size:24px;font-weight:bold;letter-spacing:0.5px;" />
         </td></tr>
         <tr><td style="padding:40px;">
           <h1 style="font-family:'Playfair Display',Georgia,serif;font-size:26px;color:#2C1A0E;margin:0 0 18px 0;line-height:1.25;">
@@ -307,10 +314,9 @@ def _password_reset_html(name: str, reset_url: str) -> str:
     <tr><td align="center">
       <table role="presentation" width="560" cellpadding="0" cellspacing="0"
              style="max-width:560px;background:#ffffff;border:1px solid #E0D5C0;border-radius:12px;overflow:hidden;">
-        <tr><td style="background:#2C1A0E;padding:28px 40px;">
-          <div style="font-family:'Playfair Display',Georgia,serif;font-size:26px;color:#F5EFE0;letter-spacing:-0.5px;">
-            Teivaka<span style="color:#3D8C40;">.</span>
-          </div>
+        <tr><td style="background:#2C1A0E;padding:24px 40px;">
+          <img src="{_logo_url()}" alt="Teivaka" width="170" height="37"
+               style="display:block;width:170px;height:37px;border:0;outline:none;text-decoration:none;-ms-interpolation-mode:bicubic;color:#F5EFE0;font-family:Georgia,serif;font-size:24px;font-weight:bold;letter-spacing:0.5px;" />
         </td></tr>
         <tr><td style="padding:40px;">
           <h1 style="font-family:'Playfair Display',Georgia,serif;font-size:28px;color:#2C1A0E;margin:0 0 20px 0;line-height:1.25;">
