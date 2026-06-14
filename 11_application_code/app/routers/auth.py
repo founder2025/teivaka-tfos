@@ -588,12 +588,17 @@ async def verify_email(token: str, db: AsyncSession = Depends(get_db)):
             detail="This verification link has expired. Request a new one from the sign-in page.",
         )
 
+    # Idempotent verify: set email_verified=true but KEEP the token. Email
+    # providers (Gmail, Outlook SafeLinks, antivirus, mobile link-preview)
+    # pre-fetch links with a GET, which would consume a one-time token before the
+    # human clicks -> "invalid or already used". By keeping the token, a repeat
+    # GET finds the row, sees email_verified=true (checked above) and returns the
+    # friendly "already verified" success instead of an error. No security risk:
+    # a verified link performs no sensitive action on re-hit.
     await db.execute(
         text("""
             UPDATE tenant.users
                SET email_verified = true,
-                   email_verification_token = NULL,
-                   email_verification_expires = NULL,
                    updated_at = NOW()
              WHERE user_id = :uid
         """),
