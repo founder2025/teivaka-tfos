@@ -93,7 +93,11 @@ export function Convo({ conn, onActivity }) {
   const [recording, setRecording] = useState(false);
   const [otherTyping, setOtherTyping] = useState(false);
   const [picker, setPicker] = useState(null); // message_id with an open reaction picker
+  const [showJump, setShowJump] = useState(false); // "↓ new messages" pill while scrolled up
   const endRef = useRef(null);
+  const scrollRef = useRef(null);      // the messages scroll container
+  const atBottomRef = useRef(true);    // is the viewer at/near the bottom?
+  const prevLenRef = useRef(null);     // message count last render (null = fresh convo)
   const fileRef = useRef(null);
   const recRef = useRef(null);
   const chunksRef = useRef([]);
@@ -107,7 +111,32 @@ export function Convo({ conn, onActivity }) {
     window.addEventListener("tfos-chat-refresh", on);
     return () => window.removeEventListener("tfos-chat-refresh", on);
   }, [load, conn.user_id]);
-  useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [msgs, otherTyping]);
+
+  const nearBottom = () => { const el = scrollRef.current; if (!el) return true; return el.scrollHeight - el.scrollTop - el.clientHeight < 90; };
+  const onScroll = () => { atBottomRef.current = nearBottom(); if (atBottomRef.current && showJump) setShowJump(false); };
+  const scrollToBottom = (behavior = "auto") => { endRef.current?.scrollIntoView({ behavior }); atBottomRef.current = true; setShowJump(false); };
+
+  // switching conversation = treat next message load as a fresh open (jump to end)
+  useEffect(() => { prevLenRef.current = null; setShowJump(false); }, [conn.user_id]);
+
+  // Scroll policy: jump to bottom on first open OR when I send OR when I'm
+  // already at the bottom; otherwise stay put and offer a "new messages" pill.
+  useEffect(() => {
+    if (msgs == null) return;
+    const len = msgs.length;
+    const prev = prevLenRef.current;
+    const lastMine = len > 0 && msgs[len - 1].mine;
+    if (prev == null) {
+      requestAnimationFrame(() => scrollToBottom("auto"));
+    } else if (len > prev) {
+      if (lastMine || atBottomRef.current) scrollToBottom("smooth");
+      else setShowJump(true);
+    }
+    prevLenRef.current = len;
+    /* eslint-disable-next-line */
+  }, [msgs]);
+  // keep pinned to the typing indicator only if already at the bottom
+  useEffect(() => { if (otherTyping && atBottomRef.current) endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [otherTyping]);
   // stop any in-flight recording if the convo unmounts
   useEffect(() => () => { try { recRef.current?.stream?.getTracks?.().forEach((t) => t.stop()); } catch { /* ignore */ } }, []);
 
@@ -192,7 +221,7 @@ export function Convo({ conn, onActivity }) {
 
   return (
     <>
-      <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: 10, display: "flex", flexDirection: "column", gap: 6, background: C.cream, WebkitOverflowScrolling: "touch" }}>
+      <div ref={scrollRef} onScroll={onScroll} style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: 10, display: "flex", flexDirection: "column", gap: 6, background: C.cream, WebkitOverflowScrolling: "touch", position: "relative" }}>
         {msgs == null ? <div style={{ color: C.muted, fontSize: 12, textAlign: "center", marginTop: 16 }}>Loading…</div>
           : msgs.length === 0 ? <div style={{ color: C.muted, fontSize: 12, textAlign: "center", marginTop: 16 }}>Say hello to {conn.full_name.split(" ")[0]}.</div>
           : msgs.map((m) => {
@@ -225,6 +254,9 @@ export function Convo({ conn, onActivity }) {
           })}
         {otherTyping && <div style={{ alignSelf: "flex-start", background: "#fff", border: `1px solid ${C.line}`, borderRadius: 12, padding: "7px 12px", fontSize: 13, color: C.muted, fontStyle: "italic" }}>typing…</div>}
         {lastMine && <div style={{ alignSelf: "flex-end", fontSize: 10, color: C.muted, marginTop: -2 }}>{lastMine.read_at ? "Seen" : "Sent"}</div>}
+        {showJump && (
+          <button onClick={() => scrollToBottom("smooth")} style={{ position: "sticky", bottom: 6, alignSelf: "center", border: "none", background: C.green, color: "#fff", borderRadius: 999, padding: "5px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer", boxShadow: "0 4px 12px rgba(0,0,0,0.18)" }}>↓ New messages</button>
+        )}
         <div ref={endRef} />
       </div>
       <div style={{ display: "flex", gap: 6, padding: 8, borderTop: `1px solid ${C.line}`, background: "#fff", alignItems: "center" }}>
