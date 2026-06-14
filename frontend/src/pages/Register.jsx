@@ -865,21 +865,27 @@ function AccountCreated({ data }) {
               Welcome, <strong style={{ color: T.soil }}>{data.display_name}</strong>.
             </p>
 
-            {/* verify-email block */}
+            {/* verify-email block — a nudge, not a gate (lazy verification) */}
             <div className="mt-6 rounded-xl p-4 text-left" style={{ background: T.greenTint, border: `1px solid ${T.line}` }}>
-              <p style={{ color: T.soil, fontWeight: 700, fontSize: 15 }}>One last step — verify your email</p>
+              <p style={{ color: T.soil, fontWeight: 700, fontSize: 15 }}>Verify your email when you can</p>
               <p style={{ color: T.soil, fontSize: 13.5, marginTop: 6, lineHeight: 1.5 }}>
-                We sent a verification link to <strong>{data.email}</strong>. Open it to activate your account.
+                We sent a link to <strong>{data.email}</strong>. You can start using Teivaka now —
+                verifying just secures your account and unlocks bank-evidence &amp; selling later.
               </p>
             </div>
 
-            {/* primary action: resend */}
+            {/* primary: straight into the app — no link-clicking required to start */}
+            <Link to="/home" className="mt-5 block w-full py-3 rounded-xl font-semibold text-center" style={{ background: T.green, color: "#fff" }}>
+              Continue to Teivaka →
+            </Link>
+
+            {/* secondary: resend, only needed if the email hasn't arrived */}
             <button
               type="button"
               onClick={resend}
               disabled={state === "sending"}
-              className="mt-5 w-full py-3 rounded-xl font-semibold"
-              style={{ background: T.green, color: "#fff", cursor: state === "sending" ? "default" : "pointer", opacity: state === "sending" ? 0.7 : 1 }}
+              className="mt-3 w-full py-2.5 rounded-xl font-medium"
+              style={{ background: "transparent", color: T.greenDk, border: `1px solid ${T.line}`, cursor: state === "sending" ? "default" : "pointer", opacity: state === "sending" ? 0.7 : 1 }}
             >
               {btnLabel}
             </button>
@@ -889,7 +895,7 @@ function AccountCreated({ data }) {
             )}
 
             <p className="mt-3" style={{ fontSize: 12.5, color: T.muted, lineHeight: 1.5 }}>
-              Didn't get the email? Check your spam or promotions folder. The link expires in 24 hours.
+              Didn't get the email? Check your spam or promotions folder. You can verify anytime from your account.
             </p>
 
             {highTrust && (
