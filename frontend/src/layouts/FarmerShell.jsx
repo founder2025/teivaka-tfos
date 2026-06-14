@@ -38,6 +38,7 @@ import { LeftRailProvider, useLeftRail } from "../context/LeftRailContext";
 import { LauncherProvider, useLauncher } from "../context/LauncherContext";
 import { GuidedTour, useTour } from "../components/tour/GuidedTour";
 import { FARM_TOURS } from "../config/farmTours";
+import SetupHost from "../components/onboarding/SetupHost";
 
 const C = {
   soil:    "var(--soil)",
@@ -363,6 +364,7 @@ function ShellContent() {
       <ChatWidget />
       <LauncherSheet />
       <FarmTourHost />
+      <SetupHost />
       <OfflineBanner />
       <Toast />
     </div>

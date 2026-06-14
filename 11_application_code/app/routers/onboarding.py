@@ -118,6 +118,57 @@ async def _rls_session(tenant_id: str) -> AsyncSession:
     return session
 
 
+async def _ensure_default_block(session: AsyncSession, tenant_id: str, farm_id: str) -> None:
+    """Auto-create a default zone + block so the farm is usable immediately
+    (farm -> block -> cycle -> event). Slice 1. Idempotent: only fires when the
+    farm has no production_unit yet. pu_type='PLOT' is the generic CHECK-valid
+    physical type (pu_type has no 'MIXED' value per the table CHECK), and
+    enterprise_type='MIXED' so a new user is not pre-committed to crops over
+    livestock. Reuses next_zone_id / next_pu_id (onboarding_service)."""
+    existing_pu = (
+        await session.execute(
+            text("SELECT 1 FROM tenant.production_units WHERE farm_id = :fid LIMIT 1"),
+            {"fid": farm_id},
+        )
+    ).first()
+    if existing_pu is not None:
+        return
+    default_zone = (
+        await session.execute(
+            text("SELECT zone_id FROM tenant.zones WHERE farm_id = :fid ORDER BY zone_id ASC LIMIT 1"),
+            {"fid": farm_id},
+        )
+    ).first()
+    if default_zone is None:
+        zone_id = await next_zone_id(session, farm_id)
+        await session.execute(
+            text(
+                """
+                INSERT INTO tenant.zones (zone_id, tenant_id, farm_id, zone_name, zone_type)
+                VALUES (:zone_id, :tid, :fid, 'Main', 'MIXED')
+                """
+            ),
+            {"zone_id": zone_id, "tid": tenant_id, "fid": farm_id},
+        )
+    else:
+        zone_id = default_zone.zone_id
+    pu_id = await next_pu_id(session, farm_id)
+    await session.execute(
+        text(
+            """
+            INSERT INTO tenant.production_units (
+                pu_id, tenant_id, zone_id, farm_id, pu_name, pu_type,
+                enterprise_type, farmer_label, is_active
+            ) VALUES (
+                :pu_id, :tid, :zone_id, :fid, 'Whole farm', 'PLOT',
+                'MIXED', 'Whole farm', TRUE
+            )
+            """
+        ),
+        {"pu_id": pu_id, "tid": tenant_id, "zone_id": zone_id, "fid": farm_id},
+    )
+
+
 # ----------------------------------------------------------------------
 # Endpoints
 # ----------------------------------------------------------------------
@@ -334,6 +385,10 @@ async def farm_basics(
             {"term": section_term, "tid": tenant_id},
         )
 
+        # Auto-create a default block so the farm is immediately usable
+        # (farm -> block -> cycle -> event). Idempotent — no-op if a block exists.
+        await _ensure_default_block(session, tenant_id, farm_id)
+
         # Emit audit row: FARM_CREATED on first touch, ONBOARDING_STARTED on update.
         event_type = "FARM_CREATED" if created else "ONBOARDING_STARTED"
         await emit_audit_event(
@@ -367,6 +422,100 @@ async def farm_basics(
     except Exception:
         await session.rollback()
         raise
+    finally:
+        await session.close()
+
+
+@router.get("/setup-status")
+async def setup_status(user: dict = Depends(get_current_user)):
+    """In-platform setup-checklist state (Slice 1). Every item is DERIVED from
+    real records — no progress table. `dismissed` reflects the only stored flag
+    (tenant.users.setup_dismissed_at)."""
+    tenant_id = str(user["tenant_id"])
+    uid = str(user["user_id"])
+    session = await _rls_session(tenant_id)
+    try:
+        urow = (
+            await session.execute(
+                text(
+                    """
+                    SELECT full_name, avatar_url, whatsapp_number, email_verified,
+                           account_type, setup_dismissed_at
+                    FROM tenant.users WHERE user_id = :uid
+                    """
+                ),
+                {"uid": uid},
+            )
+        ).mappings().first()
+        frow = (
+            await session.execute(
+                text(
+                    """
+                    SELECT farm_id, region_id, location_name, land_area_ha
+                    FROM tenant.farms WHERE tenant_id = :tid ORDER BY created_at ASC LIMIT 1
+                    """
+                ),
+                {"tid": tenant_id},
+            )
+        ).mappings().first()
+        group_count = (
+            await session.execute(
+                text(
+                    "SELECT COUNT(*) FROM tenant.farm_active_groups "
+                    "WHERE tenant_id = :tid AND is_active = true"
+                ),
+                {"tid": tenant_id},
+            )
+        ).scalar() or 0
+
+        full_name = (urow["full_name"] or "").strip() if urow else ""
+        has_location = bool(
+            frow
+            and (
+                frow["region_id"]
+                or (frow["location_name"] and frow["location_name"] != "Unspecified")
+            )
+        )
+        items = {
+            "display_name": bool(full_name),
+            "avatar": bool(urow and urow["avatar_url"]),
+            "farm": bool(frow),
+            "location": has_location,
+            "area": bool(frow and frow["land_area_ha"]),
+            "verticals": int(group_count) > 0,
+            "contact": bool(urow and urow["whatsapp_number"]),
+        }
+        return _envelope(
+            {
+                "items": items,
+                "done": sum(1 for v in items.values() if v),
+                "total": len(items),
+                "email_verified": bool(urow and urow["email_verified"]),
+                "account_type": (urow["account_type"] if urow else None),
+                "dismissed": bool(urow and urow["setup_dismissed_at"]),
+            }
+        )
+    finally:
+        await session.close()
+
+
+@router.post("/setup-dismiss")
+async def setup_dismiss(user: dict = Depends(get_current_user)):
+    """Permanently hide the setup widget for this user (sets setup_dismissed_at).
+    Idempotent — only stamps the first time."""
+    tenant_id = str(user["tenant_id"])
+    uid = str(user["user_id"])
+    session = await _rls_session(tenant_id)
+    try:
+        await session.execute(
+            text(
+                "UPDATE tenant.users SET setup_dismissed_at = NOW() "
+                "WHERE user_id = :uid AND setup_dismissed_at IS NULL"
+            ),
+            {"uid": uid},
+        )
+        await session.commit()
+        return _envelope({"dismissed": True})
     finally:
         await session.close()
 
