@@ -99,7 +99,14 @@ function Convo({ conn, onActivity }) {
   const chunksRef = useRef([]);
   const lastTypingRef = useRef(0);
   const load = useCallback(() => getJSON(`${API}/chat/with/${conn.user_id}`).then((r) => { setMsgs(r.data?.messages || []); setOtherTyping(!!r.data?.other_typing); onActivity?.(); }).catch(() => setMsgs([])), [conn.user_id, onActivity]);
-  useEffect(() => { load(); const id = setInterval(load, 4000); return () => clearInterval(id); }, [load]);
+  // SSE drives the fast path; this is a slow safety-net poll only
+  useEffect(() => { load(); const id = setInterval(load, 15000); return () => clearInterval(id); }, [load]);
+  // reload instantly when the SSE stream signals activity involving this peer
+  useEffect(() => {
+    const on = (e) => { const d = (e && e.detail) || {}; if (!d.from || d.from === conn.user_id) load(); };
+    window.addEventListener("tfos-chat-refresh", on);
+    return () => window.removeEventListener("tfos-chat-refresh", on);
+  }, [load, conn.user_id]);
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [msgs, otherTyping]);
   // stop any in-flight recording if the convo unmounts
   useEffect(() => () => { try { recRef.current?.stream?.getTracks?.().forEach((t) => t.stop()); } catch { /* ignore */ } }, []);
@@ -354,23 +361,36 @@ export default function ChatWidget() {
   // heartbeat
   useEffect(() => { if (!tok()) return undefined; const ping = () => postJSON(`${API}/presence/ping`).catch(() => {}); ping(); const id = setInterval(ping, 30000); return () => clearInterval(id); }, []);
 
-  // single poll → conns + unread (context) + alerts
+  // fetch connections → unread badges + new-message toasts/chime
+  const pollConns = useCallback(async () => {
+    if (!tok()) return;
+    try {
+      const r = await getJSON(`${API}/connections`);
+      const list = r.data || []; chat.setConns(list);
+      let total = 0; const next = {}; const fresh = [];
+      for (const c of list) { const u = c.unread || 0; next[c.user_id] = u; total += u; const had = prevUnread.current ? (prevUnread.current[c.user_id] || 0) : 0; if (prevUnread.current && u > had && !(openIds.current.has(c.user_id)) && !isConvMuted(c.user_id)) fresh.push(c); }
+      if (fresh.length) { chime(); fresh.forEach((c) => { osNotify(c.full_name, c.last_body || "New message"); setToasts((t) => [...t, { id: `${c.user_id}-${Date.now()}`, conn: c }]); }); }
+      prevUnread.current = next; chat.setUnread(total);
+    } catch { /* ignore */ }
+  }, [chat]);
+
+  // initial fetch + slow safety-net poll (SSE drives the fast path)
+  useEffect(() => { if (!tok()) return undefined; pollConns(); const id = setInterval(pollConns, 25000); return () => clearInterval(id); }, [pollConns]);
+
+  // SSE realtime: instant message / reaction / typing / seen, no busy polling
   useEffect(() => {
     if (!tok()) return undefined;
-    let alive = true;
-    const poll = async () => {
-      try {
-        const r = await getJSON(`${API}/connections`); if (!alive) return;
-        const list = r.data || []; chat.setConns(list);
-        let total = 0; const next = {}; const fresh = [];
-        for (const c of list) { const u = c.unread || 0; next[c.user_id] = u; total += u; const had = prevUnread.current ? (prevUnread.current[c.user_id] || 0) : 0; if (prevUnread.current && u > had && !(openIds.current.has(c.user_id)) && !isConvMuted(c.user_id)) fresh.push(c); }
-        if (fresh.length) { chime(); fresh.forEach((c) => { osNotify(c.full_name, c.last_body || "New message"); setToasts((t) => [...t, { id: `${c.user_id}-${Date.now()}`, conn: c }]); }); }
-        prevUnread.current = next; chat.setUnread(total);
-      } catch { /* ignore */ }
-    };
-    poll(); const id = setInterval(poll, 9000); return () => { alive = false; clearInterval(id); };
-    /* eslint-disable-next-line */
-  }, []);
+    let es;
+    try { es = new EventSource(`${API}/chat/stream?access_token=${encodeURIComponent(tok())}`); }
+    catch { return undefined; }
+    es.addEventListener("chat", (e) => {
+      pollConns();
+      let detail = {}; try { detail = JSON.parse(e.data); } catch { /* ignore */ }
+      window.dispatchEvent(new CustomEvent("tfos-chat-refresh", { detail }));
+    });
+    es.addEventListener("ping", () => {});
+    return () => { try { es.close(); } catch { /* ignore */ } };
+  }, [pollConns]);
 
   useEffect(() => { if (!toasts.length) return undefined; const id = setTimeout(() => setToasts((t) => t.slice(1)), 5000); return () => clearTimeout(id); }, [toasts]);
 

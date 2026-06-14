@@ -14,13 +14,15 @@ Presence is never exposed for non-connections. community.* has no RLS; FKs to te
 """
 import os
 import json
+import time
 import asyncio
 import logging
 from datetime import datetime, timezone
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import text
 from pydantic import BaseModel
 import redis.asyncio as aioredis
+from sse_starlette.sse import EventSourceResponse
 
 from app.db.session import get_db, get_rls_db, get_db_ctx
 from app.middleware.rls import get_current_user
@@ -66,6 +68,26 @@ async def _connected(db, a, b) -> bool:
                OR (bk.blocker_user_id=cast(:b AS uuid) AND bk.blocked_user_id=cast(:a AS uuid))
         )
     """), {"a": str(a), "b": str(b)})).scalar())
+
+
+async def _publish(target_uid, payload: dict):
+    """Fire-and-forget Redis pub/sub to a user's chat channel — the SSE stream
+    (/chat/stream) subscribes per-user and forwards. Best-effort: a Redis blip
+    just means the client falls back to its slow poll."""
+    try:
+        rc = await _r()
+        await rc.publish(f"chat:{target_uid}", json.dumps(payload))
+    except Exception:  # noqa: BLE001
+        pass
+
+
+async def _other_in_thread(db, thread_id, uid) -> str | None:
+    row = (await db.execute(text(
+        "SELECT user_lo::text AS lo, user_hi::text AS hi FROM community.chat_threads WHERE thread_id = :tid"),
+        {"tid": thread_id})).mappings().first()
+    if not row:
+        return None
+    return row["hi"] if row["lo"] == str(uid) else row["lo"]
 
 
 async def _presence_map(user_ids):
@@ -195,6 +217,46 @@ async def presence_ping(user: dict = Depends(get_current_user)):
     return {"data": {"ok": True, "at": now}}
 
 
+# ----------------------------------------------------------------------------- realtime (SSE)
+@router.get("/chat/stream")
+async def chat_stream(request: Request, user: dict = Depends(get_current_user)):
+    """Per-user Server-Sent Events stream. Pushes a lightweight signal
+    ({type, thread_id, from}) whenever something changes for this user — a new
+    message, reaction, typing ping or read receipt — so the client refreshes
+    instantly instead of polling every few seconds (Pacific-data friendly).
+    EventSource can't set headers; the auth middleware accepts ?access_token=."""
+    uid = str(user["user_id"])
+
+    async def gen():
+        rc = await _r()
+        ps = rc.pubsub()
+        await ps.subscribe(f"chat:{uid}")
+        last_ka = time.monotonic()
+        try:
+            yield {"event": "ready", "data": "{}"}
+            while True:
+                if await request.is_disconnected():
+                    break
+                try:
+                    msg = await ps.get_message(ignore_subscribe_messages=True, timeout=15.0)
+                except Exception:  # noqa: BLE001
+                    msg = None
+                if msg and msg.get("type") == "message":
+                    yield {"event": "chat", "data": msg.get("data") or "{}"}
+                now = time.monotonic()
+                if now - last_ka >= 20:
+                    yield {"event": "ping", "data": "{}"}
+                    last_ka = now
+        finally:
+            try:
+                await ps.unsubscribe(f"chat:{uid}")
+                await ps.close()
+            except Exception:  # noqa: BLE001
+                pass
+
+    return EventSourceResponse(gen())
+
+
 # ----------------------------------------------------------------------------- connections
 @router.get("/connections")
 async def list_connections(user: dict = Depends(get_current_user)):
@@ -292,10 +354,10 @@ async def chat_with(other_id: str, after: str = Query(None), user: dict = Depend
             ORDER BY m.created_at ASC LIMIT 200
         """), params)).mappings().all()
         # mark the other party's messages as read
-        await db.execute(text("""
+        marked = (await db.execute(text("""
             UPDATE community.chat_messages SET read_at = now()
             WHERE thread_id = :tid AND sender_user_id = :other AND read_at IS NULL
-        """), {"tid": tid, "other": other_id})
+        """), {"tid": tid, "other": other_id})).rowcount or 0
         # reactions for this page of messages (one query, grouped in python)
         rmap = {}
         ids = [str(m["message_id"]) for m in msgs]
@@ -309,6 +371,9 @@ async def chat_with(other_id: str, after: str = Query(None), user: dict = Depend
             """), {"ids": ids, "uid": uid})).mappings().all()
             for rr in rrows:
                 rmap.setdefault(rr["mid"], []).append({"emoji": rr["emoji"], "count": rr["n"], "mine": bool(rr["mine"])})
+    # tell the sender their messages were just seen (instant "Seen")
+    if marked:
+        await _publish(other_id, {"type": "read", "thread_id": tid, "from": uid})
     # is the other party typing? (ephemeral Redis key on the user pair)
     lo, hi = _pair(uid, other_id)
     other_typing = False
@@ -374,16 +439,22 @@ async def chat_send(other_id: str, body: ChatSend, user: dict = Depends(rate_lim
         await db.execute(text("UPDATE community.chat_threads SET last_message_at = now() WHERE thread_id = :tid"), {"tid": tid})
         # Web Push to the recipient (best-effort; no-op until VAPID configured)
         await push_to_user(db, other_id, user.get("full_name") or "New message", preview, url="/home")
+    # realtime: nudge the recipient's stream to refresh instantly
+    await _publish(other_id, {"type": "message", "thread_id": tid, "from": uid})
     return {"data": {"thread_id": tid, "message_id": str(row["message_id"]), "created_at": str(row["created_at"])}}
 
 
 @router.post("/chat/{thread_id}/read")
 async def chat_mark_read(thread_id: str, user: dict = Depends(get_current_user)):
+    uid = str(user["user_id"])
     async with get_rls_db(str(user["tenant_id"])) as db:
-        await db.execute(text("""
+        marked = (await db.execute(text("""
             UPDATE community.chat_messages SET read_at = now()
             WHERE thread_id = :tid AND sender_user_id <> :uid AND read_at IS NULL
-        """), {"tid": thread_id, "uid": str(user["user_id"])})
+        """), {"tid": thread_id, "uid": uid})).rowcount or 0
+        other = await _other_in_thread(db, thread_id, uid) if marked else None
+    if other:
+        await _publish(other, {"type": "read", "thread_id": thread_id, "from": uid})
     return {"data": {"ok": True}}
 
 
@@ -394,28 +465,48 @@ async def chat_react(message_id: str, body: ReactBody, user: dict = Depends(get_
     emoji = (body.emoji or "").strip()
     if emoji not in _REACTIONS:
         raise HTTPException(status_code=422, detail="Unsupported reaction")
+    other = None
     async with get_rls_db(str(user["tenant_id"])) as db:
         # only a participant of the message's thread may react
         row = (await db.execute(text("""
-            SELECT 1 FROM community.chat_messages m
+            SELECT th.thread_id::text AS tid, th.user_lo::text AS lo, th.user_hi::text AS hi
+            FROM community.chat_messages m
             JOIN community.chat_threads th ON th.thread_id = m.thread_id
             WHERE m.message_id = :mid AND (th.user_lo = cast(:uid AS uuid) OR th.user_hi = cast(:uid AS uuid))
-        """), {"mid": message_id, "uid": uid})).first()
+        """), {"mid": message_id, "uid": uid})).mappings().first()
         if not row:
             raise HTTPException(status_code=404, detail="Message not found")
+        other = row["hi"] if row["lo"] == uid else row["lo"]
+        tid = row["tid"]
         await db.execute(text("""
             INSERT INTO community.chat_reactions (message_id, user_id, emoji)
             VALUES (:mid, :uid, :emoji)
             ON CONFLICT (message_id, user_id) DO UPDATE SET emoji = EXCLUDED.emoji, created_at = now()
         """), {"mid": message_id, "uid": uid, "emoji": emoji})
+    if other:
+        await _publish(other, {"type": "reaction", "thread_id": tid, "from": uid})
     return {"data": {"message_id": message_id, "emoji": emoji}}
 
 
 @router.delete("/chat/message/{message_id}/react")
 async def chat_unreact(message_id: str, user: dict = Depends(get_current_user)):
+    uid = str(user["user_id"])
+    other = None
+    tid = None
     async with get_rls_db(str(user["tenant_id"])) as db:
+        row = (await db.execute(text("""
+            SELECT th.thread_id::text AS tid, th.user_lo::text AS lo, th.user_hi::text AS hi
+            FROM community.chat_messages m
+            JOIN community.chat_threads th ON th.thread_id = m.thread_id
+            WHERE m.message_id = :mid
+        """), {"mid": message_id})).mappings().first()
+        if row:
+            other = row["hi"] if row["lo"] == uid else row["lo"]
+            tid = row["tid"]
         await db.execute(text("DELETE FROM community.chat_reactions WHERE message_id = :mid AND user_id = :uid"),
-                         {"mid": message_id, "uid": str(user["user_id"])})
+                         {"mid": message_id, "uid": uid})
+    if other:
+        await _publish(other, {"type": "reaction", "thread_id": tid, "from": uid})
     return {"data": {"ok": True}}
 
 
@@ -431,6 +522,7 @@ async def chat_typing(other_id: str, user: dict = Depends(get_current_user)):
         await rc.set(f"typing:{lo}:{hi}:{uid}", "1", ex=6)
     except Exception:  # noqa: BLE001
         pass
+    await _publish(other_id, {"type": "typing", "from": uid})
     return {"data": {"ok": True}}
 
 
