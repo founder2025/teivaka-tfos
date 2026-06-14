@@ -100,6 +100,7 @@ class EventSubmission(BaseModel):
     occurred_at: Optional[datetime] = Field(default=None, description="Event time. Defaults to now() if omitted.")
     anchors: EventAnchors
     payload: dict = Field(default_factory=dict, description="Event-type-specific payload.")
+    idempotency_key: Optional[str] = Field(default=None, description="Client key; replays/double-taps return the original result instead of duplicating.")
 
 
 def _resolve_actor_uuid(user: dict) -> UUID:
@@ -216,6 +217,17 @@ async def submit_event(
     """Polymorphic event submission endpoint."""
     tenant_uuid = _resolve_tenant_uuid(user)
     actor_uuid = _resolve_actor_uuid(user)
+
+    # 0. Idempotency — offline replays + double-taps return the original result
+    # instead of creating a duplicate event (offline-first capture).
+    idem_key = (submission.idempotency_key or "").strip() or None
+    if idem_key:
+        prior = (await db.execute(
+            text("SELECT response_json FROM tenant.idempotency_keys WHERE tenant_id = :t AND idempotency_key = :k"),
+            {"t": str(tenant_uuid), "k": idem_key},
+        )).scalar()
+        if prior is not None:
+            return prior
 
     # 1. Look up event type in registry
     registry_entry = get_schema_for_event_type(submission.event_type)
@@ -1328,9 +1340,7 @@ async def submit_event(
                         task_rank=600,
                     )
 
-    await db.commit()
-
-    return success_envelope(
+    resp = success_envelope(
         {
             "event_id": str(event_id),
             "event_type": submission.event_type,
@@ -1340,3 +1350,15 @@ async def submit_event(
         },
         meta={"created": True, "table": target_table},
     )
+    # Store the response under the idempotency key in the SAME transaction, so a
+    # later replay returns this exact result without re-inserting the event.
+    if idem_key:
+        import json as _json
+        await db.execute(
+            text("INSERT INTO tenant.idempotency_keys (tenant_id, idempotency_key, user_id, response_json) "
+                 "VALUES (:t, :k, :u, CAST(:r AS jsonb)) ON CONFLICT DO NOTHING"),
+            {"t": str(tenant_uuid), "k": idem_key, "u": str(actor_uuid), "r": _json.dumps(resp)},
+        )
+
+    await db.commit()
+    return resp

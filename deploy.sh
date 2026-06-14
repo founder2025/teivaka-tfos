@@ -20,7 +20,7 @@
 set -uo pipefail
 
 BRANCH="${1:-claude/beautiful-fermi-F0dLX}"
-EXPECTED_HEAD="${2:-142_user_multirole}"
+EXPECTED_HEAD="${2:-143_idempotency_keys}"
 ROOT="/opt/teivaka"
 COMPOSE="docker compose -f ${ROOT}/04_environment/docker-compose.yml"
 PSQL="docker exec -i teivaka_db psql -v ON_ERROR_STOP=1 -tA -U teivaka -d teivaka_db"
@@ -141,6 +141,8 @@ ADRATES="$($PSQL -c "SELECT (to_regclass('community.ad_rates') IS NOT NULL)::int
 [ "${ADRATES:-0}" = "2" ] && ok "ad_rates + owner_user_id present (141 — self-serve ads)" || bad "self-serve ad schema missing (${ADRATES}/2 — migration 141)"
 MULTIROLE="$($PSQL -c "SELECT count(*) FROM information_schema.columns WHERE table_schema='tenant' AND table_name='users' AND column_name IN ('also_account_types','specialty');" 2>/dev/null | tr -d '[:space:]')"
 [ "${MULTIROLE:-0}" = "2" ] && ok "users also_account_types + specialty present (142 — multi-role)" || bad "multi-role columns missing (${MULTIROLE}/2 — migration 142)"
+IDEM="$($PSQL -c "SELECT to_regclass('tenant.idempotency_keys') IS NOT NULL;" 2>/dev/null | tr -d '[:space:]')"
+[ "$IDEM" = "t" ] && ok "idempotency_keys present (143 — offline-safe replays)" || bad "idempotency_keys missing (migration 143)"
 
 # ---------------------------------------------------------------------------
 say "5/7  Bring API up + wait healthy + parity check"
