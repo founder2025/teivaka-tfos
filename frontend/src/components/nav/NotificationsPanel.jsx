@@ -151,7 +151,9 @@ export default function NotificationsPanel({ onClose, onMarkedRead }) {
           </NavLink>
         )}
         {community.map((n) => (
-          <NavLink key={n.notification_id} to="/home" onClick={onClose}
+          <NavLink key={n.notification_id}
+            to={n.type === "FOLLOW" && n.actor_user_id ? `/u/${n.actor_user_id}` : n.post_id ? `/home?post=${n.post_id}` : "/home"}
+            onClick={onClose}
             className="w-full text-left flex gap-3 items-stretch"
             style={{ borderBottom: `1px solid ${C.border}`, background: n.read_at ? "transparent" : C.tint, textDecoration: "none", color: "inherit" }}>
             <span aria-hidden className="flex-shrink-0" style={{ width: 6, background: "#6AA84F" }} />
@@ -261,7 +263,7 @@ export default function NotificationsPanel({ onClose, onMarkedRead }) {
         }}
       >
         <NavLink
-          to="/farm/compliance"
+          to="/notifications"
           onClick={onClose}
           style={{
             color: C.greenDk,

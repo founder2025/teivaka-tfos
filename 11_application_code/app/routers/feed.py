@@ -234,12 +234,51 @@ async def list_feed(
     filter: str = Query("all"),
     verified_only: bool = Query(False),
     author: str = Query(None),
+    post_id: str = Query(None),
     limit: int = Query(30, ge=1, le=100),
     offset: int = Query(0, ge=0),
     user: dict = Depends(get_current_user),
 ):
     uid = str(user["user_id"])
     async with get_db_ctx() as db:
+        if post_id:
+            # Direct permalink fetch (notification deep-links land here). One post
+            # by id, NO feed filters — it may be old, in a group, or another
+            # user's. Same projection as the feed so the card renders identically.
+            comments_col = "fp.comments_enabled," if await _comments_enabled_col(db) else "TRUE AS comments_enabled,"
+            vexpr = await _verified_expr(db)
+            rows = (await db.execute(text(f"""
+                SELECT fp.post_id, fp.author_user_id, fp.author_profession, fp.body, fp.post_type,
+                       fp.is_question, fp.audience, fp.location, fp.vertical, fp.photos, fp.mentions,
+                       fp.link_audit_hash, fp.is_repost, fp.repost_of_id, fp.pinned,
+                       {comments_col}
+                       fp.best_answer_reply_id, fp.audit_hash, fp.created_at, fp.edited_at,
+                       u.full_name AS author_name, u.avatar_url AS author_avatar, {vexpr} AS author_verified,
+                       orig.body AS repost_body, ou.full_name AS repost_author_name, ou.avatar_url AS repost_author_avatar,
+                       orig.author_profession AS repost_author_profession,
+                       (SELECT count(*) FROM community.feed_likes fl WHERE fl.post_id = fp.post_id) AS like_count,
+                       (SELECT count(*) FROM community.feed_replies fr WHERE fr.post_id = fp.post_id AND fr.status = 'active') AS reply_count,
+                       (SELECT count(*) FROM community.feed_posts rp WHERE rp.repost_of_id = fp.post_id AND rp.status = 'active') AS repost_count,
+                       EXISTS (SELECT 1 FROM community.feed_likes fl WHERE fl.post_id = fp.post_id AND fl.user_id = :uid) AS liked,
+                       EXISTS (SELECT 1 FROM community.feed_saves fs WHERE fs.post_id = fp.post_id AND fs.user_id = :uid) AS saved,
+                       (SELECT reaction FROM community.feed_reactions rx WHERE rx.target_type = 'post' AND rx.target_id = fp.post_id AND rx.user_id = :uid) AS my_reaction
+                FROM community.feed_posts fp
+                JOIN tenant.users u ON u.user_id = fp.author_user_id
+                LEFT JOIN community.feed_posts orig ON orig.post_id = fp.repost_of_id
+                LEFT JOIN tenant.users ou ON ou.user_id = orig.author_user_id
+                WHERE fp.post_id = :pid AND fp.status = 'active'
+                LIMIT 1
+            """), {"uid": uid, "pid": post_id})).mappings().all()
+            posts = [dict(r) for r in rows]
+            if posts:
+                rsum = {}
+                for rr in (await db.execute(text("""
+                    SELECT reaction, count(*) AS n FROM community.feed_reactions
+                    WHERE target_type = 'post' AND target_id = :pid GROUP BY reaction
+                """), {"pid": post_id})).mappings().all():
+                    rsum[rr["reaction"]] = rr["n"]
+                posts[0]["reactions"] = rsum
+            return {"data": posts}
         viewer_prof, viewer_country = await _profile_of(db, uid)
         params = {"uid": uid, "limit": limit, "offset": offset, "vprof": viewer_prof, "vcountry": viewer_country}
         where = ["fp.status = 'active'"]
@@ -932,7 +971,7 @@ async def list_notifications(limit: int = Query(30, ge=1, le=100), user: dict = 
     async with get_db_ctx() as db:
         rows = (await db.execute(text("""
             SELECT n.notification_id, n.type, n.post_id, n.reply_id, n.body, n.read_at, n.created_at,
-                   a.full_name AS actor_name
+                   n.actor_user_id, a.full_name AS actor_name, a.avatar_url AS actor_avatar
             FROM community.feed_notifications n
             LEFT JOIN tenant.users a ON a.user_id = n.actor_user_id
             WHERE n.user_id = :uid

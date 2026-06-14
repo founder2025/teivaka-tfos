@@ -32,6 +32,7 @@ import ResetPassword from "./pages/ResetPassword";
 import VerifyEmail from "./pages/VerifyEmail";
 import Home from "./pages/farmer/Home";
 const HomePillar = lazy(() => import("./pages/home/HomePillar"));
+const NotificationsPage = lazy(() => import("./pages/home/NotificationsPage"));
 const ClassroomPillar = lazy(() => import("./pages/classroom/ClassroomPillar"));
 const AcceptInvite = lazy(() => import("./pages/AcceptInvite"));
 
@@ -298,6 +299,7 @@ export default function App() {
                 the sub-view is derived from the route. */}
             <Route path="/home"            element={<HomePillar />} />
             <Route path="/home/:view"      element={<HomePillar />} />
+            <Route path="/notifications"   element={<NotificationsPage />} />
             <Route path="/classroom"       element={<ClassroomPillar />} />
             <Route path="/classroom/:view" element={<ClassroomPillar />} />
             <Route path="/farm"              element={<FarmDashboard />} />

@@ -13,7 +13,7 @@ import {
   Droplet, BookOpen, Rss, UserPlus, UserCheck, Pencil, Flag,
   Pin, Archive, Copy, EyeOff, Ban, BellOff, Bookmark, Users, Camera, MailCheck,
 } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { getCurrentUser } from "../../utils/auth";
 import { useIsNarrow } from "../../hooks/useIsNarrow";
 import Avatar from "../ui/Avatar";
@@ -662,6 +662,22 @@ export default function FeedView({ initialFilter = "all", groupId = null }) {
   const [filter, setFilter] = useState(initialFilter);
   const [verifiedOnly, setVerifiedOnly] = useState(false);
   const [posts, setPosts] = useState(null);
+  // ?post=<id> permalink (notification deep-links land here) — render that one
+  // post focused at the top, even if it's old / in a group / another user's.
+  const [sp, setSp] = useSearchParams();
+  const focusId = groupId ? null : sp.get("post");
+  const [focusPost, setFocusPost] = useState(null);
+  const [focusLoading, setFocusLoading] = useState(false);
+  useEffect(() => {
+    if (!focusId) { setFocusPost(null); return; }
+    setFocusLoading(true); setFocusPost(null);
+    getJSON(`${API}/feed?post_id=${encodeURIComponent(focusId)}`)
+      .then((r) => setFocusPost((r.data || [])[0] || null))
+      .catch(() => setFocusPost(null))
+      .finally(() => setFocusLoading(false));
+    try { window.scrollTo({ top: 0, behavior: "smooth" }); } catch { /* ignore */ }
+  }, [focusId]);
+  const clearFocus = () => { const n = new URLSearchParams(sp); n.delete("post"); setSp(n, { replace: true }); };
   const [topicsOpen, setTopicsOpen] = useState(false);
   const [more, setMore] = useState(false);
   const [end, setEnd] = useState(false);
@@ -691,6 +707,17 @@ export default function FeedView({ initialFilter = "all", groupId = null }) {
 
   return (
     <div className="cm-feed">
+      {focusId && (
+        <div className="card" style={{ padding: 12, marginBottom: 12, border: "2px solid var(--green)" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+            <strong style={{ color: "var(--soil)", fontSize: 13 }}>Viewing a post</strong>
+            <button className="btn btn-sm btn-secondary" onClick={clearFocus}>← Back to feed</button>
+          </div>
+          {focusLoading ? <div className="cm-empty">Loading…</div>
+            : focusPost ? <PostCard post={focusPost} me={me} onChange={() => {}} onRemoved={clearFocus} />
+            : <div className="cm-empty">This post isn’t available — it may have been deleted.</div>}
+        </div>
+      )}
       <Composer me={me} groupId={groupId} onPosted={() => { if (!groupId) setFilter("all"); load(); }} />
 
       {!groupId && <div className="cm-filter-row">
