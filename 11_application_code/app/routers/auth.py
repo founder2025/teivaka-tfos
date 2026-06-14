@@ -258,15 +258,31 @@ async def register(
     phone_raw = (req.phone_number or "").strip().replace(" ", "").replace("-", "")
     phone = phone_raw if phone_raw else None
 
-    ip_address, user_agent = await run_all_checks(
-        request=request,
-        db=db,
-        privacy_accepted=req.privacy_accepted,
-        password=req.password,
-        date_of_birth=req.date_of_birth,
-        email=email,
-        phone_number=phone,
-    )
+    # Fraud/validation gates. HTTPExceptions (gate rejections) pass through to the
+    # client; any OTHER exception here (e.g. a shared.* write failing on a missing
+    # GRANT) must NOT collapse to the generic global handler — surface the reason.
+    try:
+        ip_address, user_agent = await run_all_checks(
+            request=request,
+            db=db,
+            privacy_accepted=req.privacy_accepted,
+            password=req.password,
+            date_of_birth=req.date_of_birth,
+            email=email,
+            phone_number=phone,
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Registration pre-check failed for %s: %s", email, e, exc_info=True)
+        try:
+            await db.rollback()
+        except Exception:  # noqa: BLE001
+            pass
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Couldn't start your registration: {type(e).__name__} — {str(e)[:180]}",
+        ) from e
 
     dup_email = await db.execute(
         text("SELECT 1 FROM tenant.users WHERE email = :email LIMIT 1"),
@@ -492,14 +508,21 @@ async def register(
     except HTTPException:
         raise
     except Exception as e:
-        await db.rollback()
-        await audit_log(
-            db, ip_address=ip_address, user_agent=user_agent,
-            email=email, phone_number=phone,
-            outcome="FAILED_SERVER_ERROR",
-            failure_detail=str(e)[:500],
-        )
-        await db.commit()
+        # Best-effort audit; must NEVER mask the controlled error below. A failed
+        # rollback/audit/commit here previously escaped to the generic global
+        # handler ("internal_server_error"), hiding the real reason.
+        logger.error("Registration failed for %s: %s", email, e, exc_info=True)
+        try:
+            await db.rollback()
+            await audit_log(
+                db, ip_address=ip_address, user_agent=user_agent,
+                email=email, phone_number=phone,
+                outcome="FAILED_SERVER_ERROR",
+                failure_detail=str(e)[:500],
+            )
+            await db.commit()
+        except Exception as audit_err:  # noqa: BLE001
+            logger.warning("Audit write failed while handling signup error: %s", audit_err)
         # Surface a short, controlled reason (NOT a stack trace) so the signup
         # screen can show what actually failed — full detail is in
         # shared.registration_audit_log.failure_detail.

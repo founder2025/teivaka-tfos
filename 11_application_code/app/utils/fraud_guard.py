@@ -21,6 +21,7 @@
 
 from __future__ import annotations
 
+import logging
 import re
 import unicodedata
 from datetime import date, datetime, timezone
@@ -439,5 +440,17 @@ async def run_all_checks(
     except HTTPException as e:
         await _fail("FAILED_IP_RATE_LIMIT", e.detail)
         raise
+    except Exception as e:  # noqa: BLE001
+        # Rate-limiting is a guard, not a gate. If the counter table is missing,
+        # ungranted, or otherwise broken, NEVER hard-block a legitimate signup —
+        # fail OPEN. Roll back the poisoned transaction so the caller's writes
+        # start clean, log loudly, and continue.
+        logging.getLogger(__name__).warning(
+            "IP rate-limit check failed (infra) — failing open for signup: %s", e
+        )
+        try:
+            await db.rollback()
+        except Exception:  # noqa: BLE001
+            pass
 
     return ip, ua
