@@ -125,14 +125,29 @@ function GroupChat({ groupId }) {
   };
   const onPick = (e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) sendMedia(f); };
   const startRec = async () => {
-    if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") { toast("Voice notes aren't supported on this device.", "error"); return; }
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mr = new MediaRecorder(stream); mr.stream = stream; chunksRef.current = [];
-      mr.ondataavailable = (e) => { if (e.data && e.data.size) chunksRef.current.push(e.data); };
-      mr.onstop = async () => { stream.getTracks().forEach((t) => t.stop()); const mtype = mr.mimeType || "audio/webm"; const ext = (mtype.includes("mp4") || mtype.includes("m4a")) ? "m4a" : mtype.includes("ogg") ? "ogg" : "webm"; const blob = new Blob(chunksRef.current, { type: mtype }); if (blob.size > 0) await sendMedia(new File([blob], `voice-${Date.now()}.${ext}`, { type: mtype })); };
-      mr.start(); recRef.current = mr; setRecording(true);
-    } catch { toast("Microphone permission is needed for voice notes.", "error"); }
+    if (!navigator.mediaDevices?.getUserMedia) { toast("Voice notes need a newer browser.", "error"); return; }
+    let stream;
+    try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); }
+    catch (err) {
+      const n = (err && err.name) || "";
+      if (n === "NotAllowedError" || n === "SecurityError") toast("Microphone is blocked. Tap the lock icon in the address bar → Permissions → allow Microphone, then try again.", "error");
+      else if (n === "NotFoundError" || n === "DevicesNotFoundError") toast("No microphone was found on this device.", "error");
+      else toast("Couldn't start the microphone. Please try again.", "error");
+      return;
+    }
+    if (typeof MediaRecorder === "undefined") { stream.getTracks().forEach((t) => t.stop()); toast("Voice recording isn't supported on this browser.", "error"); return; }
+    let mime = "";
+    for (const c of ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/ogg;codecs=opus"]) {
+      try { if (window.MediaRecorder?.isTypeSupported?.(c)) { mime = c; break; } } catch { /* ignore */ }
+    }
+    let mr;
+    try { mr = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream); }
+    catch { stream.getTracks().forEach((t) => t.stop()); toast("Voice recording isn't supported on this browser.", "error"); return; }
+    mr.stream = stream; chunksRef.current = [];
+    mr.ondataavailable = (e) => { if (e.data && e.data.size) chunksRef.current.push(e.data); };
+    mr.onstop = async () => { stream.getTracks().forEach((t) => t.stop()); const mtype = mr.mimeType || mime || "audio/webm"; const ext = (mtype.includes("mp4") || mtype.includes("m4a")) ? "m4a" : mtype.includes("ogg") ? "ogg" : "webm"; const blob = new Blob(chunksRef.current, { type: mtype }); if (blob.size > 0) await sendMedia(new File([blob], `voice-${Date.now()}.${ext}`, { type: mtype })); };
+    try { mr.start(); } catch { stream.getTracks().forEach((t) => t.stop()); toast("Couldn't start recording. Please try again.", "error"); return; }
+    recRef.current = mr; setRecording(true);
   };
   const stopRec = () => { try { recRef.current?.stop(); } catch { /* ignore */ } setRecording(false); };
   const renderBody = (m) => {
