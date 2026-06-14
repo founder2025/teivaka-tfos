@@ -47,9 +47,21 @@ def _logo_url() -> str:
     return f"{settings.frontend_url.rstrip('/')}/teivaka-lockup.png"
 
 
-def _send_via_resend(to_email: str, token: str, name: str) -> bool:
+def _verify_url(token: str, uid: str | None = None) -> str:
+    """Build the verification link. Carries the user id alongside the token so the
+    verify page can recognise an already-verified account even when the one-time
+    token has been consumed by an email-provider link scanner (Gmail, Outlook
+    SafeLinks, antivirus, mobile preview) — the link can then never wrongly read
+    as 'invalid/already used' for a real, verified user. uid is an opaque uuid."""
+    url = f"{settings.frontend_url.rstrip('/')}/verify-email?token={quote(token)}"
+    if uid:
+        url += f"&uid={quote(str(uid))}"
+    return url
+
+
+def _send_via_resend(to_email: str, token: str, name: str, uid: str | None = None) -> bool:
     """Dispatch via Resend's HTTPS REST API. Uses the same credential (SMTP_PASSWORD)."""
-    verify_url = f"{settings.frontend_url.rstrip('/')}/verify-email?token={quote(token)}"
+    verify_url = _verify_url(token, uid)
     api_key = settings.smtp_password.strip()
     payload = {
         "from": settings.smtp_from,
@@ -354,8 +366,8 @@ def _password_reset_html(name: str, reset_url: str) -> str:
 """
 
 
-def _build_verification_message(to_email: str, token: str, name: str) -> EmailMessage:
-    verify_url = f"{settings.frontend_url.rstrip('/')}/verify-email?token={quote(token)}"
+def _build_verification_message(to_email: str, token: str, name: str, uid: str | None = None) -> EmailMessage:
+    verify_url = _verify_url(token, uid)
 
     msg = EmailMessage()
     msg["Subject"] = "Verify your Teivaka account"
@@ -377,7 +389,7 @@ def _build_verification_message(to_email: str, token: str, name: str) -> EmailMe
     return msg
 
 
-def send_verification_email(to_email: str, token: str, name: str) -> bool:
+def send_verification_email(to_email: str, token: str, name: str, uid: str | None = None) -> bool:
     """
     Send an account verification email. Returns True if dispatched, False if
     SMTP is unconfigured (message is logged in that case — not an error).
@@ -390,10 +402,10 @@ def send_verification_email(to_email: str, token: str, name: str) -> bool:
     # key-only prod env (the health-monitor alert path, PR.2) silently skips
     # sending verification mail.
     if _is_resend():
-        return _send_via_resend(to_email, token, name)
+        return _send_via_resend(to_email, token, name, uid)
 
     if not _smtp_configured():
-        verify_url = f"{settings.frontend_url.rstrip('/')}/verify-email?token={quote(token)}"
+        verify_url = _verify_url(token, uid)
         logger.warning(
             "Email not configured (no Resend key, no SMTP host) — verification "
             "email for %s not sent. Verification URL: %s",
@@ -402,7 +414,7 @@ def send_verification_email(to_email: str, token: str, name: str) -> bool:
         return False
 
     try:
-        msg = _build_verification_message(to_email, token, name)
+        msg = _build_verification_message(to_email, token, name, uid)
         context = ssl.create_default_context()
         port = int(settings.smtp_port or 587)
         # Port 465 = SSL-on-connect (smtplib.SMTP_SSL). Anything else = STARTTLS.

@@ -46,12 +46,13 @@ def resolve_channel(account_type: str, requested: str | None) -> str:
 
 def dispatch_verification(
     channel: str, *, email: str, phone: str | None, token: str, name: str,
-    logger: logging.Logger | None = None,
+    logger: logging.Logger | None = None, uid: str | None = None,
 ) -> bool:
     """Send the verification on `channel`. Returns True if something was sent.
 
     Email is live. WhatsApp/SMS are wired here but not yet provisioned, so they fall
     back to email (which is always collected at signup) and log the intended channel.
+    `uid` is carried into the link so a verified account is never misread as invalid.
     """
     log = logger or logging.getLogger("teivaka.verification_routing")
     from app.utils.email import send_verification_email
@@ -62,7 +63,7 @@ def dispatch_verification(
                 "verification channel '%s' requested but not provisioned (Q8); "
                 "falling back to email for %s", channel, email,
             )
-        return send_verification_email(email, token, name)
+        return send_verification_email(email, token, name, uid)
 
     # (Future) live non-email channels would dispatch here.
-    return send_verification_email(email, token, name)
+    return send_verification_email(email, token, name, uid)

@@ -502,7 +502,7 @@ async def register(
         # (email is live; whatsapp/sms fall back to email until provisioned — Q8.)
         dispatch_verification(
             verify_channel, email=email, phone=phone,
-            token=verification_token, name=full_name, logger=logger,
+            token=verification_token, name=full_name, logger=logger, uid=user_id,
         )
 
     except HTTPException:
@@ -555,10 +555,16 @@ class ResendVerificationRequest(BaseModel):
 
 
 @router.get("/verify-email")
-async def verify_email(token: str, db: AsyncSession = Depends(get_db)):
+async def verify_email(token: str, uid: str | None = None, db: AsyncSession = Depends(get_db)):
     """
-    Confirm a verification token. On success, flip email_verified=true and
-    clear the token fields. Returns a simple success/error payload.
+    Confirm a verification token. Idempotent and link-scanner-proof:
+      1. Match by token. If found + unverified + unexpired -> verify (token kept).
+         If found + already verified -> success.
+      2. If the token row is gone (consumed by an email-provider link pre-fetch,
+         or overwritten by a later resend), fall back to `uid`: if that user is
+         already verified, still return success. A verified account can therefore
+         NEVER read as "invalid/already used".
+      3. Only a genuinely unknown token AND a non-verified/unknown uid is an error.
     """
     if not token or len(token) < 10:
         raise HTTPException(status_code=400, detail="Missing or invalid verification token.")
@@ -573,11 +579,32 @@ async def verify_email(token: str, db: AsyncSession = Depends(get_db)):
         {"token": token},
     )
     row = result.mappings().first()
+
     if not row:
-        raise HTTPException(status_code=400, detail="This verification link is invalid or has already been used.")
+        # Token not found — recognise an already-verified account via uid so a
+        # scanned/old link still lands on success instead of a scary failure.
+        if uid:
+            try:
+                urow = (await db.execute(
+                    text("""
+                        SELECT email_verified
+                        FROM tenant.users
+                        WHERE user_id = CAST(:uid AS uuid) AND is_active = true
+                        LIMIT 1
+                    """),
+                    {"uid": uid},
+                )).mappings().first()
+                if urow and urow["email_verified"]:
+                    return {"message": "Email already verified. You can now sign in.", "status": "verified"}
+            except Exception:  # noqa: BLE001 — malformed uid, fall through to error
+                pass
+        raise HTTPException(
+            status_code=400,
+            detail="This verification link has expired or already been used. Please request a new one from the sign-in page.",
+        )
 
     if row["email_verified"]:
-        return {"message": "Email already verified. You can now sign in."}
+        return {"message": "Email already verified. You can now sign in.", "status": "verified"}
 
     expires = row["email_verification_expires"]
     if expires and expires.tzinfo is None:
@@ -663,7 +690,7 @@ async def resend_verification(
     )
     await db.commit()
 
-    send_verification_email(email, new_token, row["full_name"] or "there")
+    send_verification_email(email, new_token, row["full_name"] or "there", uid=str(row["user_id"]))
     return generic_response
 
 

@@ -7,6 +7,7 @@ export default function VerifyEmail() {
   const [params] = useSearchParams();
   const navigate = useNavigate();
   const token = params.get("token");
+  const uid = params.get("uid");
   const [state, setState] = useState("loading"); // loading | success | error
   const [message, setMessage] = useState("");
 
@@ -25,7 +26,9 @@ export default function VerifyEmail() {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch(`/api/v1/auth/verify-email?token=${encodeURIComponent(token)}`, {
+        const qs = new URLSearchParams({ token });
+        if (uid) qs.set("uid", uid);
+        const res = await fetch(`/api/v1/auth/verify-email?${qs.toString()}`, {
           method: "GET",
         });
         const data = await res.json().catch(() => ({}));
@@ -44,7 +47,7 @@ export default function VerifyEmail() {
       }
     })();
     return () => { cancelled = true; };
-  }, [token]);
+  }, [token, uid]);
 
   return (
     <div className="min-h-screen flex flex-col" style={{ background: C.cream, fontFamily: "'Lora', Georgia, serif" }}>
