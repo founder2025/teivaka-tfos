@@ -146,6 +146,69 @@ function Field({ label, id, error, hint, children }) {
 }
 
 // ---------------------------------------------------------------------------
+// Google Identity Services button. Renders the real Google button when
+// VITE_GOOGLE_CLIENT_ID is configured at build time; otherwise falls back to an
+// honest "coming soon" placeholder so the slot is a clean drop-in.
+// ---------------------------------------------------------------------------
+function GoogleButton({ onCredential, busy }) {
+  const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+  const ref = useRef(null);
+  const cbRef = useRef(onCredential);
+  cbRef.current = onCredential;
+
+  useEffect(() => {
+    if (!clientId) return;
+    let cancelled = false;
+    function init() {
+      if (cancelled || !window.google?.accounts?.id || !ref.current) return;
+      window.google.accounts.id.initialize({
+        client_id: clientId,
+        callback: (resp) => { if (resp?.credential) cbRef.current(resp.credential); },
+      });
+      ref.current.innerHTML = "";
+      window.google.accounts.id.renderButton(ref.current, {
+        type: "standard", theme: "outline", size: "large",
+        text: "continue_with", shape: "pill", width: 360, logo_alignment: "center",
+      });
+    }
+    if (window.google?.accounts?.id) {
+      init();
+    } else {
+      const existing = document.getElementById("gsi-script");
+      if (existing) {
+        existing.addEventListener("load", init);
+      } else {
+        const s = document.createElement("script");
+        s.src = "https://accounts.google.com/gsi/client";
+        s.async = true; s.defer = true; s.id = "gsi-script";
+        s.onload = init;
+        document.head.appendChild(s);
+      }
+    }
+    return () => { cancelled = true; };
+  }, [clientId]);
+
+  // Drop-in placeholder until the OAuth client id is provided.
+  if (!clientId) {
+    return (
+      <div>
+        <button type="button" disabled aria-disabled="true"
+          className="w-full py-3 rounded-xl font-semibold text-sm flex items-center justify-center gap-2"
+          style={{ background: T.paper, border: `1px solid ${T.line}`, color: T.muted, cursor: "not-allowed", opacity: 0.75 }}>
+          <span style={{ fontWeight: 800, fontSize: 16 }}>G</span> Continue with Google
+        </button>
+        <p className="text-[11px] text-center mt-1" style={{ color: T.muted }}>Google sign-in coming soon</p>
+      </div>
+    );
+  }
+
+  return (
+    <div ref={ref}
+      style={{ display: "flex", justifyContent: "center", minHeight: 44, opacity: busy ? 0.6 : 1, pointerEvents: busy ? "none" : "auto" }} />
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Registration Form — progressive 4-step wizard
 // ---------------------------------------------------------------------------
 
@@ -190,6 +253,48 @@ function RegistrationForm({ onSuccess }) {
   const [phoneDropdownOpen, setPhoneDropdownOpen] = useState(false);
   const [phoneSearch, setPhoneSearch] = useState("");
   const phoneDropdownRef = useRef(null);
+
+  // Google sign-in: when a returning user, we log them straight in; for a new
+  // user we keep the verified credential and let them finish the wizard
+  // (profession etc.) — identity is still captured, password is skipped.
+  const [googleMode, setGoogleMode] = useState(false);
+  const [googleCredential, setGoogleCredential] = useState("");
+  const [googleBusy, setGoogleBusy] = useState(false);
+  const [googleError, setGoogleError] = useState("");
+
+  async function handleGoogleCredential(credential) {
+    setGoogleBusy(true); setGoogleError(""); setServerError("");
+    try {
+      const res = await fetch("/api/v1/auth/google", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ credential }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setGoogleError(extractErrorMessage(data.detail) || "Google sign-in failed. Please try again.");
+        return;
+      }
+      if (data.existing) {
+        // Returning user — log in and go straight into the app.
+        localStorage.setItem("tfos_access_token", data.access_token);
+        localStorage.setItem("tfos_refresh_token", data.refresh_token);
+        try { localStorage.removeItem(DRAFT_KEY); } catch { /* ignore */ }
+        window.location.assign("/home");
+        return;
+      }
+      // New user — carry the verified identity into the wizard (skip password).
+      setGoogleCredential(credential);
+      setGoogleMode(true);
+      update("email", data.email || "");
+      if (data.first_name) update("first_name", data.first_name);
+      if (data.last_name) update("last_name", data.last_name);
+      setStep(2); // account step is satisfied by Google
+    } catch {
+      setGoogleError("Couldn't reach Google. Please check your connection and try again.");
+    } finally {
+      setGoogleBusy(false);
+    }
+  }
 
   // referral code prefill from an invite link
   useEffect(() => {
@@ -286,8 +391,10 @@ function RegistrationForm({ onSuccess }) {
     if (n === 1) {
       if (!form.email.trim()) e.email = "Email address is required";
       else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) e.email = "Enter a valid email address";
-      const pwErr = passwordComplexityError(form.password);
-      if (pwErr) e.password = pwErr;
+      if (!googleMode) {            // Google supplies the credential instead of a password
+        const pwErr = passwordComplexityError(form.password);
+        if (pwErr) e.password = pwErr;
+      }
     } else if (n === 2) {
       if (!isResolved) {
         e.account_type = selectedProfile.dropdown
@@ -324,7 +431,8 @@ function RegistrationForm({ onSuccess }) {
     setServerError("");
     setStep((s) => Math.min(s + 1, TOTAL_STEPS));
   }
-  function back() { setServerError(""); setStep((s) => Math.max(1, s - 1)); }
+  // In Google mode the account step is owned by Google — don't let Back land there.
+  function back() { setServerError(""); setStep((s) => Math.max(googleMode ? 2 : 1, s - 1)); }
 
   // full safety net at submit (all steps combined)
   function validate() {
@@ -361,6 +469,9 @@ function RegistrationForm({ onSuccess }) {
     const { first_name, last_name } = deriveNames();
     const payload = {
       ...form,
+      // Google signups carry the verified credential instead of a password;
+      // the server uses Google's email and generates the password.
+      google_credential: googleMode ? googleCredential : null,
       first_name, last_name,
       account_type: resolvedType,
       is_company: isCompany,
@@ -471,15 +582,11 @@ function RegistrationForm({ onSuccess }) {
                     <p className="text-sm" style={{ color: T.muted }}>Join Fiji's verified farming network — takes under a minute.</p>
                   </div>
 
-                  {/* Google slot — reserved for OAuth wiring (honest "coming soon", not a dead end) */}
-                  <div>
-                    <button type="button" disabled aria-disabled="true"
-                      className="w-full py-3 rounded-xl font-semibold text-sm flex items-center justify-center gap-2"
-                      style={{ background: T.paper, border: `1px solid ${T.line}`, color: T.muted, cursor: "not-allowed", opacity: 0.75 }}>
-                      <span style={{ fontWeight: 800, fontSize: 16 }}>G</span> Continue with Google
-                    </button>
-                    <p className="text-[11px] text-center mt-1" style={{ color: T.muted }}>Google sign-in coming soon</p>
-                  </div>
+                  {/* Google sign-in — pre-verified email, no password (drop-in: live once VITE_GOOGLE_CLIENT_ID is set) */}
+                  <GoogleButton onCredential={handleGoogleCredential} busy={googleBusy} />
+                  {googleError && (
+                    <p className="text-xs text-center" style={{ color: T.red }} role="alert">⚠ {googleError}</p>
+                  )}
 
                   <div className="flex items-center gap-3">
                     <div style={{ flex: 1, height: 1, background: T.line }} />
@@ -838,6 +945,7 @@ export default function Register() {
 function AccountCreated({ data }) {
   const highTrust = HIGH_TRUST.has(data.account_type);
   const profileLabel = PROFILE_LABELS[data.account_type] || data.account_type;
+  const needsVerify = data.email_unverified !== false; // Google accounts arrive verified
   const [state, setState] = useState("idle"); // idle | sending | sent | error
   const [msg, setMsg] = useState("");
 
@@ -887,14 +995,24 @@ function AccountCreated({ data }) {
               Welcome, <strong style={{ color: T.soil }}>{data.display_name}</strong>.
             </p>
 
-            {/* verify-email block — a nudge, not a gate (lazy verification) */}
-            <div className="mt-6 rounded-xl p-4 text-left" style={{ background: T.greenTint, border: `1px solid ${T.line}` }}>
-              <p style={{ color: T.soil, fontWeight: 700, fontSize: 15 }}>Verify your email when you can</p>
-              <p style={{ color: T.soil, fontSize: 13.5, marginTop: 6, lineHeight: 1.5 }}>
-                We sent a link to <strong>{data.email}</strong>. You can start using Teivaka now —
-                verifying just secures your account and unlocks bank-evidence &amp; selling later.
-              </p>
-            </div>
+            {/* verify-email block — a nudge, not a gate (lazy verification).
+                Google accounts arrive already verified, so we confirm instead. */}
+            {needsVerify ? (
+              <div className="mt-6 rounded-xl p-4 text-left" style={{ background: T.greenTint, border: `1px solid ${T.line}` }}>
+                <p style={{ color: T.soil, fontWeight: 700, fontSize: 15 }}>Verify your email when you can</p>
+                <p style={{ color: T.soil, fontSize: 13.5, marginTop: 6, lineHeight: 1.5 }}>
+                  We sent a link to <strong>{data.email}</strong>. You can start using Teivaka now —
+                  verifying just secures your account and unlocks bank-evidence &amp; selling later.
+                </p>
+              </div>
+            ) : (
+              <div className="mt-6 rounded-xl p-4 text-left" style={{ background: T.greenTint, border: `1px solid ${T.green}` }}>
+                <p style={{ color: T.greenDk, fontWeight: 700, fontSize: 15 }}>✓ Email verified via Google</p>
+                <p style={{ color: T.soil, fontSize: 13.5, marginTop: 6, lineHeight: 1.5 }}>
+                  <strong>{data.email}</strong> is confirmed — you're all set.
+                </p>
+              </div>
+            )}
 
             {/* primary: straight into the app — no link-clicking required to start */}
             <Link to="/home" className="mt-5 block w-full py-3 rounded-xl font-semibold text-center" style={{ background: T.green, color: "#fff" }}>
@@ -902,23 +1020,27 @@ function AccountCreated({ data }) {
             </Link>
 
             {/* secondary: resend, only needed if the email hasn't arrived */}
-            <button
-              type="button"
-              onClick={resend}
-              disabled={state === "sending"}
-              className="mt-3 w-full py-2.5 rounded-xl font-medium"
-              style={{ background: "transparent", color: T.greenDk, border: `1px solid ${T.line}`, cursor: state === "sending" ? "default" : "pointer", opacity: state === "sending" ? 0.7 : 1 }}
-            >
-              {btnLabel}
-            </button>
+            {needsVerify && (
+              <>
+                <button
+                  type="button"
+                  onClick={resend}
+                  disabled={state === "sending"}
+                  className="mt-3 w-full py-2.5 rounded-xl font-medium"
+                  style={{ background: "transparent", color: T.greenDk, border: `1px solid ${T.line}`, cursor: state === "sending" ? "default" : "pointer", opacity: state === "sending" ? 0.7 : 1 }}
+                >
+                  {btnLabel}
+                </button>
 
-            {msg && (
-              <p className="mt-3" style={{ fontSize: 13, color: state === "error" ? T.red : T.greenDk }}>{msg}</p>
+                {msg && (
+                  <p className="mt-3" style={{ fontSize: 13, color: state === "error" ? T.red : T.greenDk }}>{msg}</p>
+                )}
+
+                <p className="mt-3" style={{ fontSize: 12.5, color: T.muted, lineHeight: 1.5 }}>
+                  Didn't get the email? Check your spam or promotions folder. You can verify anytime from your account.
+                </p>
+              </>
             )}
-
-            <p className="mt-3" style={{ fontSize: 12.5, color: T.muted, lineHeight: 1.5 }}>
-              Didn't get the email? Check your spam or promotions folder. You can verify anytime from your account.
-            </p>
 
             {highTrust && (
               <div className="mt-4 rounded-xl p-3 text-sm text-left" style={{ background: "var(--muted-bg)", border: `1px solid ${T.line}`, color: T.soil }}>

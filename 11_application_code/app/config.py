@@ -105,6 +105,12 @@ class Settings(BaseSettings):
     smtp_from: str = "noreply@teivaka.com"
     frontend_url: str = "http://168.144.36.120"
 
+    # ── Google sign-in (OAuth via Google Identity Services) ────────────────────
+    # The OAuth Web client ID from Google Cloud Console. Used as the audience the
+    # backend checks when verifying a Google ID token, and exposed to the frontend
+    # build as VITE_GOOGLE_CLIENT_ID. Empty => Google sign-in stays disabled.
+    google_client_id: str = ""
+
     # ── Sentry ────────────────────────────────────────────────────────────────
     sentry_dsn: str = ""
     sentry_traces_sample_rate: float = 0.1

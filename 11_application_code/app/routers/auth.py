@@ -16,6 +16,7 @@ import secrets
 import uuid
 from datetime import date, datetime, timedelta, timezone
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
 from jose import JWTError, jwt
@@ -95,7 +96,11 @@ class RegisterRequest(BaseModel):
     first_name: str
     last_name: str
     email: EmailStr
-    password: str
+    # Optional: a normal email/password signup supplies this; a Google signup
+    # leaves it null and the server generates one after verifying the Google
+    # token (the email is then trusted as already-verified).
+    password: str | None = None
+    google_credential: str | None = None
     phone_number: str | None = None
     whatsapp_number: str | None = None
     date_of_birth: date
@@ -138,6 +143,11 @@ class RegisterRequest(BaseModel):
         return v[:200] if v else None
 
 
+class GoogleAuthRequest(BaseModel):
+    """The ID-token (JWT 'credential') returned by Google Identity Services."""
+    credential: str
+
+
 class RefreshRequest(BaseModel):
     refresh_token: str
 
@@ -177,6 +187,51 @@ class ResetPasswordRequest(BaseModel):
         if not any(c.isdigit() for c in v):
             raise ValueError("Password must contain at least one number")
         return v
+
+
+def _gen_random_password() -> str:
+    """A strong random password for Google-created accounts (the user signs in
+    with Google, never with this). Satisfies the fraud-guard complexity rules:
+    length >= 8 plus upper/lower/digit/symbol."""
+    return secrets.token_urlsafe(24) + "Aa1!"
+
+
+async def _verify_google_credential(credential: str) -> dict:
+    """Verify a Google Identity Services ID token server-side and return the
+    trusted claims. Validates the signature/expiry (via Google's tokeninfo
+    endpoint), the audience (our OAuth client id), the issuer, and that the
+    email is Google-verified. Raises HTTPException on any failure."""
+    if not (settings.google_client_id or "").strip():
+        raise HTTPException(status_code=503, detail="Google sign-in is not configured.")
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get(
+                "https://oauth2.googleapis.com/tokeninfo",
+                params={"id_token": credential},
+            )
+    except Exception as e:  # noqa: BLE001 — network failure reaching Google
+        logger.warning("Google tokeninfo call failed: %s", e)
+        raise HTTPException(status_code=502, detail="Couldn't reach Google to verify sign-in. Please try again.") from e
+
+    if resp.status_code != 200:
+        raise HTTPException(status_code=400, detail="Invalid Google sign-in. Please try again.")
+    claims = resp.json()
+
+    if claims.get("aud") != settings.google_client_id.strip():
+        raise HTTPException(status_code=401, detail="This Google sign-in was issued for a different app.")
+    if claims.get("iss") not in ("accounts.google.com", "https://accounts.google.com"):
+        raise HTTPException(status_code=401, detail="Untrusted Google token issuer.")
+    if str(claims.get("email_verified")).lower() not in ("true", "1"):
+        raise HTTPException(status_code=401, detail="Your Google email address is not verified.")
+    email = (claims.get("email") or "").lower().strip()
+    if not email:
+        raise HTTPException(status_code=400, detail="Google didn't return an email address.")
+    return {
+        "email": email,
+        "given_name": (claims.get("given_name") or "").strip(),
+        "family_name": (claims.get("family_name") or "").strip(),
+        "name": (claims.get("name") or "").strip(),
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -241,6 +296,72 @@ async def login(
     }
 
 
+@router.post("/google")
+async def google_auth(req: GoogleAuthRequest, db: AsyncSession = Depends(get_db)):
+    """
+    Google sign-in / sign-up entry point.
+
+    Verifies the Google ID token, then:
+      • existing account  -> logs the user in (returns tokens, existing=true)
+      • new email         -> returns the verified email + name so the signup
+                             wizard can collect profession etc., then finish via
+                             POST /register with google_credential.
+    """
+    g = await _verify_google_credential(req.credential)
+    result = await db.execute(
+        text("""
+            SELECT u.user_id, u.tenant_id, u.email, u.full_name,
+                   u.first_name, u.last_name, u.role,
+                   t.subscription_tier, t.tis_daily_limit
+            FROM tenant.users u
+            JOIN tenant.tenants t ON t.tenant_id = u.tenant_id
+            WHERE u.email = :email AND u.is_active = true
+        """),
+        {"email": g["email"]},
+    )
+    user = result.mappings().first()
+
+    if not user:
+        # No account yet — let the wizard continue with the verified identity.
+        return {
+            "existing": False,
+            "email": g["email"],
+            "first_name": g["given_name"],
+            "last_name": g["family_name"],
+        }
+
+    # Existing account — log in (mark the email verified now that Google vouches).
+    await db.execute(
+        text("UPDATE tenant.users SET last_login = NOW(), email_verified = true WHERE user_id = :uid"),
+        {"uid": str(user["user_id"])},
+    )
+    await db.commit()
+
+    uid = str(user["user_id"])
+    tid = str(user["tenant_id"])
+    role = user["role"]
+    tier = user["subscription_tier"]
+    return {
+        "existing": True,
+        "access_token": _make_access_token(uid, tid, role, tier),
+        "refresh_token": _make_refresh_token(uid, tid),
+        "token_type": "bearer",
+        "role": role,
+        "tier": tier,
+        "tis_daily_limit": user["tis_daily_limit"],
+        "display_name": (
+            f"{user['first_name']} {user['last_name']}"
+            if user.get("first_name") and user.get("last_name")
+            else user["full_name"]
+        ),
+        "email": g["email"],
+        "email_unverified": False,
+        "capabilities": compute_capabilities(
+            {"role": role, "tier": tier, "email_verified": True, "account_type": None}
+        ),
+    }
+
+
 @router.post("/register", status_code=status.HTTP_201_CREATED)
 async def register(
     req: RegisterRequest,
@@ -253,7 +374,20 @@ async def register(
     7-layer fraud guard runs before any DB write.
     Creates tenant (FREE, 5 TIS/day) + user atomically.
     All attempts (success and failure) logged to shared.registration_audit_log.
+
+    Google signups (google_credential present) skip the password — the server
+    verifies the Google token, trusts its email as already-verified, and
+    generates a random password the user never uses.
     """
+    is_google = False
+    if req.google_credential:
+        ginfo = await _verify_google_credential(req.google_credential)
+        req.email = ginfo["email"]                 # authoritative, Google-verified
+        req.password = _gen_random_password()      # user signs in with Google, not this
+        is_google = True
+    elif not (req.password or "").strip():
+        raise HTTPException(status_code=422, detail="Password is required.")
+
     email = req.email.lower().strip()
     phone_raw = (req.phone_number or "").strip().replace(" ", "").replace("-", "")
     phone = phone_raw if phone_raw else None
@@ -385,7 +519,7 @@ async def register(
                     :business_name, :operator_name,
                     :privacy_accepted_at, :privacy_policy_version,
                     :reg_ip, :reg_ua,
-                    false, :verification_token,
+                    :email_verified, :verification_token,
                     :verification_expires,
                     true,
                     :referral_code, :referred_by_user_id, :referral_source,
@@ -415,6 +549,7 @@ async def register(
                 "privacy_policy_version": req.privacy_policy_version,
                 "reg_ip": ip_address,
                 "reg_ua": user_agent,
+                "email_verified": is_google,
                 "verification_token": verification_token,
                 "verification_expires": verification_expires,
                 "referral_code": referral_code,
@@ -500,10 +635,12 @@ async def register(
 
         # Fire-and-forget verification via the CFO-routed channel. Never raises.
         # (email is live; whatsapp/sms fall back to email until provisioned — Q8.)
-        dispatch_verification(
-            verify_channel, email=email, phone=phone,
-            token=verification_token, name=full_name, logger=logger, uid=user_id,
-        )
+        # Google accounts are already verified by Google — nothing to dispatch.
+        if not is_google:
+            dispatch_verification(
+                verify_channel, email=email, phone=phone,
+                token=verification_token, name=full_name, logger=logger, uid=user_id,
+            )
 
     except HTTPException:
         raise
@@ -540,9 +677,13 @@ async def register(
         "tis_daily_limit": 20,
         "display_name": full_name,
         "email": email,
-        "email_unverified": True,
-        "capabilities": compute_capabilities({"role": role, "tier": "BASIC", "email_verified": False, "account_type": req.account_type}),
-        "message": "Account created. Please check your email to verify your address.",
+        "email_unverified": not is_google,
+        "capabilities": compute_capabilities({"role": role, "tier": "BASIC", "email_verified": is_google, "account_type": req.account_type}),
+        "message": (
+            "Account created — your email is verified via Google."
+            if is_google else
+            "Account created. Please check your email to verify your address."
+        ),
     }
 
 
