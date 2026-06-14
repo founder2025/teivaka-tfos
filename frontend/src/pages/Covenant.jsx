@@ -88,7 +88,7 @@ export default function Covenant() {
       </div>
 
       {/* CTA band → verify */}
-      <div style={{ background: C.soil, color: "#fff", borderRadius: 10, padding: 40, textAlign: "center" }}>
+      <div style={{ background: "var(--ink)", color: "var(--paper)", borderRadius: 10, padding: 40, textAlign: "center" }}>
         <h2 style={{ fontSize: 22, fontWeight: 700, color: "#fff", margin: "0 0 8px" }}>Verify a record yourself</h2>
         <p style={{ fontSize: 14, color: "rgba(255,255,255,0.85)", margin: "0 0 18px" }}>Every record on TFOS can be verified independently. No account needed.</p>
         <a href="/verify" style={{ display: "inline-block", background: C.green, color: "#fff", borderRadius: 8, padding: "12px 24px", fontSize: 14.5, fontWeight: 700, textDecoration: "none" }}>Open the verification tool →</a>

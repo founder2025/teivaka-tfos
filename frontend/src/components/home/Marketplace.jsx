@@ -349,7 +349,7 @@ export default function Marketplace() {
                 {(l.photos || [])[0]
                   ? <img src={l.photos[0]} alt="" loading="lazy" style={{ width: "100%", aspectRatio: "1", objectFit: "cover" }} />
                   : <div style={{ width: "100%", aspectRatio: "1", background: "rgba(106,168,79,0.08)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--green-dk)" }}><Tag size={26} /></div>}
-                {l.sold_at && <span style={{ position: "absolute", top: 8, left: 8, background: "var(--soil)", color: "#fff", fontSize: 10, fontWeight: 700, padding: "3px 8px", borderRadius: 6 }}>SOLD</span>}
+                {l.sold_at && <span style={{ position: "absolute", top: 8, left: 8, background: "var(--ink)", color: "var(--paper)", fontSize: 10, fontWeight: 700, padding: "3px 8px", borderRadius: 6 }}>SOLD</span>}
                 {l.category === "WANTED" && !l.sold_at && <span style={{ position: "absolute", top: 8, left: 8, background: "var(--amber)", color: "#fff", fontSize: 10, fontWeight: 700, padding: "3px 8px", borderRadius: 6 }}>WANTED</span>}
                 <div style={{ padding: "8px 10px 10px" }}>
                   <div style={{ fontWeight: 700, color: "var(--soil)", fontSize: 13.5, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{l.listing_title}</div>

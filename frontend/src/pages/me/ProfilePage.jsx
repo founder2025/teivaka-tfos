@@ -555,7 +555,7 @@ export default function ProfilePage({ self = false }) {
               <span><Clock size={12} /> {isYou ? "active just now" : "member"}</span>
             </div>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8 }}>
-              <span style={{ background: C.soil, color: "#fff", fontSize: 10, fontWeight: 700, padding: "3px 9px", borderRadius: 6 }}>{p.role}</span>
+              <span style={{ background: "var(--ink)", color: "var(--paper)", fontSize: 10, fontWeight: 700, padding: "3px 9px", borderRadius: 6 }}>{p.role}</span>
               {(() => { const per = personaOf(p.profession); return (
                 <span style={{ background: `${per?.color || C.greenDk}22`, color: per?.color || C.greenDk, fontSize: 10, fontWeight: 700, padding: "3px 9px", borderRadius: 6, display: "inline-flex", gap: 3, alignItems: "center" }}>{(per?.label || personaLabel(p.profession)).toUpperCase()} {p.verified && <BadgeCheck size={11} />}</span>
               ); })()}

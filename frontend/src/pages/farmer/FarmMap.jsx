@@ -644,7 +644,7 @@ export default function FarmMap({ farmId, onCountsChange, openRequest, onSaved }
                 )}
               </div>
               <button onClick={() => setEditMode((v) => !v)} className="h-10 px-4 rounded-xl flex items-center gap-1.5 shadow-lg font-semibold hover:brightness-95"
-                style={editMode ? { background: C.soil, color: "#fff" } : { background: "rgba(255,255,255,0.97)", color: C.soil, border: `1px solid ${C.border}` }}>
+                style={editMode ? { background: "var(--ink)", color: "var(--paper)" } : { background: "rgba(255,255,255,0.97)", color: C.soil, border: `1px solid ${C.border}` }}>
                 <Pencil size={16} />Edit
               </button>
               <button onClick={() => setFullscreen(false)} className="h-10 px-4 rounded-xl flex items-center gap-1.5 shadow-lg font-semibold hover:brightness-95"
@@ -662,11 +662,11 @@ export default function FarmMap({ farmId, onCountsChange, openRequest, onSaved }
               </div>
               <div className="flex items-center h-10 rounded-xl shadow-lg overflow-hidden" style={{ border: `1px solid ${C.border}`, background: "rgba(255,255,255,0.97)" }}>
                 {Object.entries(AREA_UNITS).map(([k, u]) => (
-                  <button key={k} onClick={() => setAreaUnit(k)} className="h-full px-3 text-sm font-semibold" style={areaUnit === k ? { background: C.soil, color: "#fff" } : { color: C.soil }}>{u.label}</button>
+                  <button key={k} onClick={() => setAreaUnit(k)} className="h-full px-3 text-sm font-semibold" style={areaUnit === k ? { background: "var(--ink)", color: "var(--paper)" } : { color: C.soil }}>{u.label}</button>
                 ))}
               </div>
               <button onClick={() => (measuring ? stopMeasure() : startMeasure())} className="h-10 px-3.5 rounded-xl shadow-lg text-sm font-semibold flex items-center gap-1.5"
-                style={measuring ? { background: C.soil, color: "#fff" } : { background: "rgba(255,255,255,0.97)", color: C.soil, border: `1px solid ${C.border}` }}>
+                style={measuring ? { background: "var(--ink)", color: "var(--paper)" } : { background: "rgba(255,255,255,0.97)", color: C.soil, border: `1px solid ${C.border}` }}>
                 <Ruler size={15} />Measure
               </button>
               <button onClick={() => { setCalcOpen((o) => !o); if (measuring) stopMeasure(); }} className="h-10 px-3.5 rounded-xl shadow-lg text-sm font-semibold flex items-center gap-1.5"
@@ -703,7 +703,7 @@ export default function FarmMap({ farmId, onCountsChange, openRequest, onSaved }
 
           {!walking && !measuring && (
             <div className="absolute z-[1000] bottom-3 left-3 flex items-center gap-2 flex-wrap">
-              <button onClick={startWalk} className="h-10 px-4 rounded-xl flex items-center gap-2 shadow-lg text-sm font-semibold text-white hover:brightness-95" style={{ background: C.soil }}>
+              <button onClick={startWalk} className="h-10 px-4 rounded-xl flex items-center gap-2 shadow-lg text-sm font-semibold text-white hover:brightness-95" style={{ background: "var(--green)" }}>
                 <Footprints size={16} />Walk {drawKind === "BLOCK" ? "block" : drawKind === "BOUNDARY" ? "boundary" : "zone"}
               </button>
               <button onClick={locateMe} className="h-10 px-4 rounded-xl flex items-center gap-2 shadow-lg text-sm font-semibold hover:brightness-95" style={{ background: "var(--paper)", color: C.soil, border: `1px solid ${C.border}` }}>
@@ -731,7 +731,7 @@ export default function FarmMap({ farmId, onCountsChange, openRequest, onSaved }
               <div className="text-xs mb-2.5" style={{ color: C.muted }}>Tap along the path on the map to measure its length.</div>
               <div className="flex items-center gap-2">
                 <button onClick={undoMeasure} className="flex-1 text-sm px-3 py-2 rounded-xl font-semibold flex items-center justify-center gap-1.5 hover:brightness-95" style={{ color: C.soil, border: `1px solid ${C.border}` }}><Undo2 size={15} />Undo</button>
-                <button onClick={stopMeasure} className="flex-1 text-sm px-3 py-2 rounded-xl font-semibold text-white flex items-center justify-center gap-1.5 hover:brightness-95" style={{ background: C.soil }}><Check size={15} />Done</button>
+                <button onClick={stopMeasure} className="flex-1 text-sm px-3 py-2 rounded-xl font-semibold text-white flex items-center justify-center gap-1.5 hover:brightness-95" style={{ background: "var(--green)" }}><Check size={15} />Done</button>
               </div>
             </div>
           )}
@@ -770,7 +770,7 @@ export default function FarmMap({ farmId, onCountsChange, openRequest, onSaved }
                 <button onClick={undoCorner} disabled={!walkPts.length} className="flex-1 text-sm px-3 py-2 rounded-xl flex items-center justify-center gap-1.5 font-semibold hover:brightness-95 disabled:opacity-40" style={{ color: C.soil, border: `1px solid ${C.border}` }}>
                   <Undo2 size={15} />Undo
                 </button>
-                <button onClick={finishWalk} disabled={walkPts.length < 3} className="flex-[2] text-sm px-3 py-2 rounded-xl flex items-center justify-center gap-1.5 text-white font-semibold hover:brightness-95 disabled:opacity-40" style={{ background: C.soil }}>
+                <button onClick={finishWalk} disabled={walkPts.length < 3} className="flex-[2] text-sm px-3 py-2 rounded-xl flex items-center justify-center gap-1.5 text-white font-semibold hover:brightness-95 disabled:opacity-40" style={{ background: "var(--green)" }}>
                   <Flag size={15} />Finish {walkPts.length >= 3 ? `(${walkPts.length} corners)` : `(need ${3 - walkPts.length} more)`}
                 </button>
                 <button onClick={cancelWalk} className="text-sm px-3 py-2 rounded-xl flex items-center justify-center font-semibold hover:brightness-95" style={{ color: C.red, border: `1px solid ${C.border}` }}>

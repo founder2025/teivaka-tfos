@@ -22,14 +22,14 @@ const PERIOD_LABEL = { DAILY: "Daily", WEEKLY: "Weekly", MONTHLY: "Monthly" };
 const blankForm = { title: "", blurb: "", sponsor_logo: "", image_url: "", cta_label: "", cta_url: "", billing_period: "WEEKLY", target_country: "", target_account_type: "" };
 
 const STATUS_CHIP = {
-  PENDING_REVIEW: { label: "In review", bg: "#FBF3DC", fg: C.gold },
+  PENDING_REVIEW: { label: "In review", bg: "var(--amber-bg)", fg: C.gold },
   APPROVED: { label: "Approved", bg: "var(--green-tint)", fg: C.greenDk },
-  PENDING_PAYMENT: { label: "Awaiting payment", bg: "#FBF3DC", fg: C.gold },
+  PENDING_PAYMENT: { label: "Awaiting payment", bg: "var(--amber-bg)", fg: C.gold },
   ACTIVE: { label: "Live", bg: "var(--green-tint)", fg: C.greenDk },
-  REJECTED: { label: "Rejected", bg: "#FBE6E2", fg: C.red },
-  PAUSED: { label: "Paused", bg: "#EFE9DC", fg: C.muted },
-  ENDED: { label: "Ended", bg: "#EFE9DC", fg: C.muted },
-  DRAFT: { label: "Draft", bg: "#EFE9DC", fg: C.muted },
+  REJECTED: { label: "Rejected", bg: "var(--danger-bg)", fg: C.red },
+  PAUSED: { label: "Paused", bg: "var(--muted-bg)", fg: C.muted },
+  ENDED: { label: "Ended", bg: "var(--muted-bg)", fg: C.muted },
+  DRAFT: { label: "Draft", bg: "var(--muted-bg)", fg: C.muted },
 };
 
 const lbl = { display: "block", fontSize: 12.5, fontWeight: 700, color: C.soil, marginBottom: 4 };

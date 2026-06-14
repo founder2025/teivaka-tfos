@@ -419,7 +419,7 @@ function LocationsInner() {
               <div className="flex items-center rounded-lg overflow-hidden" style={{ border: `1px solid ${C.border}` }}>
                 {Object.entries(AREA_UNITS).map(([k, lbl]) => (
                   <button key={k} onClick={() => { setCalcUnit(k); localStorage.setItem("tfos_area_unit", k); }} className="text-[11px] px-2 py-1 font-semibold"
-                    style={calcUnit === k ? { background: C.soil, color: "#fff" } : { color: C.soil }}>{lbl}</button>
+                    style={calcUnit === k ? { background: "var(--ink)", color: "var(--paper)" } : { color: C.soil }}>{lbl}</button>
                 ))}
               </div>
             }>Capacity calculator</ColHead>
