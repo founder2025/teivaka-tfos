@@ -584,3 +584,72 @@ async def chat_unread_count(user: dict = Depends(get_current_user)):
               AND m.sender_user_id <> :uid AND m.read_at IS NULL
         """), {"uid": uid})).scalar() or 0
     return {"data": {"unread": n}}
+
+
+# ----------------------------------------------------------------------------- group chat
+async def _is_group_member(db, group_id: str, uid: str) -> bool:
+    return bool((await db.execute(text(
+        "SELECT 1 FROM community.group_members WHERE group_id = :g AND user_id = cast(:u AS uuid)"),
+        {"g": group_id, "u": uid})).first())
+
+
+@router.get("/groups/{group_id}/chat")
+async def group_chat_list(group_id: str, after: str = Query(None), user: dict = Depends(get_current_user)):
+    """Recent group messages (members only). Non-RLS context so sender names
+    resolve across tenants (members can be from different tenants)."""
+    uid = str(user["user_id"])
+    async with get_db_ctx() as db:
+        if not await _is_group_member(db, group_id, uid):
+            raise HTTPException(status_code=403, detail="Join the group to see its chat")
+        params = {"g": group_id}
+        clause = ""
+        if after:
+            clause = " AND m.created_at > :after"
+            params["after"] = after
+        rows = (await db.execute(text(f"""
+            SELECT m.message_id, m.sender_user_id, m.body, m.created_at,
+                   m.message_type, m.media_url, m.media_meta,
+                   u.full_name AS sender_name, u.avatar_url AS sender_avatar
+            FROM community.group_messages m
+            JOIN tenant.users u ON u.user_id = m.sender_user_id
+            WHERE m.group_id = :g{clause}
+            ORDER BY m.created_at ASC LIMIT 200
+        """), params)).mappings().all()
+    return {"data": [
+        {**dict(m), "message_id": str(m["message_id"]), "sender_user_id": str(m["sender_user_id"]),
+         "mine": str(m["sender_user_id"]) == uid} for m in rows]}
+
+
+@router.post("/groups/{group_id}/chat")
+async def group_chat_send(group_id: str, body: ChatSend, user: dict = Depends(rate_limit_only("groupchat", 60))):
+    uid = str(user["user_id"])
+    mt = (body.message_type or "text").strip().lower()
+    if mt not in _MSG_TYPES:
+        raise HTTPException(status_code=422, detail="Unsupported message type")
+    text_body = (body.body or "").strip() or None
+    media_url = (body.media_url or "").strip() or None
+    if mt == "text":
+        if not text_body:
+            raise HTTPException(status_code=422, detail="Message body is required")
+    else:
+        if not media_url:
+            raise HTTPException(status_code=422, detail="media_url is required for a media message")
+        if not media_url.startswith("/api/v1/community/uploads/"):
+            raise HTTPException(status_code=422, detail="media_url must be an uploaded Teivaka asset")
+    mmeta = json.dumps(body.media_meta) if body.media_meta else None
+
+    async with get_rls_db(str(user["tenant_id"])) as db:
+        if not await _is_group_member(db, group_id, uid):
+            raise HTTPException(status_code=403, detail="Join the group to chat")
+        row = (await db.execute(text("""
+            INSERT INTO community.group_messages (group_id, sender_user_id, body, message_type, media_url, media_meta)
+            VALUES (:g, :uid, :body, :mt, :murl, CAST(:mmeta AS jsonb))
+            RETURNING message_id, created_at
+        """), {"g": group_id, "uid": uid, "body": text_body, "mt": mt, "murl": media_url, "mmeta": mmeta})).mappings().first()
+        members = (await db.execute(text(
+            "SELECT user_id::text AS id FROM community.group_members WHERE group_id = :g AND user_id <> cast(:uid AS uuid)"),
+            {"g": group_id, "uid": uid})).mappings().all()
+    # realtime fan-out to every other member's SSE stream
+    for mrow in members:
+        await _publish(mrow["id"], {"type": "group_message", "group_id": group_id, "from": uid})
+    return {"data": {"message_id": str(row["message_id"]), "created_at": str(row["created_at"])}}

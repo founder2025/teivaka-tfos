@@ -5,13 +5,22 @@
  * the real feed infrastructure (FeedView with a group filter — reactions,
  * replies, photos all work). Owner can edit/close; admin can feature.
  */
-import { useEffect, useState } from "react";
-import { Users, Plus, Search, X, Star, Lock as LockIcon, Settings as Cog } from "lucide-react";
+import { useEffect, useState, useRef } from "react";
+import { Users, Plus, Search, X, Star, Lock as LockIcon, Settings as Cog, Send, Image as ImageIcon, Mic, Square } from "lucide-react";
 import { getJSON, send } from "../../utils/api";
 import FeedView from "./FeedView";
 
 const API = "/api/v1/community";
 const toast = (message, type) => { try { window.dispatchEvent(new CustomEvent("tfos:toast", { detail: { message, type } })); } catch { /* noop */ } };
+const gcDayLabel = (iso) => {
+  const d = new Date(iso), today = new Date(), y = new Date(); y.setDate(today.getDate() - 1);
+  const same = (a, b) => a.toDateString() === b.toDateString();
+  if (same(d, today)) return "Today";
+  if (same(d, y)) return "Yesterday";
+  return d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+};
+const gcTime = (iso) => { try { return new Date(iso).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" }); } catch { return ""; } };
+const gcInitials = (n) => (n || "?").split(" ").map((s) => s[0]).slice(0, 2).join("").toUpperCase();
 
 const CATEGORIES = [["CROPS", "Crops"], ["LIVESTOCK", "Livestock"], ["FISHING", "Fishing"], ["EXPORT", "Export"],
   ["WOMEN_IN_AG", "Women in Ag"], ["YOUTH", "Youth"], ["EQUIPMENT", "Equipment"], ["REGION", "Region"], ["GENERAL", "General"]];
@@ -80,11 +89,102 @@ function GroupForm({ group, onClose, onDone }) {
   );
 }
 
+/* realtime group chat room (members only). Reuses the SSE signal dispatched by
+   ChatWidget; text + photo/video + voice notes. Reactions/receipts deferred. */
+function GroupChat({ groupId }) {
+  const [msgs, setMsgs] = useState(null);
+  const [text, setText] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [recording, setRecording] = useState(false);
+  const endRef = useRef(null);
+  const fileRef = useRef(null);
+  const recRef = useRef(null);
+  const chunksRef = useRef([]);
+  const tokn = () => localStorage.getItem("tfos_access_token");
+
+  const load = () => getJSON(`${API}/groups/${groupId}/chat`).then((r) => setMsgs(r.data || [])).catch(() => setMsgs([]));
+  useEffect(() => { load(); const id = setInterval(load, 15000); return () => clearInterval(id); /* eslint-disable-next-line */ }, [groupId]);
+  useEffect(() => {
+    const on = (e) => { const d = (e && e.detail) || {}; if (d.type === "group_message" && d.group_id === groupId) load(); };
+    window.addEventListener("tfos-chat-refresh", on);
+    return () => window.removeEventListener("tfos-chat-refresh", on);
+    /* eslint-disable-next-line */
+  }, [groupId]);
+  useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [msgs]);
+  useEffect(() => () => { try { recRef.current?.stream?.getTracks?.().forEach((t) => t.stop()); } catch { /* ignore */ } }, []);
+
+  const doSend = async () => { if (!text.trim() || busy) return; setBusy(true); const b = text.trim(); setText(""); try { await send("POST", `${API}/groups/${groupId}/chat`, { body: b }); await load(); } catch { setText(b); } finally { setBusy(false); } };
+  const upload = async (file) => { const fd = new FormData(); fd.append("file", file); const t = tokn(); const r = await fetch(`${API}/uploads`, { method: "POST", headers: t ? { Authorization: `Bearer ${t}` } : {}, body: fd }); if (!r.ok) throw new Error(String(r.status)); return r.json(); };
+  const sendMedia = async (file) => {
+    if (!file || busy) return;
+    const ty = file.type || ""; const kind = ty.startsWith("video/") ? "video" : ty.startsWith("audio/") ? "audio" : "image";
+    setBusy(true);
+    try { const up = await upload(file); const url = up?.data?.url; if (!url) throw new Error("upload"); await send("POST", `${API}/groups/${groupId}/chat`, { message_type: kind, media_url: url, media_meta: { name: up.data?.name, bytes: up.data?.bytes } }); await load(); }
+    catch (e) { const s = String(e); toast(s.includes("413") ? "File too large (max 15 MB)." : s.includes("415") ? "Unsupported file type." : "Couldn't send that file.", "error"); }
+    finally { setBusy(false); }
+  };
+  const onPick = (e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) sendMedia(f); };
+  const startRec = async () => {
+    if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") { toast("Voice notes aren't supported on this device.", "error"); return; }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mr = new MediaRecorder(stream); mr.stream = stream; chunksRef.current = [];
+      mr.ondataavailable = (e) => { if (e.data && e.data.size) chunksRef.current.push(e.data); };
+      mr.onstop = async () => { stream.getTracks().forEach((t) => t.stop()); const mtype = mr.mimeType || "audio/webm"; const ext = (mtype.includes("mp4") || mtype.includes("m4a")) ? "m4a" : mtype.includes("ogg") ? "ogg" : "webm"; const blob = new Blob(chunksRef.current, { type: mtype }); if (blob.size > 0) await sendMedia(new File([blob], `voice-${Date.now()}.${ext}`, { type: mtype })); };
+      mr.start(); recRef.current = mr; setRecording(true);
+    } catch { toast("Microphone permission is needed for voice notes.", "error"); }
+  };
+  const stopRec = () => { try { recRef.current?.stop(); } catch { /* ignore */ } setRecording(false); };
+  const renderBody = (m) => {
+    if (m.message_type === "image") return <img src={m.media_url} alt="photo" onClick={() => window.open(m.media_url, "_blank")} style={{ maxWidth: 220, maxHeight: 260, borderRadius: 10, display: "block", cursor: "pointer" }} />;
+    if (m.message_type === "video") return <video src={m.media_url} controls style={{ maxWidth: 240, maxHeight: 260, borderRadius: 10, display: "block" }} />;
+    if (m.message_type === "audio") return <audio src={m.media_url} controls style={{ width: 220, display: "block" }} />;
+    return m.body;
+  };
+
+  let prevDay = null;
+  const ICONBTN = { border: "none", background: "transparent", cursor: "pointer", color: "var(--muted)", padding: 6, display: "flex", flexShrink: 0 };
+  return (
+    <div className="card" style={{ padding: 0, display: "flex", flexDirection: "column", height: 460, overflow: "hidden" }}>
+      <div style={{ flex: 1, overflowY: "auto", padding: 12, display: "flex", flexDirection: "column", gap: 7, background: "var(--cream)" }}>
+        {msgs == null ? <div style={{ color: "var(--muted)", fontSize: 13, textAlign: "center", marginTop: 18 }}>Loading…</div>
+          : msgs.length === 0 ? <div style={{ color: "var(--muted)", fontSize: 13, textAlign: "center", marginTop: 18 }}>No messages yet — say hello to the group.</div>
+          : msgs.map((m) => {
+            const isMedia = m.message_type && m.message_type !== "text";
+            const day = gcDayLabel(m.created_at); const showDay = day !== prevDay; prevDay = day;
+            return (
+              <div key={m.message_id} style={{ display: "contents" }}>
+                {showDay && <div style={{ alignSelf: "center", fontSize: 10.5, color: "var(--muted)", background: "#fff", border: "1px solid var(--line)", borderRadius: 10, padding: "1px 10px", margin: "4px 0" }}>{day}</div>}
+                <div style={{ alignSelf: m.mine ? "flex-end" : "flex-start", maxWidth: "82%", display: "flex", gap: 7, flexDirection: m.mine ? "row-reverse" : "row", alignItems: "flex-end" }}>
+                  {!m.mine && (m.sender_avatar ? <img src={m.sender_avatar} alt="" style={{ width: 26, height: 26, borderRadius: "50%", objectFit: "cover", flexShrink: 0 }} /> : <span style={{ width: 26, height: 26, borderRadius: "50%", background: "var(--green)", color: "#fff", fontSize: 10, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{gcInitials(m.sender_name)}</span>)}
+                  <div style={{ background: isMedia ? "transparent" : (m.mine ? "var(--green)" : "#fff"), color: m.mine ? "#fff" : "var(--soil)", border: (isMedia || m.mine) ? "none" : "1px solid var(--line)", borderRadius: 12, padding: isMedia ? 0 : "7px 11px", fontSize: 13.5, lineHeight: 1.45 }}>
+                    {!m.mine && !isMedia && <div style={{ fontSize: 11, fontWeight: 700, color: "var(--green-dk)", marginBottom: 2 }}>{m.sender_name}</div>}
+                    {renderBody(m)}
+                    <div style={{ fontSize: 9.5, opacity: 0.7, marginTop: 2, textAlign: "right", color: isMedia ? "var(--muted)" : undefined }}>{gcTime(m.created_at)}</div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        <div ref={endRef} />
+      </div>
+      <div style={{ display: "flex", gap: 6, padding: 8, borderTop: "1px solid var(--line)", background: "#fff", alignItems: "center" }}>
+        <input ref={fileRef} type="file" accept="image/*,video/*" onChange={onPick} style={{ display: "none" }} />
+        <button onClick={() => fileRef.current?.click()} disabled={busy || recording} title="Send photo or video" style={ICONBTN}><ImageIcon size={18} /></button>
+        <button onClick={recording ? stopRec : startRec} disabled={busy} title={recording ? "Stop & send voice note" : "Record voice note"} style={{ ...ICONBTN, color: recording ? "var(--danger,#D4442E)" : "var(--muted)" }}>{recording ? <Square size={16} /> : <Mic size={18} />}</button>
+        <input value={text} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => e.key === "Enter" && doSend()} placeholder={recording ? "Recording… tap ■ to send" : "Message the group…"} disabled={recording} style={{ flex: 1, border: "1px solid var(--line)", borderRadius: 18, padding: "9px 13px", fontSize: 14, outline: "none" }} />
+        <button onClick={doSend} disabled={busy || recording || !text.trim()} style={{ border: "none", background: "var(--green)", color: "#fff", borderRadius: "50%", width: 40, height: 40, flexShrink: 0, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><Send size={16} /></button>
+      </div>
+    </div>
+  );
+}
+
 function GroupPage({ groupId, onBack }) {
   const [g, setG] = useState(null);
   const [members, setMembers] = useState(null);
   const [showMembers, setShowMembers] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [tab, setTab] = useState("feed");
   const load = () => getJSON(`${API}/groups/${groupId}`).then((r) => setG(r.data))
     .catch((e) => { toast(`Couldn't open the group: ${e.userMessage || e.message}`, "error"); onBack(); });
   useEffect(() => { load(); /* eslint-disable-next-line */ }, [groupId]);
@@ -142,7 +242,15 @@ function GroupPage({ groupId, onBack }) {
         <GroupForm group={g} onClose={() => setEditing(false)} onDone={() => { setEditing(false); load(); }} />
       )}
       {g.is_member || g.is_owner
-        ? <FeedView initialFilter={`group_${groupId}`} groupId={groupId} />
+        ? (
+          <>
+            <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+              <button className={`btn btn-sm ${tab === "feed" ? "btn-primary" : "btn-secondary"}`} onClick={() => setTab("feed")}>Feed</button>
+              <button className={`btn btn-sm ${tab === "chat" ? "btn-primary" : "btn-secondary"}`} onClick={() => setTab("chat")}>Chat</button>
+            </div>
+            {tab === "feed" ? <FeedView initialFilter={`group_${groupId}`} groupId={groupId} /> : <GroupChat groupId={groupId} />}
+          </>
+        )
         : (
           <div className="card" style={{ color: "var(--muted)", textAlign: "center", padding: 22 }}>
             <Users size={26} style={{ marginBottom: 6 }} />

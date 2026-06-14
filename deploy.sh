@@ -20,7 +20,7 @@
 set -uo pipefail
 
 BRANCH="${1:-claude/beautiful-fermi-F0dLX}"
-EXPECTED_HEAD="${2:-138_chat_safety}"
+EXPECTED_HEAD="${2:-139_group_chat}"
 ROOT="/opt/teivaka"
 COMPOSE="docker compose -f ${ROOT}/04_environment/docker-compose.yml"
 PSQL="docker exec -i teivaka_db psql -v ON_ERROR_STOP=1 -tA -U teivaka -d teivaka_db"
@@ -133,6 +133,8 @@ CHATRX="$($PSQL -c "SELECT to_regclass('community.chat_reactions') IS NOT NULL;"
 [ "$CHATRX" = "t" ] && ok "chat_reactions table present (137 — reactions)" || bad "chat_reactions missing (migration 137 — chat reactions would fail)"
 CHATSAFE="$($PSQL -c "SELECT (to_regclass('community.chat_blocks') IS NOT NULL)::int + (to_regclass('community.chat_reports') IS NOT NULL)::int;" 2>/dev/null | tr -d '[:space:]')"
 [ "${CHATSAFE:-0}" = "2" ] && ok "chat_blocks + chat_reports present (138 — safety)" || bad "chat safety tables missing (${CHATSAFE}/2 — migration 138)"
+GRPCHAT="$($PSQL -c "SELECT to_regclass('community.group_messages') IS NOT NULL;" 2>/dev/null | tr -d '[:space:]')"
+[ "$GRPCHAT" = "t" ] && ok "group_messages table present (139 — group chat)" || bad "group_messages missing (migration 139 — group chat would fail)"
 
 # ---------------------------------------------------------------------------
 say "5/7  Bring API up + wait healthy + parity check"
