@@ -785,8 +785,9 @@ async def resend_verification(
     db: AsyncSession = Depends(get_db),
 ):
     """
-    Issue a fresh verification token and re-send the email.
-    Rate limited to 3 per hour per email. Always returns 200 — never leaks
+    Re-send the verification email, REUSING the account's current token so every
+    email already sent stays valid (no stale-link trap). Rate limited with a
+    short cooldown + generous hourly cap. Always returns 200 — never leaks
     whether the email exists in our DB.
     """
     email = req.email.lower().strip()
@@ -816,7 +817,7 @@ async def resend_verification(
 
     result = await db.execute(
         text("""
-            SELECT user_id, full_name, email_verified
+            SELECT user_id, full_name, email_verified, email_verification_token
             FROM tenant.users
             WHERE email = :email AND is_active = true
             LIMIT 1
@@ -833,7 +834,11 @@ async def resend_verification(
     if not row or row["email_verified"]:
         return generic_response
 
-    new_token = secrets.token_urlsafe(32)
+    # REUSE the existing token (don't rotate) so EVERY verification email already
+    # sent to this user keeps working — clicking an older email must never read as
+    # "expired/already used". Mint a new one only if there isn't one. Always
+    # refresh the 24h window so old links are revived.
+    token_to_send = row["email_verification_token"] or secrets.token_urlsafe(32)
     new_expires = now + timedelta(hours=24)
     await db.execute(
         text("""
@@ -843,11 +848,11 @@ async def resend_verification(
                    updated_at = NOW()
              WHERE user_id = :uid
         """),
-        {"tok": new_token, "exp": new_expires, "uid": str(row["user_id"])},
+        {"tok": token_to_send, "exp": new_expires, "uid": str(row["user_id"])},
     )
     await db.commit()
 
-    send_verification_email(email, new_token, row["full_name"] or "there", uid=str(row["user_id"]))
+    send_verification_email(email, token_to_send, row["full_name"] or "there", uid=str(row["user_id"]))
     return generic_response
 
 
