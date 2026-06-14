@@ -15,7 +15,7 @@
  * VAPID provisioning — see summary), not here.
  */
 import { useEffect, useRef, useState, useCallback } from "react";
-import { X, Send, Minus, ArrowLeft, Image as ImageIcon, Mic, Square, MoreVertical } from "lucide-react";
+import { X, Send, Minus, ArrowLeft, Image as ImageIcon, Mic, Square, MoreVertical, SmilePlus } from "lucide-react";
 import { useChat } from "../../context/ChatContext";
 
 const API = "/api/v1/community";
@@ -207,7 +207,7 @@ export function Convo({ conn, onActivity }) {
                     <div style={{ background: isMedia ? "transparent" : (m.mine ? C.green : "#fff"), color: m.mine ? "#fff" : C.soil, border: (isMedia || m.mine) ? "none" : `1px solid ${C.line}`, borderRadius: 12, padding: isMedia ? 0 : "7px 11px", fontSize: 13, lineHeight: 1.4 }}>
                       {renderBody(m)}<div style={{ fontSize: 9, opacity: 0.7, marginTop: 2, textAlign: "right", color: isMedia ? C.muted : undefined }}>{ago(m.created_at)}</div>
                     </div>
-                    <button onClick={() => setPicker(picker === m.message_id ? null : m.message_id)} title="React" style={{ ...iconBtn, padding: 2, fontSize: 13, opacity: 0.5, lineHeight: 1 }}>🙂</button>
+                    <button onClick={() => setPicker(picker === m.message_id ? null : m.message_id)} title="React" style={{ ...iconBtn, padding: 2, opacity: 0.55 }}><SmilePlus size={15} /></button>
                   </div>
                   {picker === m.message_id && (
                     <div style={{ display: "flex", gap: 2, background: "#fff", border: `1px solid ${C.line}`, borderRadius: 16, padding: "3px 6px", boxShadow: "0 4px 12px rgba(0,0,0,0.14)" }}>
