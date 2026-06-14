@@ -805,48 +805,109 @@ function RegistrationForm({ onSuccess }) {
 
 export default function Register() {
   const [accountData, setAccountData] = useState(null);
+  if (accountData) return <AccountCreated data={accountData} />;
+  return <RegistrationForm onSuccess={(data) => setAccountData(data)} />;
+}
 
-  if (accountData) {
-    const highTrust = HIGH_TRUST.has(accountData.account_type);
-    const profileLabel = PROFILE_LABELS[accountData.account_type] || accountData.account_type;
-    return (
-      <div className="min-h-screen flex flex-col" style={{ background: T.cream, fontFamily: FONT }}>
-        <div className="text-center py-5" style={{ borderBottom: `1px solid ${T.line}` }}>
-          <img src="/teivaka_logo.png" alt="Teivaka" style={{ height: 80, width: "auto", display: "block", margin: "0 auto" }} />
-        </div>
-        <div className="flex-1 flex items-center justify-center p-4">
-          <div className="w-full max-w-md">
-            <div className="rounded-2xl p-8 text-center" style={{ background: T.paper, border: `1px solid ${T.line}`, boxShadow: "0 2px 8px rgba(92,64,51,0.08)" }}>
-              <div className="text-5xl mb-4">🎉</div>
-              <h2 className="text-2xl font-bold" style={{ color: T.soil }}>Welcome to Teivaka!</h2>
-              <p className="mt-2" style={{ color: T.muted }}>
-                Hello <strong style={{ color: T.soil }}>{accountData.display_name}</strong> — your account is ready.
-              </p>
-              <div className="mt-4 rounded-xl p-3 text-sm text-left" style={{ background: T.greenTint, color: T.soil }}>
-                <p>Profile: <strong>{profileLabel}</strong></p>
-                <p>Plan: <strong>{accountData.tier || "BASIC"}</strong> — full access</p>
-                <p>TIS queries: <strong>{accountData.tis_daily_limit ?? 20} per day</strong></p>
-              </div>
-              {accountData.email_unverified && (
-                <div className="mt-3 rounded-xl p-3 text-sm text-left" style={{ background: "#F7ECCF", border: `1px solid ${T.amber}55`, color: "#7A5C00" }}>
-                  📧 We've sent a verification link to <strong>{accountData.email}</strong>.
-                  You can start now — please verify your email to keep full access.
-                </div>
-              )}
-              {highTrust && (
-                <div className="mt-3 rounded-xl p-3 text-sm text-left" style={{ background: "#EAF1F7", border: "1px solid #5E6D7E55", color: "#3A4A5A" }}>
-                  🔒 Your <strong>{profileLabel}</strong> features unlock after we verify your account. We'll be in touch shortly.
-                </div>
-              )}
-              <a href="/home" className="mt-6 inline-block w-full py-3 text-white rounded-xl font-semibold" style={{ background: T.green }}>
-                Go to my dashboard →
-              </a>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
+// ---------------------------------------------------------------------------
+// Post-signup success — a clean "verify your email" prompt. No dashboard entry
+// before verification; resend is the primary action for when mail doesn't land.
+// ---------------------------------------------------------------------------
+function AccountCreated({ data }) {
+  const highTrust = HIGH_TRUST.has(data.account_type);
+  const profileLabel = PROFILE_LABELS[data.account_type] || data.account_type;
+  const [state, setState] = useState("idle"); // idle | sending | sent | error
+  const [msg, setMsg] = useState("");
+
+  async function resend() {
+    setState("sending"); setMsg("");
+    try {
+      const res = await fetch("/api/v1/auth/resend-verification", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: data.email }),
+      });
+      if (res.status === 429) {
+        const d = await res.json().catch(() => ({}));
+        setState("error");
+        setMsg(d.detail || "Too many requests — please wait an hour and try again.");
+        return;
+      }
+      setState("sent");
+      setMsg("Verification email sent — check your inbox and spam folder.");
+    } catch {
+      setState("error");
+      setMsg("Couldn't send right now. Please try again in a moment.");
+    }
   }
 
-  return <RegistrationForm onSuccess={(data) => setAccountData(data)} />;
+  const btnLabel =
+    state === "sending" ? "Sending…"
+    : state === "sent" ? "Resend again"
+    : "Resend verification email";
+
+  return (
+    <div className="min-h-screen flex flex-col" style={{ background: T.cream, fontFamily: FONT }}>
+      <div className="text-center py-5" style={{ borderBottom: `1px solid ${T.line}` }}>
+        <img src="/teivaka_logo.png" alt="Teivaka" style={{ height: 72, width: "auto", display: "block", margin: "0 auto" }} />
+      </div>
+      <div className="flex-1 flex items-center justify-center p-4">
+        <div className="w-full max-w-md">
+          <div className="rounded-2xl p-8 text-center" style={{ background: T.paper, border: `1px solid ${T.line}`, boxShadow: "0 2px 8px rgba(92,64,51,0.08)" }}>
+            {/* success check */}
+            <div style={{ width: 64, height: 64, borderRadius: "50%", background: T.greenTint, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 18px" }}>
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke={T.greenDk} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+            </div>
+            <h2 className="text-2xl font-bold" style={{ color: T.soil }}>Account created</h2>
+            <p className="mt-1.5" style={{ color: T.muted, fontSize: 14.5 }}>
+              Welcome, <strong style={{ color: T.soil }}>{data.display_name}</strong>.
+            </p>
+
+            {/* verify-email block */}
+            <div className="mt-6 rounded-xl p-4 text-left" style={{ background: T.greenTint, border: `1px solid ${T.line}` }}>
+              <p style={{ color: T.soil, fontWeight: 700, fontSize: 15 }}>One last step — verify your email</p>
+              <p style={{ color: T.soil, fontSize: 13.5, marginTop: 6, lineHeight: 1.5 }}>
+                We sent a verification link to <strong>{data.email}</strong>. Open it to activate your account.
+              </p>
+            </div>
+
+            {/* primary action: resend */}
+            <button
+              type="button"
+              onClick={resend}
+              disabled={state === "sending"}
+              className="mt-5 w-full py-3 rounded-xl font-semibold"
+              style={{ background: T.green, color: "#fff", cursor: state === "sending" ? "default" : "pointer", opacity: state === "sending" ? 0.7 : 1 }}
+            >
+              {btnLabel}
+            </button>
+
+            {msg && (
+              <p className="mt-3" style={{ fontSize: 13, color: state === "error" ? T.red : T.greenDk }}>{msg}</p>
+            )}
+
+            <p className="mt-3" style={{ fontSize: 12.5, color: T.muted, lineHeight: 1.5 }}>
+              Didn't get the email? Check your spam or promotions folder. The link expires in 24 hours.
+            </p>
+
+            {highTrust && (
+              <div className="mt-4 rounded-xl p-3 text-sm text-left" style={{ background: "var(--muted-bg)", border: `1px solid ${T.line}`, color: T.soil }}>
+                🔒 Your <strong>{profileLabel}</strong> features unlock after we verify your account. We'll be in touch shortly.
+              </div>
+            )}
+
+            <div className="mt-6 pt-5" style={{ borderTop: `1px solid ${T.line}` }}>
+              <p style={{ fontSize: 13.5, color: T.muted }}>
+                Already verified?{" "}
+                <Link to="/login" className="font-medium hover:underline" style={{ color: T.greenDk }}>Sign in</Link>
+              </p>
+            </div>
+          </div>
+          <p className="text-center text-xs mt-5" style={{ color: T.muted }}>Connecting Pacific Island farmers 🌏</p>
+        </div>
+      </div>
+    </div>
+  );
 }
