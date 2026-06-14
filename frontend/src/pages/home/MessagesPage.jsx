@@ -200,8 +200,10 @@ export default function MessagesPage() {
       <main className="main-content">
         <div className="main-inner" style={{ maxWidth: 1100, height: "calc(100dvh - 132px)", display: "flex", flexDirection: "column", minHeight: 0 }}>
           <div className="page-header" style={{ flexShrink: 0 }}>
-            <h1>Messages</h1>
-            <p className="subtitle">Everyone you're talking to, in one place.</p>
+            <div>
+              <h1>Messages</h1>
+              <p className="subtitle">Everyone you're talking to, in one place.</p>
+            </div>
           </div>
           <div className="card" style={{ padding: 0, overflow: "hidden", flex: 1, minHeight: 0, display: "flex" }}>
             {narrow ? (

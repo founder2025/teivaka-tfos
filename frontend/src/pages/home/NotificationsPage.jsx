@@ -83,8 +83,10 @@ export default function NotificationsPage() {
       <main className="main-content">
         <div className="main-inner" style={{ maxWidth: 720 }}>
           <div className="page-header">
-            <h1>Notifications</h1>
-            <p className="subtitle">Everything happening across your Teivaka — tap any item to go straight to it.</p>
+            <div>
+              <h1>Notifications</h1>
+              <p className="subtitle">Everything happening across your Teivaka — tap any item to go straight to it.</p>
+            </div>
           </div>
 
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
