@@ -16,11 +16,11 @@ async function send(method, url, body) {
   return j;
 }
 
-const ST_COLOR = { ACTIVE: "#3E7B1F", PAUSED: "#bf9000", PENDING: "#8A8678", REJECTED: "#A32D2D" };
+const ST_COLOR = { ACTIVE: "var(--green-dk)", PAUSED: "var(--amber)", PENDING: "var(--muted)", REJECTED: "var(--red)" };
 
 function Kpi({ n, label, color }) {
   return (
-    <div style={{ flex: 1, minWidth: 110, background: "#fff", border: `1px solid ${C.line}`, borderRadius: 10, padding: "12px 14px", textAlign: "center" }}>
+    <div style={{ flex: 1, minWidth: 110, background: "var(--paper)", border: `1px solid ${C.line}`, borderRadius: 10, padding: "12px 14px", textAlign: "center" }}>
       <div style={{ fontSize: 21, fontWeight: 800, color: color || C.soil }}>{n}</div>
       <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase" }}>{label}</div>
     </div>
@@ -72,7 +72,7 @@ export default function AffiliateConsole() {
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
         <Kpi n={fjd(t.accrued_fjd)} label="Commission accrued" color={C.greenDk} />
         <Kpi n={fjd(t.paid_fjd)} label="Paid out" />
-        <Kpi n={fjd(t.outstanding_fjd)} label="Outstanding" color="#bf9000" />
+        <Kpi n={fjd(t.outstanding_fjd)} label="Outstanding" color="var(--amber)" />
         <Kpi n={fjd(t.revenue_fjd)} label="Revenue driven" color={C.greenDk} />
       </div>
 
@@ -94,12 +94,12 @@ export default function AffiliateConsole() {
                 <span style={{ fontSize: 12, color: C.soil }}>{a.effective_pct}%{a.override_pct != null ? " (set)" : ""}</span>
                 <span style={{ fontSize: 12, color: C.soil }}>{a.conversions} subscribed</span>
                 <strong style={{ color: C.greenDk, fontSize: 12.5 }}>{fjd(a.earned_fjd)}</strong>
-                <span style={{ color: "#bf9000", fontSize: 12.5 }}>{fjd(a.outstanding_fjd)} owed</span>
+                <span style={{ color: "var(--amber)", fontSize: 12.5 }}>{fjd(a.outstanding_fjd)} owed</span>
               </div>
               <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
                 <button className="btn btn-sm btn-secondary" onClick={() => setRate(a)}>Set rate</button>
                 {a.status === "ACTIVE"
-                  ? <button className="btn btn-sm btn-secondary" style={{ color: "#bf9000" }} onClick={() => setStatus(a, "PAUSED")}>Pause</button>
+                  ? <button className="btn btn-sm btn-secondary" style={{ color: "var(--amber)" }} onClick={() => setStatus(a, "PAUSED")}>Pause</button>
                   : <button className="btn btn-sm btn-secondary" style={{ color: C.greenDk }} onClick={() => setStatus(a, "ACTIVE")}>Activate</button>}
               </div>
             </div>
@@ -108,7 +108,7 @@ export default function AffiliateConsole() {
 
       <div style={card}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-          <Shield size={15} style={{ color: "#bf9000" }} />
+          <Shield size={15} style={{ color: "var(--amber)" }} />
           <strong style={{ color: C.soil, fontSize: 14 }}>Program settings</strong>
           <span style={{ fontSize: 11, color: C.muted }}>· founder only</span>
         </div>

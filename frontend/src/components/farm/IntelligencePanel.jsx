@@ -1,5 +1,5 @@
 import { Sparkles, ArrowRight, AlertTriangle } from "lucide-react";
-const C={paper:"#FFFFFF",green:"#6AA84F",greenDk:"#3E7B1F",soil:"#5C4033",amber:"#BF9000",red:"#A32D2D",line:"#E2D8C3",muted:"#8A7B6F",cream:"#F8F3E9"};
+const C={paper:"var(--paper)",green:"var(--green)",greenDk:"var(--green-dk)",soil:"var(--soil)",amber:"var(--amber)",red:"var(--red)",line:"var(--line)",muted:"var(--muted)",cream:"var(--cream)"};
 const I={opp:["Grow Eggplant — strongest right now (return +34%).","Tomato earns the most — net FJD 4,200."],risk:["2 things on hold — do not sell or harvest until cleared."],rec:["Put your next effort into Eggplant.","Keep logging daily — your bank record gets stronger every entry."]};
 export default function IntelligencePanel(){const B=[{icon:ArrowRight,title:"Opportunities",color:C.greenDk,lines:I.opp},{icon:AlertTriangle,title:"Risks",color:C.red,lines:I.risk},{icon:Sparkles,title:"Recommendations",color:C.green,lines:I.rec}];return(
 <section className="rounded-2xl px-4 py-4" style={{background:C.paper,border:`1px solid ${C.line}`}}>

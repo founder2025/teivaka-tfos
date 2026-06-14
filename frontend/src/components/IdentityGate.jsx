@@ -11,9 +11,9 @@
 import { useRef, useState } from "react";
 
 const T = {
-  cream: "#F8F3E9", paper: "#FFFFFF", green: "#6AA84F", greenDk: "#4F8A37",
-  greenTint: "#E8F0E0", soil: "#5C4033", line: "#E2D8C3", ink: "#2A2118",
-  muted: "#7A6E5C", red: "#A32D2D", amber: "#BF9000",
+  cream: "var(--cream)", paper: "var(--paper)", green: "var(--green)", greenDk: "var(--green-dk)",
+  greenTint: "var(--green-tint)", soil: "var(--soil)", line: "var(--line)", ink: "#2A2118",
+  muted: "var(--muted)", red: "var(--red)", amber: "var(--amber)",
 };
 const FONT = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif";
 

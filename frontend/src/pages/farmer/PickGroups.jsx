@@ -40,10 +40,10 @@ import { authHeader } from "../../utils/auth";
 
 const C = {
   soil:    "#2C1A0E",
-  green:   "#3D8C40",
+  green:   "var(--green)",
   greenDk: "#2C6A2E",
-  cream:   "#F5EFE0",
-  border:  "#E0D5C0",
+  cream:   "var(--cream)",
+  border:  "var(--line)",
   muted:   "#8A7863",
   red:     "#B23A2A",
 };
@@ -162,7 +162,7 @@ function PickGroupsInner() {
                   className="rounded-2xl p-4 flex flex-col items-center justify-center transition-all"
                   style={{
                     background: isSelected ? C.green : C.cream,
-                    color: isSelected ? "white" : C.soil,
+                    color: isSelected ? "var(--paper)" : C.soil,
                     border: `1px solid ${isSelected ? C.greenDk : C.border}`,
                     minHeight: 96,
                     transform: isSelected ? "scale(1.02)" : "scale(1)",
@@ -172,7 +172,7 @@ function PickGroupsInner() {
                   <Icon size={28} strokeWidth={1.6} />
                   <span
                     className="text-xs font-semibold mt-2 text-center"
-                    style={{ color: isSelected ? "white" : C.soil }}
+                    style={{ color: isSelected ? "var(--paper)" : C.soil }}
                   >
                     {label}
                   </span>

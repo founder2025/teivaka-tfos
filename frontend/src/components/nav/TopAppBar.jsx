@@ -8,17 +8,17 @@ import SearchPalette from "../search/SearchPalette";
 import { useIsNarrow } from "../../hooks/useIsNarrow";
 
 const C = {
-  soil:    "#5C4033",
-  cream:   "#F8F3E9",
-  border:  "#E8E2D4",
+  soil:    "var(--soil)",
+  cream:   "var(--cream)",
+  border:  "var(--line)",
   tint:    "#EAF3DE",
-  greenDk: "#3E7B1F",
+  greenDk: "var(--green-dk)",
   hoverBg: "rgba(92, 64, 51, 0.06)",
   // Prototype .topbar-search palette (pixel-exact)
-  cream2:      "#EFE8D8", // --cream-2
+  cream2:      "var(--line)", // --cream-2
   cream2hover: "#E7DFCC",
-  line2:       "#E2D8C3", // --line
-  muted:       "#7A6E5C", // --muted
+  line2:       "var(--line)", // --line
+  muted:       "var(--muted)", // --muted
 };
 
 function TeivakaLogo() {
@@ -116,7 +116,7 @@ function SearchBarFull({ onClick }) {
         Search farm, tasks, people…
       </span>
       <span style={{
-        marginLeft: "auto", fontSize: 11, color: C.muted, background: "#FFFFFF",
+        marginLeft: "auto", fontSize: 11, color: C.muted, background: "var(--paper)",
         padding: "2px 6px", borderRadius: 3, border: `1px solid ${C.line2}`, flexShrink: 0,
       }}>⌘K</span>
     </button>
@@ -144,7 +144,7 @@ export default function TopAppBar() {
     <header
       className="sticky top-0 z-40"
       style={{
-        background: "#FFFFFF",
+        background: "var(--paper)",
         borderBottom: `1px solid ${C.border}`,
         position: "sticky",
       }}

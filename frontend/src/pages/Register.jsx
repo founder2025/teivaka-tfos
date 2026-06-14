@@ -22,10 +22,10 @@ import {
 
 // In-app (.tfp) palette.
 const T = {
-  cream: "#F8F3E9", cream2: "#EFE8D8", paper: "#FFFFFF",
-  green: "#6AA84F", greenDk: "#4F8A37", greenTint: "#E8F0E0",
-  soil: "#5C4033", soil2: "#7A5C4E", amber: "#BF9000",
-  line: "#E2D8C3", ink: "#2A2118", muted: "#7A6E5C", red: "#A32D2D",
+  cream: "var(--cream)", cream2: "var(--line)", paper: "var(--paper)",
+  green: "var(--green)", greenDk: "var(--green-dk)", greenTint: "var(--green-tint)",
+  soil: "var(--soil)", soil2: "#7A5C4E", amber: "var(--amber)",
+  line: "var(--line)", ink: "#2A2118", muted: "var(--muted)", red: "var(--red)",
 };
 const FONT = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif";
 
@@ -418,8 +418,8 @@ function RegistrationForm({ onSuccess }) {
   }
 
   const inputCls = (field) =>
-    `w-full rounded-xl px-4 py-3 text-sm border bg-white focus:outline-none focus:ring-2 focus:ring-[#6AA84F]/30 ${
-      errors[field] ? "border-[#A32D2D]" : "border-[#E2D8C3] focus:border-[#6AA84F]"
+    `w-full rounded-xl px-4 py-3 text-sm border bg-white focus:outline-none focus:ring-2 focus:ring-[var(--green)]/30 ${
+      errors[field] ? "border-[var(--red)]" : "border-[var(--line)] focus:border-[var(--green)]"
     }`;
   const inputStyle = { fontFamily: FONT, color: T.ink };
 
@@ -502,7 +502,7 @@ function RegistrationForm({ onSuccess }) {
                     <input id="specialty" value={specialty} onChange={(e) => { setSpecialty(e.target.value); clearErr("specialty"); }}
                       placeholder="e.g. Veterinarian · Irrigation contractor · Co-op manager"
                       className={inputCls("specialty")} style={inputStyle} />
-                    {errors.specialty && <p className="text-xs mt-1" style={{ color: "#D4442E" }}>{errors.specialty}</p>}
+                    {errors.specialty && <p className="text-xs mt-1" style={{ color: "var(--red)" }}>{errors.specialty}</p>}
                   </div>
                 )}
 

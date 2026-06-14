@@ -63,7 +63,7 @@ const SIGNAL_SOURCE = {
   "DS-010": { route: "/farm/inventory", label: "Inventory" },
 };
 const stateClass = (s) => (s === "RED" ? "red" : s === "AMBER" ? "amber" : s === "GREEN" ? "green" : "building");
-const stateColor = (s) => (s === "GREEN" ? "var(--green)" : s === "AMBER" ? "var(--amber)" : s === "RED" ? "var(--red)" : "#7A6E5C");
+const stateColor = (s) => (s === "GREEN" ? "var(--green)" : s === "AMBER" ? "var(--amber)" : s === "RED" ? "var(--red)" : "var(--muted)");
 
 // ── prototype renderSparkline, verbatim shape ──────────────────────────────
 function Sparkline({ history, color, wide }) {

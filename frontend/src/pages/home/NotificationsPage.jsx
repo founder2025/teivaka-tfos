@@ -69,7 +69,7 @@ export default function NotificationsPage() {
   const showAdvisories = cat === "all" || cat === "advisories";
 
   const Row = ({ icon: Icon, color, title, sub, onClick, unread }) => (
-    <button onClick={onClick} className="card" style={{ width: "100%", textAlign: "left", display: "flex", gap: 12, alignItems: "center", padding: "12px 14px", marginBottom: 8, cursor: onClick ? "pointer" : "default", background: unread ? "rgba(106,168,79,0.06)" : "#fff", border: "1px solid var(--line)" }}>
+    <button onClick={onClick} className="card" style={{ width: "100%", textAlign: "left", display: "flex", gap: 12, alignItems: "center", padding: "12px 14px", marginBottom: 8, cursor: onClick ? "pointer" : "default", background: unread ? "rgba(106,168,79,0.06)" : "var(--paper)", border: "1px solid var(--line)" }}>
       <span style={{ width: 34, height: 34, borderRadius: "50%", background: `${color}1A`, color, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><Icon size={17} /></span>
       <span style={{ flex: 1, minWidth: 0 }}>
         <span style={{ display: "block", fontSize: 13.5, color: "var(--soil)", lineHeight: 1.35 }}>{title}</span>
@@ -105,13 +105,13 @@ export default function NotificationsPage() {
             ) : (
               <>
                 {showTasks && (taskN.overdue > 0 || taskN.open > 0) && (
-                  <Row icon={ListChecks} color={taskN.overdue > 0 ? "#D4442E" : "#3E7B1F"} unread
+                  <Row icon={ListChecks} color={taskN.overdue > 0 ? "var(--red)" : "var(--green-dk)"} unread
                     title={taskN.overdue > 0 ? <><strong>{taskN.overdue}</strong> task{taskN.overdue === 1 ? "" : "s"} overdue</> : <><strong>{taskN.open}</strong> open task{taskN.open === 1 ? "" : "s"}</>}
                     sub="Tap to review your tasks" onClick={() => navigate("/farm/tasks")} />
                 )}
 
                 {showAdvisories && advisories.map((a) => (
-                  <Row key={a.advisory_id} icon={Sparkles} color="#BF9000" unread={!a.read_at}
+                  <Row key={a.advisory_id} icon={Sparkles} color="var(--amber)" unread={!a.read_at}
                     title={a.title || a.preview} sub={`TIS advisory${a.priority ? ` · ${a.priority}` : ""} · ${relTime(a.created_at || a.read_at)}`}
                     onClick={() => navigate("/farm/tasks")} />
                 ))}
@@ -120,7 +120,7 @@ export default function NotificationsPage() {
                   const Icon = COMMUNITY_ICON[n.type] || Bell;
                   const name = n.actor_name || "Someone";
                   return (
-                    <Row key={n.notification_id} icon={Icon} color="#6AA84F" unread={!n.read_at}
+                    <Row key={n.notification_id} icon={Icon} color="var(--green)" unread={!n.read_at}
                       title={n.body || <><strong>{name}</strong> {COMMUNITY_VERB[n.type] || (n.type || "").toLowerCase()}</>}
                       sub={relTime(n.created_at)} onClick={() => openCommunity(n)} />
                   );

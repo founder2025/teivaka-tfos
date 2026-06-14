@@ -54,23 +54,23 @@ export default function AdminContent() {
 
   return (
     <AdminLayout>
-      <h1 className="text-xl font-bold text-[#5C4033] mb-5">Content Moderation</h1>
+      <h1 className="text-xl font-bold text-[var(--soil)] mb-5">Content Moderation</h1>
 
       {/* Section tabs */}
-      <div className="flex gap-1 bg-white border border-[#E6E1D6] rounded-lg w-fit mb-5 p-1">
+      <div className="flex gap-1 bg-white border border-[var(--line)] rounded-lg w-fit mb-5 p-1">
         {SECTIONS.map(s => (
           <button key={s} onClick={() => setSection(s)}
             className={`px-4 py-1.5 rounded text-sm font-medium transition-colors ${
-              section === s ? "bg-amber-500 text-amber-950" : "text-[#8A8678] hover:text-[#5C4033]"
+              section === s ? "bg-amber-500 text-amber-950" : "text-[var(--muted)] hover:text-[var(--soil)]"
             }`}>
             {SECTION_LABELS[s]}
             {s === "flagged" && flagged.length > 0 && (
-              <span className="ml-1.5 bg-red-600 text-[#5C4033] text-xs rounded-full px-1.5 py-0.5">
+              <span className="ml-1.5 bg-red-600 text-[var(--soil)] text-xs rounded-full px-1.5 py-0.5">
                 {flagged.length}
               </span>
             )}
             {s === "kb-pending" && kbPending.length > 0 && (
-              <span className="ml-1.5 bg-yellow-600 text-[#5C4033] text-xs rounded-full px-1.5 py-0.5">
+              <span className="ml-1.5 bg-yellow-600 text-[var(--soil)] text-xs rounded-full px-1.5 py-0.5">
                 {kbPending.length}
               </span>
             )}
@@ -83,12 +83,12 @@ export default function AdminContent() {
       ) : section === "flagged" ? (
         <div className="space-y-3">
           {flagged.length === 0 && (
-            <div className="bg-white border border-[#E6E1D6] rounded-xl py-12 text-center text-gray-500">
+            <div className="bg-white border border-[var(--line)] rounded-xl py-12 text-center text-gray-500">
               ✅ No flagged posts — moderation queue is clear
             </div>
           )}
           {flagged.map(post => (
-            <div key={post.post_id} className="bg-white border border-[#E6E1D6] rounded-xl p-4">
+            <div key={post.post_id} className="bg-white border border-[var(--line)] rounded-xl p-4">
               <div className="flex items-start justify-between gap-4">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">
@@ -96,8 +96,8 @@ export default function AdminContent() {
                     <span className="text-gray-500 text-xs">by {post.author_name}</span>
                     <span className="text-gray-600 text-xs">{new Date(post.created_at).toLocaleDateString()}</span>
                   </div>
-                  {post.title && <p className="text-[#5C4033] font-medium mb-1">{post.title}</p>}
-                  <p className="text-[#8A8678] text-sm line-clamp-3">{post.content}</p>
+                  {post.title && <p className="text-[var(--soil)] font-medium mb-1">{post.title}</p>}
+                  <p className="text-[var(--muted)] text-sm line-clamp-3">{post.content}</p>
                 </div>
                 <div className="flex flex-col gap-1.5 shrink-0">
                   <button onClick={() => postAction(post.post_id, "keep")}
@@ -113,7 +113,7 @@ export default function AdminContent() {
                     ⚠ Warn
                   </button>
                   <button onClick={() => postAction(post.post_id, "ban")}
-                    className="text-xs px-3 py-1.5 rounded-lg bg-gray-700 hover:bg-gray-600 text-[#8A8678]">
+                    className="text-xs px-3 py-1.5 rounded-lg bg-gray-700 hover:bg-gray-600 text-[var(--muted)]">
                     🚫 Ban
                   </button>
                 </div>
@@ -124,21 +124,21 @@ export default function AdminContent() {
       ) : section === "kb-pending" ? (
         <div className="space-y-3">
           {kbPending.length === 0 && (
-            <div className="bg-white border border-[#E6E1D6] rounded-xl py-12 text-center text-gray-500">
+            <div className="bg-white border border-[var(--line)] rounded-xl py-12 text-center text-gray-500">
               ✅ No pending KB submissions
             </div>
           )}
           {kbPending.map(article => (
-            <div key={article.article_id} className="bg-white border border-[#E6E1D6] rounded-xl p-4">
+            <div key={article.article_id} className="bg-white border border-[var(--line)] rounded-xl p-4">
               <div className="flex items-start justify-between gap-4">
                 <div className="flex-1">
-                  <p className="text-[#5C4033] font-medium mb-1">{article.title}</p>
-                  <div className="flex gap-3 text-xs text-[#8A8678] mb-2">
+                  <p className="text-[var(--soil)] font-medium mb-1">{article.title}</p>
+                  <div className="flex gap-3 text-xs text-[var(--muted)] mb-2">
                     <span>Category: {article.category}</span>
                     <span>By: {article.submitted_by}</span>
                     <span>{new Date(article.created_at).toLocaleDateString()}</span>
                   </div>
-                  <p className="text-[#8A8678] text-sm line-clamp-3">{article.content_preview}</p>
+                  <p className="text-[var(--muted)] text-sm line-clamp-3">{article.content_preview}</p>
                 </div>
                 <div className="flex flex-col gap-1.5 shrink-0">
                   <button onClick={() => kbAction(article.article_id, "approve")}
@@ -155,8 +155,8 @@ export default function AdminContent() {
           ))}
         </div>
       ) : (
-        <div className="bg-white border border-[#E6E1D6] rounded-xl p-6">
-          <h2 className="font-semibold text-[#5C4033] mb-3">Pinned Content & Announcements</h2>
+        <div className="bg-white border border-[var(--line)] rounded-xl p-6">
+          <h2 className="font-semibold text-[var(--soil)] mb-3">Pinned Content & Announcements</h2>
           <div className="text-gray-500 text-sm">
             Drag-and-drop pinned post ordering and announcement banner editor — connect to
             community_posts table with is_pinned = true.

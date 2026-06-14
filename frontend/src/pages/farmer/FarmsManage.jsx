@@ -14,8 +14,8 @@ import { useNavigate } from "react-router-dom";
 import { CurrentFarmProvider, useCurrentFarm } from "../../context/CurrentFarmContext";
 import Modal from "../../components/ui/Modal.jsx";
 
-const C = { soil: "#5C4033", cream: "#F8F3E9", border: "#E6DED0", muted: "#8A7863", green: "#6AA84F", greenDk: "#3E7B1F", red: "#D4442E", paper: "#FCFAF5", greenTint: "#E9F2DD" };
-const FOCUS = "focus:outline-none focus-visible:ring-2 focus-visible:ring-[#6AA84F]";
+const C = { soil: "var(--soil)", cream: "var(--cream)", border: "#E6DED0", muted: "#8A7863", green: "var(--green)", greenDk: "var(--green-dk)", red: "var(--red)", paper: "#FCFAF5", greenTint: "#E9F2DD" };
+const FOCUS = "focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--green)]";
 
 function authHeaders() { const t = localStorage.getItem("tfos_access_token"); return t ? { "Content-Type": "application/json", Authorization: `Bearer ${t}` } : { "Content-Type": "application/json" }; }
 function emitToast(m) { window.dispatchEvent(new CustomEvent("tfos:toast", { detail: { message: m } })); }
@@ -104,17 +104,17 @@ function ManageInner() {
       </div>
 
       {isLoading ? (
-        <div className="rounded-2xl border p-6" style={{ borderColor: C.border, background: "white" }}>Loading farms…</div>
+        <div className="rounded-2xl border p-6" style={{ borderColor: C.border, background: "var(--paper)" }}>Loading farms…</div>
       ) : farms.length === 0 ? (
-        <div className="rounded-2xl border p-6 text-sm" style={{ borderColor: C.border, background: "white", color: C.muted }}>No farms yet. Add one from the farm switcher.</div>
+        <div className="rounded-2xl border p-6 text-sm" style={{ borderColor: C.border, background: "var(--paper)", color: C.muted }}>No farms yet. Add one from the farm switcher.</div>
       ) : (
         <div className="space-y-2">
           {farms.map((f) => {
             const archived = f.is_active === false;
             return (
-              <div key={f.farm_id} className="rounded-2xl border p-3.5 flex items-start gap-3" style={{ borderColor: C.border, background: "white", opacity: archived ? 0.6 : 1 }}>
+              <div key={f.farm_id} className="rounded-2xl border p-3.5 flex items-start gap-3" style={{ borderColor: C.border, background: "var(--paper)", opacity: archived ? 0.6 : 1 }}>
                 <span className="w-9 h-9 rounded-full flex items-center justify-center shrink-0" style={{ background: f.farm_id === farmId ? C.green : C.cream }}>
-                  <Sprout size={17} style={{ color: f.farm_id === farmId ? "white" : C.greenDk }} />
+                  <Sprout size={17} style={{ color: f.farm_id === farmId ? "var(--paper)" : C.greenDk }} />
                 </span>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">

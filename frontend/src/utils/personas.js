@@ -13,18 +13,18 @@ import {
 
 // group ∈ PRODUCER | TRADE | CAPITAL | GOVERNANCE | SERVICE
 export const PERSONAS = {
-  PRIMARY_PRODUCER:        { label: "Primary Producer",      short: "Farmer",    Icon: Sprout,       color: "#6AA84F", group: "PRODUCER" },
+  PRIMARY_PRODUCER:        { label: "Primary Producer",      short: "Farmer",    Icon: Sprout,       color: "var(--green)", group: "PRODUCER" },
   COMMERCIAL_BUYER:        { label: "Commercial Buyer",      short: "Buyer",     Icon: ShoppingCart, color: "#3E7B8C", group: "TRADE" },
-  AGRI_INPUT_SUPPLIER:     { label: "Agri-Input Supplier",   short: "Supplier",  Icon: Factory,      color: "#BF9000", group: "TRADE" },
+  AGRI_INPUT_SUPPLIER:     { label: "Agri-Input Supplier",   short: "Supplier",  Icon: Factory,      color: "var(--amber)", group: "TRADE" },
   LOGISTICS_OPERATOR:      { label: "Logistics & Fleet",     short: "Logistics", Icon: Truck,        color: "#7A5C4E", group: "SERVICE" },
   BANKER_COMMERCIAL:       { label: "Commercial Bank",       short: "Banker",    Icon: Landmark,     color: "#5E6D7E", group: "CAPITAL" },
   DONOR_DEVELOPMENT:       { label: "Development / Donor",    short: "Donor",     Icon: Landmark,     color: "#5E6D7E", group: "CAPITAL" },
   AGRIBUSINESS_ENTERPRISE: { label: "Agribusiness",          short: "Business",  Icon: Building2,    color: "#8B6914", group: "TRADE" },
   COMMODITY_EXPORTER:      { label: "Commodity Exporter",    short: "Exporter",  Icon: Ship,         color: "#2F5D3A", group: "TRADE" },
   TRADE_IMPORTER:          { label: "Trade Importer",        short: "Importer",  Icon: Package,      color: "#5E6D7E", group: "TRADE" },
-  MATAQALI_TRUSTEE:        { label: "Mataqali Trustee",      short: "Trustee",   Icon: Users,        color: "#5C4033", group: "GOVERNANCE" },
-  GOVERNMENT_REGULATOR:    { label: "Government Regulator",  short: "Regulator", Icon: Users,        color: "#A32D2D", group: "GOVERNANCE" },
-  QUALITY_AUDITOR:         { label: "Quality Auditor",       short: "Auditor",   Icon: Users,        color: "#A32D2D", group: "GOVERNANCE" },
+  MATAQALI_TRUSTEE:        { label: "Mataqali Trustee",      short: "Trustee",   Icon: Users,        color: "var(--soil)", group: "GOVERNANCE" },
+  GOVERNMENT_REGULATOR:    { label: "Government Regulator",  short: "Regulator", Icon: Users,        color: "var(--red)", group: "GOVERNANCE" },
+  QUALITY_AUDITOR:         { label: "Quality Auditor",       short: "Auditor",   Icon: Users,        color: "var(--red)", group: "GOVERNANCE" },
 };
 
 // Ordered list of the 12 (for selects). value = canonical UPPER key.

@@ -52,8 +52,8 @@ function Toast({ message, onClose }) {
         top: 16,
         right: 16,
         zIndex: 9999,
-        background: "var(--green, #6AA84F)",
-        color: "white",
+        background: "var(--green, var(--green))",
+        color: "#fff",
         padding: "12px 18px",
         borderRadius: 8,
         boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
@@ -68,7 +68,7 @@ function Toast({ message, onClose }) {
         style={{
           marginLeft: 12,
           background: "transparent",
-          color: "white",
+          color: "#fff",
           border: "none",
           cursor: "pointer",
           fontSize: 16,
@@ -87,12 +87,12 @@ function Label({ children, required }) {
         display: "block",
         fontSize: 13,
         fontWeight: 600,
-        color: "var(--soil, #5C4033)",
+        color: "var(--soil, var(--soil))",
         marginBottom: 6,
       }}
     >
       {children}
-      {required && <span style={{ color: "var(--red, #A32D2D)", marginLeft: 3 }}>*</span>}
+      {required && <span style={{ color: "var(--red, var(--red))", marginLeft: 3 }}>*</span>}
     </label>
   );
 }
@@ -103,7 +103,7 @@ function Field({ label, required, error, children }) {
       <Label required={required}>{label}</Label>
       {children}
       {error && (
-        <div style={{ color: "var(--red, #A32D2D)", fontSize: 12, marginTop: 4 }}>
+        <div style={{ color: "var(--red, var(--red))", fontSize: 12, marginTop: 4 }}>
           {error}
         </div>
       )}
@@ -120,11 +120,11 @@ function Input({ value, onChange, type = "text", ...rest }) {
       style={{
         width: "100%",
         padding: "10px 12px",
-        border: "1px solid var(--line, #E0D5C0)",
+        border: "1px solid var(--line, var(--line))",
         borderRadius: 6,
         fontSize: 14,
-        background: "white",
-        color: "var(--soil, #5C4033)",
+        background: "var(--paper)",
+        color: "var(--soil, var(--soil))",
         boxSizing: "border-box",
       }}
       {...rest}
@@ -306,7 +306,7 @@ export default function CycleNew() {
   // ── Render ────────────────────────────────────────────────────────
   if (loading) {
     return (
-      <div style={{ padding: 32, color: "var(--soil, #5C4033)" }}>Loading…</div>
+      <div style={{ padding: 32, color: "var(--soil, var(--soil))" }}>Loading…</div>
     );
   }
 
@@ -316,7 +316,7 @@ export default function CycleNew() {
         maxWidth: 640,
         margin: "0 auto",
         padding: "24px 20px 40px",
-        color: "var(--soil, #5C4033)",
+        color: "var(--soil, var(--soil))",
       }}
     >
       <Toast message={toast} onClose={() => setToast(null)} />
@@ -333,8 +333,8 @@ export default function CycleNew() {
           role="alert"
           style={{
             background: "#FBE5E5",
-            border: "1px solid var(--red, #A32D2D)",
-            color: "var(--red, #A32D2D)",
+            border: "1px solid var(--red, var(--red))",
+            color: "var(--red, var(--red))",
             padding: "10px 14px",
             borderRadius: 6,
             marginBottom: 16,
@@ -441,11 +441,11 @@ export default function CycleNew() {
           style={{
             width: "100%",
             padding: "10px 12px",
-            border: "1px solid var(--line, #E0D5C0)",
+            border: "1px solid var(--line, var(--line))",
             borderRadius: 6,
             fontSize: 14,
-            background: "white",
-            color: "var(--soil, #5C4033)",
+            background: "var(--paper)",
+            color: "var(--soil, var(--soil))",
             boxSizing: "border-box",
             resize: "vertical",
             fontFamily: "inherit",
@@ -458,8 +458,8 @@ export default function CycleNew() {
           onClick={handleSubmit}
           disabled={submitting}
           style={{
-            background: "var(--green, #6AA84F)",
-            color: "white",
+            background: "var(--green, var(--green))",
+            color: "#fff",
             border: "none",
             padding: "12px 24px",
             borderRadius: 6,
@@ -476,8 +476,8 @@ export default function CycleNew() {
           disabled={submitting}
           style={{
             background: "transparent",
-            color: "var(--soil, #5C4033)",
-            border: "1px solid var(--line, #E0D5C0)",
+            color: "var(--soil, var(--soil))",
+            border: "1px solid var(--line, var(--line))",
             padding: "12px 24px",
             borderRadius: 6,
             fontSize: 14,

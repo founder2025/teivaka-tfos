@@ -6,12 +6,12 @@
  * a small badge in the corner so farmers see what's coming.
  */
 const C = {
-  soil:    "#5C4033",
-  green:   "#6AA84F",
-  greenDk: "#3E7B1F",
-  amber:   "#BF9000",
-  red:     "#D4442E",
-  cream:   "#F8F3E9",
+  soil:    "var(--soil)",
+  green:   "var(--green)",
+  greenDk: "var(--green-dk)",
+  amber:   "var(--amber)",
+  red:     "var(--red)",
+  cream:   "var(--cream)",
   border:  "#E6DED0",
   muted:   "#8A7863",
 };

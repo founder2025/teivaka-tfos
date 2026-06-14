@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Shield, Check } from "lucide-react";
 
-const C = { soil: "#5C4033", cream: "#F8F3E9", green: "#6AA84F", greenDk: "#3E7B1F", line: "#E6DED0", muted: "#8A8678", red: "#A32D2D" };
+const C = { soil: "var(--soil)", cream: "var(--cream)", green: "var(--green)", greenDk: "var(--green-dk)", line: "#E6DED0", muted: "var(--muted)", red: "var(--red)" };
 
 export default function AcceptInvite() {
   const { token } = useParams();
@@ -38,7 +38,7 @@ export default function AcceptInvite() {
   const inp = { width: "100%", border: `1px solid ${C.line}`, borderRadius: 8, padding: "11px 13px", fontSize: 14, marginBottom: 10, boxSizing: "border-box" };
   return (
     <div style={{ minHeight: "100vh", background: C.cream, display: "flex", alignItems: "center", justifyContent: "center", padding: 16, fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" }}>
-      <div style={{ background: "#fff", border: `1px solid ${C.line}`, borderRadius: 14, padding: 26, width: "100%", maxWidth: 440 }}>
+      <div style={{ background: "var(--paper)", border: `1px solid ${C.line}`, borderRadius: 14, padding: 26, width: "100%", maxWidth: 440 }}>
         <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 4 }}>
           <Shield size={20} style={{ color: C.green }} />
           <strong style={{ color: C.soil, fontSize: 18 }}>Teivaka team invitation</strong>

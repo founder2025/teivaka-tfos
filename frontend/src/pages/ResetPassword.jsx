@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, useSearchParams, useNavigate } from "react-router-dom";
 
-const C = { soil: "#2C1A0E", green: "#3D8C40", cream: "#F5EFE0", border: "#E0D5C0" };
+const C = { soil: "#2C1A0E", green: "var(--green)", cream: "var(--cream)", border: "var(--line)" };
 
 function EyeIcon({ open }) {
   return open ? (
@@ -88,7 +88,7 @@ export default function ResetPassword() {
       <div className="bg-white rounded-2xl shadow-lg w-full max-w-md p-8" style={{ border: `1px solid ${C.border}` }}>
         <div className="text-center mb-6">
           <img src="/teivaka_logo.png" alt="Teivaka" style={{ height: 88, width: "auto", display: "block", margin: "0 auto 8px" }} />
-          <p className="text-sm" style={{ color: "#5C4033", opacity: 0.7 }}>Set a new password</p>
+          <p className="text-sm" style={{ color: "var(--soil)", opacity: 0.7 }}>Set a new password</p>
         </div>
 
         {success ? (

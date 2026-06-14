@@ -57,7 +57,7 @@ export default function Subscription() {
     } catch (e) { toast(String(e.message || e), "error"); } finally { setBusy(null); }
   };
 
-  const tile = { flex: 1, minWidth: 140, background: "#fff", border: `1px solid ${C.line}`, borderRadius: 10, padding: "12px 16px" };
+  const tile = { flex: 1, minWidth: 140, background: "var(--paper)", border: `1px solid ${C.line}`, borderRadius: 10, padding: "12px 16px" };
 
   return (
     <MeShell title="Your tier" subtitle="Tier is account-level — it covers your entire account and all farms inside it.">
@@ -104,7 +104,7 @@ export default function Subscription() {
                   <button disabled style={{ width: "100%", border: `1px solid ${C.line}`, background: C.cream, color: C.muted, borderRadius: 8, padding: "10px 0", fontSize: 13, fontWeight: 700 }}>By sponsorship</button>
                 ) : (
                   <button disabled={Boolean(pending) || busy === t.code} onClick={() => requestSwitch(t.code)}
-                    style={{ width: "100%", border: "none", background: pending ? C.line : C.green, color: pending ? C.muted : "#fff", borderRadius: 8, padding: "10px 0", fontSize: 13, fontWeight: 700, cursor: pending ? "default" : "pointer" }}>
+                    style={{ width: "100%", border: "none", background: pending ? C.line : C.green, color: pending ? C.muted : "var(--paper)", borderRadius: 8, padding: "10px 0", fontSize: 13, fontWeight: 700, cursor: pending ? "default" : "pointer" }}>
                     {busy === t.code ? "Requesting…" : `Switch to ${live.name || t.code}`}
                   </button>
                 )}

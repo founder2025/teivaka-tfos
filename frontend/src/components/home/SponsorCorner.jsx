@@ -13,7 +13,7 @@ const tok = () => localStorage.getItem("tfos_access_token");
 const toast = (m, t) => { try { window.dispatchEvent(new CustomEvent("tfos:toast", { detail: { message: m, type: t } })); } catch { /* noop */ } };
 async function getJSON(u) { const t = tok(); const r = await fetch(u, { headers: t ? { Authorization: `Bearer ${t}` } : {} }); if (!r.ok) throw new Error(String(r.status)); return r.json(); }
 async function postJSON(u, b) { const t = tok(); const r = await fetch(u, { method: "POST", headers: { ...(t ? { Authorization: `Bearer ${t}` } : {}), ...(b ? { "Content-Type": "application/json" } : {}) }, body: b ? JSON.stringify(b) : undefined }); if (!r.ok) throw new Error(String(r.status)); return r.json().catch(() => ({})); }
-const inp = { width: "100%", border: "1px solid var(--line)", borderRadius: 8, padding: "9px 11px", fontSize: 13.5, marginBottom: 10, outline: "none", color: "var(--soil)", background: "#fff" };
+const inp = { width: "100%", border: "1px solid var(--line)", borderRadius: 8, padding: "9px 11px", fontSize: 13.5, marginBottom: 10, outline: "none", color: "var(--soil)", background: "var(--paper)" };
 
 function InquiryModal({ onClose }) {
   const [f, setF] = useState({ organisation: "", email: "", note: "" });
@@ -66,7 +66,7 @@ export default function SponsorCorner({ compact = false }) {
         <>
           <div style={{ display: "flex", flexDirection: compact ? "row" : "column", gap: 10, overflowX: compact ? "auto" : "visible", WebkitOverflowScrolling: "touch" }}>
             {items.map((it) => (
-              <div key={it.placement_id} style={{ border: "1px solid var(--line)", borderRadius: 10, overflow: "hidden", minWidth: compact ? 240 : "auto", flexShrink: 0, background: "#fff" }}>
+              <div key={it.placement_id} style={{ border: "1px solid var(--line)", borderRadius: 10, overflow: "hidden", minWidth: compact ? 240 : "auto", flexShrink: 0, background: "var(--paper)" }}>
                 {it.image_url && <img src={it.image_url} alt="" loading="lazy" style={{ width: "100%", height: 96, objectFit: "cover", display: "block" }} />}
                 <div style={{ padding: "9px 11px" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>

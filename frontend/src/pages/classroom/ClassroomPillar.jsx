@@ -32,8 +32,8 @@ const toast = (message, type) => { try { window.dispatchEvent(new CustomEvent("t
 // Deterministic farm-toned cover per course title — every card looks designed
 // even before an author uploads a cover image.
 const COVER_PALETTE = [
-  "linear-gradient(135deg,#6aa84f,#3d6b2e)",   // field green
-  "linear-gradient(135deg,#bf9000,#7a5c00)",   // harvest amber
+  "linear-gradient(135deg,var(--green),#3d6b2e)",   // field green
+  "linear-gradient(135deg,var(--amber),#7a5c00)",   // harvest amber
   "linear-gradient(135deg,#2e7d6b,#174f42)",   // taro leaf teal
   "linear-gradient(135deg,#7b5ea7,#4a3168)",   // eggplant violet
   "linear-gradient(135deg,#c0603a,#83402a)",   // terracotta soil
@@ -92,10 +92,10 @@ const PRICINGS = [["", "Free & paid"], ["FREE", "Free only"], ["PAID", "Mastercl
 const SORTS = [["featured", "Featured"], ["newest", "Newest"], ["rated", "Top rated"], ["popular", "Most learners"]];
 
 function GridControls({ q, setQ, level, setLevel, price, setPrice, sort, setSort }) {
-  const sel = { border: "1px solid var(--line)", borderRadius: 999, padding: "7px 12px", fontSize: 12.5, background: "#fff", color: "var(--soil)", cursor: "pointer" };
+  const sel = { border: "1px solid var(--line)", borderRadius: 999, padding: "7px 12px", fontSize: 12.5, background: "var(--paper)", color: "var(--soil)", cursor: "pointer" };
   return (
     <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: 12 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, flex: 1, minWidth: 200, border: "1px solid var(--line)", borderRadius: 999, padding: "7px 14px", background: "#fff" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, flex: 1, minWidth: 200, border: "1px solid var(--line)", borderRadius: 999, padding: "7px 14px", background: "var(--paper)" }}>
         <BookOpen size={14} style={{ color: "var(--muted)" }} />
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search courses…"
           style={{ border: "none", outline: "none", flex: 1, fontSize: 13.5, background: "transparent", color: "var(--soil)" }} />
@@ -364,7 +364,7 @@ function LibraryView({ canAuthor }) {
   return (
     <>
       <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 12, flexWrap: "wrap" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, flex: 1, minWidth: 220, border: "1px solid var(--line)", borderRadius: 10, padding: "8px 12px", background: "#fff" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flex: 1, minWidth: 220, border: "1px solid var(--line)", borderRadius: 10, padding: "8px 12px", background: "var(--paper)" }}>
           <BookOpen size={15} style={{ color: "var(--muted)" }} />
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search the field guides — crops, pests, chemicals, practices…"
             style={{ border: "none", outline: "none", flex: 1, fontSize: 14, background: "transparent", color: "var(--soil)" }} />

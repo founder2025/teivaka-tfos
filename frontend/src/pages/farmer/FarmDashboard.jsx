@@ -34,10 +34,10 @@ import NewCycleModal from "../../components/farm/NewCycleModal";
 import LayerBackfillBanner from "../../components/farm/LayerBackfillBanner";
 
 const C = {
-  soil: "#5C4033", cream: "#F8F3E9", border: "#E6DED0", muted: "#8A7863", ink: "#3A2E26",
-  green: "#6AA84F", greenDk: "#3E7B1F", amber: "#BF9000", red: "#D4442E", greenTint: "#E9F2DD", paper: "#FCFAF5",
+  soil: "var(--soil)", cream: "var(--cream)", border: "#E6DED0", muted: "#8A7863", ink: "#3A2E26",
+  green: "var(--green)", greenDk: "var(--green-dk)", amber: "var(--amber)", red: "var(--red)", greenTint: "#E9F2DD", paper: "#FCFAF5",
 };
-const FOCUS = "focus:outline-none focus-visible:ring-2 focus-visible:ring-[#6AA84F] focus-visible:ring-offset-1 transition";
+const FOCUS = "focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--green)] focus-visible:ring-offset-1 transition";
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false, staleTime: 60_000 } } });
 
@@ -176,7 +176,7 @@ function Priorities({ tasks, navigate, onAction }) {
           {top.map((t) => {
             const sev = (t.task_rank || 999) < 100 ? C.red : (t.task_rank || 999) < 300 ? C.amber : C.muted;
             return (
-              <div key={t.task_id} className="rounded-xl border p-3" style={{ background: "white", borderColor: C.border, borderLeft: `3px solid ${sev}` }}>
+              <div key={t.task_id} className="rounded-xl border p-3" style={{ background: "var(--paper)", borderColor: C.border, borderLeft: `3px solid ${sev}` }}>
                 <div className="text-[11px]" style={{ color: C.muted }}>{t.source_module || "Task"}</div>
                 <div className="text-sm font-semibold mt-0.5" style={{ color: C.ink }}>{t.imperative}</div>
                 {t.body_md && <div className="text-[11px] mt-0.5 line-clamp-2" style={{ color: C.muted }}>{t.body_md}</div>}
@@ -236,7 +236,7 @@ function WeatherStrip({ farmId, navigate }) {
             {days.map((d, i) => {
               const dw = wmoWx(d.weather_code);
               return (
-                <div key={i} className="rounded-xl border p-2 text-center shrink-0 min-w-[64px]" style={{ background: "white", borderColor: C.border }}>
+                <div key={i} className="rounded-xl border p-2 text-center shrink-0 min-w-[64px]" style={{ background: "var(--paper)", borderColor: C.border }}>
                   <div className="text-[11px] font-semibold" style={{ color: C.soil }}>{wxDay(d.valid_at)}</div>
                   <dw.Icon size={16} style={{ color: C.greenDk, margin: "3px auto" }} />
                   <div className="text-xs font-bold" style={{ color: C.soil }}>{wx1(d.temp_max_c) != null ? `${wx1(d.temp_max_c)}°` : "—"}<span className="font-normal" style={{ color: C.muted }}>{wx1(d.temp_min_c) != null ? `/${wx1(d.temp_min_c)}°` : ""}</span></div>
@@ -333,7 +333,7 @@ function CyclePipeline({ cycles, navigate }) {
       <div className="flex items-stretch gap-1 overflow-x-auto">
         {stages.map((s, i) => (
           <div key={s.label} className="flex items-center gap-1 shrink-0">
-            <button onClick={() => navigate("/farm/cycles")} className={`rounded-xl border px-4 py-3 text-center min-w-[84px] hover:brightness-95 ${FOCUS}`} style={{ background: "white", borderColor: C.border }}>
+            <button onClick={() => navigate("/farm/cycles")} className={`rounded-xl border px-4 py-3 text-center min-w-[84px] hover:brightness-95 ${FOCUS}`} style={{ background: "var(--paper)", borderColor: C.border }}>
               <div className="text-xl font-bold" style={{ color: C.greenDk }}>{s.v}</div>
               <div className="text-[11px]" style={{ color: C.muted }}>{s.label}</div>
             </button>
@@ -352,7 +352,7 @@ function FarmComparison({ farms, navigate }) {
     <Section icon={Award} title="Farm comparison" link="Compare in Enterprises →" onLink={() => navigate("/farm/enterprises")}>
       <div className="grid gap-2.5 grid-cols-1 sm:grid-cols-2">
         {farms.map((f) => (
-          <div key={f.farm_id} className="rounded-xl border p-3" style={{ background: "white", borderColor: C.border }}>
+          <div key={f.farm_id} className="rounded-xl border p-3" style={{ background: "var(--paper)", borderColor: C.border }}>
             <div className="font-semibold text-sm" style={{ color: C.soil }}>{f.farm_id} · {f.farm_name || f.location_island || ""}</div>
             <div className="text-[11px] mt-0.5" style={{ color: C.muted }}>{f.land_area_ha != null ? `${Number(f.land_area_ha).toFixed(2)} ha` : "—"}</div>
           </div>
@@ -376,7 +376,7 @@ function QuickActions({ navigate }) {
     <Section icon={Plus} title="Quick actions">
       <div className="grid gap-2 grid-cols-3 sm:grid-cols-6">
         {acts.map((a) => (
-          <button key={a.label} onClick={a.go} className={`rounded-xl border p-3 flex flex-col items-center gap-1.5 hover:brightness-95 ${FOCUS}`} style={{ background: "white", borderColor: C.border }}>
+          <button key={a.label} onClick={a.go} className={`rounded-xl border p-3 flex flex-col items-center gap-1.5 hover:brightness-95 ${FOCUS}`} style={{ background: "var(--paper)", borderColor: C.border }}>
             <a.icon size={16} style={{ color: C.greenDk }} /><span className="text-[11px] font-medium" style={{ color: C.soil }}>{a.label}</span>
           </button>
         ))}

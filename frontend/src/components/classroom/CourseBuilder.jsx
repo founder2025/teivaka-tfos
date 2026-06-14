@@ -26,7 +26,7 @@ function Prompt({ title, message, value, placeholder, okLabel, destructive, conf
   return (
     <div className="tp-root" style={{ position: "fixed", inset: 0, zIndex: 1200, display: "flex", alignItems: "center", justifyContent: "center" }}>
       <div className="tp-scrim" style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.4)" }} onClick={onClose} />
-      <div className="tp-card" style={{ position: "relative", background: "#fff", borderRadius: 12, padding: 18, width: 340, maxWidth: "92vw" }}>
+      <div className="tp-card" style={{ position: "relative", background: "var(--paper)", borderRadius: 12, padding: 18, width: 340, maxWidth: "92vw" }}>
         <div className="tp-title" style={{ fontWeight: 700, color: "var(--soil)", marginBottom: 10 }}>{title}</div>
         {confirm ? <div className="tp-msg" style={{ fontSize: 13.5, color: "var(--muted)", marginBottom: 12 }}>{message}</div> : (
           <input className="tp-input" autoFocus value={v} placeholder={placeholder || ""} onChange={(e) => setV(e.target.value)}

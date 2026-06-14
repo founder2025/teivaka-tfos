@@ -16,7 +16,7 @@ import { useCurrentFarm } from "../../context/CurrentFarmContext";
 import { getCurrentUser } from "../../utils/auth";
 import Modal from "../ui/Modal.jsx";
 
-const C = { soil: "#5C4033", border: "#E6DED0", muted: "#8A7863", green: "#6AA84F", greenDk: "#3E7B1F", cream: "#F8F3E9", paper: "#FCFAF5", greenTint: "#E9F2DD" };
+const C = { soil: "var(--soil)", border: "#E6DED0", muted: "#8A7863", green: "var(--green)", greenDk: "var(--green-dk)", cream: "var(--cream)", paper: "#FCFAF5", greenTint: "#E9F2DD" };
 
 function authHeaders() {
   const tok = localStorage.getItem("tfos_access_token");
@@ -105,8 +105,8 @@ export default function FarmSelector() {
     <div className="relative inline-block" ref={wrapRef}>
       {/* Trigger */}
       <button onClick={() => setOpen((v) => !v)}
-        className="inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold hover:brightness-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#6AA84F]"
-        style={{ background: "white", color: C.soil, border: `1px solid ${C.border}`, minWidth: 200 }}>
+        className="inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold hover:brightness-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--green)]"
+        style={{ background: "var(--paper)", color: C.soil, border: `1px solid ${C.border}`, minWidth: 200 }}>
         <Sprout size={15} style={{ color: C.greenDk }} />
         <span className="flex-1 truncate text-left">
           {current ? <>{current.farm_name || "Unnamed farm"}{current.location_island ? ` · ${current.location_island}` : ""}</> : "Select farm…"}
@@ -117,7 +117,7 @@ export default function FarmSelector() {
       {/* Popover */}
       {open && (
         <div className="absolute left-0 mt-1.5 rounded-2xl shadow-xl z-[1500] overflow-hidden"
-          style={{ width: 320, background: "white", border: `1px solid ${C.border}` }}>
+          style={{ width: 320, background: "var(--paper)", border: `1px solid ${C.border}` }}>
           <div className="px-3.5 py-2.5" style={{ background: C.paper, borderBottom: `1px solid ${C.border}` }}>
             <div className="flex items-center justify-between">
               <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: C.muted }}>Your farms</span>
@@ -134,7 +134,7 @@ export default function FarmSelector() {
                   className="w-full text-left flex items-start gap-2.5 rounded-xl p-2.5 hover:brightness-[0.98]"
                   style={{ background: sel ? C.greenTint : "transparent", border: `1px solid ${sel ? C.green : "transparent"}` }}>
                   <span className="mt-0.5 w-7 h-7 rounded-full flex items-center justify-center shrink-0" style={{ background: sel ? C.green : C.cream }}>
-                    <Sprout size={15} style={{ color: sel ? "white" : C.greenDk }} />
+                    <Sprout size={15} style={{ color: sel ? "var(--paper)" : C.greenDk }} />
                   </span>
                   <span className="flex-1 min-w-0">
                     <span className="flex items-center gap-1.5">

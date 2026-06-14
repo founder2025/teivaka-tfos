@@ -303,7 +303,7 @@ function BuyersInner() {
 function StatusPill({ status, onChange }) {
   const color = { PENDING: "var(--amber)", CONFIRMED: "var(--green)", PICKING: "var(--green)", DISPATCHED: "var(--green)", DELIVERED: "var(--green-dk)", PAID: "var(--green-dk)", INVOICED: "var(--green-dk)", CANCELLED: "var(--red)" }[status] || "var(--muted)";
   return (
-    <select value={status} onChange={(e) => onChange(e.target.value)} style={{ fontSize: 12, fontWeight: 700, borderRadius: 999, padding: "3px 8px", border: "1px solid var(--line)", color, background: "#fff" }}>
+    <select value={status} onChange={(e) => onChange(e.target.value)} style={{ fontSize: 12, fontWeight: 700, borderRadius: 999, padding: "3px 8px", border: "1px solid var(--line)", color, background: "var(--paper)" }}>
       {ORDER_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
     </select>
   );

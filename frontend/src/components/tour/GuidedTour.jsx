@@ -63,7 +63,7 @@ function Spotlight({ selector }) {
   }, [selector]);
   if (!rect) return null;
   return (
-    <div style={{ position: "fixed", ...rect, border: "3px solid #6AA84F", borderRadius: 12,
+    <div style={{ position: "fixed", ...rect, border: "3px solid var(--green)", borderRadius: 12,
       boxShadow: "0 0 0 9999px rgba(44,26,14,0.55)", zIndex: 10000, pointerEvents: "none", transition: "all .25s" }} />
   );
 }
@@ -74,7 +74,7 @@ export function GuidedTour({ tour, steps }) {
   if (!tour.open || !steps?.length) return null;
   const step = steps[Math.min(i, steps.length - 1)];
   const last = i >= steps.length - 1;
-  const C = { soil: "#5C4033", green: "#6AA84F", greenDk: "#3E7B1F", cream: "#F8F3E9", border: "#E6DED0", muted: "#8A7863" };
+  const C = { soil: "var(--soil)", green: "var(--green)", greenDk: "var(--green-dk)", cream: "var(--cream)", border: "#E6DED0", muted: "#8A7863" };
   const Icon = step.Icon;
 
   const finish = () => { const act = step.action; tour.markSeen(); if (act) setTimeout(act, 250); };
@@ -84,7 +84,7 @@ export function GuidedTour({ tour, steps }) {
       {step.spotlight ? <Spotlight selector={step.spotlight} />
         : <div style={{ position: "fixed", inset: 0, background: "rgba(44,26,14,0.55)", zIndex: 9999 }} />}
       <div role="dialog" aria-modal="true" style={{ position: "fixed", left: "50%", bottom: 24, transform: "translateX(-50%)", width: "min(420px, calc(100vw - 28px))", zIndex: 10001 }}>
-        <div style={{ background: "#fff", border: `1px solid ${C.border}`, borderRadius: 18, boxShadow: "0 12px 40px rgba(44,26,14,0.28)", padding: 18 }}>
+        <div style={{ background: "var(--paper)", border: `1px solid ${C.border}`, borderRadius: 18, boxShadow: "0 12px 40px rgba(44,26,14,0.28)", padding: 18 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <div style={{ width: 46, height: 46, borderRadius: 12, background: C.cream, color: C.greenDk, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
               {Icon ? <Icon size={24} strokeWidth={1.7} /> : <Check size={24} />}
@@ -100,7 +100,7 @@ export function GuidedTour({ tour, steps }) {
               {steps.map((_, n) => <span key={n} style={{ width: n === i ? 18 : 7, height: 7, borderRadius: 4, background: n === i ? C.green : C.border, transition: "all .2s" }} />)}
             </div>
             <div style={{ display: "flex", gap: 8 }}>
-              {i > 0 && <button onClick={() => setI(i - 1)} style={{ background: "#fff", border: `1px solid ${C.border}`, color: C.soil, borderRadius: 10, padding: "8px 12px", fontSize: 13, fontWeight: 600, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 4 }}><ArrowLeft size={14} />Back</button>}
+              {i > 0 && <button onClick={() => setI(i - 1)} style={{ background: "var(--paper)", border: `1px solid ${C.border}`, color: C.soil, borderRadius: 10, padding: "8px 12px", fontSize: 13, fontWeight: 600, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 4 }}><ArrowLeft size={14} />Back</button>}
               {last
                 ? <button onClick={finish} style={{ background: C.green, border: "none", color: "#fff", borderRadius: 10, padding: "8px 16px", fontSize: 13, fontWeight: 700, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 4 }}>{step.actionLabel || "Done"}<ArrowRight size={14} /></button>
                 : <button onClick={() => setI(i + 1)} style={{ background: C.green, border: "none", color: "#fff", borderRadius: 10, padding: "8px 16px", fontSize: 13, fontWeight: 700, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 4 }}>Next<ArrowRight size={14} /></button>}

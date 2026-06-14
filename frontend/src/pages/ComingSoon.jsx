@@ -2,8 +2,8 @@ import { useParams } from "react-router-dom";
 import { Construction } from "lucide-react";
 
 const C = {
-  soil:  "#5C4033",
-  green: "#6AA84F",
+  soil:  "var(--soil)",
+  green: "var(--green)",
 };
 
 /**

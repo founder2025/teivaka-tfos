@@ -8,7 +8,7 @@
  * applies the saved theme before first paint (no flash).
  */
 const KEY = "tfos_theme"; // 'system' | 'light' | 'dark'
-const COLORS = { light: "#F8F3E9", dark: "#16130E" };
+const COLORS = { light: "var(--cream)", dark: "#16130E" };
 
 export function getThemePref() {
   try { return localStorage.getItem(KEY) || "system"; } catch { return "system"; }

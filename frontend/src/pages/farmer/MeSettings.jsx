@@ -70,12 +70,12 @@ function Toggle({ on, onChange }) {
   return (
     <button onClick={() => onChange(!on)} aria-pressed={on}
       style={{ width: 44, height: 24, borderRadius: 12, border: "none", cursor: "pointer", position: "relative", background: on ? G.green : G.line, transition: "background .15s" }}>
-      <span style={{ position: "absolute", top: 3, left: on ? 23 : 3, width: 18, height: 18, borderRadius: "50%", background: "#fff", transition: "left .15s" }} />
+      <span style={{ position: "absolute", top: 3, left: on ? 23 : 3, width: 18, height: 18, borderRadius: "50%", background: "var(--paper)", transition: "left .15s" }} />
     </button>
   );
 }
 
-const sBtn = { border: `1px solid ${G.line}`, background: "#fff", color: G.soil, borderRadius: 8, padding: "7px 13px", fontSize: 12.5, fontWeight: 600, cursor: "pointer", textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 6 };
+const sBtn = { border: `1px solid ${G.line}`, background: "var(--paper)", color: G.soil, borderRadius: 8, padding: "7px 13px", fontSize: 12.5, fontWeight: 600, cursor: "pointer", textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 6 };
 
 /* Card 1 — Farm setup (prototype: farm profile + enterprises + what you run) */
 function FarmSetupCard({ farm, loading, children }) {
@@ -127,7 +127,7 @@ function LanguageAndAlerts() {
         <div style={{ display: "flex", gap: 6 }}>
           {LANGS.map(([v, l]) => (
             <button key={v} onClick={() => save({ preferred_language: v })}
-              style={{ border: `1px solid ${lang === v ? G.greenDk : G.line}`, background: lang === v ? G.green : "#fff", color: lang === v ? "#fff" : G.soil, borderRadius: 999, padding: "6px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>{l}</button>
+              style={{ border: `1px solid ${lang === v ? G.greenDk : G.line}`, background: lang === v ? G.green : "var(--paper)", color: lang === v ? "var(--paper)" : G.soil, borderRadius: 999, padding: "6px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>{l}</button>
           ))}
         </div>
       </Row>
@@ -225,7 +225,7 @@ function MoneyUnits() {
     catch (e) { toast(`Couldn't save: ${e.userMessage || e.message}`, "error"); }
   };
   const pill = (m, label) => (
-    <button onClick={() => saveMode(m)} style={{ border: `1px solid ${mode === m ? G.greenDk : G.line}`, background: mode === m ? G.green : "#fff", color: mode === m ? "#fff" : G.soil, borderRadius: 999, padding: "7px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer", minHeight: 40 }}>{label}</button>
+    <button onClick={() => saveMode(m)} style={{ border: `1px solid ${mode === m ? G.greenDk : G.line}`, background: mode === m ? G.green : "var(--paper)", color: mode === m ? "var(--paper)" : G.soil, borderRadius: 999, padding: "7px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer", minHeight: 40 }}>{label}</button>
   );
   const sel = { padding: "7px 9px", border: `1px solid ${G.line}`, borderRadius: 8, fontSize: 13.5, minWidth: 150 };
   return (
@@ -254,11 +254,11 @@ function MoneyUnits() {
 }
 
 const C = {
-  cream:   "#F8F3E9",
+  cream:   "var(--cream)",
   soil:    "var(--soil)",
   muted:   "var(--muted)",
   border:  "var(--line)",
-  red:     "#A32D2D",
+  red:     "var(--red)",
   redBg:   "#FDECEA",
 };
 
@@ -309,7 +309,7 @@ function DangerZone() {
             style={{ width: "100%", maxWidth: 320, padding: "9px 11px", border: `1px solid ${C.border}`, borderRadius: 8, fontSize: 14, boxSizing: "border-box", marginBottom: 10 }}
           />
           <div style={{ display: "flex", gap: 8 }}>
-            <button onClick={del} disabled={busy || !password} style={{ background: C.red, color: "white", border: "none", borderRadius: 8, padding: "9px 14px", fontSize: 14, fontWeight: 600, cursor: "pointer", opacity: busy || !password ? 0.5 : 1 }}>
+            <button onClick={del} disabled={busy || !password} style={{ background: C.red, color: "#fff", border: "none", borderRadius: 8, padding: "9px 14px", fontSize: 14, fontWeight: 600, cursor: "pointer", opacity: busy || !password ? 0.5 : 1 }}>
               {busy ? "Deleting…" : "Permanently delete"}
             </button>
             <button onClick={() => { setOpen(false); setPassword(""); setErr(""); }} disabled={busy} style={{ background: "var(--paper)", color: C.soil, border: `1px solid ${C.border}`, borderRadius: 8, padding: "9px 14px", fontSize: 14, cursor: "pointer" }}>
@@ -377,7 +377,7 @@ export default function MeSettings() {
         {/* Card 1 — Farm setup (incl. what-you-run catalog toggles) */}
         <FarmSetupCard farm={farm} loading={loadingFarms}>
           {farmsError && (
-            <div style={{ margin: "10px 0 0", padding: 10, background: "#FDECEA", color: "#A32D2D", borderRadius: 8, fontSize: 13 }}>
+            <div style={{ margin: "10px 0 0", padding: 10, background: "#FDECEA", color: "var(--red)", borderRadius: 8, fontSize: 13 }}>
               Couldn't load your farms: {farmsError}
             </div>
           )}

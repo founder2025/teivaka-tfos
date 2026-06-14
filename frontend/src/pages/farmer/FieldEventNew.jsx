@@ -34,11 +34,11 @@ import { CurrentFarmProvider, useCurrentFarm } from "../../context/CurrentFarmCo
 import FarmSelector from "../../components/farm/FarmSelector";
 
 const C = {
-  soil:    "#5C4033",
-  green:   "#6AA84F",
-  greenDk: "#3E7B1F",
-  red:     "#D4442E",
-  cream:   "#F8F3E9",
+  soil:    "var(--soil)",
+  green:   "var(--green)",
+  greenDk: "var(--green-dk)",
+  red:     "var(--red)",
+  cream:   "var(--cream)",
   border:  "#E6DED0",
   muted:   "#8A7863",
 };
@@ -549,7 +549,7 @@ function CropSelectionForm({ eventType, schema }) {
                 required
                 maxLength={120}
                 className="w-full px-3 py-2 rounded-lg text-sm focus:outline-none mt-2"
-                style={{ background: "white", border: `1px solid ${C.border}`, color: C.soil }}
+                style={{ background: "var(--paper)", border: `1px solid ${C.border}`, color: C.soil }}
               />
             )}
           </div>
@@ -566,7 +566,7 @@ function CropSelectionForm({ eventType, schema }) {
               onChange={(e) => setEventDate(e.target.value)}
               required
               className="w-full px-3 py-2 rounded-lg text-sm focus:outline-none"
-              style={{ background: "white", border: `1px solid ${C.border}`, color: C.soil }}
+              style={{ background: "var(--paper)", border: `1px solid ${C.border}`, color: C.soil }}
             />
           </div>
 
@@ -597,7 +597,7 @@ function CropSelectionForm({ eventType, schema }) {
                   onChange={(e) => setField(f.name, e.target.value)}
                   required={!!f.required}
                   className="w-full px-3 py-2 rounded-lg text-sm focus:outline-none"
-                  style={{ background: "white", border: `1px solid ${C.border}`, color: C.soil }}
+                  style={{ background: "var(--paper)", border: `1px solid ${C.border}`, color: C.soil }}
                 />
               )}
             </div>
@@ -615,7 +615,7 @@ function CropSelectionForm({ eventType, schema }) {
               maxLength={500}
               placeholder="Optional details about this activity"
               className="w-full px-3 py-2 rounded-lg text-sm focus:outline-none"
-              style={{ background: "white", border: `1px solid ${C.border}`, color: C.soil }}
+              style={{ background: "var(--paper)", border: `1px solid ${C.border}`, color: C.soil }}
             />
           </div>
 
@@ -635,7 +635,7 @@ function CropSelectionForm({ eventType, schema }) {
               onClick={() => navigate("/farm")}
               disabled={submitting}
               className="text-sm font-medium px-3 py-2 rounded-lg disabled:opacity-40"
-              style={{ background: "white", border: `1px solid ${C.border}`, color: C.soil }}
+              style={{ background: "var(--paper)", border: `1px solid ${C.border}`, color: C.soil }}
             >
               Cancel
             </button>
@@ -773,7 +773,7 @@ function Strike96CropsForm({ eventType }) {
               onChange={(e) => setEventDate(e.target.value)}
               required
               className="w-full px-3 py-2 rounded-lg text-sm focus:outline-none"
-              style={{ background: "white", border: `1px solid ${C.border}`, color: C.soil }}
+              style={{ background: "var(--paper)", border: `1px solid ${C.border}`, color: C.soil }}
             />
           </div>
 
@@ -804,7 +804,7 @@ function Strike96CropsForm({ eventType }) {
                   onChange={(e) => setField(f.name, e.target.value)}
                   required={!!f.required}
                   className="w-full px-3 py-2 rounded-lg text-sm focus:outline-none"
-                  style={{ background: "white", border: `1px solid ${C.border}`, color: C.soil }}
+                  style={{ background: "var(--paper)", border: `1px solid ${C.border}`, color: C.soil }}
                 />
               )}
             </div>
@@ -822,7 +822,7 @@ function Strike96CropsForm({ eventType }) {
               maxLength={500}
               placeholder="Optional details about this activity"
               className="w-full px-3 py-2 rounded-lg text-sm focus:outline-none"
-              style={{ background: "white", border: `1px solid ${C.border}`, color: C.soil }}
+              style={{ background: "var(--paper)", border: `1px solid ${C.border}`, color: C.soil }}
             />
           </div>
 
@@ -842,7 +842,7 @@ function Strike96CropsForm({ eventType }) {
               onClick={() => navigate("/farm")}
               disabled={submitting}
               className="text-sm font-medium px-3 py-2 rounded-lg disabled:opacity-40"
-              style={{ background: "white", border: `1px solid ${C.border}`, color: C.soil }}
+              style={{ background: "var(--paper)", border: `1px solid ${C.border}`, color: C.soil }}
             >
               Cancel
             </button>
@@ -1019,7 +1019,7 @@ function FieldEventForm() {
               onChange={(e) => setEventDate(e.target.value)}
               required
               className="w-full px-3 py-2 rounded-lg text-sm focus:outline-none"
-              style={{ background: "white", border: `1px solid ${C.border}`, color: C.soil }}
+              style={{ background: "var(--paper)", border: `1px solid ${C.border}`, color: C.soil }}
             />
           </div>
 
@@ -1070,7 +1070,7 @@ function FieldEventForm() {
                     placeholder="e.g. 5"
                     required
                     className="w-full px-3 py-2 rounded-lg text-sm focus:outline-none"
-                    style={{ background: "white", border: `1px solid ${C.border}`, color: C.soil }}
+                    style={{ background: "var(--paper)", border: `1px solid ${C.border}`, color: C.soil }}
                   />
                 </div>
                 <div>
@@ -1102,7 +1102,7 @@ function FieldEventForm() {
               rows={3}
               placeholder="Optional details about this activity"
               className="w-full px-3 py-2 rounded-lg text-sm focus:outline-none"
-              style={{ background: "white", border: `1px solid ${C.border}`, color: C.soil }}
+              style={{ background: "var(--paper)", border: `1px solid ${C.border}`, color: C.soil }}
             />
           </div>
 
@@ -1122,7 +1122,7 @@ function FieldEventForm() {
               onClick={() => navigate("/farm")}
               disabled={submitting}
               className="text-sm font-medium px-3 py-2 rounded-lg disabled:opacity-40"
-              style={{ background: "white", border: `1px solid ${C.border}`, color: C.soil }}
+              style={{ background: "var(--paper)", border: `1px solid ${C.border}`, color: C.soil }}
             >
               Cancel
             </button>

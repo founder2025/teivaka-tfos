@@ -5,18 +5,18 @@ import { useTisSse } from "../../hooks/useTisSse";
 import { useIsNarrow } from "../../hooks/useIsNarrow";
 
 const C = {
-  soil:    "#5C4033",
-  cream:   "#F8F3E9",
-  border:  "#E8E2D4",
+  soil:    "var(--soil)",
+  cream:   "var(--cream)",
+  border:  "var(--line)",
   tint:    "rgba(106, 168, 79, 0.06)",
-  muted:   "#8A7B6F",
-  greenDk: "#3E7B1F",
+  muted:   "var(--muted)",
+  greenDk: "var(--green-dk)",
 };
 
 const SEV = {
-  CRITICAL: { bar: "#D4442E", badgeBg: "#D4442E", label: "CRITICAL" },
-  HIGH:     { bar: "#BF9000", badgeBg: "#BF9000", label: "HIGH" },
-  MED:      { bar: "#6AA84F", badgeBg: "#6AA84F", label: "MED" },
+  CRITICAL: { bar: "var(--red)", badgeBg: "var(--red)", label: "CRITICAL" },
+  HIGH:     { bar: "var(--amber)", badgeBg: "var(--amber)", label: "HIGH" },
+  MED:      { bar: "var(--green)", badgeBg: "var(--green)", label: "MED" },
 };
 
 function sevFor(priority) {
@@ -103,7 +103,7 @@ export default function NotificationsPanel({ onClose, onMarkedRead }) {
         ...(narrow
           ? { left: 8, right: 8, top: 60, width: "auto", maxHeight: "75vh" }
           : { width: 360, maxHeight: 480 }),
-        background: "#FFFFFF",
+        background: "var(--paper)",
         border: `1px solid ${C.border}`,
         color: C.soil,
         display: "flex",
@@ -139,9 +139,9 @@ export default function NotificationsPanel({ onClose, onMarkedRead }) {
         {(taskN.overdue > 0 || taskN.open > 0) && (
           <NavLink to="/farm/tasks" onClick={onClose} className="w-full text-left flex gap-3 items-stretch"
             style={{ borderBottom: `1px solid ${C.border}`, background: taskN.overdue > 0 ? "rgba(212,68,46,0.06)" : C.tint, textDecoration: "none", color: "inherit" }}>
-            <span aria-hidden className="flex-shrink-0" style={{ width: 6, background: taskN.overdue > 0 ? "#D4442E" : "#3E7B1F" }} />
+            <span aria-hidden className="flex-shrink-0" style={{ width: 6, background: taskN.overdue > 0 ? "var(--red)" : "var(--green-dk)" }} />
             <div className="flex-1 min-w-0 flex items-center gap-2" style={{ padding: "10px 12px" }}>
-              <ListChecks size={16} style={{ color: taskN.overdue > 0 ? "#D4442E" : C.greenDk, flexShrink: 0 }} />
+              <ListChecks size={16} style={{ color: taskN.overdue > 0 ? "var(--red)" : C.greenDk, flexShrink: 0 }} />
               <span style={{ fontSize: 13, color: C.soil }}>
                 {taskN.overdue > 0
                   ? <><strong>{taskN.overdue}</strong> task{taskN.overdue === 1 ? "" : "s"} overdue</>
@@ -156,7 +156,7 @@ export default function NotificationsPanel({ onClose, onMarkedRead }) {
             onClick={onClose}
             className="w-full text-left flex gap-3 items-stretch"
             style={{ borderBottom: `1px solid ${C.border}`, background: n.read_at ? "transparent" : C.tint, textDecoration: "none", color: "inherit" }}>
-            <span aria-hidden className="flex-shrink-0" style={{ width: 6, background: "#6AA84F" }} />
+            <span aria-hidden className="flex-shrink-0" style={{ width: 6, background: "var(--green)" }} />
             <div className="flex-1 min-w-0" style={{ padding: "10px 12px" }}>
               <p style={{ fontSize: 13, color: C.soil, margin: 0, lineHeight: 1.35 }}>{n.body || `${n.actor_name || "Someone"} ${(n.type || "").toLowerCase()}`}</p>
               <p style={{ fontSize: 11, color: C.muted, margin: "4px 0 0 0" }}>{relativeTime(n.created_at)}</p>
@@ -214,7 +214,7 @@ export default function NotificationsPanel({ onClose, onMarkedRead }) {
                           className="sev-badge flex-shrink-0"
                           style={{
                             background: sev.badgeBg,
-                            color: "#FFFFFF",
+                            color: "#fff",
                             fontSize: 10,
                             fontWeight: 700,
                             padding: "2px 6px",

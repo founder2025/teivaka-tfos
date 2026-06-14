@@ -35,13 +35,13 @@ const GROUPS_DEF = [
 ];
 
 const C = {
-  cream:   "#F8F3E9",
-  green:   "#6AA84F",
-  greenDk: "#3F7427",
-  soil:    "#5C4033",
-  border:  "#E6E1D6",
-  muted:   "#8A8678",
-  red:     "#A32D2D",
+  cream:   "var(--cream)",
+  green:   "var(--green)",
+  greenDk: "var(--green-dk)",
+  soil:    "var(--soil)",
+  border:  "var(--line)",
+  muted:   "var(--muted)",
+  red:     "var(--red)",
   redBg:   "#FDECEA",
 };
 
@@ -171,7 +171,7 @@ export default function GroupCatalogSection({ farmId, inlineMode = false, groupL
               key={key}
               style={{
                 display: "flex", alignItems: "center", justifyContent: "space-between",
-                background: "white",
+                background: "var(--paper)",
                 border: `1px solid ${C.border}`,
                 borderRadius: 12,
                 padding: "12px 16px",
@@ -229,7 +229,7 @@ export default function GroupCatalogSection({ farmId, inlineMode = false, groupL
                     width: 20,
                     height: 20,
                     borderRadius: "50%",
-                    background: "white",
+                    background: "var(--paper)",
                     transition: "left 0.18s ease",
                     boxShadow: "0 1px 3px rgba(0,0,0,0.15)",
                   }}

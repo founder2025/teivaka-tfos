@@ -10,7 +10,7 @@ import { apiClient } from '../../../utils/apiClient';
 import { useEventMutation } from '../../../utils/useEventMutation';
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false, staleTime: 30_000 } } });
-const C = { soil: '#5C4033', cream: '#F8F3E9', green: '#6AA84F', amber: '#BF9000', red: '#A32D2D', border: '#E6DED0', muted: '#8A8678' };
+const C = { soil: 'var(--soil)', cream: 'var(--cream)', green: 'var(--green)', amber: 'var(--amber)', red: 'var(--red)', border: '#E6DED0', muted: 'var(--muted)' };
 
 const SALE_TYPES = [
   { value: 'LIVE_BIRD',       label: 'Live bird' },

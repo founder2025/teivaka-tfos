@@ -16,7 +16,7 @@ async function send(method, url, body) {
   return j;
 }
 
-const ROLE_COLOR = { FOUNDER: "#3E7B1F", ADMIN: "#3E7B1F", MANAGER: "#2e6da4", WORKER: "#bf9000", ACCOUNTANT: "#7b5ea7", VIEWER: "#8A8678", FARMER: "#3E7B1F" };
+const ROLE_COLOR = { FOUNDER: "var(--green-dk)", ADMIN: "var(--green-dk)", MANAGER: "#2e6da4", WORKER: "var(--amber)", ACCOUNTANT: "#7b5ea7", VIEWER: "var(--muted)", FARMER: "var(--green-dk)" };
 const inp = { width: "100%", border: `1px solid ${C.line}`, borderRadius: 8, padding: "10px 12px", fontSize: 14, marginBottom: 10, boxSizing: "border-box" };
 
 function InviteFlow({ onClose, onDone }) {
@@ -40,10 +40,10 @@ function InviteFlow({ onClose, onDone }) {
   };
   const roleDef = roles.find((r) => r.id === f.role);
   const waPreview = `Hi ${f.name.split(" ")[0] || "…"}, you've been added as ${roleDef?.label || f.role} at ${f.scopeLabel} on Teivaka. Tap to confirm and set up your account.`;
-  const pick = (sel) => ({ display: "block", width: "100%", textAlign: "left", border: `1px solid ${sel ? "#6AA84F" : C.line}`, background: sel ? "rgba(106,168,79,0.07)" : "#fff", borderRadius: 10, padding: "11px 13px", marginBottom: 8, cursor: "pointer" });
+  const pick = (sel) => ({ display: "block", width: "100%", textAlign: "left", border: `1px solid ${sel ? "var(--green)" : C.line}`, background: sel ? "rgba(106,168,79,0.07)" : "var(--paper)", borderRadius: 10, padding: "11px 13px", marginBottom: 8, cursor: "pointer" });
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 1100, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }} onClick={onClose}>
-      <div style={{ background: "#fff", borderRadius: 14, width: "100%", maxWidth: 520, maxHeight: "92vh", overflowY: "auto", padding: 22 }} onClick={(e) => e.stopPropagation()}>
+      <div style={{ background: "var(--paper)", borderRadius: 14, width: "100%", maxWidth: 520, maxHeight: "92vh", overflowY: "auto", padding: 22 }} onClick={(e) => e.stopPropagation()}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
           <strong style={{ color: C.soil, fontSize: 17 }}>Invite a worker</strong>
           <button onClick={onClose} style={{ background: "transparent", border: "none", cursor: "pointer", color: C.muted }}><X size={18} /></button>
@@ -51,7 +51,7 @@ function InviteFlow({ onClose, onDone }) {
         <div style={{ display: "flex", gap: 6, marginBottom: 18 }}>
           {STEPS.map((s, i) => (
             <div key={s} style={{ flex: 1, textAlign: "center" }}>
-              <div style={{ height: 4, borderRadius: 2, background: i <= step ? "#6AA84F" : C.line, marginBottom: 4 }} />
+              <div style={{ height: 4, borderRadius: 2, background: i <= step ? "var(--green)" : C.line, marginBottom: 4 }} />
               <span style={{ fontSize: 10, color: i <= step ? C.greenDk : C.muted, fontWeight: i === step ? 800 : 500 }}>{s}</span>
             </div>
           ))}
@@ -162,7 +162,7 @@ export default function Team() {
     catch (e) { toast(String(e.message || e), "error"); }
   };
 
-  const tile = { flex: 1, minWidth: 100, background: "#fff", border: `1px solid ${C.line}`, borderRadius: 10, padding: "12px 14px", textAlign: "center" };
+  const tile = { flex: 1, minWidth: 100, background: "var(--paper)", border: `1px solid ${C.line}`, borderRadius: 10, padding: "12px 14px", textAlign: "center" };
   return (
     <MeShell title="Team management" subtitle="All members on your account. Invitations go out via your WhatsApp; workers can be scoped to specific farms.">
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 14 }}>
@@ -174,7 +174,7 @@ export default function Team() {
       <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 12, flexWrap: "wrap" }}>
         {[["members", "Members", Users], ["pending", "Pending invites", Clock]].map(([id, label, Icon]) => (
           <button key={id} onClick={() => setTab(id)}
-            style={{ display: "inline-flex", gap: 6, alignItems: "center", border: `1px solid ${tab === id ? "#3E7B1F" : C.line}`, background: tab === id ? "#6AA84F" : "#fff", color: tab === id ? "#fff" : C.soil, borderRadius: 999, padding: "8px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+            style={{ display: "inline-flex", gap: 6, alignItems: "center", border: `1px solid ${tab === id ? "var(--green-dk)" : C.line}`, background: tab === id ? "var(--green)" : "var(--paper)", color: tab === id ? "var(--paper)" : C.soil, borderRadius: 999, padding: "8px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
             <Icon size={14} />{label}{id === "pending" && pending.length > 0 ? ` (${pending.length})` : ""}
           </button>
         ))}
@@ -203,14 +203,14 @@ export default function Team() {
             : pending.length === 0 ? <div style={{ padding: 14, color: C.muted, fontSize: 13 }}>No pending invitations. Send one via "Invite a worker".</div>
             : pending.map((i) => (
               <div key={i.invite_id} style={{ display: "flex", gap: 12, alignItems: "center", padding: "12px 16px", borderBottom: `1px solid ${C.line}`, flexWrap: "wrap" }}>
-                <Clock size={18} style={{ color: "#bf9000", flexShrink: 0 }} />
+                <Clock size={18} style={{ color: "var(--amber)", flexShrink: 0 }} />
                 <div style={{ flex: 1, minWidth: 160 }}>
                   <div style={{ fontWeight: 700, color: C.soil, fontSize: 13.5 }}>{i.invitee_name}</div>
                   <div style={{ fontSize: 11.5, color: C.muted }}>{i.invitee_phone} · {i.team_role} · {i.scope_label} · sent {new Date(i.created_at).toLocaleDateString()}{i.sent_by ? ` by ${i.sent_by}` : ""}</div>
                 </div>
                 <div style={{ display: "flex", gap: 6 }}>
                   {i.whatsapp_link && <a className="btn btn-sm btn-secondary" style={{ textDecoration: "none" }} href={i.whatsapp_link} target="_blank" rel="noreferrer"><Send size={12} />Resend</a>}
-                  <button className="btn btn-sm btn-secondary" style={{ color: "#A32D2D" }} onClick={() => cancel(i)}>Cancel</button>
+                  <button className="btn btn-sm btn-secondary" style={{ color: "var(--red)" }} onClick={() => cancel(i)}>Cancel</button>
                 </div>
               </div>
             ))}

@@ -1,5 +1,5 @@
 import { CloudSun, AlertTriangle } from "lucide-react";
-const C={paper:"#FFFFFF",green:"#6AA84F",greenDk:"#3E7B1F",soil:"#5C4033",amber:"#BF9000",red:"#A32D2D",line:"#E2D8C3",muted:"#8A7B6F",cream:"#F8F3E9"};
+const C={paper:"var(--paper)",green:"var(--green)",greenDk:"var(--green-dk)",soil:"var(--soil)",amber:"var(--amber)",red:"var(--red)",line:"var(--line)",muted:"var(--muted)",cream:"var(--cream)"};
 const W={location:"Korovou, Tailevu",hi:29,lo:23,conditions:"Partly cloudy",humidity:78,rain24h:4,forecast:[{day:"Tue",hi:30,lo:23,c:"Showers"},{day:"Wed",hi:31,lo:24,c:"Sunny"},{day:"Thu",hi:28,lo:22,c:"Rain"}],flags:["Heavy rain Thu — hold spraying"]};
 export default function WeatherStrip(){return(
 <section className="rounded-2xl px-4 py-4" style={{background:C.paper,border:`1px solid ${C.line}`}}>

@@ -104,10 +104,10 @@ async function postJson(url, body) {
 
 const C = {
   soil:   "#2C1A0E",
-  green:  "#3D8C40",
-  cream:  "#F5EFE0",
-  gold:   "#D4A017",
-  border: "#E0D5C0",
+  green:  "var(--green)",
+  cream:  "var(--cream)",
+  gold:   "var(--amber)",
+  border: "var(--line)",
 };
 
 const TOTAL_STEPS = 7;
@@ -173,7 +173,7 @@ function ProgressBar({ step }) {
     <div className="flex items-center gap-1 mb-8">
       {Array.from({ length: TOTAL_STEPS }).map((_, i) => (
         <div key={i} className="flex-1 h-1.5 rounded-full transition-all duration-300"
-          style={{ background: i < step ? C.green : "#E0D5C0" }} />
+          style={{ background: i < step ? C.green : "var(--line)" }} />
       ))}
     </div>
   );
@@ -445,7 +445,7 @@ export default function Onboarding() {
                     className="w-full flex items-start gap-3 p-4 rounded-xl border text-left transition-all"
                     style={{
                       borderColor: data.map_visibility === opt.value ? C.green : C.border,
-                      background: data.map_visibility === opt.value ? C.green + "10" : "white",
+                      background: data.map_visibility === opt.value ? C.green + "10" : "var(--paper)",
                     }}>
                     <span className="text-xl mt-0.5">{opt.icon}</span>
                     <div>
@@ -484,14 +484,14 @@ export default function Onboarding() {
                       aria-pressed={selected}
                       className="rounded-2xl p-4 flex flex-col items-center justify-center transition-all"
                       style={{
-                        background: selected ? C.green : "white",
-                        color: selected ? "white" : C.soil,
+                        background: selected ? C.green : "var(--paper)",
+                        color: selected ? "var(--paper)" : C.soil,
                         border: `1px solid ${selected ? C.green : C.border}`,
                         minHeight: 92,
                       }}>
                       <Icon size={26} strokeWidth={1.6} />
                       <span className="text-xs font-semibold mt-2 text-center"
-                        style={{ color: selected ? "white" : C.soil }}>{label}</span>
+                        style={{ color: selected ? "var(--paper)" : C.soil }}>{label}</span>
                     </button>
                   );
                 })}
@@ -523,8 +523,8 @@ export default function Onboarding() {
                     <button key={crop} onClick={() => toggleCrop(crop)}
                       className="px-3 py-1.5 rounded-full text-sm font-medium transition-all"
                       style={{
-                        background: selected ? C.green : "white",
-                        color: selected ? "white" : C.soil,
+                        background: selected ? C.green : "var(--paper)",
+                        color: selected ? "var(--paper)" : C.soil,
                         border: `1px solid ${selected ? C.green : C.border}`,
                       }}>
                       {crop}

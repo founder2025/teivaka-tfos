@@ -15,7 +15,7 @@ import NewChatModal from "./NewChatModal";
 const API = "/api/v1/community";
 const tok = () => localStorage.getItem("tfos_access_token");
 async function getJSON(u) { const t = tok(); const r = await fetch(u, { headers: t ? { Authorization: `Bearer ${t}` } : {} }); if (!r.ok) throw new Error(String(r.status)); return r.json(); }
-const C = { soil: "#5C4033", green: "#6AA84F", greenDk: "#3E7B1F", line: "#E8E2D4", muted: "#8A7B6F", red: "#D4442E" };
+const C = { soil: "var(--soil)", green: "var(--green)", greenDk: "var(--green-dk)", line: "var(--line)", muted: "var(--muted)", red: "var(--red)" };
 const initials = (n) => (n || "?").split(" ").map((s) => s[0]).slice(0, 2).join("").toUpperCase();
 import { personaLabel } from "../../utils/personas";
 
@@ -53,7 +53,7 @@ export default function ChatDropdown() {
   return (
     <div ref={ref} role="dialog" aria-label="Messages"
       className={`z-50 rounded-lg shadow-xl ${narrow ? "fixed" : "absolute right-0 top-full mt-2"}`}
-      style={{ ...(narrow ? { left: 8, right: 8, top: 60, width: "auto", maxHeight: "75vh" } : { width: 320, maxHeight: 460 }), background: "#fff", border: `1px solid ${C.line}`, color: C.soil, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+      style={{ ...(narrow ? { left: 8, right: 8, top: 60, width: "auto", maxHeight: "75vh" } : { width: 320, maxHeight: 460 }), background: "var(--paper)", border: `1px solid ${C.line}`, color: C.soil, display: "flex", flexDirection: "column", overflow: "hidden" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 12px", borderBottom: `1px solid ${C.line}` }}>
         <span style={{ fontSize: 14, fontWeight: 600 }}>Messages</span>
         <span style={{ display: "flex", gap: 2 }}>
@@ -75,7 +75,7 @@ export default function ChatDropdown() {
             </div>
           ) : local.map((c) => (
             <button key={c.user_id} onClick={() => pick(c)}
-              style={{ width: "100%", display: "flex", gap: 10, alignItems: "center", padding: "10px 12px", minHeight: 44, border: "none", borderBottom: `1px solid ${C.line}`, background: c.unread > 0 ? "rgba(106,168,79,0.06)" : "#fff", cursor: "pointer", textAlign: "left" }}>
+              style={{ width: "100%", display: "flex", gap: 10, alignItems: "center", padding: "10px 12px", minHeight: 44, border: "none", borderBottom: `1px solid ${C.line}`, background: c.unread > 0 ? "rgba(106,168,79,0.06)" : "var(--paper)", cursor: "pointer", textAlign: "left" }}>
               <span style={{ position: "relative", flexShrink: 0 }}>
                 <Avatar src={c.avatar_url} name={c.full_name} size={36} fontScale={0.36} />
                 {c.online && <span style={{ position: "absolute", bottom: 0, right: 0, width: 11, height: 11, borderRadius: "50%", background: "#4caf50", border: "2px solid #fff" }} />}

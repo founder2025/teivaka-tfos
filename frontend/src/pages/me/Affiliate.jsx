@@ -18,7 +18,7 @@ async function send(method, url, body) {
 
 function Tile({ n, label }) {
   return (
-    <div style={{ flex: 1, minWidth: 100, background: "#fff", border: `1px solid ${C.line}`, borderRadius: 10, padding: "13px 14px", textAlign: "center" }}>
+    <div style={{ flex: 1, minWidth: 100, background: "var(--paper)", border: `1px solid ${C.line}`, borderRadius: 10, padding: "13px 14px", textAlign: "center" }}>
       <div style={{ fontSize: 24, fontWeight: 800, color: C.soil }}>{n}</div>
       <div style={{ fontSize: 10.5, color: C.muted, textTransform: "uppercase" }}>{label}</div>
     </div>

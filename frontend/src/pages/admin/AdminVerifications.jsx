@@ -9,7 +9,7 @@ import AdminLayout from "../../components/admin/AdminLayout";
 import { getJSON, send, apiFetch } from "../../utils/api";
 import Avatar from "../../components/ui/Avatar";
 
-const C = { soil: "#5C4033", green: "#6AA84F", greenDk: "#3E7B1F", line: "#E6E1D6", muted: "#8A8678", red: "#A32D2D" };
+const C = { soil: "var(--soil)", green: "var(--green)", greenDk: "var(--green-dk)", line: "var(--line)", muted: "var(--muted)", red: "var(--red)" };
 const toast = (m, t) => { try { window.dispatchEvent(new CustomEvent("tfos:toast", { detail: { message: m, type: t } })); } catch { /* noop */ } };
 
 function Docs({ rid }) {
@@ -73,28 +73,28 @@ export default function AdminVerifications() {
         <p style={{ margin: "0 0 14px", color: C.muted, fontSize: 13.5 }}>KYC review — approve grants the Teivaka green tick platform-wide.</p>
         <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
           {["PENDING", "APPROVED", "REJECTED", "ALL"].map((f) => (
-            <button key={f} onClick={() => setFilter(f)} style={{ padding: "7px 14px", borderRadius: 999, fontSize: 12.5, fontWeight: 600, cursor: "pointer", border: `1px solid ${filter === f ? C.greenDk : C.line}`, background: filter === f ? C.green : "#fff", color: filter === f ? "#fff" : C.soil }}>{f}</button>
+            <button key={f} onClick={() => setFilter(f)} style={{ padding: "7px 14px", borderRadius: 999, fontSize: 12.5, fontWeight: 600, cursor: "pointer", border: `1px solid ${filter === f ? C.greenDk : C.line}`, background: filter === f ? C.green : "var(--paper)", color: filter === f ? "var(--paper)" : C.soil }}>{f}</button>
           ))}
         </div>
         {rows == null ? <div style={{ color: C.muted }}>Loading…</div>
-          : rows.length === 0 ? <div style={{ color: C.muted, padding: 16, background: "#fff", border: `1px solid ${C.line}`, borderRadius: 10 }}>No {filter.toLowerCase()} requests.</div>
+          : rows.length === 0 ? <div style={{ color: C.muted, padding: 16, background: "var(--paper)", border: `1px solid ${C.line}`, borderRadius: 10 }}>No {filter.toLowerCase()} requests.</div>
           : rows.map((r) => (
-            <div key={r.request_id} style={{ background: "#fff", border: `1px solid ${C.line}`, borderRadius: 12, padding: 14, marginBottom: 12 }}>
+            <div key={r.request_id} style={{ background: "var(--paper)", border: `1px solid ${C.line}`, borderRadius: 12, padding: 14, marginBottom: 12 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
                 <Avatar src={r.avatar_url} name={r.full_name} size={36} />
                 <div style={{ flex: 1, minWidth: 160 }}>
                   <div style={{ fontWeight: 700, color: C.soil, fontSize: 14 }}>{r.full_name}</div>
                   <div style={{ fontSize: 11.5, color: C.muted }}>{r.email} · {r.country || "—"} · {(r.account_type || "").toLowerCase()} · {r.created_at ? new Date(r.created_at).toLocaleString() : ""}</div>
                 </div>
-                <span style={{ fontSize: 10.5, fontWeight: 700, padding: "3px 9px", borderRadius: 6, background: r.status === "PENDING" ? "rgba(191,144,0,.15)" : r.status === "APPROVED" ? "rgba(106,168,79,.15)" : "rgba(163,45,45,.12)", color: r.status === "PENDING" ? "#BF9000" : r.status === "APPROVED" ? C.greenDk : C.red }}>{r.status}</span>
-                <button onClick={() => setOpen(open === r.request_id ? null : r.request_id)} style={{ border: `1px solid ${C.line}`, background: "#fff", borderRadius: 8, padding: "7px 12px", fontSize: 12.5, cursor: "pointer" }}>{open === r.request_id ? "Hide documents" : "View documents"}</button>
+                <span style={{ fontSize: 10.5, fontWeight: 700, padding: "3px 9px", borderRadius: 6, background: r.status === "PENDING" ? "rgba(191,144,0,.15)" : r.status === "APPROVED" ? "rgba(106,168,79,.15)" : "rgba(163,45,45,.12)", color: r.status === "PENDING" ? "var(--amber)" : r.status === "APPROVED" ? C.greenDk : C.red }}>{r.status}</span>
+                <button onClick={() => setOpen(open === r.request_id ? null : r.request_id)} style={{ border: `1px solid ${C.line}`, background: "var(--paper)", borderRadius: 8, padding: "7px 12px", fontSize: 12.5, cursor: "pointer" }}>{open === r.request_id ? "Hide documents" : "View documents"}</button>
               </div>
               {open === r.request_id && <Docs rid={r.request_id} />}
               {r.note && <div style={{ fontSize: 12, color: C.muted, marginTop: 8 }}>Note: {r.note}</div>}
               {r.status === "PENDING" && (
                 <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
                   <button disabled={busy === r.request_id} onClick={() => review(r.request_id, "approve")} style={{ background: C.green, color: "#fff", border: "none", borderRadius: 8, padding: "9px 16px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Approve — grant green tick</button>
-                  <button disabled={busy === r.request_id} onClick={() => review(r.request_id, "reject")} style={{ background: "#fff", color: C.red, border: `1px solid ${C.red}`, borderRadius: 8, padding: "9px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Reject…</button>
+                  <button disabled={busy === r.request_id} onClick={() => review(r.request_id, "reject")} style={{ background: "var(--paper)", color: C.red, border: `1px solid ${C.red}`, borderRadius: 8, padding: "9px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Reject…</button>
                 </div>
               )}
             </div>

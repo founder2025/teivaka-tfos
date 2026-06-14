@@ -168,10 +168,10 @@ const Prototype = lazy(() => import("./pages/Prototype"));
 function PageLoader() {
   return (
     <div className="min-h-screen flex items-center justify-center"
-      style={{ background: "#F5EFE0" }}>
+      style={{ background: "var(--cream)" }}>
       <div className="flex flex-col items-center gap-3">
         <img src="/teivaka_logo.png" alt="Teivaka" style={{ height: 72, width: "auto", display: "block" }} className="animate-pulse" />
-        <p className="text-sm font-medium" style={{ color: "#6AA84F" }}>Loading…</p>
+        <p className="text-sm font-medium" style={{ color: "var(--green)" }}>Loading…</p>
       </div>
     </div>
   );

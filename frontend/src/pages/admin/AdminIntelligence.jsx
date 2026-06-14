@@ -9,8 +9,8 @@ import AdminLayout from "../../components/admin/AdminLayout";
 import { RefreshCw, Download, Shield } from "lucide-react";
 import { getJSON } from "../../utils/api";
 
-const C = { soil: "#5C4033", green: "#6AA84F", greenDk: "#3E7B1F", line: "#E6E1D6", muted: "#8A8678", cream: "#F8F3E9", gold: "#BF9000" };
-const card = { background: "#fff", border: `1px solid ${C.line}`, borderRadius: 12, padding: 18, marginBottom: 16 };
+const C = { soil: "var(--soil)", green: "var(--green)", greenDk: "var(--green-dk)", line: "var(--line)", muted: "var(--muted)", cream: "var(--cream)", gold: "var(--amber)" };
+const card = { background: "var(--paper)", border: `1px solid ${C.line}`, borderRadius: 12, padding: 18, marginBottom: 16 };
 
 async function downloadCsv(url, name) {
   const t = localStorage.getItem("tfos_access_token");
@@ -48,7 +48,7 @@ function Table({ rows, section, table }) {
       </table>
       {section && (
         <button onClick={() => downloadCsv(`/api/v1/admin/intelligence/export.csv?section=${section}&table=${table}`, `intel-${section}-${table}.csv`)}
-          style={{ marginTop: 8, display: "inline-flex", gap: 5, alignItems: "center", border: `1px solid ${C.line}`, background: "#fff", color: C.soil, borderRadius: 8, padding: "5px 11px", fontSize: 11.5, cursor: "pointer" }}>
+          style={{ marginTop: 8, display: "inline-flex", gap: 5, alignItems: "center", border: `1px solid ${C.line}`, background: "var(--paper)", color: C.soil, borderRadius: 8, padding: "5px 11px", fontSize: 11.5, cursor: "pointer" }}>
           <Download size={11} /> CSV
         </button>
       )}
@@ -86,7 +86,7 @@ function GrowthBoard({ g }) {
     [k.signups_30d, "New signups · 30d"],
   ];
   return (
-    <div style={{ background: "linear-gradient(120deg,#3e7b1f,#6aa84f)", borderRadius: 14, padding: 22, marginBottom: 16, color: "#fff" }}>
+    <div style={{ background: "linear-gradient(120deg,var(--green-dk),var(--green))", borderRadius: 14, padding: 22, marginBottom: 16, color: "#fff" }}>
       <div style={{ fontWeight: 800, fontSize: 16, marginBottom: 12 }}>Growth KPIs — live, verifiable</div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(150px,1fr))", gap: 12 }}>
         {TILES.map(([n, label]) => (
@@ -130,7 +130,7 @@ export default function AdminIntelligence() {
         </span>
         <div style={{ flex: 1 }} />
         <button onClick={() => load(true)} disabled={busy}
-          style={{ display: "inline-flex", gap: 6, alignItems: "center", border: `1px solid ${C.line}`, background: "#fff", color: C.soil, borderRadius: 8, padding: "8px 14px", fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}>
+          style={{ display: "inline-flex", gap: 6, alignItems: "center", border: `1px solid ${C.line}`, background: "var(--paper)", color: C.soil, borderRadius: 8, padding: "8px 14px", fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}>
           <RefreshCw size={13} /> {busy ? "Computing…" : "Refresh"}
         </button>
         <button onClick={() => downloadCsv("/api/v1/admin/intelligence/external.csv", "teivaka-external-report.csv")}

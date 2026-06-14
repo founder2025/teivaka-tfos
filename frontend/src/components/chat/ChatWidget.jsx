@@ -34,9 +34,9 @@ async function uploadFile(file) {
   return r.json();
 }
 
-const C = { soil: "#5C4033", green: "#6AA84F", greenDk: "#3E7B1F", line: "#E8E2D4", cream: "#F8F3E9", muted: "#8A7B6F", red: "#D4442E" };
-const iconBtn = { border: "none", background: "transparent", cursor: "pointer", color: "#8A7B6F", padding: 6, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 };
-const menuItem = { display: "block", width: "100%", textAlign: "left", padding: "9px 12px", border: "none", background: "transparent", cursor: "pointer", fontSize: 13, color: "#5C4033", whiteSpace: "nowrap" };
+const C = { soil: "var(--soil)", green: "var(--green)", greenDk: "var(--green-dk)", line: "var(--line)", cream: "var(--cream)", muted: "var(--muted)", red: "var(--red)" };
+const iconBtn = { border: "none", background: "transparent", cursor: "pointer", color: "var(--muted)", padding: 6, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 };
+const menuItem = { display: "block", width: "100%", textAlign: "left", padding: "9px 12px", border: "none", background: "transparent", cursor: "pointer", fontSize: 13, color: "var(--soil)", whiteSpace: "nowrap" };
 const convMuteKey = (id) => `tfos_chat_mute_${id}`;
 const isConvMuted = (id) => { try { return localStorage.getItem(convMuteKey(id)) === "1"; } catch { return false; } };
 const setConvMuted = (id, v) => { try { if (v) localStorage.setItem(convMuteKey(id), "1"); else localStorage.removeItem(convMuteKey(id)); } catch { /* ignore */ } };
@@ -233,10 +233,10 @@ export function Convo({ conn, onActivity }) {
             const day = dayLabel(m.created_at); const showDay = day !== prevDay; prevDay = day;
             return (
               <div key={m.message_id} style={{ display: "contents" }}>
-                {showDay && <div style={{ alignSelf: "center", fontSize: 10, color: C.muted, background: "#fff", border: `1px solid ${C.line}`, borderRadius: 10, padding: "1px 10px", margin: "4px 0" }}>{day}</div>}
+                {showDay && <div style={{ alignSelf: "center", fontSize: 10, color: C.muted, background: "var(--paper)", border: `1px solid ${C.line}`, borderRadius: 10, padding: "1px 10px", margin: "4px 0" }}>{day}</div>}
                 <div style={{ alignSelf: m.mine ? "flex-end" : "flex-start", maxWidth: "85%", display: "flex", flexDirection: "column", alignItems: m.mine ? "flex-end" : "flex-start", gap: 2 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 4, flexDirection: m.mine ? "row-reverse" : "row" }}>
-                    <div style={{ background: isMedia && !m.reply ? "transparent" : (m.mine ? C.green : "#fff"), color: m.mine ? "#fff" : C.soil, border: ((isMedia && !m.reply) || m.mine) ? "none" : `1px solid ${C.line}`, borderRadius: 12, padding: (isMedia && !m.reply) ? 0 : "7px 11px", fontSize: 13, lineHeight: 1.4 }}>
+                    <div style={{ background: isMedia && !m.reply ? "transparent" : (m.mine ? C.green : "var(--paper)"), color: m.mine ? "var(--paper)" : C.soil, border: ((isMedia && !m.reply) || m.mine) ? "none" : `1px solid ${C.line}`, borderRadius: 12, padding: (isMedia && !m.reply) ? 0 : "7px 11px", fontSize: 13, lineHeight: 1.4 }}>
                       {m.reply && (
                         <div style={{ borderLeft: `3px solid ${m.mine ? "rgba(255,255,255,0.7)" : C.green}`, paddingLeft: 7, marginBottom: 5, opacity: 0.85, fontSize: 11.5 }}>
                           <div style={{ fontWeight: 700 }}>{m.reply.mine ? "You" : conn.full_name.split(" ")[0]}</div>
@@ -249,20 +249,20 @@ export function Convo({ conn, onActivity }) {
                     <button onClick={() => setPicker(picker === m.message_id ? null : m.message_id)} title="React" style={{ ...iconBtn, padding: 2, opacity: 0.55 }}><SmilePlus size={15} /></button>
                   </div>
                   {picker === m.message_id && (
-                    <div style={{ display: "flex", gap: 2, background: "#fff", border: `1px solid ${C.line}`, borderRadius: 16, padding: "3px 6px", boxShadow: "0 4px 12px rgba(0,0,0,0.14)" }}>
+                    <div style={{ display: "flex", gap: 2, background: "var(--paper)", border: `1px solid ${C.line}`, borderRadius: 16, padding: "3px 6px", boxShadow: "0 4px 12px rgba(0,0,0,0.14)" }}>
                       {REACTIONS.map((e) => <button key={e} onClick={() => toggleReact(m, e)} style={{ border: "none", background: "transparent", cursor: "pointer", fontSize: 16, padding: 2, lineHeight: 1 }}>{e}</button>)}
                     </div>
                   )}
                   {reactions.length > 0 && (
                     <div style={{ display: "flex", gap: 3, flexWrap: "wrap" }}>
-                      {reactions.map((r) => <button key={r.emoji} onClick={() => toggleReact(m, r.emoji)} title="Tap to toggle" style={{ border: `1px solid ${r.mine ? C.green : C.line}`, background: r.mine ? "#EAF5E5" : "#fff", borderRadius: 10, padding: "0 6px", fontSize: 11, cursor: "pointer", lineHeight: "18px", color: C.soil }}>{r.emoji} {r.count}</button>)}
+                      {reactions.map((r) => <button key={r.emoji} onClick={() => toggleReact(m, r.emoji)} title="Tap to toggle" style={{ border: `1px solid ${r.mine ? C.green : C.line}`, background: r.mine ? "var(--green-tint)" : "var(--paper)", borderRadius: 10, padding: "0 6px", fontSize: 11, cursor: "pointer", lineHeight: "18px", color: C.soil }}>{r.emoji} {r.count}</button>)}
                     </div>
                   )}
                 </div>
               </div>
             );
           })}
-        {otherTyping && <div style={{ alignSelf: "flex-start", background: "#fff", border: `1px solid ${C.line}`, borderRadius: 12, padding: "7px 12px", fontSize: 13, color: C.muted, fontStyle: "italic" }}>typing…</div>}
+        {otherTyping && <div style={{ alignSelf: "flex-start", background: "var(--paper)", border: `1px solid ${C.line}`, borderRadius: 12, padding: "7px 12px", fontSize: 13, color: C.muted, fontStyle: "italic" }}>typing…</div>}
         {lastMine && <div style={{ alignSelf: "flex-end", fontSize: 10, color: C.muted, marginTop: -2 }}>{lastMine.read_at ? "Seen" : "Sent"}</div>}
         {showJump && (
           <button onClick={() => scrollToBottom("smooth")} style={{ position: "sticky", bottom: 6, alignSelf: "center", border: "none", background: C.green, color: "#fff", borderRadius: 999, padding: "5px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer", boxShadow: "0 4px 12px rgba(0,0,0,0.18)" }}>↓ New messages</button>
@@ -278,11 +278,11 @@ export function Convo({ conn, onActivity }) {
           <button onClick={() => setReplyTo(null)} title="Cancel reply" style={{ ...iconBtn, padding: 2 }}><X size={16} /></button>
         </div>
       )}
-      <div style={{ display: "flex", gap: 6, padding: 8, borderTop: `1px solid ${C.line}`, background: "#fff", alignItems: "center" }}>
+      <div style={{ display: "flex", gap: 6, padding: 8, borderTop: `1px solid ${C.line}`, background: "var(--paper)", alignItems: "center" }}>
         <input ref={fileRef} type="file" accept="image/*,video/*" onChange={onPick} style={{ display: "none" }} />
         <button onClick={() => fileRef.current?.click()} disabled={busy || recording} title="Send photo or video" style={iconBtn}><ImageIcon size={18} /></button>
         <button onClick={recording ? stopRec : startRec} disabled={busy} title={recording ? "Stop & send voice note" : "Record voice note"} style={{ ...iconBtn, color: recording ? C.red : C.muted }}>{recording ? <Square size={16} /> : <Mic size={18} />}</button>
-        <input value={text} onChange={(e) => { setText(e.target.value); notifyTyping(); }} onKeyDown={(e) => e.key === "Enter" && send()} placeholder={recording ? "Recording… tap ■ to send" : "Message…"} disabled={recording} style={{ flex: 1, border: `1px solid ${C.line}`, borderRadius: 18, padding: "9px 13px", fontSize: 14, outline: "none", background: recording ? C.cream : "#fff" }} />
+        <input value={text} onChange={(e) => { setText(e.target.value); notifyTyping(); }} onKeyDown={(e) => e.key === "Enter" && send()} placeholder={recording ? "Recording… tap ■ to send" : "Message…"} disabled={recording} style={{ flex: 1, border: `1px solid ${C.line}`, borderRadius: 18, padding: "9px 13px", fontSize: 14, outline: "none", background: recording ? C.cream : "var(--paper)" }} />
         <button onClick={send} disabled={busy || recording || !text.trim()} style={{ border: "none", background: C.green, color: "#fff", borderRadius: "50%", width: 40, height: 40, flexShrink: 0, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><Send size={16} /></button>
       </div>
     </>
@@ -327,7 +327,7 @@ function ConvoMenu({ conn, onClose }) {
       {open && (
         <>
           <div onClick={(e) => { e.stopPropagation(); setOpen(false); }} style={{ position: "fixed", inset: 0, zIndex: 1399 }} />
-          <div style={{ position: "absolute", right: 0, top: 26, zIndex: 1400, background: "#fff", border: `1px solid ${C.line}`, borderRadius: 8, boxShadow: "0 8px 24px rgba(0,0,0,0.16)", minWidth: 170, overflow: "hidden" }}>
+          <div style={{ position: "absolute", right: 0, top: 26, zIndex: 1400, background: "var(--paper)", border: `1px solid ${C.line}`, borderRadius: 8, boxShadow: "0 8px 24px rgba(0,0,0,0.16)", minWidth: 170, overflow: "hidden" }}>
             <button onClick={profile} style={{ ...menuItem, display: "flex", alignItems: "center", gap: 8 }}><User size={14} />View profile</button>
             <button onClick={follow} style={{ ...menuItem, display: "flex", alignItems: "center", gap: 8 }}><UserPlus size={14} />Follow</button>
             <button onClick={toggleMute} style={menuItem}>{muted ? "Unmute notifications" : "Mute notifications"}</button>
@@ -387,12 +387,12 @@ function FloatingChat({ conn, index, onClose }) {
         style={{ position: "fixed", left: st.x, top: st.y, width: 60, height: 60, zIndex: 1200, cursor: "grab", touchAction: "none", userSelect: "none" }}>
         <Avatar name={conn.full_name} src={conn.avatar_url} online={conn.online} size={60} />
         {conn.unread > 0 && <span style={{ position: "absolute", top: -2, right: -2, minWidth: 20, height: 20, padding: "0 5px", borderRadius: 10, background: C.red, color: "#fff", fontSize: 11, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", border: "2px solid #fff" }}>{conn.unread > 9 ? "9+" : conn.unread}</span>}
-        <button onClick={(e) => { e.stopPropagation(); onClose(); }} aria-label="Close" style={{ position: "absolute", bottom: -2, right: -2, width: 20, height: 20, borderRadius: "50%", background: "#fff", border: `1px solid ${C.line}`, color: C.muted, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><X size={12} /></button>
+        <button onClick={(e) => { e.stopPropagation(); onClose(); }} aria-label="Close" style={{ position: "absolute", bottom: -2, right: -2, width: 20, height: 20, borderRadius: "50%", background: "var(--paper)", border: `1px solid ${C.line}`, color: C.muted, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><X size={12} /></button>
       </div>
     );
   }
   return (
-    <div style={{ position: "fixed", left: st.x, top: st.y, width: 320, height: 440, zIndex: 1200, background: "#fff", border: `1px solid ${C.line}`, borderRadius: "12px 12px 8px 8px", boxShadow: "0 12px 34px rgba(0,0,0,0.2)", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+    <div style={{ position: "fixed", left: st.x, top: st.y, width: 320, height: 440, zIndex: 1200, background: "var(--paper)", border: `1px solid ${C.line}`, borderRadius: "12px 12px 8px 8px", boxShadow: "0 12px 34px rgba(0,0,0,0.2)", display: "flex", flexDirection: "column", overflow: "hidden" }}>
       <div onPointerDown={onDown} style={{ display: "flex", alignItems: "center", gap: 8, padding: "9px 10px", borderBottom: `1px solid ${C.line}`, background: C.cream, cursor: "grab", touchAction: "none", userSelect: "none" }}>
         <Avatar name={conn.full_name} src={conn.avatar_url} online={conn.online} size={30} />
         <div style={{ flex: 1, minWidth: 0 }}>
@@ -419,7 +419,7 @@ function MobileBubble({ conn, index, onTap, onClose }) {
     <div onPointerDown={onDown} style={{ position: "fixed", left: p.x, top: p.y, width: 60, height: 60, zIndex: 1200, touchAction: "none", userSelect: "none" }}>
       <Avatar name={conn.full_name} src={conn.avatar_url} online={conn.online} size={60} />
       {conn.unread > 0 && <span style={{ position: "absolute", top: -2, right: -2, minWidth: 20, height: 20, padding: "0 5px", borderRadius: 10, background: C.red, color: "#fff", fontSize: 11, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", border: "2px solid #fff" }}>{conn.unread > 9 ? "9+" : conn.unread}</span>}
-      <button onClick={(e) => { e.stopPropagation(); onClose(); }} aria-label="Close" style={{ position: "absolute", bottom: -2, right: -2, width: 22, height: 22, borderRadius: "50%", background: "#fff", border: `1px solid ${C.line}`, color: C.muted, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><X size={13} /></button>
+      <button onClick={(e) => { e.stopPropagation(); onClose(); }} aria-label="Close" style={{ position: "absolute", bottom: -2, right: -2, width: 22, height: 22, borderRadius: "50%", background: "var(--paper)", border: `1px solid ${C.line}`, color: C.muted, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><X size={13} /></button>
     </div>
   );
 }
@@ -489,7 +489,7 @@ export default function ChatWidget() {
       {mobile && mobileExpanded && (() => {
         const c = live((chat.openChats || []).find((x) => x.user_id === mobileExpanded) || { user_id: mobileExpanded });
         return (
-          <div style={{ position: "fixed", inset: 0, width: "100%", height: "100dvh", zIndex: 1300, background: "#fff", display: "flex", flexDirection: "column" }}>
+          <div style={{ position: "fixed", inset: 0, width: "100%", height: "100dvh", zIndex: 1300, background: "var(--paper)", display: "flex", flexDirection: "column" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 12px", borderBottom: `1px solid ${C.line}`, background: C.cream }}>
               <button onClick={() => setMobileExpanded(null)} aria-label="Back" style={{ border: "none", background: "transparent", cursor: "pointer", color: C.soil, width: 40, height: 40, display: "flex", alignItems: "center", justifyContent: "center" }}><ArrowLeft size={20} /></button>
               <Avatar name={c.full_name} online={c.online} size={34} />
@@ -509,7 +509,7 @@ export default function ChatWidget() {
       <div style={{ position: "fixed", top: 72, right: 16, zIndex: 2000, display: "flex", flexDirection: "column", gap: 8, maxWidth: "calc(100vw - 32px)" }}>
         {toasts.map((t) => (
           <button key={t.id} onClick={() => { chat.openWith(t.conn); if (mobile) setMobileExpanded(t.conn.user_id); setToasts((x) => x.filter((y) => y.id !== t.id)); }}
-            style={{ display: "flex", gap: 10, alignItems: "center", width: 300, maxWidth: "calc(100vw - 32px)", background: "#fff", border: `1px solid ${C.line}`, borderLeft: `4px solid ${C.green}`, borderRadius: 8, boxShadow: "0 8px 24px rgba(0,0,0,0.16)", padding: "10px 12px", cursor: "pointer", textAlign: "left" }}>
+            style={{ display: "flex", gap: 10, alignItems: "center", width: 300, maxWidth: "calc(100vw - 32px)", background: "var(--paper)", border: `1px solid ${C.line}`, borderLeft: `4px solid ${C.green}`, borderRadius: 8, boxShadow: "0 8px 24px rgba(0,0,0,0.16)", padding: "10px 12px", cursor: "pointer", textAlign: "left" }}>
             <Avatar name={t.conn.full_name} src={t.conn.avatar_url} online={t.conn.online} size={32} />
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontWeight: 700, fontSize: 13, color: C.soil }}>{t.conn.full_name}</div>

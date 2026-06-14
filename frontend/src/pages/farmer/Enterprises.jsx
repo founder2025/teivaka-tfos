@@ -30,10 +30,10 @@ import ModeDropdown from "../../components/farm/ModeDropdown";
 import Modal from "../../components/ui/Modal";
 
 const C = {
-  soil: "#5C4033", cream: "#F8F3E9", border: "#E6DED0", muted: "#8A7863", ink: "#3A2E26",
-  green: "#6AA84F", greenDk: "#3E7B1F", amber: "#BF9000", red: "#D4442E", greenTint: "#E9F2DD", paper: "#FCFAF5",
+  soil: "var(--soil)", cream: "var(--cream)", border: "#E6DED0", muted: "#8A7863", ink: "#3A2E26",
+  green: "var(--green)", greenDk: "var(--green-dk)", amber: "var(--amber)", red: "var(--red)", greenTint: "#E9F2DD", paper: "#FCFAF5",
 };
-const FOCUS = "focus:outline-none focus-visible:ring-2 focus-visible:ring-[#6AA84F] focus-visible:ring-offset-1 transition";
+const FOCUS = "focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--green)] focus-visible:ring-offset-1 transition";
 
 const VIEW_TABS = [
   { id: "portfolio", label: "Portfolio", hint: "Overview" },
@@ -204,7 +204,7 @@ function KpiTile({ label, value, sub, color, low, onClick }) {
     <div onClick={onClick} role={onClick ? "button" : undefined} tabIndex={onClick ? 0 : undefined}
       onKeyDown={onClick ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick(); } } : undefined}
       className={`rounded-xl border p-3 min-w-0 ${onClick ? `cursor-pointer hover:brightness-95 ${FOCUS}` : ""}`}
-      style={{ background: low ? "rgba(212,68,46,0.04)" : "white", borderColor: C.border }}>
+      style={{ background: low ? "rgba(212,68,46,0.04)" : "var(--paper)", borderColor: C.border }}>
       <div className="text-[10px] uppercase tracking-wide truncate" style={{ color: C.muted }}>{label}</div>
       <div className="text-lg font-bold truncate" style={{ color: color || C.soil }}>{value}</div>
       {sub && <div className="text-[11px] truncate" style={{ color: C.muted }}>{sub}</div>}
@@ -308,7 +308,7 @@ function GlanceTile({ icon: Icon, q, a, color, onClick }) {
 }
 function Chip({ active, label, count, onClick }) {
   return (
-    <button onClick={onClick} className={`text-xs px-2.5 py-1 rounded-full shrink-0 flex items-center gap-1 hover:brightness-95 ${FOCUS}`} style={{ border: `1px solid ${active ? C.green : C.border}`, background: active ? C.greenTint : "white", color: active ? C.greenDk : C.muted }}>
+    <button onClick={onClick} className={`text-xs px-2.5 py-1 rounded-full shrink-0 flex items-center gap-1 hover:brightness-95 ${FOCUS}`} style={{ border: `1px solid ${active ? C.green : C.border}`, background: active ? C.greenTint : "var(--paper)", color: active ? C.greenDk : C.muted }}>
       {label}{count != null && <span className="font-bold">{count}</span>}
     </button>
   );
@@ -721,7 +721,7 @@ function ErrorState({ onRetry }) {
 }
 function AddModal({ open, onClose, navigate }) {
   const opt = (Icon, title, desc, onClick) => (
-    <button onClick={onClick} className={`w-full text-left rounded-xl border p-3 flex items-start gap-3 hover:brightness-95 ${FOCUS}`} style={{ borderColor: C.border, background: "white" }}>
+    <button onClick={onClick} className={`w-full text-left rounded-xl border p-3 flex items-start gap-3 hover:brightness-95 ${FOCUS}`} style={{ borderColor: C.border, background: "var(--paper)" }}>
       <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0" style={{ background: C.greenTint, color: C.greenDk }}><Icon size={18} /></div>
       <div><div className="text-sm font-semibold" style={{ color: C.soil }}>{title}</div><div className="text-xs" style={{ color: C.muted }}>{desc}</div></div>
     </button>

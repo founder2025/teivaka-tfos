@@ -9,10 +9,10 @@
 import { useEffect, useState } from "react";
 
 const C = {
-  soil:   "#5C4033",
-  green:  "#6AA84F",
-  amber:  "#BF9000",
-  cream:  "#F8F3E9",
+  soil:   "var(--soil)",
+  green:  "var(--green)",
+  amber:  "var(--amber)",
+  cream:  "var(--cream)",
   border: "#E6DED0",
   muted:  "#8A7863",
 };

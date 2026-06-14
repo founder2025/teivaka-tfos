@@ -15,7 +15,7 @@ function UploadBox({ label, Icon, value, pct, onPick, capture }) {
   const ref = useRef();
   return (
     <div style={{ flex: 1, minWidth: 220 }}>
-      <button onClick={() => ref.current?.click()} disabled={pct != null} style={{ width: "100%", minHeight: 110, border: `2px dashed ${value ? C.green : C.line}`, borderRadius: 12, background: value ? "rgba(106,168,79,0.06)" : "#fff", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6, padding: 14 }}>
+      <button onClick={() => ref.current?.click()} disabled={pct != null} style={{ width: "100%", minHeight: 110, border: `2px dashed ${value ? C.green : C.line}`, borderRadius: 12, background: value ? "rgba(106,168,79,0.06)" : "var(--paper)", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6, padding: 14 }}>
         <Icon size={22} style={{ color: value ? C.greenDk : C.muted }} />
         <span style={{ fontSize: 13.5, fontWeight: 600, color: C.soil }}>{label}</span>
         <span style={{ fontSize: 11.5, color: value ? C.greenDk : C.muted }}>
@@ -80,8 +80,8 @@ export default function MeVerification() {
       ) : (
         <>
           {req?.status === "REJECTED" && (
-            <div style={{ ...card, border: "1px solid #A32D2D", background: "rgba(163,45,45,0.05)" }}>
-              <div style={{ display: "flex", gap: 8, alignItems: "center", color: "#A32D2D", fontWeight: 700, fontSize: 13.5 }}><XCircle size={16} /> Previous request not approved</div>
+            <div style={{ ...card, border: "1px solid var(--red)", background: "rgba(163,45,45,0.05)" }}>
+              <div style={{ display: "flex", gap: 8, alignItems: "center", color: "var(--red)", fontWeight: 700, fontSize: 13.5 }}><XCircle size={16} /> Previous request not approved</div>
               {req.note && <div style={{ fontSize: 12.5, color: C.soil, marginTop: 6 }}>{req.note}</div>}
               <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>You can submit again with clearer documents.</div>
             </div>

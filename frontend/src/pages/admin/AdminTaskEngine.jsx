@@ -33,9 +33,9 @@ function ago(iso) {
 function Stat({ label, value, tone }) {
   const color = tone === "bad" ? "text-red-400" : tone === "warn" ? "text-amber-400" : "text-emerald-400";
   return (
-    <div className="rounded-xl bg-white border border-[#E6E1D6] px-4 py-3">
+    <div className="rounded-xl bg-white border border-[var(--line)] px-4 py-3">
       <div className={`text-2xl font-bold ${color}`}>{value}</div>
-      <div className="text-xs text-[#8A8678] mt-0.5">{label}</div>
+      <div className="text-xs text-[var(--muted)] mt-0.5">{label}</div>
     </div>
   );
 }
@@ -76,8 +76,8 @@ export default function AdminTaskEngine() {
     <AdminLayout>
       <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
         <div>
-          <h1 className="text-xl font-bold text-[#5C4033]">Task Engine Health</h1>
-          <p className="text-xs text-[#8A8678] mt-0.5">
+          <h1 className="text-xl font-bold text-[var(--soil)]">Task Engine Health</h1>
+          <p className="text-xs text-[var(--muted)] mt-0.5">
             Cross-tenant feeder liveness · last-produced timestamps · malformed-row check
           </p>
         </div>
@@ -87,7 +87,7 @@ export default function AdminTaskEngine() {
           )}
           <button
             onClick={load}
-            className="text-xs px-3 py-1.5 rounded-lg bg-white border border-[#E6E1D6] text-emerald-400 hover:brightness-110"
+            className="text-xs px-3 py-1.5 rounded-lg bg-white border border-[var(--line)] text-emerald-400 hover:brightness-110"
           >
             Refresh
           </button>
@@ -96,14 +96,14 @@ export default function AdminTaskEngine() {
 
       {state === "error" && (
         <div className="rounded-xl border border-red-800 bg-red-950/40 p-4 text-center">
-          <p className="text-sm font-semibold text-[#5C4033]">Couldn't load task-engine health</p>
-          <p className="text-xs text-[#8A8678] mt-1">Reads /admin/task-engine (ADMIN). Retry below.</p>
-          <button onClick={load} className="mt-3 text-xs px-3 py-1.5 rounded-lg bg-emerald-600 text-[#5C4033] hover:brightness-95">Retry</button>
+          <p className="text-sm font-semibold text-[var(--soil)]">Couldn't load task-engine health</p>
+          <p className="text-xs text-[var(--muted)] mt-1">Reads /admin/task-engine (ADMIN). Retry below.</p>
+          <button onClick={load} className="mt-3 text-xs px-3 py-1.5 rounded-lg bg-emerald-600 text-[var(--soil)] hover:brightness-95">Retry</button>
         </div>
       )}
 
       {state === "loading" && (
-        <div className="rounded-xl border border-[#E6E1D6] bg-white/40 p-10 text-center text-sm text-[#8A8678]">
+        <div className="rounded-xl border border-[var(--line)] bg-white/40 p-10 text-center text-sm text-[var(--muted)]">
           Loading task-engine health…
         </div>
       )}
@@ -138,10 +138,10 @@ export default function AdminTaskEngine() {
           )}
 
           {/* Per-source table */}
-          <div className="rounded-xl overflow-hidden border border-[#E6E1D6]">
+          <div className="rounded-xl overflow-hidden border border-[var(--line)]">
             <table className="w-full text-sm">
               <thead>
-                <tr className="bg-white text-[#8A8678] text-xs uppercase tracking-wide">
+                <tr className="bg-white text-[var(--muted)] text-xs uppercase tracking-wide">
                   <th className="text-left px-4 py-2.5 font-medium">Feeder</th>
                   <th className="text-right px-3 py-2.5 font-medium">Open</th>
                   <th className="text-right px-3 py-2.5 font-medium">Overdue</th>
@@ -153,11 +153,11 @@ export default function AdminTaskEngine() {
               </thead>
               <tbody>
                 {rows.map((r) => (
-                  <tr key={r.source_module} className="border-t border-gray-800 text-[#5C4033]">
+                  <tr key={r.source_module} className="border-t border-gray-800 text-[var(--soil)]">
                     <td className="px-4 py-2.5 font-medium">
                       {r.source_module}
                       {r._silent && (
-                        <span className="ml-2 text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-gray-700 text-[#8A8678]">
+                        <span className="ml-2 text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-gray-700 text-[var(--muted)]">
                           never produced
                         </span>
                       )}
@@ -165,11 +165,11 @@ export default function AdminTaskEngine() {
                     <td className="px-3 py-2.5 text-right">{r.open}</td>
                     <td className={`px-3 py-2.5 text-right ${r.overdue > 0 ? "text-amber-400 font-semibold" : ""}`}>{r.overdue}</td>
                     <td className="px-3 py-2.5 text-right">{r.completed}</td>
-                    <td className="px-3 py-2.5 text-right text-[#8A8678]">{r.total}</td>
-                    <td className="px-4 py-2.5 text-[#8A8678]">
+                    <td className="px-3 py-2.5 text-right text-[var(--muted)]">{r.total}</td>
+                    <td className="px-4 py-2.5 text-[var(--muted)]">
                       {r.last_created ? <span title={r.last_created}>{ago(r.last_created)}</span> : <span className="text-gray-600">—</span>}
                     </td>
-                    <td className="px-4 py-2.5 text-[#8A8678]">
+                    <td className="px-4 py-2.5 text-[var(--muted)]">
                       {r.last_completed ? <span title={r.last_completed}>{ago(r.last_completed)}</span> : <span className="text-gray-600">—</span>}
                     </td>
                   </tr>
@@ -195,17 +195,17 @@ function NotificationsCard({ n }) {
   const everSent = (n?.totals?.total || 0) > 0;
   return (
     <div className="mt-6">
-      <h2 className="text-base font-semibold text-[#5C4033] mb-2">External alert delivery (WhatsApp / email)</h2>
+      <h2 className="text-base font-semibold text-[var(--soil)] mb-2">External alert delivery (WhatsApp / email)</h2>
 
       {!n?.enabled ? (
-        <div className="rounded-xl border border-[#E6E1D6] bg-white/40 px-4 py-3 text-sm text-[#8A8678]">
+        <div className="rounded-xl border border-[var(--line)] bg-white/40 px-4 py-3 text-sm text-[var(--muted)]">
           Delivery log table not present in this environment yet (migration 086 not applied).
         </div>
       ) : (
         <>
           {/* PR.2 banner */}
           {!everSent ? (
-            <div className="rounded-xl border border-[#E6E1D6] bg-white/40 px-4 py-3 mb-3 text-sm text-[#8A8678]">
+            <div className="rounded-xl border border-[var(--line)] bg-white/40 px-4 py-3 mb-3 text-sm text-[var(--muted)]">
               No alerts dispatched yet. Per <strong>PR.2</strong> the scheduled sweep stays off until a test alert is
               receipt-verified — fire <code className="text-emerald-400">send_task_alert_test</code> and confirm receipt in the real inbox/WhatsApp.
             </div>
@@ -220,10 +220,10 @@ function NotificationsCard({ n }) {
             </div>
           )}
 
-          <div className="rounded-xl overflow-hidden border border-[#E6E1D6]">
+          <div className="rounded-xl overflow-hidden border border-[var(--line)]">
             <table className="w-full text-sm">
               <thead>
-                <tr className="bg-white text-[#8A8678] text-xs uppercase tracking-wide">
+                <tr className="bg-white text-[var(--muted)] text-xs uppercase tracking-wide">
                   <th className="text-left px-4 py-2.5 font-medium">Channel</th>
                   <th className="text-right px-3 py-2.5 font-medium">Sent</th>
                   <th className="text-right px-3 py-2.5 font-medium">Mock</th>
@@ -236,13 +236,13 @@ function NotificationsCard({ n }) {
                 {channels.length === 0 ? (
                   <tr><td colSpan={6} className="px-4 py-3 text-gray-500 text-center">No deliveries logged.</td></tr>
                 ) : channels.map((c) => (
-                  <tr key={c.channel} className="border-t border-gray-800 text-[#5C4033]">
+                  <tr key={c.channel} className="border-t border-gray-800 text-[var(--soil)]">
                     <td className="px-4 py-2.5 font-medium">{c.channel}</td>
                     <td className="px-3 py-2.5 text-right">{c.sent}</td>
-                    <td className="px-3 py-2.5 text-right text-[#8A8678]">{c.mock}</td>
+                    <td className="px-3 py-2.5 text-right text-[var(--muted)]">{c.mock}</td>
                     <td className={`px-3 py-2.5 text-right ${c.failed > 0 ? "text-red-400 font-semibold" : ""}`}>{c.failed}</td>
                     <td className={`px-3 py-2.5 text-right ${c.receipt_confirmed > 0 ? "text-emerald-400" : "text-gray-500"}`}>{c.receipt_confirmed}</td>
-                    <td className="px-4 py-2.5 text-[#8A8678]">{c.last_sent ? ago(c.last_sent) : <span className="text-gray-600">—</span>}</td>
+                    <td className="px-4 py-2.5 text-[var(--muted)]">{c.last_sent ? ago(c.last_sent) : <span className="text-gray-600">—</span>}</td>
                   </tr>
                 ))}
               </tbody>

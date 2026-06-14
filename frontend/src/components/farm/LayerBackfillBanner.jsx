@@ -17,12 +17,12 @@ import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 const C = {
-  soil:    "#5C4033",
-  green:   "#6AA84F",
-  greenDk: "#3E7B1F",
-  amber:   "#BF9000",
-  red:     "#D4442E",
-  cream:   "#F8F3E9",
+  soil:    "var(--soil)",
+  green:   "var(--green)",
+  greenDk: "var(--green-dk)",
+  amber:   "var(--amber)",
+  red:     "var(--red)",
+  cream:   "var(--cream)",
   border:  "#E6DED0",
   muted:   "#8A7863",
   bannerBg:     "#FFF5D6",
@@ -240,7 +240,7 @@ export default function LayerBackfillBanner() {
         >
           <div
             className="w-full max-w-lg rounded-2xl p-6 space-y-4"
-            style={{ background: "white", border: `1px solid ${C.border}` }}
+            style={{ background: "var(--paper)", border: `1px solid ${C.border}` }}
           >
             <header className="flex items-start justify-between gap-3">
               <div>
@@ -256,7 +256,7 @@ export default function LayerBackfillBanner() {
                 type="button"
                 onClick={() => setModalOpen(false)}
                 className="text-xs font-medium px-3 py-1.5 rounded-lg shrink-0"
-                style={{ background: "white", border: `1px solid ${C.border}`, color: C.muted }}
+                style={{ background: "var(--paper)", border: `1px solid ${C.border}`, color: C.muted }}
                 aria-label="Close modal (banner stays until all cycles classified)"
               >
                 Close

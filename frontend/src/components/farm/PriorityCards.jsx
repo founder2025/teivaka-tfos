@@ -1,6 +1,6 @@
 import { useNavigate } from "react-router-dom";
 import { ListTodo, ChevronRight } from "lucide-react";
-const C={paper:"#FFFFFF",green:"#6AA84F",greenDk:"#3E7B1F",soil:"#5C4033",amber:"#BF9000",red:"#A32D2D",line:"#E2D8C3",muted:"#8A7B6F",cream:"#F8F3E9"};
+const C={paper:"var(--paper)",green:"var(--green)",greenDk:"var(--green-dk)",soil:"var(--soil)",amber:"var(--amber)",red:"var(--red)",line:"var(--line)",muted:"var(--muted)",cream:"var(--cream)"};
 const D=[{crop:"Eggplant",cycle:"Crops",title:"Spray due — block 3",due:"Today · withholding ends",sev:"high"},{crop:"Tomato",cycle:"Crops",title:"Harvest window opens",due:"Today",sev:"normal"},{crop:"Goats",cycle:"Animals",title:"Weigh-in scheduled",due:"This week",sev:"normal"}];
 export default function PriorityCards(){const nav=useNavigate();return(
 <section className="rounded-2xl px-4 py-4" style={{background:C.paper,border:`1px solid ${C.line}`}}>

@@ -4,9 +4,9 @@ import { useMe } from "../../hooks/useMe";
 import { navPillarKeys } from "../../utils/personas";
 
 const C = {
-  soil:      "#5C4033",
-  greenDk:   "#3E7B1F",
-  green:     "#6AA84F",
+  soil:      "var(--soil)",
+  greenDk:   "var(--green-dk)",
+  green:     "var(--green)",
   activeBg:  "rgba(106, 168, 79, 0.08)",
   hoverBg:   "rgba(92, 64, 51, 0.04)",
 };

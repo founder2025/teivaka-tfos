@@ -20,7 +20,7 @@ const tok = () => localStorage.getItem("tfos_access_token");
 const toast = (message, type) => { try { window.dispatchEvent(new CustomEvent("tfos:toast", { detail: { message, type } })); } catch { /* noop */ } };
 async function getJSON(u) { const t = tok(); const r = await fetch(u, { headers: t ? { Authorization: `Bearer ${t}` } : {} }); if (!r.ok) throw new Error(String(r.status)); return r.json(); }
 async function api(method, u, body) { const t = tok(); const r = await fetch(u, { method, headers: { ...(t ? { Authorization: `Bearer ${t}` } : {}), ...(body ? { "Content-Type": "application/json" } : {}) }, body: body ? JSON.stringify(body) : undefined }); if (!r.ok) throw new Error(String(r.status)); return r.json().catch(() => ({})); }
-const C = { soil: "#5C4033", green: "#6AA84F", greenDk: "#3E7B1F", line: "#E8E2D4", cream: "#F8F3E9", muted: "#8A7B6F", red: "#D4442E" };
+const C = { soil: "var(--soil)", green: "var(--green)", greenDk: "var(--green-dk)", line: "var(--line)", cream: "var(--cream)", muted: "var(--muted)", red: "var(--red)" };
 const muteKey = (id) => `tfos_chat_mute_${id}`;
 
 /* compose: pick someone you follow to start/open a conversation */
@@ -36,7 +36,7 @@ function ComposeModal({ onClose, onPick }) {
   }, [q]);
   return (
     <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 1500, display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "9vh 16px" }}>
-      <div onClick={(e) => e.stopPropagation()} style={{ width: 440, maxWidth: "100%", maxHeight: "72vh", background: "#fff", borderRadius: 12, display: "flex", flexDirection: "column", overflow: "hidden", border: `1px solid ${C.line}` }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ width: 440, maxWidth: "100%", maxHeight: "72vh", background: "var(--paper)", borderRadius: 12, display: "flex", flexDirection: "column", overflow: "hidden", border: `1px solid ${C.line}` }}>
         <div style={{ padding: "12px 14px", borderBottom: `1px solid ${C.line}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <strong style={{ color: C.soil }}>New message</strong>
           <button onClick={onClose} aria-label="Close" style={{ border: "none", background: "transparent", cursor: "pointer", color: C.muted }}><X size={18} /></button>
@@ -51,7 +51,7 @@ function ComposeModal({ onClose, onPick }) {
           {people == null ? <div style={{ padding: 20, color: C.muted, fontSize: 13, textAlign: "center" }}>Loading…</div>
             : people.length === 0 ? <div style={{ padding: 24, color: C.muted, fontSize: 13, textAlign: "center", lineHeight: 1.6 }}>{q ? "No matches." : <>You're not following anyone yet. <strong>Follow people in Home → Directory</strong> to start a conversation.</>}</div>
               : people.map((p) => (
-                <button key={p.user_id} onClick={() => onPick(p.user_id)} style={{ width: "100%", display: "flex", gap: 10, alignItems: "center", padding: "10px 14px", border: "none", borderBottom: `1px solid ${C.line}`, background: "#fff", cursor: "pointer", textAlign: "left" }}>
+                <button key={p.user_id} onClick={() => onPick(p.user_id)} style={{ width: "100%", display: "flex", gap: 10, alignItems: "center", padding: "10px 14px", border: "none", borderBottom: `1px solid ${C.line}`, background: "var(--paper)", cursor: "pointer", textAlign: "left" }}>
                   <Avatar src={p.avatar_url} name={p.full_name} size={38} fontScale={0.36} />
                   <span style={{ flex: 1, minWidth: 0 }}>
                     <span style={{ display: "block", fontWeight: 700, fontSize: 14, color: C.soil, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.full_name}</span>
@@ -93,7 +93,7 @@ function HeaderIdentity({ conn, onBlocked }) {
       {open && (
         <>
           <div onClick={close} style={{ position: "fixed", inset: 0, zIndex: 1399 }} />
-          <div style={{ position: "absolute", left: 0, top: 42, zIndex: 1400, background: "#fff", border: `1px solid ${C.line}`, borderRadius: 8, boxShadow: "0 8px 24px rgba(0,0,0,0.16)", minWidth: 190, overflow: "hidden" }}>
+          <div style={{ position: "absolute", left: 0, top: 42, zIndex: 1400, background: "var(--paper)", border: `1px solid ${C.line}`, borderRadius: 8, boxShadow: "0 8px 24px rgba(0,0,0,0.16)", minWidth: 190, overflow: "hidden" }}>
             <MI icon={User} onClick={profile}>View profile</MI>
             <MI icon={UserPlus} onClick={follow}>Follow</MI>
             <MI icon={muted ? Volume2 : VolumeX} onClick={toggleMute}>{muted ? "Unmute" : "Mute"} notifications</MI>
@@ -136,7 +136,7 @@ export default function MessagesPage() {
 
   const Row = (c) => (
     <button key={c.user_id} onClick={() => navigate(`/messages/${c.user_id}`)}
-      style={{ width: "100%", display: "flex", gap: 10, alignItems: "center", padding: "11px 12px", border: "none", borderBottom: `1px solid ${C.line}`, background: c.user_id === userId ? "rgba(106,168,79,0.10)" : c.unread > 0 ? "rgba(106,168,79,0.05)" : "#fff", cursor: "pointer", textAlign: "left", flexShrink: 0 }}>
+      style={{ width: "100%", display: "flex", gap: 10, alignItems: "center", padding: "11px 12px", border: "none", borderBottom: `1px solid ${C.line}`, background: c.user_id === userId ? "rgba(106,168,79,0.10)" : c.unread > 0 ? "rgba(106,168,79,0.05)" : "var(--paper)", cursor: "pointer", textAlign: "left", flexShrink: 0 }}>
       <span style={{ position: "relative", flexShrink: 0 }}>
         <Avatar src={c.avatar_url} name={c.full_name} size={42} fontScale={0.36} />
         {c.online && <span style={{ position: "absolute", bottom: 0, right: 0, width: 12, height: 12, borderRadius: "50%", background: "#4caf50", border: "2px solid #fff" }} />}
@@ -155,9 +155,9 @@ export default function MessagesPage() {
   );
 
   const listPane = (
-    <div style={{ display: "flex", flexDirection: "column", minHeight: 0, height: "100%", borderRight: narrow ? "none" : `1px solid ${C.line}`, background: "#fff" }}>
+    <div style={{ display: "flex", flexDirection: "column", minHeight: 0, height: "100%", borderRight: narrow ? "none" : `1px solid ${C.line}`, background: "var(--paper)" }}>
       <div style={{ padding: "10px 12px", borderBottom: `1px solid ${C.line}`, flexShrink: 0, display: "flex", gap: 8, alignItems: "center" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, border: `1px solid ${C.line}`, borderRadius: 999, padding: "7px 12px", background: "#fff", flex: 1 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, border: `1px solid ${C.line}`, borderRadius: 999, padding: "7px 12px", background: "var(--paper)", flex: 1 }}>
           <Search size={14} style={{ color: C.muted }} />
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search messages…" style={{ border: "none", outline: "none", flex: 1, fontSize: 13.5, background: "transparent", color: C.soil }} />
         </div>
@@ -175,7 +175,7 @@ export default function MessagesPage() {
   );
 
   const convPane = (withBack) => (
-    <div style={{ display: "flex", flexDirection: "column", minHeight: 0, height: "100%", minWidth: 0, background: "#fff" }}>
+    <div style={{ display: "flex", flexDirection: "column", minHeight: 0, height: "100%", minWidth: 0, background: "var(--paper)" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", borderBottom: `1px solid ${C.line}`, background: C.cream, flexShrink: 0 }}>
         {withBack && <button onClick={() => navigate("/messages")} aria-label="Back" style={{ border: "none", background: "transparent", cursor: "pointer", color: C.soil, display: "flex" }}><ArrowLeft size={20} /></button>}
         <HeaderIdentity conn={selected} onBlocked={() => navigate("/messages")} />
@@ -187,7 +187,7 @@ export default function MessagesPage() {
   );
 
   const emptyState = (
-    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", color: C.muted, gap: 10, height: "100%", background: "#fff" }}>
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", color: C.muted, gap: 10, height: "100%", background: "var(--paper)" }}>
       <MessageCircle size={42} strokeWidth={1.5} style={{ opacity: 0.4 }} />
       <div style={{ fontSize: 14, color: C.soil, fontWeight: 700 }}>Select a conversation</div>
       <div style={{ fontSize: 13 }}>Pick someone on the left, or</div>

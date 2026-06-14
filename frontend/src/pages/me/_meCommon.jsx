@@ -3,7 +3,7 @@
 import { Link } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
 
-export const C = { soil: "#5C4033", green: "#6AA84F", greenDk: "#3E7B1F", line: "#E8E2D4", cream: "#F8F3E9", muted: "#8A7B6F", amber: "#BF9000" };
+export const C = { soil: "var(--soil)", green: "var(--green)", greenDk: "var(--green-dk)", line: "var(--line)", cream: "var(--cream)", muted: "var(--muted)", amber: "var(--amber)" };
 export const tok = () => localStorage.getItem("tfos_access_token");
 export const authHeaders = () => { const t = tok(); return t ? { "Content-Type": "application/json", Authorization: `Bearer ${t}` } : { "Content-Type": "application/json" }; };
 // Shared wrapper: token auto-refresh on 401 + truthful error classification.
@@ -22,4 +22,4 @@ export function MeShell({ title, subtitle, children, back = "/me" }) {
   );
 }
 
-export const card = { background: "#fff", border: `1px solid ${C.line}`, borderRadius: 12, padding: 16, marginBottom: 14 };
+export const card = { background: "var(--paper)", border: `1px solid ${C.line}`, borderRadius: 12, padding: 16, marginBottom: 14 };

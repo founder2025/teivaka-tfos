@@ -22,23 +22,23 @@
  */
 
 export const PALETTE_FARM = {
-  bg:         "#F8F3E9",
-  text:       "#5C4033",
+  bg:         "var(--cream)",
+  text:       "var(--soil)",
   textMuted:  "#8A7863",
   border:     "#E6DED0",
-  accent:     "#6AA84F",
+  accent:     "var(--green)",
   accentTint: "#E9F2DD",
-  warn:       "#BF9000",
+  warn:       "var(--amber)",
 };
 
 export const PALETTE_DARK = {
-  bg:         "#F5EFE0",
+  bg:         "var(--cream)",
   text:       "#2C1A0E",
   textMuted:  "#8A7863",
-  border:     "#E0D5C0",
-  accent:     "#3D8C40",
+  border:     "var(--line)",
+  accent:     "var(--green)",
   accentTint: "#E6EFD4",
-  warn:       "#D4A017",
+  warn:       "var(--amber)",
 };
 
 export default PALETTE_FARM;

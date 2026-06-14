@@ -16,16 +16,16 @@ async function getJSON(u) { const t = tok(); const r = await fetch(u, { headers:
 async function postJSON(u, b) { const t = tok(); const r = await fetch(u, { method: "POST", headers: { ...(t ? { Authorization: `Bearer ${t}` } : {}), "Content-Type": "application/json" }, body: JSON.stringify(b) }); if (!r.ok) { const d = await r.json().catch(() => ({})); throw new Error(d.detail || String(r.status)); } return r.json(); }
 async function uploadFile(file) { const t = tok(); const fd = new FormData(); fd.append("file", file); const r = await fetch(`${API}/uploads`, { method: "POST", headers: t ? { Authorization: `Bearer ${t}` } : {}, body: fd }); if (!r.ok) throw new Error(String(r.status)); return r.json(); }
 
-const C = { soil: "#5C4033", green: "#6AA84F", greenDk: "#3E7B1F", line: "#E8E2D4", cream: "#F8F3E9", muted: "#8A7B6F", red: "#D4442E", gold: "#BF9000" };
+const C = { soil: "var(--soil)", green: "var(--green)", greenDk: "var(--green-dk)", line: "var(--line)", cream: "var(--cream)", muted: "var(--muted)", red: "var(--red)", gold: "var(--amber)" };
 const PERIOD_DAYS = { DAILY: 1, WEEKLY: 7, MONTHLY: 30 };
 const PERIOD_LABEL = { DAILY: "Daily", WEEKLY: "Weekly", MONTHLY: "Monthly" };
 const blankForm = { title: "", blurb: "", sponsor_logo: "", image_url: "", cta_label: "", cta_url: "", billing_period: "WEEKLY", target_country: "", target_account_type: "" };
 
 const STATUS_CHIP = {
   PENDING_REVIEW: { label: "In review", bg: "#FBF3DC", fg: C.gold },
-  APPROVED: { label: "Approved", bg: "#EAF5E5", fg: C.greenDk },
+  APPROVED: { label: "Approved", bg: "var(--green-tint)", fg: C.greenDk },
   PENDING_PAYMENT: { label: "Awaiting payment", bg: "#FBF3DC", fg: C.gold },
-  ACTIVE: { label: "Live", bg: "#EAF5E5", fg: C.greenDk },
+  ACTIVE: { label: "Live", bg: "var(--green-tint)", fg: C.greenDk },
   REJECTED: { label: "Rejected", bg: "#FBE6E2", fg: C.red },
   PAUSED: { label: "Paused", bg: "#EFE9DC", fg: C.muted },
   ENDED: { label: "Ended", bg: "#EFE9DC", fg: C.muted },
@@ -34,7 +34,7 @@ const STATUS_CHIP = {
 
 const lbl = { display: "block", fontSize: 12.5, fontWeight: 700, color: C.soil, marginBottom: 4 };
 const hint = { fontSize: 11, color: C.muted, marginTop: -6, marginBottom: 10 };
-const inp = { width: "100%", border: `1px solid ${C.line}`, borderRadius: 9, padding: "10px 12px", fontSize: 14, outline: "none", boxSizing: "border-box", color: C.soil, background: "#fff", marginBottom: 12 };
+const inp = { width: "100%", border: `1px solid ${C.line}`, borderRadius: 9, padding: "10px 12px", fontSize: 14, outline: "none", boxSizing: "border-box", color: C.soil, background: "var(--paper)", marginBottom: 12 };
 const sectionTitle = { fontSize: 11, fontWeight: 800, color: C.greenDk, letterSpacing: "0.06em", textTransform: "uppercase", margin: "0 0 12px" };
 
 /* ---- a single image field (upload → preview) ----------------------------- */
@@ -75,7 +75,7 @@ function AdPreview({ f, sponsorName }) {
         <Megaphone size={14} style={{ color: C.greenDk }} />
         <span style={{ fontWeight: 800, fontSize: 12, color: C.soil, textTransform: "uppercase", letterSpacing: "0.04em" }}>Live preview</span>
       </div>
-      <div style={{ border: `1px solid ${C.line}`, borderRadius: 10, overflow: "hidden", background: "#fff", maxWidth: 280 }}>
+      <div style={{ border: `1px solid ${C.line}`, borderRadius: 10, overflow: "hidden", background: "var(--paper)", maxWidth: 280 }}>
         {f.image_url && <img src={f.image_url} alt="" style={{ width: "100%", height: 96, objectFit: "cover", display: "block" }} />}
         <div style={{ padding: "10px 12px" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 5 }}>
@@ -215,7 +215,7 @@ export default function Promote() {
                     const saves = (dailyRate != null && perDay != null && p !== "DAILY") ? Math.round((1 - perDay / dailyRate) * 100) : 0;
                     return (
                       <button key={p} onClick={() => set("billing_period", p)}
-                        style={{ position: "relative", textAlign: "left", border: `1.5px solid ${on ? C.green : C.line}`, background: on ? "rgba(106,168,79,0.10)" : "#fff", borderRadius: 12, padding: "12px 12px 14px", cursor: "pointer" }}>
+                        style={{ position: "relative", textAlign: "left", border: `1.5px solid ${on ? C.green : C.line}`, background: on ? "rgba(106,168,79,0.10)" : "var(--paper)", borderRadius: 12, padding: "12px 12px 14px", cursor: "pointer" }}>
                         {on && <span style={{ position: "absolute", top: 8, right: 8, color: C.green }}><Check size={15} /></span>}
                         <div style={{ fontWeight: 800, color: C.soil, fontSize: 13 }}>{PERIOD_LABEL[p]}</div>
                         <div style={{ fontWeight: 800, color: C.greenDk, fontSize: 17, marginTop: 4 }}>{pr != null ? `FJD ${pr.toFixed(2)}` : "—"}</div>

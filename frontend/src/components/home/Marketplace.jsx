@@ -22,17 +22,17 @@ const CAT_LABEL = Object.fromEntries(CATS);
 const ISLANDS = ["Viti Levu", "Vanua Levu", "Kadavu", "Taveuni", "Ovalau", "Rotuma", "Other"];
 // Category-native config: fields, units and copy adapt to what's being listed.
 const CAT_CFG = {
-  PRODUCE:   { accent: "#3E7B1F", qty: "Quantity (kg)", desc: "Describe it — condition, grade, harvest date…", bases: [["kg", "per kg"], ["unit", "per unit"], ["pack", "per pack"]], loc: "Pickup location — village / town", hash: true,
+  PRODUCE:   { accent: "var(--green-dk)", qty: "Quantity (kg)", desc: "Describe it — condition, grade, harvest date…", bases: [["kg", "per kg"], ["unit", "per unit"], ["pack", "per pack"]], loc: "Pickup location — village / town", hash: true,
                extras: [["grade", "Grade (A / B / Organic / Mixed)"], ["harvest_date", "Harvest date (e.g. 10 Jun)"]], delivery: true },
-  INPUTS:    { accent: "#BF9000", qty: "Quantity available (packs/bags)", desc: "Describe it — brand, pack size, expiry…", bases: [["pack", "per pack"], ["unit", "per unit"], ["kg", "per kg"]], loc: "Pickup location — shop / town", hash: false,
+  INPUTS:    { accent: "var(--amber)", qty: "Quantity available (packs/bags)", desc: "Describe it — brand, pack size, expiry…", bases: [["pack", "per pack"], ["unit", "per unit"], ["kg", "per kg"]], loc: "Pickup location — shop / town", hash: false,
                extras: [["brand", "Brand / product name"], ["pack_size", "Pack size (e.g. 25 kg bag)"]], delivery: true },
   TOOLS:     { accent: "#7A5C4E", qty: "How many available", desc: "Describe it — what it does, age, condition…", bases: [["item", "per item"], ["day", "per day (hire)"]], loc: "Pickup location — village / town", hash: false,
                extras: [["condition", "Condition (New / Used — good / Used — fair)"], ["brand_model", "Brand / model (optional)"]], delivery: false },
-  LIVESTOCK: { accent: "#A32D2D", qty: "Head count", desc: "Describe them — breed, age, health, vaccinations…", bases: [["head", "per head"], ["kg", "per kg (dressed)"]], loc: "Pickup location — farm / village", hash: true,
+  LIVESTOCK: { accent: "var(--red)", qty: "Head count", desc: "Describe them — breed, age, health, vaccinations…", bases: [["head", "per head"], ["kg", "per kg (dressed)"]], loc: "Pickup location — farm / village", hash: true,
                extras: [["animal_type", "Animal (e.g. broiler, goat, piglet)"], ["age_weight", "Age / weight (e.g. 6 wks, ~2 kg)"]], delivery: false },
   SERVICES:  { accent: "#2C6E8A", qty: null, desc: "What's the service? Experience, equipment, availability…", bases: [["hour", "per hour"], ["job", "per job"], ["day", "per day"]], loc: "Service area — islands / regions covered", hash: false,
                extras: [["availability", "Availability (e.g. weekdays, from July)"]], delivery: false },
-  WANTED:    { accent: "#5C4033", qty: "Quantity needed", desc: "What do you need? Quantity, grade, when…", bases: [["budget", "total budget"]], loc: "Where you need it — town / island", hash: false,
+  WANTED:    { accent: "var(--soil)", qty: "Quantity needed", desc: "What do you need? Quantity, grade, when…", bases: [["budget", "total budget"]], loc: "Where you need it — town / island", hash: false,
                extras: [["needed_by", "Needed by (date)"]], delivery: false },
 };
 const BASIS_SUFFIX = { kg: "/kg", unit: "/unit", hour: "/hr", job: "/job", day: "/day", head: "/head", pack: "/pack", item: "", budget: "" };
@@ -45,7 +45,7 @@ const priceLine = (l) => {
 // Profession-aware default category (just a default — freely changeable).
 const PROF_DEFAULT_CAT = { commercial_buyer: "WANTED", agri_input_supplier: "INPUTS", logistics_operator: "SERVICES", trade_importer: "WANTED", commodity_exporter: "WANTED" };
 const fjd = (v) => { const n = Number(v); return isNaN(n) || v == null ? null : `FJD ${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`; };
-const inp = { width: "100%", padding: "9px 11px", border: "1px solid var(--line)", borderRadius: 8, fontSize: 14, background: "#fff", boxSizing: "border-box" };
+const inp = { width: "100%", padding: "9px 11px", border: "1px solid var(--line)", borderRadius: 8, fontSize: 14, background: "var(--paper)", boxSizing: "border-box" };
 
 /* ---------------- new listing ---------------- */
 function NewListingModal({ onClose, onCreated }) {
@@ -115,7 +115,7 @@ function NewListingModal({ onClose, onCreated }) {
           <input style={inp} placeholder="Title — e.g. Fresh cassava, 200 kg" maxLength={80} value={f.listing_title} onChange={(e) => set("listing_title", e.target.value)} />
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
             {CATS.slice(1).map(([v, l]) => (
-              <button key={v} onClick={() => { set("category", v); set("price_basis", CAT_CFG[v].bases[0][0]); setDetails({}); }} style={{ padding: "7px 12px", borderRadius: 999, fontSize: 12.5, cursor: "pointer", fontWeight: 600, border: `1px solid ${f.category === v ? "var(--green-dk)" : "var(--line)"}`, background: f.category === v ? "var(--green)" : "#fff", color: f.category === v ? "#fff" : "var(--soil)" }}>{l}</button>
+              <button key={v} onClick={() => { set("category", v); set("price_basis", CAT_CFG[v].bases[0][0]); setDetails({}); }} style={{ padding: "7px 12px", borderRadius: 999, fontSize: 12.5, cursor: "pointer", fontWeight: 600, border: `1px solid ${f.category === v ? "var(--green-dk)" : "var(--line)"}`, background: f.category === v ? "var(--green)" : "var(--paper)", color: f.category === v ? "var(--paper)" : "var(--soil)" }}>{l}</button>
             ))}
           </div>
           <textarea style={{ ...inp, minHeight: 70 }} placeholder={cfg.desc} maxLength={1000} value={f.listing_description} onChange={(e) => set("listing_description", e.target.value)} />
@@ -124,10 +124,10 @@ function NewListingModal({ onClose, onCreated }) {
             {photos.map((u, i) => (
               <span key={i} style={{ position: "relative" }}>
                 <img src={u} alt="" style={{ width: 64, height: 64, objectFit: "cover", borderRadius: 8 }} />
-                <button onClick={() => setPhotos((p) => p.filter((_, j) => j !== i))} style={{ position: "absolute", top: -6, right: -6, width: 20, height: 20, borderRadius: "50%", border: "1px solid var(--line)", background: "#fff", cursor: "pointer", fontSize: 10 }}>✕</button>
+                <button onClick={() => setPhotos((p) => p.filter((_, j) => j !== i))} style={{ position: "absolute", top: -6, right: -6, width: 20, height: 20, borderRadius: "50%", border: "1px solid var(--line)", background: "var(--paper)", cursor: "pointer", fontSize: 10 }}>✕</button>
               </span>
             ))}
-            <button onClick={() => fileRef.current?.click()} disabled={pct != null} style={{ width: 64, height: 64, border: "2px dashed var(--line)", borderRadius: 8, background: "#fff", cursor: "pointer", color: "var(--muted)", fontSize: 11 }}>
+            <button onClick={() => fileRef.current?.click()} disabled={pct != null} style={{ width: 64, height: 64, border: "2px dashed var(--line)", borderRadius: 8, background: "var(--paper)", cursor: "pointer", color: "var(--muted)", fontSize: 11 }}>
               {pct != null ? `${pct}%` : "+ Photos"}
             </button>
             <input ref={fileRef} type="file" accept="image/*" multiple hidden onChange={pick} />
@@ -311,12 +311,12 @@ export default function Marketplace() {
       {seller && (
         <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 13px", marginBottom: 10, border: "1px solid var(--green)", borderRadius: 10, background: "rgba(106,168,79,0.07)", fontSize: 13, color: "var(--soil)" }}>
           Showing listings by <strong>{sellerName || "this member"}</strong>
-          <button onClick={() => navigate("/home/marketplace")} style={{ marginLeft: "auto", border: "1px solid var(--line)", background: "#fff", borderRadius: 999, padding: "4px 12px", fontSize: 12, cursor: "pointer" }}>Show all</button>
+          <button onClick={() => navigate("/home/marketplace")} style={{ marginLeft: "auto", border: "1px solid var(--line)", background: "var(--paper)", borderRadius: 999, padding: "4px 12px", fontSize: 12, cursor: "pointer" }}>Show all</button>
         </div>
       )}
       {/* controls */}
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: 10 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 6, flex: 1, minWidth: 200, border: "1px solid var(--line)", borderRadius: 999, padding: "7px 12px", background: "#fff" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, flex: 1, minWidth: 200, border: "1px solid var(--line)", borderRadius: 999, padding: "7px 12px", background: "var(--paper)" }}>
           <Search size={14} style={{ color: "var(--muted)" }} />
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search the marketplace…" style={{ border: "none", outline: "none", flex: 1, fontSize: 13.5, background: "transparent" }} />
         </div>
@@ -324,12 +324,12 @@ export default function Marketplace() {
           <option value="">All islands</option>
           {ISLANDS.map((i) => <option key={i} value={i}>{i}</option>)}
         </select>
-        <button onClick={() => setView(view === "mine" ? "browse" : "mine")} style={{ padding: "8px 14px", borderRadius: 999, fontSize: 12.5, fontWeight: 600, cursor: "pointer", minHeight: 38, border: `1px solid ${view === "mine" ? "var(--green-dk)" : "var(--line)"}`, background: view === "mine" ? "var(--green)" : "#fff", color: view === "mine" ? "#fff" : "var(--soil)" }}>My listings</button>
-        <button onClick={() => setView(view === "saved" ? "browse" : "saved")} style={{ padding: "8px 14px", borderRadius: 999, fontSize: 12.5, fontWeight: 600, cursor: "pointer", minHeight: 38, border: `1px solid ${view === "saved" ? "var(--green-dk)" : "var(--line)"}`, background: view === "saved" ? "var(--green)" : "#fff", color: view === "saved" ? "#fff" : "var(--soil)" }}>Saved</button>
+        <button onClick={() => setView(view === "mine" ? "browse" : "mine")} style={{ padding: "8px 14px", borderRadius: 999, fontSize: 12.5, fontWeight: 600, cursor: "pointer", minHeight: 38, border: `1px solid ${view === "mine" ? "var(--green-dk)" : "var(--line)"}`, background: view === "mine" ? "var(--green)" : "var(--paper)", color: view === "mine" ? "var(--paper)" : "var(--soil)" }}>My listings</button>
+        <button onClick={() => setView(view === "saved" ? "browse" : "saved")} style={{ padding: "8px 14px", borderRadius: 999, fontSize: 12.5, fontWeight: 600, cursor: "pointer", minHeight: 38, border: `1px solid ${view === "saved" ? "var(--green-dk)" : "var(--line)"}`, background: view === "saved" ? "var(--green)" : "var(--paper)", color: view === "saved" ? "var(--paper)" : "var(--soil)" }}>Saved</button>
       </div>
       <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 14 }}>
         {CATS.map(([v, l]) => (
-          <button key={v} onClick={() => setCat(v)} style={{ padding: "7px 13px", borderRadius: 999, fontSize: 12.5, fontWeight: 600, cursor: "pointer", minHeight: 38, border: `1px solid ${cat === v ? "var(--green-dk)" : "var(--line)"}`, background: cat === v ? "var(--green)" : "#fff", color: cat === v ? "#fff" : "var(--soil)" }}>{l}</button>
+          <button key={v} onClick={() => setCat(v)} style={{ padding: "7px 13px", borderRadius: 999, fontSize: 12.5, fontWeight: 600, cursor: "pointer", minHeight: 38, border: `1px solid ${cat === v ? "var(--green-dk)" : "var(--line)"}`, background: cat === v ? "var(--green)" : "var(--paper)", color: cat === v ? "var(--paper)" : "var(--soil)" }}>{l}</button>
         ))}
       </div>
 
@@ -345,12 +345,12 @@ export default function Marketplace() {
         ) : (
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(170px, 1fr))", gap: 12 }}>
             {items.map((l) => (
-              <button key={l.listing_id} onClick={() => setOpen(l)} style={{ textAlign: "left", background: "#fff", border: "1px solid var(--line)", borderRadius: 12, overflow: "hidden", cursor: "pointer", padding: 0, position: "relative" }}>
+              <button key={l.listing_id} onClick={() => setOpen(l)} style={{ textAlign: "left", background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 12, overflow: "hidden", cursor: "pointer", padding: 0, position: "relative" }}>
                 {(l.photos || [])[0]
                   ? <img src={l.photos[0]} alt="" loading="lazy" style={{ width: "100%", aspectRatio: "1", objectFit: "cover" }} />
                   : <div style={{ width: "100%", aspectRatio: "1", background: "rgba(106,168,79,0.08)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--green-dk)" }}><Tag size={26} /></div>}
                 {l.sold_at && <span style={{ position: "absolute", top: 8, left: 8, background: "var(--soil)", color: "#fff", fontSize: 10, fontWeight: 700, padding: "3px 8px", borderRadius: 6 }}>SOLD</span>}
-                {l.category === "WANTED" && !l.sold_at && <span style={{ position: "absolute", top: 8, left: 8, background: "#BF9000", color: "#fff", fontSize: 10, fontWeight: 700, padding: "3px 8px", borderRadius: 6 }}>WANTED</span>}
+                {l.category === "WANTED" && !l.sold_at && <span style={{ position: "absolute", top: 8, left: 8, background: "var(--amber)", color: "#fff", fontSize: 10, fontWeight: 700, padding: "3px 8px", borderRadius: 6 }}>WANTED</span>}
                 <div style={{ padding: "8px 10px 10px" }}>
                   <div style={{ fontWeight: 700, color: "var(--soil)", fontSize: 13.5, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{l.listing_title}</div>
                   <div style={{ fontSize: 13, fontWeight: 800, color: "var(--green-dk)" }}>{priceLine(l)}</div>

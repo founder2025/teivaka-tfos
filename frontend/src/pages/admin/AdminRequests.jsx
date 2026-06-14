@@ -4,8 +4,8 @@ import { useEffect, useState } from "react";
 import AdminLayout from "../../components/admin/AdminLayout";
 import { getJSON, send } from "../../utils/api";
 
-const C = { soil: "#5C4033", green: "#6AA84F", greenDk: "#3E7B1F", line: "#E6E1D6", muted: "#8A8678", red: "#A32D2D" };
-const card = { background: "#fff", border: `1px solid ${C.line}`, borderRadius: 12, padding: 18, marginBottom: 16 };
+const C = { soil: "var(--soil)", green: "var(--green)", greenDk: "var(--green-dk)", line: "var(--line)", muted: "var(--muted)", red: "var(--red)" };
+const card = { background: "var(--paper)", border: `1px solid ${C.line}`, borderRadius: 12, padding: 18, marginBottom: 16 };
 const toast = (m, t) => { try { window.dispatchEvent(new CustomEvent("tfos:toast", { detail: { message: m, type: t } })); } catch { /* noop */ } };
 
 export default function AdminRequests() {
@@ -27,7 +27,7 @@ export default function AdminRequests() {
       <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
         {["PENDING", "APPROVED", "REJECTED"].map((s) => (
           <button key={s} onClick={() => setStatus(s)}
-            style={{ padding: "6px 13px", borderRadius: 999, fontSize: 12, fontWeight: 700, cursor: "pointer", border: `1px solid ${status === s ? C.greenDk : C.line}`, background: status === s ? C.green : "#fff", color: status === s ? "#fff" : C.muted }}>{s}</button>
+            style={{ padding: "6px 13px", borderRadius: 999, fontSize: 12, fontWeight: 700, cursor: "pointer", border: `1px solid ${status === s ? C.greenDk : C.line}`, background: status === s ? C.green : "var(--paper)", color: status === s ? "var(--paper)" : C.muted }}>{s}</button>
         ))}
       </div>
       <div style={card}>
@@ -45,7 +45,7 @@ export default function AdminRequests() {
                   <button onClick={() => decide(r.request_id, "approve")} style={{ background: C.green, color: "#fff", border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>Approve — payment confirmed</button>
                   <input value={reason[r.request_id] || ""} placeholder="Rejection reason (sent to the member)" onChange={(e) => setReason({ ...reason, [r.request_id]: e.target.value })}
                     style={{ flex: 1, minWidth: 180, border: `1px solid ${C.line}`, borderRadius: 8, padding: "8px 11px", fontSize: 12.5 }} />
-                  <button onClick={() => decide(r.request_id, "reject")} style={{ background: "#fff", color: C.red, border: `1px solid ${C.line}`, borderRadius: 8, padding: "8px 14px", fontSize: 12.5, cursor: "pointer" }}>Reject</button>
+                  <button onClick={() => decide(r.request_id, "reject")} style={{ background: "var(--paper)", color: C.red, border: `1px solid ${C.line}`, borderRadius: 8, padding: "8px 14px", fontSize: 12.5, cursor: "pointer" }}>Reject</button>
                 </div>
               )}
             </div>

@@ -18,14 +18,14 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
 const C = {
-  soil:    "#5C4033",
-  green:   "#6AA84F",
-  amber:   "#BF9000",
+  soil:    "var(--soil)",
+  green:   "var(--green)",
+  amber:   "var(--amber)",
   red:     "#B00020",
-  cream:   "#F8F3E9",
+  cream:   "var(--cream)",
   border:  "#E6DED0",
   muted:   "#8A7863",
-  panel:   "#FFFFFF",
+  panel:   "var(--paper)",
 };
 
 function authHeaders() {

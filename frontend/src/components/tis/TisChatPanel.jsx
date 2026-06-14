@@ -20,15 +20,15 @@ const STARTER_CHIPS = [
 ];
 
 const C = {
-  cream:    "#F8F3E9",
-  white:    "#FFFFFF",
-  soil:     "#5C4033",
+  cream:    "var(--cream)",
+  white:    "var(--paper)",
+  soil:     "var(--soil)",
   soilDk:   "#2D2016",
-  green:    "#6AA84F",
-  greenDk:  "#3E7B1F",
-  borderLt: "#E8E2D4",
+  green:    "var(--green)",
+  greenDk:  "var(--green-dk)",
+  borderLt: "var(--line)",
   borderMd: "#D4CFC3",
-  muted:    "#8A7B6F",
+  muted:    "var(--muted)",
 };
 
 function UserBubble({ content }) {
@@ -37,7 +37,7 @@ function UserBubble({ content }) {
       <div
         style={{
           background: C.green,
-          color: "#FFFFFF",
+          color: "#fff",
           borderRadius: 12,
           padding: "8px 12px",
           maxWidth: "80%",
@@ -168,7 +168,7 @@ export default function TisChatPanel({
           height: 44,
           padding: "0 12px 0 16px",
           background: C.green,
-          color: "#FFFFFF",
+          color: "#fff",
           flexShrink: 0,
         }}
       >
@@ -181,7 +181,7 @@ export default function TisChatPanel({
             style={{
               background: "transparent",
               border: "none",
-              color: "#FFFFFF",
+              color: "#fff",
               fontSize: 11,
               fontWeight: 500,
               cursor: "pointer",
@@ -204,7 +204,7 @@ export default function TisChatPanel({
               borderRadius: 4,
               background: "transparent",
               border: "none",
-              color: "#FFFFFF",
+              color: "#fff",
               cursor: "pointer",
             }}
             onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(255,255,255,0.15)"; }}
@@ -310,7 +310,7 @@ export default function TisChatPanel({
             padding: "6px 12px",
             fontSize: 13,
             color: C.soilDk,
-            background: "#FFFFFF",
+            background: "var(--paper)",
             outline: "none",
           }}
         />
@@ -325,7 +325,7 @@ export default function TisChatPanel({
             height: 32,
             borderRadius: "50%",
             background: C.green,
-            color: "#FFFFFF",
+            color: "#fff",
             border: "none",
             cursor: sendDisabled ? "not-allowed" : "pointer",
             opacity: sendDisabled ? 0.5 : 1,

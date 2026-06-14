@@ -63,7 +63,7 @@ function SRow({ label, sub, right }) {
 function Toggle({ on, onClick, busy }) {
   return (
     <button onClick={onClick} disabled={busy} style={{ width: 44, height: 24, borderRadius: 12, border: "none", cursor: "pointer", background: on ? "var(--green)" : "var(--line)", position: "relative", transition: ".15s", opacity: busy ? 0.6 : 1 }}>
-      <span style={{ position: "absolute", top: 2, left: on ? 22 : 2, width: 20, height: 20, borderRadius: "50%", background: "#fff", transition: ".15s", boxShadow: "0 1px 2px rgba(0,0,0,.25)" }} />
+      <span style={{ position: "absolute", top: 2, left: on ? 22 : 2, width: 20, height: 20, borderRadius: "50%", background: "var(--paper)", transition: ".15s", boxShadow: "0 1px 2px rgba(0,0,0,.25)" }} />
     </button>
   );
 }

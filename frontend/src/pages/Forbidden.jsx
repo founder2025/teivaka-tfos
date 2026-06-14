@@ -6,7 +6,7 @@
 import { useNavigate } from "react-router-dom";
 import { isAdmin } from "../utils/auth";
 
-const C = { soil: "#2C1A0E", green: "#3D8C40", cream: "#F5EFE0", border: "#E0D5C0" };
+const C = { soil: "#2C1A0E", green: "var(--green)", cream: "var(--cream)", border: "var(--line)" };
 
 export default function Forbidden() {
   const navigate = useNavigate();

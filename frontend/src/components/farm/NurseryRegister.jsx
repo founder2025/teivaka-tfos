@@ -13,15 +13,15 @@ import { useQuery } from "@tanstack/react-query";
 import { Sprout, MapPin, ChevronDown, Check, AlertTriangle } from "lucide-react";
 
 const C = {
-  soil: "#5C4033", green: "#6AA84F", greenDk: "#4F8138", amber: "#BF9000",
-  cream: "#F8F3E9", border: "#E6DED0", muted: "#8A7863", panel: "#FFFFFF", red: "#D4442E",
+  soil: "var(--soil)", green: "var(--green)", greenDk: "#4F8138", amber: "var(--amber)",
+  cream: "var(--cream)", border: "#E6DED0", muted: "#8A7863", panel: "var(--paper)", red: "var(--red)",
 };
 
 const BATCH_STATUS = {
   SOWN: { label: "Sown", bg: C.cream, fg: C.soil },
   GERMINATING: { label: "Germinating", bg: "#E9F2DD", fg: C.greenDk },
-  READY: { label: "Ready", bg: C.green, fg: "#fff" },
-  TRANSPLANTED: { label: "Transplanted", bg: C.soil, fg: "#fff" },
+  READY: { label: "Ready", bg: C.green, fg: "var(--paper)" },
+  TRANSPLANTED: { label: "Transplanted", bg: C.soil, fg: "var(--paper)" },
 };
 
 function authHeaders() {

@@ -6,12 +6,12 @@ import { useNavigate } from "react-router-dom";
 import { Plus, Link2, Shield, FileText } from "lucide-react";
 
 const C = {
-  soil:   "#5C4033",
-  muted:  "#8A7B6F",
-  line:   "#E2D8C3",
-  paper:  "#FFFFFF",
-  green:  "#6AA84F",
-  greenDk:"#3E7B1F",
+  soil:   "var(--soil)",
+  muted:  "var(--muted)",
+  line:   "var(--line)",
+  paper:  "var(--paper)",
+  green:  "var(--green)",
+  greenDk:"var(--green-dk)",
 };
 
 const STEPS = [

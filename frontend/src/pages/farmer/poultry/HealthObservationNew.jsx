@@ -11,13 +11,13 @@ import { apiClient } from '../../../utils/apiClient';
 import { useEventMutation } from '../../../utils/useEventMutation';
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false, staleTime: 30_000 } } });
-const C = { soil: '#5C4033', cream: '#F8F3E9', green: '#6AA84F', amber: '#BF9000', red: '#A32D2D', border: '#E6DED0', muted: '#8A8678' };
+const C = { soil: 'var(--soil)', cream: 'var(--cream)', green: 'var(--green)', amber: 'var(--amber)', red: 'var(--red)', border: '#E6DED0', muted: 'var(--muted)' };
 
 const SEVERITY_OPTIONS = [
-  { value: 'MILD',     label: 'Mild — a few birds noticed',                color: '#BF9000' },
+  { value: 'MILD',     label: 'Mild — a few birds noticed',                color: 'var(--amber)' },
   { value: 'MODERATE', label: 'Moderate — needs attention',                color: '#D97A1A' },
-  { value: 'SEVERE',   label: 'Severe — many sick or dying (blocks sales)', color: '#A32D2D' },
-  { value: 'CLEARED',  label: 'Cleared — flock is healthy now',            color: '#6AA84F' },
+  { value: 'SEVERE',   label: 'Severe — many sick or dying (blocks sales)', color: 'var(--red)' },
+  { value: 'CLEARED',  label: 'Cleared — flock is healthy now',            color: 'var(--green)' },
 ];
 
 const SYMPTOMS = [

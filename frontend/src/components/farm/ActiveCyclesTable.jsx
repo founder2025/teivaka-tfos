@@ -9,9 +9,9 @@
 import { useQuery } from "@tanstack/react-query";
 
 const C = {
-  soil:    "#5C4033",
-  greenDk: "#3E7B1F",
-  cream:   "#F8F3E9",
+  soil:    "var(--soil)",
+  greenDk: "var(--green-dk)",
+  cream:   "var(--cream)",
   border:  "#E6DED0",
   muted:   "#8A7863",
 };

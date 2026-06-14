@@ -174,7 +174,7 @@ export default function InputsSandbox() {
       style={{ background: "#1A1410", fontFamily: "'Lora', Georgia, serif" }}
     >
       <header className="mb-6">
-        <h1 className="text-2xl font-bold" style={{ color: "#F5EFE0" }}>
+        <h1 className="text-2xl font-bold" style={{ color: "var(--cream)" }}>
           Inputs Sandbox
         </h1>
         <p className="text-sm" style={{ color: "#A89880" }}>

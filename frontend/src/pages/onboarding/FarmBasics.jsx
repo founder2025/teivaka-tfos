@@ -50,10 +50,10 @@ function defaultFarmName() {
 
 const C = {
   soil:    "#2C1A0E",
-  green:   "#3D8C40",
+  green:   "var(--green)",
   greenDk: "#2C6A2E",
-  cream:   "#F5EFE0",
-  border:  "#E0D5C0",
+  cream:   "var(--cream)",
+  border:  "var(--line)",
   muted:   "#8A7863",
 };
 

@@ -1,6 +1,6 @@
 import { useNavigate } from "react-router-dom";
 import { Plus, Sprout, ArrowRight, DollarSign, ListTodo, Users, Camera } from "lucide-react";
-const C={paper:"#FFFFFF",green:"#6AA84F",greenDk:"#3E7B1F",soil:"#5C4033",amber:"#BF9000",red:"#A32D2D",line:"#E2D8C3",muted:"#8A7B6F",cream:"#F8F3E9"};
+const C={paper:"var(--paper)",green:"var(--green)",greenDk:"var(--green-dk)",soil:"var(--soil)",amber:"var(--amber)",red:"var(--red)",line:"var(--line)",muted:"var(--muted)",cream:"var(--cream)"};
 const A=[{label:"Harvest",icon:Sprout,a:"/farm/harvest/new"},{label:"Cash in",icon:ArrowRight,a:"/farm/cash"},{label:"Expense",icon:DollarSign,a:"/farm/cash"},{label:"Field event",icon:ListTodo,a:"/farm/field-events?new=1"},{label:"Labor",icon:Users,a:"/farm/labor"},{label:"Photo",icon:Camera,a:"/farm/gallery"}];
 export default function QuickActions(){const nav=useNavigate();return(
 <section className="rounded-2xl px-4 py-4" style={{background:C.paper,border:`1px solid ${C.line}`}}>

@@ -30,7 +30,7 @@ const toast = (message, type) => {
 };
 
 const initials = (n) => (n || "?").split(" ").map((s) => s[0]).slice(0, 2).join("").toUpperCase();
-const QA = { display: "inline-flex", alignItems: "center", gap: 6, padding: "9px 13px", border: `1px solid ${C.line}`, borderRadius: 10, background: "#fff", color: C.soil, fontSize: 13, fontWeight: 600, cursor: "pointer" };
+const QA = { display: "inline-flex", alignItems: "center", gap: 6, padding: "9px 13px", border: `1px solid ${C.line}`, borderRadius: 10, background: "var(--paper)", color: C.soil, fontSize: 13, fontWeight: 600, cursor: "pointer" };
 // Guard against null/epoch dates: an unset created_at must read "—", never "01/01/1970".
 const isRealDate = (d) => d instanceof Date && !isNaN(d) && d.getFullYear() > 1971;
 const fmtDate = (iso) => { if (!iso) return "—"; const d = new Date(iso); return isRealDate(d) ? d.toLocaleDateString(undefined, { year: "numeric", month: "2-digit", day: "2-digit" }) : "—"; };
@@ -79,7 +79,7 @@ function ProfileCertificates({ userId }) {
   return (
     <div style={card}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-        <Award size={16} style={{ color: "#BF9000" }} />
+        <Award size={16} style={{ color: "var(--amber)" }} />
         <strong style={{ color: C.soil }}>Classroom certificates</strong>
         <span style={{ fontSize: 12, color: C.muted }}>· verified credentials, scannable by anyone</span>
       </div>
@@ -194,7 +194,7 @@ function EditModal({ me, onClose, onSaved }) {
   };
   return (
     <div onMouseDown={(e) => e.target === e.currentTarget && onClose()} style={{ position: "fixed", inset: 0, zIndex: 3000, background: "rgba(40,30,20,.4)", display: "flex", justifyContent: "center", alignItems: "flex-start", paddingTop: "7vh" }}>
-      <div style={{ width: "min(540px, calc(100vw - 24px))", background: "#fff", border: `1px solid ${C.line}`, borderRadius: 12, maxHeight: "85vh", overflow: "auto" }}>
+      <div style={{ width: "min(540px, calc(100vw - 24px))", background: "var(--paper)", border: `1px solid ${C.line}`, borderRadius: 12, maxHeight: "85vh", overflow: "auto" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 16px", borderBottom: `1px solid ${C.line}` }}>
           <strong style={{ color: C.soil }}>Edit profile</strong>
           <button onClick={onClose} style={{ border: "none", background: "transparent", cursor: "pointer", color: C.muted }}><X size={18} /></button>
@@ -214,7 +214,7 @@ function EditModal({ me, onClose, onSaved }) {
               const on = also.includes(c.key);
               return (
                 <button key={c.key} type="button" onClick={() => toggleAlso(c.key)}
-                  style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "5px 10px", borderRadius: 999, border: `1px solid ${on ? C.green : C.line}`, background: on ? "rgba(106,168,79,0.12)" : "#fff", color: on ? C.greenDk : C.soil, fontSize: 12, fontWeight: on ? 700 : 500, cursor: "pointer" }}>
+                  style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "5px 10px", borderRadius: 999, border: `1px solid ${on ? C.green : C.line}`, background: on ? "rgba(106,168,79,0.12)" : "var(--paper)", color: on ? C.greenDk : C.soil, fontSize: 12, fontWeight: on ? 700 : 500, cursor: "pointer" }}>
                   <c.Icon size={13} />{c.label}
                 </button>
               );
@@ -233,7 +233,7 @@ function EditModal({ me, onClose, onSaved }) {
           ))}
         </div>
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, padding: "12px 16px", borderTop: `1px solid ${C.line}` }}>
-          <button onClick={onClose} style={{ border: `1px solid ${C.line}`, background: "#fff", borderRadius: 8, padding: "9px 14px", cursor: "pointer" }}>Cancel</button>
+          <button onClick={onClose} style={{ border: `1px solid ${C.line}`, background: "var(--paper)", borderRadius: 8, padding: "9px 14px", cursor: "pointer" }}>Cancel</button>
           <button onClick={save} disabled={busy} style={{ border: "none", background: C.green, color: "#fff", borderRadius: 8, padding: "9px 16px", cursor: "pointer", fontWeight: 600 }}>{busy ? "Saving…" : "Save"}</button>
         </div>
       </div>
@@ -257,7 +257,7 @@ function BizModal({ biz, onClose, onSaved }) {
   };
   return (
     <div onMouseDown={(e) => e.target === e.currentTarget && onClose()} style={{ position: "fixed", inset: 0, zIndex: 3000, background: "rgba(40,30,20,.4)", display: "flex", justifyContent: "center", alignItems: "flex-start", paddingTop: "7vh" }}>
-      <div style={{ width: "min(480px, calc(100vw - 24px))", background: "#fff", border: `1px solid ${C.line}`, borderRadius: 12 }}>
+      <div style={{ width: "min(480px, calc(100vw - 24px))", background: "var(--paper)", border: `1px solid ${C.line}`, borderRadius: 12 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 16px", borderBottom: `1px solid ${C.line}` }}>
           <strong style={{ color: C.soil }}>Business profile</strong>
           <button onClick={onClose} style={{ border: "none", background: "transparent", cursor: "pointer", color: C.muted }}><X size={18} /></button>
@@ -267,7 +267,7 @@ function BizModal({ biz, onClose, onSaved }) {
           <label style={{ fontSize: 12, color: C.muted, display: "block", marginTop: 12 }}>Authorized operator name<input style={inp} value={f.operator_name} onChange={(e) => setF({ ...f, operator_name: e.target.value })} placeholder="e.g. Cody Viliami" /></label>
         </div>
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, padding: "12px 16px", borderTop: `1px solid ${C.line}` }}>
-          <button onClick={onClose} style={{ border: `1px solid ${C.line}`, background: "#fff", borderRadius: 8, padding: "9px 14px", cursor: "pointer" }}>Cancel</button>
+          <button onClick={onClose} style={{ border: `1px solid ${C.line}`, background: "var(--paper)", borderRadius: 8, padding: "9px 14px", cursor: "pointer" }}>Cancel</button>
           <button onClick={save} disabled={busy} style={{ border: "none", background: C.green, color: "#fff", borderRadius: 8, padding: "9px 16px", cursor: "pointer", fontWeight: 600 }}>{busy ? "Saving…" : "Save"}</button>
         </div>
       </div>
@@ -494,13 +494,13 @@ export default function ProfilePage({ self = false }) {
       {tabs.map((t) => {
         const on = tab === t.id;
         return (
-          <button key={t.id} onClick={() => goTab(t)} style={{ flex: "0 0 auto", display: "inline-flex", alignItems: "center", gap: 6, padding: "9px 13px", minHeight: 44, borderRadius: 999, border: `1px solid ${on ? C.green : C.line}`, background: on ? "rgba(106,168,79,0.12)" : "#fff", color: on ? C.greenDk : C.soil, fontSize: 13, fontWeight: on ? 700 : 500, whiteSpace: "nowrap", cursor: "pointer" }}>
+          <button key={t.id} onClick={() => goTab(t)} style={{ flex: "0 0 auto", display: "inline-flex", alignItems: "center", gap: 6, padding: "9px 13px", minHeight: 44, borderRadius: 999, border: `1px solid ${on ? C.green : C.line}`, background: on ? "rgba(106,168,79,0.12)" : "var(--paper)", color: on ? C.greenDk : C.soil, fontSize: 13, fontWeight: on ? 700 : 500, whiteSpace: "nowrap", cursor: "pointer" }}>
             <t.Icon size={15} />{t.label}
           </button>
         );
       })}
       {NETWORK.map((n) => (
-        <button key={n.label} onClick={() => navigate(n.route)} style={{ flex: "0 0 auto", display: "inline-flex", alignItems: "center", gap: 6, padding: "9px 13px", minHeight: 44, borderRadius: 999, border: `1px solid ${C.line}`, background: "#fff", color: C.muted, fontSize: 13, whiteSpace: "nowrap", cursor: "pointer" }}>
+        <button key={n.label} onClick={() => navigate(n.route)} style={{ flex: "0 0 auto", display: "inline-flex", alignItems: "center", gap: 6, padding: "9px 13px", minHeight: 44, borderRadius: 999, border: `1px solid ${C.line}`, background: "var(--paper)", color: C.muted, fontSize: 13, whiteSpace: "nowrap", cursor: "pointer" }}>
           <n.Icon size={15} />{n.label}
         </button>
       ))}
@@ -579,11 +579,11 @@ export default function ProfilePage({ self = false }) {
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", margin: "16px 0" }}>
           {isYou ? <>
             <button onClick={() => setEditing(true)} style={{ background: C.green, color: "#fff", border: "none", borderRadius: 8, padding: "9px 14px", cursor: "pointer", display: "inline-flex", gap: 6, alignItems: "center", fontWeight: 600 }}><Pencil size={14} />Edit profile</button>
-            <button onClick={() => setPreviewPublic((v) => !v)} style={{ background: "#fff", color: C.soil, border: `1px solid ${C.line}`, borderRadius: 8, padding: "9px 14px", cursor: "pointer", display: "inline-flex", gap: 6, alignItems: "center" }}><Eye size={14} />{pub ? "Exit preview" : "Preview as public"}</button>
-            <Link to="/me/data" style={{ background: "#fff", color: C.soil, border: `1px solid ${C.line}`, borderRadius: 8, padding: "9px 14px", textDecoration: "none", display: "inline-flex", gap: 6, alignItems: "center" }}><Download size={14} />Export my data</Link>
+            <button onClick={() => setPreviewPublic((v) => !v)} style={{ background: "var(--paper)", color: C.soil, border: `1px solid ${C.line}`, borderRadius: 8, padding: "9px 14px", cursor: "pointer", display: "inline-flex", gap: 6, alignItems: "center" }}><Eye size={14} />{pub ? "Exit preview" : "Preview as public"}</button>
+            <Link to="/me/data" style={{ background: "var(--paper)", color: C.soil, border: `1px solid ${C.line}`, borderRadius: 8, padding: "9px 14px", textDecoration: "none", display: "inline-flex", gap: 6, alignItems: "center" }}><Download size={14} />Export my data</Link>
           </> : <>
-            <button onClick={toggleFollow} disabled={busyFollow} style={{ background: p.is_following ? "#fff" : C.green, color: p.is_following ? C.soil : "#fff", border: p.is_following ? `1px solid ${C.line}` : "none", borderRadius: 8, padding: "9px 16px", cursor: "pointer", display: "inline-flex", gap: 6, alignItems: "center", fontWeight: 600 }}>{p.is_following ? <><UserCheck size={14} />Following</> : <><UserPlus size={14} />Follow</>}</button>
-            <button onClick={() => { if (p.is_following || p.is_connected) { chat.openWith({ user_id: p.user_id, full_name: p.full_name, profession: p.profession }); chat.setDropdownOpen?.(false); } else alert(`Follow ${p.full_name?.split(" ")[0] || "them"} first to start a conversation.`); }} style={{ background: "#fff", color: (p.is_following || p.is_connected) ? C.greenDk : C.muted, border: `1px solid ${C.line}`, borderRadius: 8, padding: "9px 16px", cursor: "pointer", display: "inline-flex", gap: 6, alignItems: "center" }}><MessageCircle size={14} />Message</button>
+            <button onClick={toggleFollow} disabled={busyFollow} style={{ background: p.is_following ? "var(--paper)" : C.green, color: p.is_following ? C.soil : "var(--paper)", border: p.is_following ? `1px solid ${C.line}` : "none", borderRadius: 8, padding: "9px 16px", cursor: "pointer", display: "inline-flex", gap: 6, alignItems: "center", fontWeight: 600 }}>{p.is_following ? <><UserCheck size={14} />Following</> : <><UserPlus size={14} />Follow</>}</button>
+            <button onClick={() => { if (p.is_following || p.is_connected) { chat.openWith({ user_id: p.user_id, full_name: p.full_name, profession: p.profession }); chat.setDropdownOpen?.(false); } else alert(`Follow ${p.full_name?.split(" ")[0] || "them"} first to start a conversation.`); }} style={{ background: "var(--paper)", color: (p.is_following || p.is_connected) ? C.greenDk : C.muted, border: `1px solid ${C.line}`, borderRadius: 8, padding: "9px 16px", cursor: "pointer", display: "inline-flex", gap: 6, alignItems: "center" }}><MessageCircle size={14} />Message</button>
           </>}
         </div>
         {pub && <div style={{ ...card, background: "rgba(191,144,0,.08)", borderColor: C.amber, color: C.soil, fontSize: 12.5 }}>Viewing your profile as the public sees it. Fields you've restricted are hidden.</div>}
@@ -627,7 +627,7 @@ export default function ProfilePage({ self = false }) {
               <strong style={{ color: C.soil, display: "block", marginBottom: 10 }}>Your pillars</strong>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(96px,1fr))", gap: 8 }}>
                 {pillarsFor(p.profession).map((pl) => (
-                  <button key={pl.key} onClick={() => navigate(pl.to)} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, padding: "14px 6px", border: `1px solid ${C.line}`, borderRadius: 12, background: "#fff", cursor: "pointer", color: C.soil }}>
+                  <button key={pl.key} onClick={() => navigate(pl.to)} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, padding: "14px 6px", border: `1px solid ${C.line}`, borderRadius: 12, background: "var(--paper)", cursor: "pointer", color: C.soil }}>
                     <pl.Icon size={20} color={C.greenDk} /><span style={{ fontSize: 12, fontWeight: 600 }}>{pl.label}</span>
                   </button>
                 ))}
@@ -673,7 +673,7 @@ export default function ProfilePage({ self = false }) {
             <div style={{ fontSize: 12.5, color: C.muted, marginBottom: 12 }}>What this farmer has built — a record buyers and lenders can check.</div>
             <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
               {[["Logged actions", p.stats?.records ?? 0], ["Crop runs", p.stats?.crop_runs ?? 0], ["Attestations", p.stats?.attestations ?? 0]].map(([k, v]) => (
-                <div key={k} style={{ flex: 1, minWidth: 110, background: "#fff", border: `1px solid ${C.line}`, borderRadius: 10, padding: "12px 14px" }}>
+                <div key={k} style={{ flex: 1, minWidth: 110, background: "var(--paper)", border: `1px solid ${C.line}`, borderRadius: 10, padding: "12px 14px" }}>
                   <div style={{ fontSize: 24, fontWeight: 800, color: C.soil }}>{v}</div>
                   <div style={{ fontSize: 12, color: C.muted }}>{k}</div>
                 </div>

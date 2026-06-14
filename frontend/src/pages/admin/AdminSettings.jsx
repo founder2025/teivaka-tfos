@@ -9,8 +9,8 @@ import { Link } from "react-router-dom";
 import { Megaphone, Check, X as XIcon } from "lucide-react";
 import { getJSON, send } from "../../utils/api";
 
-const C = { soil: "#5C4033", green: "#6AA84F", greenDk: "#3E7B1F", line: "#E6E1D6", muted: "#8A8678", cream: "#F8F3E9" };
-const card = { background: "#fff", border: `1px solid ${C.line}`, borderRadius: 12, padding: 18, marginBottom: 16 };
+const C = { soil: "var(--soil)", green: "var(--green)", greenDk: "var(--green-dk)", line: "var(--line)", muted: "var(--muted)", cream: "var(--cream)" };
+const card = { background: "var(--paper)", border: `1px solid ${C.line}`, borderRadius: 12, padding: 18, marginBottom: 16 };
 const toast = (m, t) => { try { window.dispatchEvent(new CustomEvent("tfos:toast", { detail: { message: m, type: t } })); } catch { /* noop */ } };
 
 export default function AdminSettings() {
@@ -51,7 +51,7 @@ export default function AdminSettings() {
           </button>
           {banner?.banner_enabled && (
             <button onClick={() => save({ banner_enabled: false })}
-              style={{ background: "#fff", color: "#A32D2D", border: `1px solid ${C.line}`, borderRadius: 8, padding: "9px 16px", fontSize: 13, cursor: "pointer" }}>
+              style={{ background: "var(--paper)", color: "var(--red)", border: `1px solid ${C.line}`, borderRadius: 8, padding: "9px 16px", fontSize: 13, cursor: "pointer" }}>
               Hide banner
             </button>
           )}
@@ -102,7 +102,7 @@ export default function AdminSettings() {
         <strong style={{ color: C.soil, fontSize: 15 }}>Control surfaces</strong>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
           {[["/admin/platform", "Feature flags & admin access"], ["/admin/classroom", "Classroom"], ["/admin/requests", "Tier requests"], ["/me/affiliate/console", "Affiliate program"], ["/admin/intelligence", "Intelligence"]].map(([to, label]) => (
-            <Link key={to} to={to} style={{ border: `1px solid ${C.line}`, background: "#fff", color: C.soil, borderRadius: 8, padding: "8px 14px", fontSize: 12.5, fontWeight: 600, textDecoration: "none" }}>{label}</Link>
+            <Link key={to} to={to} style={{ border: `1px solid ${C.line}`, background: "var(--paper)", color: C.soil, borderRadius: 8, padding: "8px 14px", fontSize: 12.5, fontWeight: 600, textDecoration: "none" }}>{label}</Link>
           ))}
         </div>
       </div>

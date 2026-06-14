@@ -35,15 +35,15 @@ const OPENER = {
 };
 
 const C = {
-  cream:     "#F8F3E9",
-  white:     "#FFFFFF",
-  soil:      "#5C4033",
+  cream:     "var(--cream)",
+  white:     "var(--paper)",
+  soil:      "var(--soil)",
   soilDk:    "#2D2016",
-  green:     "#6AA84F",
-  greenDk:   "#3E7B1F",
-  borderLt:  "#E8E2D4",
+  green:     "var(--green)",
+  greenDk:   "var(--green-dk)",
+  borderLt:  "var(--line)",
   borderMd:  "#D4CFC3",
-  muted:     "#8A7B6F",
+  muted:     "var(--muted)",
 };
 
 function parseReply(data) {
@@ -164,7 +164,7 @@ function UserBubble({ content }) {
       <div
         style={{
           background: C.green,
-          color: "#FFFFFF",
+          color: "#fff",
           borderRadius: 12,
           padding: "12px 16px",
           maxWidth: 680,
@@ -364,7 +364,7 @@ export default function TIS() {
           className="flex items-center justify-center"
           style={{
             background: C.green,
-            color: "#FFFFFF",
+            color: "#fff",
             borderRadius: 8,
             height: 40,
             padding: "0 16px",

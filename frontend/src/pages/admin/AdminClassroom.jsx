@@ -11,10 +11,10 @@ import { getJSON, send } from "../../utils/api";
 import Avatar from "../../components/ui/Avatar";
 
 const API = "/api/v1/classroom";
-const C = { soil: "#5C4033", green: "#6AA84F", greenDk: "#3E7B1F", line: "#E6E1D6", muted: "#8A8678", red: "#A32D2D" };
+const C = { soil: "var(--soil)", green: "var(--green)", greenDk: "var(--green-dk)", line: "var(--line)", muted: "var(--muted)", red: "var(--red)" };
 const toast = (m, t) => { try { window.dispatchEvent(new CustomEvent("tfos:toast", { detail: { message: m, type: t } })); } catch { /* noop */ } };
 
-const card = { background: "#fff", border: `1px solid ${C.line}`, borderRadius: 12, padding: 18, marginBottom: 18 };
+const card = { background: "var(--paper)", border: `1px solid ${C.line}`, borderRadius: 12, padding: 18, marginBottom: 18 };
 const h2 = { fontSize: 15, fontWeight: 700, color: C.soil, marginBottom: 12 };
 const inp = { width: "100%", border: `1px solid ${C.line}`, borderRadius: 8, padding: "9px 11px", fontSize: 13.5, marginBottom: 10 };
 
@@ -23,7 +23,7 @@ function StatusTabs({ value, onChange }) {
     <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
       {["PENDING", "APPROVED", "REJECTED"].map((s) => (
         <button key={s} onClick={() => onChange(s)}
-          style={{ padding: "5px 12px", borderRadius: 999, fontSize: 11.5, fontWeight: 700, cursor: "pointer", border: `1px solid ${value === s ? C.greenDk : C.line}`, background: value === s ? C.green : "#fff", color: value === s ? "#fff" : C.muted }}>
+          style={{ padding: "5px 12px", borderRadius: 999, fontSize: 11.5, fontWeight: 700, cursor: "pointer", border: `1px solid ${value === s ? C.greenDk : C.line}`, background: value === s ? C.green : "var(--paper)", color: value === s ? "var(--paper)" : C.muted }}>
           {s}
         </button>
       ))}

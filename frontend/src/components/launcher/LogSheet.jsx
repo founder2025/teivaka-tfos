@@ -79,9 +79,9 @@ import GroupCatalogSection from "../settings/GroupCatalogSection";
  */
 
 const C = {
-  green: "var(--green, #6AA84F)",
-  cream: "var(--cream, #F8F3E9)",
-  soil:  "var(--soil, #5C4033)",
+  green: "var(--green, var(--green))",
+  cream: "var(--cream, var(--cream))",
+  soil:  "var(--soil, var(--soil))",
 };
 
 // Phase 5.10d: 11-group taxonomy per Catalog Redesign Doctrine Amendment v2.
@@ -245,7 +245,7 @@ function GroupTile({ groupKey, label, count, onClick, disabled }) {
         ${
           disabled
             ? "bg-gray-50 border-gray-100 cursor-not-allowed opacity-60"
-            : "bg-white border-gray-200 hover:border-[var(--green,#6AA84F)] hover:shadow-md active:scale-95"
+            : "bg-white border-gray-200 hover:border-[var(--green,var(--green))] hover:shadow-md active:scale-95"
         }
       `}
     >
@@ -296,9 +296,9 @@ function VoiceTile() {
 // independent of the catalog. Always shown at level-1 so a fish/forestry
 // farmer has real capture the moment they open (+), not just Money/Notes/Other.
 const UNIVERSAL_ACTIONS = [
-  { key: "establish", label: "Add a production unit", sub: "Pond · paddock · woodlot · hive · bed", Icon: PlusCircle, route: "/farm/unit/new", accent: "#3E7B1F" },
-  { key: "sale",      label: "Record a sale",         sub: "Money in — any enterprise",          Icon: HandCoins,  route: "/farm/cash?type=in", accent: "#6AA84F" },
-  { key: "purchase",  label: "Record a purchase",     sub: "Money out — supplies, feed, fuel",   Icon: ShoppingCart, route: "/farm/cash?type=out", accent: "#BF9000" },
+  { key: "establish", label: "Add a production unit", sub: "Pond · paddock · woodlot · hive · bed", Icon: PlusCircle, route: "/farm/unit/new", accent: "var(--green-dk)" },
+  { key: "sale",      label: "Record a sale",         sub: "Money in — any enterprise",          Icon: HandCoins,  route: "/farm/cash?type=in", accent: "var(--green)" },
+  { key: "purchase",  label: "Record a purchase",     sub: "Money out — supplies, feed, fuel",   Icon: ShoppingCart, route: "/farm/cash?type=out", accent: "var(--amber)" },
 ];
 
 function UniversalSection({ navigate, onClose }) {
@@ -310,12 +310,12 @@ function UniversalSection({ navigate, onClose }) {
         {UNIVERSAL_ACTIONS.map(({ key, label, sub, Icon, route, accent }) => (
           <button key={key} type="button" onClick={() => go(route)}
             className="flex items-center gap-3 text-left rounded-xl p-3 transition hover:brightness-95"
-            style={{ background: "#FFFFFF", border: "1px solid #E6DED0" }}>
-            <span className="shrink-0 flex items-center justify-center rounded-lg" style={{ width: 38, height: 38, background: "#F8F3E9", color: accent }}>
+            style={{ background: "var(--paper)", border: "1px solid #E6DED0" }}>
+            <span className="shrink-0 flex items-center justify-center rounded-lg" style={{ width: 38, height: 38, background: "var(--cream)", color: accent }}>
               <Icon className="w-5 h-5" />
             </span>
             <span className="min-w-0">
-              <span className="block text-sm font-semibold truncate" style={{ color: "#5C4033" }}>{label}</span>
+              <span className="block text-sm font-semibold truncate" style={{ color: "var(--soil)" }}>{label}</span>
               <span className="block text-[11px] truncate" style={{ color: "#8A7863" }}>{sub}</span>
             </span>
           </button>
@@ -340,7 +340,7 @@ function EventTile({ event, onClick }) {
         p-4 h-24 rounded-xl border transition-all
         ${
           isLive
-            ? "bg-white border-gray-200 hover:border-[var(--green,#6AA84F)] hover:shadow-md active:scale-95 cursor-pointer"
+            ? "bg-white border-gray-200 hover:border-[var(--green,var(--green))] hover:shadow-md active:scale-95 cursor-pointer"
             : "bg-gray-50 border-gray-100 cursor-default opacity-60"
         }
       `}
@@ -658,7 +658,7 @@ export default function LogSheet({ isOpen, onClose, mode }) {
           </div>
           <div
             className="mt-4 pt-3"
-            style={{ borderTop: `1px solid ${C.border || "#E6E1D6"}` }}
+            style={{ borderTop: `1px solid ${C.border || "var(--line)"}` }}
           >
             <button
               type="button"
@@ -666,8 +666,8 @@ export default function LogSheet({ isOpen, onClose, mode }) {
               style={{
                 width: "100%",
                 padding: 14,
-                background: C.green || "#6AA84F",
-                color: "white",
+                background: C.green || "var(--green)",
+                color: "#fff",
                 border: "none",
                 borderRadius: 8,
                 fontSize: 16,

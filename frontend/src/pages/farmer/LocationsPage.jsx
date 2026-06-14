@@ -32,18 +32,18 @@ const useBlockStatus = (id) => useQuery({ queryKey: ["loc-status", id], queryFn:
 // Block state machine → pill colour (Phase 2)
 const STATE_STYLE = {
   EMPTY:      { bg: "#EFEAE0", fg: "#8A7863", label: "Empty" },
-  PREPARING:  { bg: "#EFE6D6", fg: "#5C4033", label: "Preparing" },
-  ACTIVE:     { bg: "#E9F2DD", fg: "#3E7B1F", label: "Growing" },
-  HARVESTING: { bg: "#FBF0D8", fg: "#BF9000", label: "Harvesting" },
+  PREPARING:  { bg: "#EFE6D6", fg: "var(--soil)", label: "Preparing" },
+  ACTIVE:     { bg: "#E9F2DD", fg: "var(--green-dk)", label: "Growing" },
+  HARVESTING: { bg: "#FBF0D8", fg: "var(--amber)", label: "Harvesting" },
   RESTING:    { bg: "#E6EEF6", fg: "#2D6CDF", label: "Resting" },
-  IDLE:       { bg: "#FBEAE7", fg: "#D4442E", label: "Idle" },
+  IDLE:       { bg: "#FBEAE7", fg: "var(--red)", label: "Idle" },
 };
 
 const C = {
-  soil: "#5C4033", cream: "#F8F3E9", border: "#E6DED0", muted: "#8A7863", ink: "#3A2E26",
-  green: "#6AA84F", greenDk: "#3E7B1F", amber: "#BF9000", red: "#D4442E", greenTint: "#E9F2DD", paper: "#FCFAF5",
+  soil: "var(--soil)", cream: "var(--cream)", border: "#E6DED0", muted: "#8A7863", ink: "#3A2E26",
+  green: "var(--green)", greenDk: "var(--green-dk)", amber: "var(--amber)", red: "var(--red)", greenTint: "#E9F2DD", paper: "#FCFAF5",
 };
-const FOCUS = "focus:outline-none focus-visible:ring-2 focus-visible:ring-[#6AA84F] focus-visible:ring-offset-1 transition";
+const FOCUS = "focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--green)] focus-visible:ring-offset-1 transition";
 
 function authHeaders() { const t = localStorage.getItem("tfos_access_token"); return t ? { Authorization: `Bearer ${t}` } : {}; }
 async function getJSON(url) { const r = await fetch(url, { headers: authHeaders() }); if (!r.ok) throw new Error(String(r.status)); return r.json(); }
@@ -72,7 +72,7 @@ function ColHead({ children, extra }) {
 }
 function FacilityCard({ icon: Icon, title, value, sub, building, onAdd }) {
   return (
-    <div className="rounded-xl border p-3" style={{ background: "white", borderColor: C.border }}>
+    <div className="rounded-xl border p-3" style={{ background: "var(--paper)", borderColor: C.border }}>
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-1.5 text-sm font-semibold" style={{ color: C.soil }}><Icon size={15} style={{ color: C.greenDk }} />{title}</div>
         {value != null ? <span className="text-lg font-bold" style={{ color: C.greenDk }}>{value}</span> : building ? <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ background: C.cream, color: C.amber }}>building</span> : null}
@@ -419,7 +419,7 @@ function LocationsInner() {
               <div className="flex items-center rounded-lg overflow-hidden" style={{ border: `1px solid ${C.border}` }}>
                 {Object.entries(AREA_UNITS).map(([k, lbl]) => (
                   <button key={k} onClick={() => { setCalcUnit(k); localStorage.setItem("tfos_area_unit", k); }} className="text-[11px] px-2 py-1 font-semibold"
-                    style={calcUnit === k ? { background: C.soil, color: "white" } : { color: C.soil }}>{lbl}</button>
+                    style={calcUnit === k ? { background: C.soil, color: "#fff" } : { color: C.soil }}>{lbl}</button>
                 ))}
               </div>
             }>Capacity calculator</ColHead>

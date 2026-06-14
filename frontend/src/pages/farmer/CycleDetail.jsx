@@ -20,9 +20,9 @@ import { useEffect, useState, useCallback } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 
 const C = {
-  soil: "#5C4033", green: "#6AA84F", greenDk: "#3E7B1F", greenTint: "#E9F2DD",
-  amber: "#BF9000", amberTint: "#FBF1D6", red: "#B00020", redTint: "#FBEAE6",
-  cream: "#F8F3E9", border: "#E6DED0", muted: "#8A7863", ink: "#3A2E26", panel: "#FFFFFF",
+  soil: "var(--soil)", green: "var(--green)", greenDk: "var(--green-dk)", greenTint: "#E9F2DD",
+  amber: "var(--amber)", amberTint: "#FBF1D6", red: "#B00020", redTint: "#FBEAE6",
+  cream: "var(--cream)", border: "#E6DED0", muted: "#8A7863", ink: "#3A2E26", panel: "var(--paper)",
 };
 function authHeaders() {
   const t = localStorage.getItem("tfos_access_token");
@@ -41,9 +41,9 @@ function fmtKg(v) { if (v == null || v === "") return null; const n = Number(v);
 const LIFECYCLE = ["PLANNED", "ACTIVE", "HARVESTING", "CLOSING", "CLOSED"];
 const LIFECYCLE_LABEL = { PLANNED: "Planned", ACTIVE: "Active", HARVESTING: "Harvesting", CLOSING: "Closing", CLOSED: "Closed" };
 const STATUS_COLORS = {
-  PLANNED: { bg: "#EEE7D8", fg: C.soil }, ACTIVE: { bg: C.green, fg: "#fff" },
-  HARVESTING: { bg: C.amber, fg: "#fff" }, CLOSING: { bg: C.amber, fg: "#fff" },
-  CLOSED: { bg: C.soil, fg: "#fff" }, FAILED: { bg: C.red, fg: "#fff" },
+  PLANNED: { bg: "#EEE7D8", fg: C.soil }, ACTIVE: { bg: C.green, fg: "var(--paper)" },
+  HARVESTING: { bg: C.amber, fg: "var(--paper)" }, CLOSING: { bg: C.amber, fg: "var(--paper)" },
+  CLOSED: { bg: C.soil, fg: "var(--paper)" }, FAILED: { bg: C.red, fg: "var(--paper)" },
 };
 const LAYER_LABEL = { CASH_FLOW: "Cash Flow", FOOD_SECURITY: "Food Security", LONG_TERM_ASSET: "Long-Term Asset" };
 const NEXT_STATUS = { PLANNED: ["ACTIVE", "FAILED"], ACTIVE: ["HARVESTING", "FAILED"], HARVESTING: ["CLOSING", "FAILED"], CLOSING: ["CLOSED", "FAILED"], CLOSED: [], FAILED: [] };
@@ -210,7 +210,7 @@ export default function CycleDetail() {
           {LIFECYCLE.map((s, i) => {
             const done = lifeIdx > i, cur = lifeIdx === i;
             const dotBg = status === "FAILED" ? C.redTint : done ? C.green : cur ? C.amber : C.cream;
-            const dotFg = (done || cur) && status !== "FAILED" ? "#fff" : C.muted;
+            const dotFg = (done || cur) && status !== "FAILED" ? "var(--paper)" : C.muted;
             return (
               <div key={s} className="flex items-center" style={{ flex: i < LIFECYCLE.length - 1 ? 1 : "0 0 auto" }}>
                 <div className="flex flex-col items-center" style={{ minWidth: 56 }}>
@@ -332,7 +332,7 @@ function ActionBtn({ children, onClick, disabled, danger }) {
   return (
     <button onClick={onClick} disabled={disabled}
       className="text-sm font-semibold px-3 py-1.5 rounded-lg disabled:opacity-50"
-      style={{ background: "#fff", border: `1px solid ${"#E6DED0"}`, color: danger ? "#B00020" : "#5C4033" }}>
+      style={{ background: "var(--paper)", border: `1px solid ${"#E6DED0"}`, color: danger ? "#B00020" : "var(--soil)" }}>
       {children}
     </button>
   );

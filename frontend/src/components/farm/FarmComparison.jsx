@@ -1,6 +1,6 @@
 import { useNavigate } from "react-router-dom";
 import { Layers, ChevronRight } from "lucide-react";
-const C={paper:"#FFFFFF",green:"#6AA84F",greenDk:"#3E7B1F",soil:"#5C4033",amber:"#BF9000",red:"#A32D2D",line:"#E2D8C3",muted:"#8A7B6F",cream:"#F8F3E9"};
+const C={paper:"var(--paper)",green:"var(--green)",greenDk:"var(--green-dk)",soil:"var(--soil)",amber:"var(--amber)",red:"var(--red)",line:"var(--line)",muted:"var(--muted)",cream:"var(--cream)"};
 const F=[{id:"F001",name:"Save-A-Lot",loc:"Tailevu",rev:"3,340",runs:7},{id:"F002",name:"Viyasiyasi",loc:"Kadavu",rev:"1,840",runs:4}];
 export default function FarmComparison(){const nav=useNavigate();return(
 <section className="rounded-2xl px-4 py-4" style={{background:C.paper,border:`1px solid ${C.line}`}}>

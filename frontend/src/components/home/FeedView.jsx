@@ -75,7 +75,7 @@ function Overlay({ title, onClose, children, foot, maxWidth = 440 }) {
     </div>
   );
 }
-const inp = { width: "100%", padding: "8px 10px", border: "1px solid var(--line)", borderRadius: 8, fontSize: 14, background: "#fff", boxSizing: "border-box" };
+const inp = { width: "100%", padding: "8px 10px", border: "1px solid var(--line)", borderRadius: 8, fontSize: 14, background: "var(--paper)", boxSizing: "border-box" };
 
 function PlaceModal({ onPick, onClose }) {
   const [v, setV] = useState("");
@@ -319,7 +319,7 @@ function Composer({ me, onPosted, groupId }) {
         )}
         {needVerify && (
           <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", background: "rgba(191,144,0,0.10)", border: "1px solid rgba(191,144,0,0.45)", borderRadius: 8, padding: "10px 12px", margin: "8px 0 2px" }}>
-            <MailCheck size={16} style={{ color: "var(--amber, #bf9000)", flexShrink: 0 }} />
+            <MailCheck size={16} style={{ color: "var(--amber, var(--amber))", flexShrink: 0 }} />
             <span style={{ flex: 1, fontSize: 12.5, color: "var(--soil)", minWidth: 180 }}>
               <strong>Verify your email to post.</strong> Check your inbox for the link{myEmail ? ` sent to ${myEmail}` : ""}.
             </span>
@@ -348,7 +348,7 @@ function Composer({ me, onPosted, groupId }) {
           <button className="btn btn-primary" disabled={busy || uploading || !draft.body.trim()} onClick={post} style={narrow ? { width: "100%", minHeight: 44, justifyContent: "center" } : undefined}><Send size={13} />{busy ? "Posting…" : "Post"}</button>
         </div>
         {emojiOpen && (
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 4, background: "#fff", border: "1px solid var(--line)", borderRadius: 8, padding: 8, marginTop: 6 }}>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 4, background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 8, padding: 8, marginTop: 6 }}>
             {EMOJIS.map((em) => (
               <button key={em} onClick={() => { set("body", (draft.body + " " + em).trimStart().slice(0, BODY_MAX)); }} style={{ border: "none", background: "transparent", fontSize: 20, cursor: "pointer", width: 36, height: 36, lineHeight: 1 }}>{em}</button>
             ))}
@@ -516,7 +516,7 @@ function PostCard({ post, me, onChange, onRemoved }) {
             <span className="cm-post-author-name" onClick={() => p.author_user_id && navigate(`/u/${p.author_user_id}`)} style={{ cursor: "pointer" }}>{p.author_name}</span>
             {p.author_verified && <BadgeCheck size={13} className="cm-verified-tick" />}
             <span className="cm-prof-badge">{personaLabel(p.author_profession)}</span>
-            {p.is_question && <span className="cm-prof-badge" style={{ background: "rgba(191,144,0,0.14)", color: "var(--amber,#bf9000)" }}><HelpCircle size={10} /> Question</span>}
+            {p.is_question && <span className="cm-prof-badge" style={{ background: "rgba(191,144,0,0.14)", color: "var(--amber,var(--amber))" }}><HelpCircle size={10} /> Question</span>}
           </div>
           <div className="cm-post-meta">{fmtTime(p.created_at)}{p.location ? ` · ${p.location}` : ""}{p.vertical ? ` · ${p.vertical}` : ""}{p.pinned ? " · 📌 Pinned" : ""}</div>
         </div>

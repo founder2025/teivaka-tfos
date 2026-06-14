@@ -9,7 +9,7 @@
 import { useState } from "react";
 import { Calculator, Sprout, Beef } from "lucide-react";
 
-const C = { soil: "#5C4033", cream: "#F8F3E9", border: "#E6DED0", muted: "#8A7863", green: "#6AA84F", greenDk: "#3E7B1F", paper: "#FCFAF5" };
+const C = { soil: "var(--soil)", cream: "var(--cream)", border: "#E6DED0", muted: "#8A7863", green: "var(--green)", greenDk: "var(--green-dk)", paper: "#FCFAF5" };
 const HA_TO = { acres: 2.47105, ha: 1, m2: 10000 };
 const PER_ANIMAL_TO_M2 = { acres: 4046.86, ha: 10000, m2: 1 };
 
@@ -56,7 +56,7 @@ export default function CapacityCalc({ areaHa, unit = "acres", compact = false }
   );
 
   return (
-    <div className="rounded-xl" style={compact ? {} : { background: "white" }}>
+    <div className="rounded-xl" style={compact ? {} : { background: "var(--paper)" }}>
       <div className="flex items-center gap-2 mb-2">
         <Calculator size={15} style={{ color: C.greenDk }} />
         <span className="text-sm font-bold" style={{ color: C.soil }}>Capacity estimate</span>
@@ -67,7 +67,7 @@ export default function CapacityCalc({ areaHa, unit = "acres", compact = false }
         {[["crop", "Plants", Sprout], ["livestock", "Livestock", Beef]].map(([m, lbl, Icon]) => (
           <button key={m} onClick={() => setMode(m)}
             className="flex-1 text-xs px-2 py-1.5 rounded-lg font-semibold flex items-center justify-center gap-1.5"
-            style={mode === m ? { background: C.greenDk, color: "white" } : { color: C.soil, border: `1px solid ${C.border}` }}>
+            style={mode === m ? { background: C.greenDk, color: "#fff" } : { color: C.soil, border: `1px solid ${C.border}` }}>
             <Icon size={13} />{lbl}
           </button>
         ))}

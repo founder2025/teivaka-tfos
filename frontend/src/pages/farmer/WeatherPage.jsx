@@ -24,10 +24,10 @@ import ModeDropdown from "../../components/farm/ModeDropdown";
 import Modal from "../../components/ui/Modal";
 
 const C = {
-  soil: "#5C4033", cream: "#F8F3E9", border: "#E6DED0", muted: "#8A7863", ink: "#3A2E26",
-  green: "#6AA84F", greenDk: "#3E7B1F", amber: "#BF9000", red: "#D4442E", greenTint: "#E9F2DD", paper: "#FCFAF5",
+  soil: "var(--soil)", cream: "var(--cream)", border: "#E6DED0", muted: "#8A7863", ink: "#3A2E26",
+  green: "var(--green)", greenDk: "var(--green-dk)", amber: "var(--amber)", red: "var(--red)", greenTint: "#E9F2DD", paper: "#FCFAF5",
 };
-const FOCUS = "focus:outline-none focus-visible:ring-2 focus-visible:ring-[#6AA84F] focus-visible:ring-offset-1 transition";
+const FOCUS = "focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--green)] focus-visible:ring-offset-1 transition";
 const WET_MM = 10, HUMID = 80, WINDY_KMH = 25;
 
 function authHeaders() { const t = localStorage.getItem("tfos_access_token"); return t ? { "Content-Type": "application/json", Authorization: `Bearer ${t}` } : { "Content-Type": "application/json" }; }
@@ -97,7 +97,7 @@ function Section({ icon: Icon, title, meta, link, onLink, children, pending }) {
 }
 function Tile({ label, value, sub, color }) {
   return (
-    <div className="rounded-xl border p-3 min-w-0" style={{ background: "white", borderColor: C.border }}>
+    <div className="rounded-xl border p-3 min-w-0" style={{ background: "var(--paper)", borderColor: C.border }}>
       <div className="text-[10px] uppercase tracking-wide truncate" style={{ color: C.muted }}>{label}</div>
       <div className="text-lg font-bold truncate" style={{ color: color || C.soil }}>{value}</div>
       {sub && <div className="text-[11px] truncate" style={{ color: C.muted }}>{sub}</div>}
@@ -195,7 +195,7 @@ function WeatherInner() {
       {!loggedToday && !loading && (
         <div className="rounded-xl border p-3 flex items-center justify-between gap-2 flex-wrap" style={{ background: C.greenTint, borderColor: C.border }}>
           <div className="text-xs" style={{ color: C.greenDk }}><strong>Log today's weather — takes 10 seconds.</strong> The more days you log, the better your year-over-year picture becomes.</div>
-          <button onClick={() => setLogOpen(true)} className={`text-[11px] px-2.5 py-1 rounded-lg flex items-center gap-1.5 hover:brightness-95 ${FOCUS}`} style={{ color: C.greenDk, border: `1px solid ${C.border}`, background: "white" }}><Plus size={12} />Log now</button>
+          <button onClick={() => setLogOpen(true)} className={`text-[11px] px-2.5 py-1 rounded-lg flex items-center gap-1.5 hover:brightness-95 ${FOCUS}`} style={{ color: C.greenDk, border: `1px solid ${C.border}`, background: "var(--paper)" }}><Plus size={12} />Log now</button>
         </div>
       )}
 
@@ -260,7 +260,7 @@ function WeatherInner() {
                 {(hourly.data.data).map((h, i) => {
                   const w = wmo(h.weather_code);
                   return (
-                    <div key={i} className="rounded-xl border p-2.5 text-center shrink-0 min-w-[72px]" style={{ background: "white", borderColor: C.border }}>
+                    <div key={i} className="rounded-xl border p-2.5 text-center shrink-0 min-w-[72px]" style={{ background: "var(--paper)", borderColor: C.border }}>
                       <div className="text-[11px]" style={{ color: C.muted }}>{fmtTime(h.valid_at)}</div>
                       <w.Icon size={18} style={{ color: C.greenDk, margin: "4px auto" }} />
                       <div className="text-sm font-bold" style={{ color: C.soil }}>{has(h.temp_c) ? `${round1(h.temp_c)}°` : "—"}</div>
@@ -283,7 +283,7 @@ function WeatherInner() {
                 {(daily.data.data).map((d, i) => {
                   const w = wmo(d.weather_code);
                   return (
-                    <div key={i} className="rounded-xl border p-2.5 text-center" style={{ background: "white", borderColor: C.border }}>
+                    <div key={i} className="rounded-xl border p-2.5 text-center" style={{ background: "var(--paper)", borderColor: C.border }}>
                       <div className="text-[11px] font-semibold" style={{ color: C.soil }}>{fmtDay(d.valid_at)}</div>
                       <w.Icon size={20} style={{ color: C.greenDk, margin: "5px auto" }} />
                       <div className="text-sm font-bold" style={{ color: C.soil }}>{has(d.temp_max_c) ? `${round1(d.temp_max_c)}°` : "—"}<span className="text-xs font-normal" style={{ color: C.muted }}>{has(d.temp_min_c) ? ` / ${round1(d.temp_min_c)}°` : ""}</span></div>

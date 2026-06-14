@@ -8,8 +8,8 @@ import AdminLayout from "../../components/admin/AdminLayout";
 import { Users, Activity, Sparkles, MessageSquare, Tractor, UserPlus, BadgeCheck, GraduationCap, CreditCard, Library } from "lucide-react";
 import { getJSON } from "../../utils/api";
 
-const C = { soil: "#5C4033", green: "#6AA84F", greenDk: "#3E7B1F", line: "#E6E1D6", muted: "#8A8678", cream: "#F8F3E9", gold: "#BF9000" };
-const card = { background: "#fff", border: `1px solid ${C.line}`, borderRadius: 12, padding: 18 };
+const C = { soil: "var(--soil)", green: "var(--green)", greenDk: "var(--green-dk)", line: "var(--line)", muted: "var(--muted)", cream: "var(--cream)", gold: "var(--amber)" };
+const card = { background: "var(--paper)", border: `1px solid ${C.line}`, borderRadius: 12, padding: 18 };
 
 const TILES = [
   ["members_total", "Total members", Users],

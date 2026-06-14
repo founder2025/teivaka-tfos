@@ -27,14 +27,14 @@ import ThemedSelect from "../../components/inputs/ThemedSelect.jsx";
 import { completeLinkedTask } from "../../utils/taskBridge";
 
 const C = {
-  soil:    "#5C4033",
-  green:   "#6AA84F",
-  amber:   "#BF9000",
+  soil:    "var(--soil)",
+  green:   "var(--green)",
+  amber:   "var(--amber)",
   red:     "#B00020",
-  cream:   "#F8F3E9",
+  cream:   "var(--cream)",
   border:  "#E6DED0",
   muted:   "#8A7863",
-  panel:   "#FFFFFF",
+  panel:   "var(--paper)",
 };
 
 const GRADES       = ["A", "B", "C"];
@@ -52,7 +52,7 @@ function todayISO() {
 }
 
 const inputCls =
-  "w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#6AA84F]";
+  "w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--green)]";
 
 // ── Sub-components (module scope; never redefined inside parent) ─────────────
 
@@ -141,7 +141,7 @@ function ComplianceModal({ open, detail, onClose }) {
           <a
             href="https://mail.google.com/mail/?view=cm&fs=1&to=founder@teivaka.com&su=Harvest%20compliance%20override%20request" target="_blank" rel="noopener noreferrer"
             className="px-3 py-2 rounded-lg text-sm font-semibold"
-            style={{ border: `1px solid ${C.border}`, color: C.soil, background: "white" }}
+            style={{ border: `1px solid ${C.border}`, color: C.soil, background: "var(--paper)" }}
           >
             Contact Cody for override
           </a>

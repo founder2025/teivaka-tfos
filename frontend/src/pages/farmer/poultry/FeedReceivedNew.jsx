@@ -21,13 +21,13 @@ const queryClient = new QueryClient({
 });
 
 const C = {
-  soil:   '#5C4033',
-  cream:  '#F8F3E9',
-  green:  '#6AA84F',
-  amber:  '#BF9000',
-  red:    '#A32D2D',
+  soil:   'var(--soil)',
+  cream:  'var(--cream)',
+  green:  'var(--green)',
+  amber:  'var(--amber)',
+  red:    'var(--red)',
   border: '#E6DED0',
-  muted:  '#8A8678',
+  muted:  'var(--muted)',
 };
 
 const FeedSchema = z.object({

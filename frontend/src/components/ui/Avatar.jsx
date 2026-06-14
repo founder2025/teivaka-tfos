@@ -8,7 +8,7 @@ import { useState, useEffect } from "react";
 
 const initials = (n) => (n || "?").split(" ").map((s) => s[0]).slice(0, 2).join("").toUpperCase();
 
-export default function Avatar({ src, name, size = 36, fontScale = 0.36, bg = "#6AA84F", style }) {
+export default function Avatar({ src, name, size = 36, fontScale = 0.36, bg = "var(--green)", style }) {
   const [broken, setBroken] = useState(false);
   useEffect(() => { setBroken(false); }, [src]);
   const base = { width: size, height: size, borderRadius: "50%", flexShrink: 0, ...style };

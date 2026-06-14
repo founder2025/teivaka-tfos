@@ -21,10 +21,10 @@ const TIS_ENDPOINT = import.meta.env.VITE_TIS_ENDPOINT || "/tis/chat";
 const TIS_TOKEN = import.meta.env.VITE_TIS_BRIDGE_TOKEN || "";
 
 const C = {
-  soil:   "#5C4033",
-  green:  "#6AA84F",
-  amber:  "#BF9000",
-  cream:  "#F8F3E9",
+  soil:   "var(--soil)",
+  green:  "var(--green)",
+  amber:  "var(--amber)",
+  cream:  "var(--cream)",
   border: "#E6DED0",
   muted:  "#8A7863",
 };
@@ -84,7 +84,7 @@ function MessageBubble({ role, content }) {
         className="max-w-[85%] px-3 py-2 rounded-2xl text-sm whitespace-pre-wrap break-words"
         style={
           isUser
-            ? { background: C.green, color: "white", borderBottomRightRadius: 4 }
+            ? { background: C.green, color: "#fff", borderBottomRightRadius: 4 }
             : { background: C.cream, color: C.soil, border: `1px solid ${C.border}`, borderBottomLeftRadius: 4 }
         }
       >
@@ -325,7 +325,7 @@ function ModalChrome({
       {/* Footer */}
       <div
         className="flex items-end gap-2 p-3 shrink-0"
-        style={{ borderTop: `1px solid ${C.border}`, background: "white" }}
+        style={{ borderTop: `1px solid ${C.border}`, background: "var(--paper)" }}
       >
         <textarea
           ref={inputRef}

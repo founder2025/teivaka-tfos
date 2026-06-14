@@ -10,8 +10,8 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 const C = {
-  soil: '#5C4033', cream: '#F8F3E9', green: '#6AA84F', amber: '#BF9000',
-  red: '#A32D2D', border: '#E6DED0', muted: '#8A8678',
+  soil: 'var(--soil)', cream: 'var(--cream)', green: 'var(--green)', amber: 'var(--amber)',
+  red: 'var(--red)', border: '#E6DED0', muted: 'var(--muted)',
 };
 
 function thisMonth() {

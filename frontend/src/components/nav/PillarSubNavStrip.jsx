@@ -15,13 +15,13 @@ import { PILLAR_SUB_NAV } from "./pillarSubNavMap";
 import { useTaskCount } from "../../hooks/useTaskCount";
 
 const C = {
-  soil:     "#5C4033",
-  greenDk:  "#3E7B1F",
-  green:    "#6AA84F",
-  border:   "#E8E2D4",
-  muted:    "#8A7B6F",
+  soil:     "var(--soil)",
+  greenDk:  "var(--green-dk)",
+  green:    "var(--green)",
+  border:   "var(--line)",
+  muted:    "var(--muted)",
   activeBg: "rgba(106, 168, 79, 0.12)",
-  red:      "#D4442E",
+  red:      "var(--red)",
 };
 
 function resolveHref(item) {
@@ -57,7 +57,7 @@ function StripItem({ item, badge, badgeOverdue }) {
           minHeight: 44,
           borderRadius: 999,
           border: `1px solid ${on ? C.green : C.border}`,
-          background: on ? C.activeBg : "#fff",
+          background: on ? C.activeBg : "var(--paper)",
           color: on ? C.greenDk : C.soil,
           fontSize: 13,
           fontWeight: on ? 700 : 500,

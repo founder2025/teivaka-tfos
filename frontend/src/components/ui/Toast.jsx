@@ -19,14 +19,14 @@ import { useEffect, useState } from "react";
  * Auto-dismiss after 4s. Bottom-anchored on mobile + desktop (warm cream pill).
  */
 const C = {
-  soil:    "#5C4033",
-  cream:   "#F8F3E9",
+  soil:    "var(--soil)",
+  cream:   "var(--cream)",
   border:  "#E6DED0",
-  green:   "#3F7427",
+  green:   "var(--green-dk)",
   greenBg: "#EAF3E0",
-  red:     "#A32D2D",
+  red:     "var(--red)",
   redBg:   "#FDECEA",
-  muted:   "#8A8678",
+  muted:   "var(--muted)",
 };
 
 export default function Toast() {

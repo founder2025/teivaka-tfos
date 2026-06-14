@@ -5,8 +5,8 @@
 import { useNavigate } from "react-router-dom";
 import { Activity } from "lucide-react";
 
-const C = { paper:"#FFFFFF", green:"#6AA84F", greenDk:"#3E7B1F", soil:"#5C4033",
-  red:"#A32D2D", line:"#E2D8C3", muted:"#8A7B6F" };
+const C = { paper:"var(--paper)", green:"var(--green)", greenDk:"var(--green-dk)", soil:"var(--soil)",
+  red:"var(--red)", line:"var(--line)", muted:"var(--muted)" };
 
 const SUMMARY = {
   score: 84, grade: "Strong", businesses: 6, onHold: 2,

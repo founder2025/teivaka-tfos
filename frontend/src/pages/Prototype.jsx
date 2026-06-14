@@ -63,12 +63,12 @@ export default function Prototype() {
   }
 
   return (
-    <div style={{ position: "fixed", inset: 0, background: "#F8F3E9" }}>
+    <div style={{ position: "fixed", inset: 0, background: "var(--cream)" }}>
       <div
         style={{
           position: "absolute", top: 0, left: 0, right: 0, height: BANNER_H,
           display: "flex", alignItems: "center", gap: 8, padding: "0 12px",
-          background: "#BF9000", color: "#fff", fontSize: 12, fontWeight: 700,
+          background: "var(--amber)", color: "#fff", fontSize: 12, fontWeight: 700,
           fontFamily: "system-ui", zIndex: 10, justifyContent: "space-between",
         }}
       >
@@ -77,7 +77,7 @@ export default function Prototype() {
           onClick={() => navigate("/home")}
           title="Leave the prototype and use the live app (real data, real login)"
           style={{
-            background: "#fff", color: "#5C4033", border: 0, borderRadius: 6,
+            background: "var(--paper)", color: "var(--soil)", border: 0, borderRadius: 6,
             padding: "3px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer",
             whiteSpace: "nowrap",
           }}

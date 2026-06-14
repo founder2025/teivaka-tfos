@@ -17,7 +17,7 @@ const tok = () => localStorage.getItem("tfos_access_token");
 async function getJSON(u) { const t = tok(); const r = await fetch(u, { headers: t ? { Authorization: `Bearer ${t}` } : {} }); if (!r.ok) throw new Error(String(r.status)); return r.json(); }
 async function send(method, u) { const t = tok(); const r = await fetch(u, { method, headers: t ? { Authorization: `Bearer ${t}` } : {} }); if (!r.ok) throw new Error(String(r.status)); return r.json().catch(() => ({})); }
 
-const C = { soil: "#5C4033", green: "#6AA84F", greenDk: "#3E7B1F", line: "#E8E2D4", cream: "#F8F3E9", muted: "#8A7B6F" };
+const C = { soil: "var(--soil)", green: "var(--green)", greenDk: "var(--green-dk)", line: "var(--line)", cream: "var(--cream)", muted: "var(--muted)" };
 const initials = (n) => (n || "?").split(" ").map((s) => s[0]).slice(0, 2).join("").toUpperCase();
 import { personaLabel, personaGroup } from "../../utils/personas";
 const LS_RECENT = "tfos_search_recent";
@@ -98,13 +98,13 @@ export default function SearchPalette({ onClose }) {
   let idx = -1;
   const Row = ({ entry, children }) => { idx += 1; const i = idx; const on = i === active;
     return <button data-i={i} onMouseEnter={() => setActive(i)} onClick={() => choose(entry)}
-      style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "9px 14px", minHeight: 44, border: "none", background: on ? "rgba(106,168,79,0.10)" : "#fff", cursor: "pointer", textAlign: "left" }}>{children}</button>; };
+      style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "9px 14px", minHeight: 44, border: "none", background: on ? "rgba(106,168,79,0.10)" : "var(--paper)", cursor: "pointer", textAlign: "left" }}>{children}</button>; };
   const GroupHead = ({ children }) => <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: ".05em", textTransform: "uppercase", color: C.muted, padding: "10px 14px 4px" }}>{children}</div>;
 
   return (
     <div onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
       style={{ position: "fixed", inset: 0, zIndex: 3000, background: "rgba(40,30,20,0.35)", display: "flex", justifyContent: "center", alignItems: "flex-start", paddingTop: "8vh" }}>
-      <div style={{ width: "min(620px, calc(100vw - 24px))", maxHeight: "80vh", background: "#fff", border: `1px solid ${C.line}`, borderRadius: 12, boxShadow: "0 20px 60px rgba(0,0,0,0.28)", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+      <div style={{ width: "min(620px, calc(100vw - 24px))", maxHeight: "80vh", background: "var(--paper)", border: `1px solid ${C.line}`, borderRadius: 12, boxShadow: "0 20px 60px rgba(0,0,0,0.28)", display: "flex", flexDirection: "column", overflow: "hidden" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", borderBottom: `1px solid ${C.line}` }}>
           <Search size={18} style={{ color: C.muted }} />
           <input ref={inputRef} value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={onKey}
@@ -119,7 +119,7 @@ export default function SearchPalette({ onClose }) {
             recent.length === 0
               ? <div style={{ padding: "26px 16px", color: C.muted, fontSize: 13, textAlign: "center" }}>Search farmers, buyers, exporters, bankers… or type a page like “Tasks”, “Cash”, “Marketplace”.</div>
               : <><GroupHead>Recent</GroupHead>{recent.map((r) => (
-                  <button key={r.path} onClick={() => goNav(r)} style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "9px 14px", border: "none", background: "#fff", cursor: "pointer", textAlign: "left" }}>
+                  <button key={r.path} onClick={() => goNav(r)} style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "9px 14px", border: "none", background: "var(--paper)", cursor: "pointer", textAlign: "left" }}>
                     <ArrowRight size={15} style={{ color: C.muted }} /><span style={{ fontSize: 13.5, color: C.soil }}>{r.label}</span><span style={{ fontSize: 10.5, color: C.muted, marginLeft: "auto" }}>{r.group}</span>
                   </button>))}</>
           ) : (flat.length === 0 && !loading) ? (

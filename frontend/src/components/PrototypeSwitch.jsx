@@ -32,7 +32,7 @@ export default function PrototypeSwitch() {
       title="Founder/admin: open the design prototype (mock data)"
       style={{
         position: "fixed", left: 12, bottom: 12, zIndex: 1000,
-        background: "#5C4033", color: "#fff", border: "1px solid #BF9000",
+        background: "var(--soil)", color: "#fff", border: "1px solid var(--amber)",
         borderRadius: 999, padding: "7px 12px", fontSize: 12, fontWeight: 700,
         cursor: "pointer", boxShadow: "0 2px 8px rgba(0,0,0,0.18)",
         fontFamily: "system-ui",

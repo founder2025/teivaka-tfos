@@ -8,7 +8,7 @@ import { C, getJSON, card, MeShell } from "./_meCommon";
 
 function StatTile({ n, label }) {
   return (
-    <div style={{ flex: 1, minWidth: 110, background: "#fff", border: `1px solid ${C.line}`, borderRadius: 10, padding: "14px 16px", textAlign: "center" }}>
+    <div style={{ flex: 1, minWidth: 110, background: "var(--paper)", border: `1px solid ${C.line}`, borderRadius: 10, padding: "14px 16px", textAlign: "center" }}>
       <div style={{ fontSize: 26, fontWeight: 800, color: C.soil }}>{n}</div>
       <div style={{ fontSize: 11, color: C.muted, textTransform: "uppercase", letterSpacing: "0.04em" }}>{label}</div>
     </div>
@@ -37,7 +37,7 @@ export default function Referrals() {
   const url = data?.share_links?.whatsapp || "https://teivaka.com";
   const shareText = data?.share_links?.copy_text || (code ? `Join Teivaka with my code ${code} -> ${url}` : `Join Teivaka -> ${url}`);
   const copy = (what, text) => { navigator.clipboard?.writeText(text).then(() => { setCopied(what); setTimeout(() => setCopied(null), 1800); }); };
-  const btn = { display: "inline-flex", gap: 6, alignItems: "center", border: `1px solid ${C.line}`, background: "#fff", color: C.soil, borderRadius: 8, padding: "9px 13px", cursor: "pointer", fontSize: 13, fontWeight: 600 };
+  const btn = { display: "inline-flex", gap: 6, alignItems: "center", border: `1px solid ${C.line}`, background: "var(--paper)", color: C.soil, borderRadius: 8, padding: "9px 13px", cursor: "pointer", fontSize: 13, fontWeight: 600 };
 
   return (
     <MeShell title="Referrals" subtitle="Invite farmers, buyers and partners — your network is your reward.">
@@ -56,7 +56,7 @@ export default function Referrals() {
         </div>
         {qr && (
           <div style={{ textAlign: "center" }}>
-            <img src={qr} alt="Referral QR" style={{ width: 132, height: 132, borderRadius: 8, border: `1px solid ${C.line}`, background: "#fff" }} />
+            <img src={qr} alt="Referral QR" style={{ width: 132, height: 132, borderRadius: 8, border: `1px solid ${C.line}`, background: "var(--paper)" }} />
             <div style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>Scan to join</div>
           </div>
         )}

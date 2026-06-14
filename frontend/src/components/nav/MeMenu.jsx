@@ -7,14 +7,14 @@ import { hasRole } from "../../utils/roles";
 import Avatar from "../ui/Avatar";
 
 const C = {
-  soil:    "#5C4033",
-  cream:   "#F8F3E9",
+  soil:    "var(--soil)",
+  cream:   "var(--cream)",
   border:  "#D4CFC3",
   hoverBg: "rgba(92, 64, 51, 0.04)",
-  amber:   "#BF9000",
-  green:   "#6AA84F",
-  greenDk: "#3E7B1F",
-  muted:   "#8A7B6F",
+  amber:   "var(--amber)",
+  green:   "var(--green)",
+  greenDk: "var(--green-dk)",
+  muted:   "var(--muted)",
 };
 
 function initialsFrom(name, fallback = "UK") {
@@ -126,7 +126,7 @@ export default function MeMenu({ onClose }) {
       className="absolute right-0 top-full mt-2 z-50 rounded-lg shadow-xl overflow-hidden"
       style={{
         width: 280,
-        background: "#FFFFFF",
+        background: "var(--paper)",
         border: `1px solid ${C.border}`,
         color: C.soil,
       }}
@@ -146,7 +146,7 @@ export default function MeMenu({ onClose }) {
               aria-label={`Subscription tier ${tier}`}
               style={{
                 background: badgeBg,
-                color: "#FFFFFF",
+                color: "#fff",
                 fontSize: 10,
                 fontWeight: 700,
                 padding: "2px 8px",

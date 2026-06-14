@@ -42,7 +42,7 @@ function StoryViewer({ group, onClose, onDeleted }) {
         {/* progress bars */}
         <div style={{ display: "flex", gap: 4, padding: "10px 10px 6px" }}>
           {group.stories.map((_, i) => (
-            <div key={i} style={{ flex: 1, height: 3, borderRadius: 2, background: i < idx ? "#fff" : i === idx ? "rgba(255,255,255,0.9)" : "rgba(255,255,255,0.3)" }} />
+            <div key={i} style={{ flex: 1, height: 3, borderRadius: 2, background: i < idx ? "var(--paper)" : i === idx ? "rgba(255,255,255,0.9)" : "rgba(255,255,255,0.3)" }} />
           ))}
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "0 12px 8px", color: "#fff" }}>

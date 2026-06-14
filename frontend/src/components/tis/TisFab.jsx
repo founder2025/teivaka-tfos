@@ -8,7 +8,7 @@
  */
 
 const C = {
-  green: "#6AA84F",
+  green: "var(--green)",
 };
 
 function SparklesIcon({ size = 24 }) {

@@ -14,27 +14,27 @@ import FarmerLayout from "../../components/farmer/FarmerLayout";
 // ── Design tokens ─────────────────────────────────────────────────────────────
 const C = {
   soil:   "#2C1A0E",
-  green:  "#3D8C40",
-  cream:  "#F5EFE0",
-  gold:   "#D4A017",
-  border: "#E0D5C0",
-  cardBg: "#FFFFFF",
+  green:  "var(--green)",
+  cream:  "var(--cream)",
+  gold:   "var(--amber)",
+  border: "var(--line)",
+  cardBg: "var(--paper)",
 };
 
 // ── Rank badge map ────────────────────────────────────────────────────────────
 const RANK = {
   seedling:       { emoji: "🌱", label: "Seedling",      color: "#6B9E6E" },
-  grower:         { emoji: "🌿", label: "Grower",        color: "#3D8C40" },
+  grower:         { emoji: "🌿", label: "Grower",        color: "var(--green)" },
   farmer:         { emoji: "🌾", label: "Farmer",        color: "#8B6914" },
   senior_farmer:  { emoji: "👨‍🌾", label: "Senior Farmer", color: "#5C4A1E" },
-  champion:       { emoji: "🏆", label: "Champion",      color: "#D4A017" },
+  champion:       { emoji: "🏆", label: "Champion",      color: "var(--amber)" },
 };
 
 // ── Category pill config ──────────────────────────────────────────────────────
 const CATEGORY = {
-  Win:      { bg: "#FFF3CD", text: "#8B6914",  border: "#D4A017" },
+  Win:      { bg: "#FFF3CD", text: "#8B6914",  border: "var(--amber)" },
   Question: { bg: "#E8F0FE", text: "#1A56DB",  border: "#3F83F8" },
-  Tip:      { bg: "#ECFDF5", text: "#065F46",  border: "#3D8C40" },
+  Tip:      { bg: "#ECFDF5", text: "#065F46",  border: "var(--green)" },
   Problem:  { bg: "#FFF7ED", text: "#9A3412",  border: "#FB923C" },
   Update:   { bg: "#F3F4F6", text: "#374151",  border: "#9CA3AF" },
 };
@@ -104,10 +104,10 @@ const MOCK_POSTS = [
 ];
 
 const ONLINE_MEMBERS = [
-  { initials: "MT", color: "#3D8C40" },
+  { initials: "MT", color: "var(--green)" },
   { initials: "SN", color: "#8B6914" },
   { initials: "AR", color: "#1A56DB" },
-  { initials: "JC", color: "#D4A017" },
+  { initials: "JC", color: "var(--amber)" },
   { initials: "LV", color: "#9A3412" },
 ];
 
@@ -195,8 +195,8 @@ function FeedFilterBar({ active, onChange }) {
         <button key={f} onClick={() => onChange(f)}
           className="px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-all"
           style={{
-            background: active === f ? C.green : "white",
-            color: active === f ? "white" : C.soil,
+            background: active === f ? C.green : "var(--paper)",
+            color: active === f ? "var(--paper)" : C.soil,
             border: `1px solid ${active === f ? C.green : C.border}`,
           }}>
           {f}
@@ -384,7 +384,7 @@ function MiniMapWidget() {
             style={{ top: dot.top, left: dot.left }}>
             <div className="w-2 h-2 rounded-full"
               style={{
-                background: dot.pulse ? "#4ADE80" : "#3D8C40",
+                background: dot.pulse ? "#4ADE80" : "var(--green)",
                 boxShadow: dot.pulse ? "0 0 0 3px rgba(74,222,128,0.3)" : "none",
               }} />
           </div>

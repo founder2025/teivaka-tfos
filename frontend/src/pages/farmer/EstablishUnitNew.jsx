@@ -14,7 +14,7 @@ import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { apiClient } from "../../utils/apiClient";
 
-const C = { soil: "#5C4033", cream: "#F8F3E9", green: "#6AA84F", amber: "#BF9000", red: "#A32D2D", border: "#E6DED0", muted: "#8A8678" };
+const C = { soil: "var(--soil)", cream: "var(--cream)", green: "var(--green)", amber: "var(--amber)", red: "var(--red)", border: "#E6DED0", muted: "var(--muted)" };
 
 const ENT_LABEL = {
   CROPS: "Crops", PERENNIALS: "Trees & vines", AQUACULTURE: "Fish & sea",
@@ -128,7 +128,7 @@ export default function EstablishUnitNew() {
           <div>
             <label className="block text-xs mb-1" style={{ color: C.muted }}>Enterprise *</label>
             <select value={enterprise} onChange={(e) => setEnterprise(e.target.value)} disabled={loading}
-              className="w-full px-3 py-3 rounded-md border text-base" style={{ background: "#fff", borderColor: !enterprise ? C.amber : C.border }}>
+              className="w-full px-3 py-3 rounded-md border text-base" style={{ background: "var(--paper)", borderColor: !enterprise ? C.amber : C.border }}>
               <option value="">Pick…</option>
               {activeEnts.map((k) => <option key={k} value={k}>{ENT_LABEL[k] || k}</option>)}
             </select>
@@ -140,7 +140,7 @@ export default function EstablishUnitNew() {
                 {kinds.map((k) => (
                   <button key={k} type="button" onClick={() => setPuType(k)}
                     className="px-3 py-2 rounded-md border text-sm font-medium"
-                    style={{ background: puType === k ? C.green : "#fff", color: puType === k ? "#fff" : C.soil, borderColor: puType === k ? C.green : C.border }}>
+                    style={{ background: puType === k ? C.green : "var(--paper)", color: puType === k ? "var(--paper)" : C.soil, borderColor: puType === k ? C.green : C.border }}>
                     {UNIT_LABEL[k] || k}
                   </button>
                 ))}
@@ -152,12 +152,12 @@ export default function EstablishUnitNew() {
               <label className="block text-xs mb-1" style={{ color: C.muted }}>Name it *</label>
               <input value={name} onChange={(e) => setName(e.target.value)} maxLength={64}
                 placeholder={puType ? `e.g. ${UNIT_LABEL[puType]} 1, near the river` : "Give it a name"}
-                className="w-full px-3 py-3 rounded-md border text-base" style={{ background: "#fff", borderColor: C.border }} />
+                className="w-full px-3 py-3 rounded-md border text-base" style={{ background: "var(--paper)", borderColor: C.border }} />
             </div>
             <div>
               <label className="block text-xs mb-1" style={{ color: C.muted }}>{areaLabel} (optional)</label>
               <input type="number" inputMode="decimal" min={0} step={0.01} value={area} onChange={(e) => setArea(e.target.value)}
-                className="w-full px-3 py-3 rounded-md border text-base" style={{ background: "#fff", borderColor: C.border }} />
+                className="w-full px-3 py-3 rounded-md border text-base" style={{ background: "var(--paper)", borderColor: C.border }} />
             </div>
           </div>
         </section>

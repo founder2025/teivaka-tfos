@@ -9,10 +9,10 @@ import { Users, BookOpen, Tractor, Sparkles } from "lucide-react";
 import UniversalLogButton from "./UniversalLogButton";
 
 const C = {
-  soil:   "#5C4033",
-  green:  "#6AA84F",
+  soil:   "var(--soil)",
+  green:  "var(--green)",
   border: "#E6DED0",
-  cream:  "#F8F3E9",
+  cream:  "var(--cream)",
 };
 
 const LEFT_TABS = [

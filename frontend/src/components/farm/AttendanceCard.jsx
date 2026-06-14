@@ -8,8 +8,8 @@
 import { useEffect, useState } from "react";
 import { LogIn, LogOut, MapPin, CheckCircle2, AlertTriangle, Loader2, Clock } from "lucide-react";
 
-const C = { soil: "#5C4033", cream: "#F8F3E9", border: "#E6DED0", muted: "#8A7863", green: "#6AA84F", greenDk: "#3E7B1F", amber: "#BF9000", red: "#D4442E", paper: "#FCFAF5" };
-const FOCUS = "focus:outline-none focus-visible:ring-2 focus-visible:ring-[#6AA84F]";
+const C = { soil: "var(--soil)", cream: "var(--cream)", border: "#E6DED0", muted: "#8A7863", green: "var(--green)", greenDk: "var(--green-dk)", amber: "var(--amber)", red: "var(--red)", paper: "#FCFAF5" };
+const FOCUS = "focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--green)]";
 
 function authHeaders() { const t = localStorage.getItem("tfos_access_token"); return t ? { Authorization: `Bearer ${t}` } : {}; }
 const fmtTime = (iso) => { try { return new Date(iso).toLocaleString(undefined, { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }); } catch { return iso; } };
@@ -64,7 +64,7 @@ export default function AttendanceCard({ farmId }) {
   const Btn = ({ kind, label, Icon, primary }) => (
     <button onClick={() => clock(kind)} disabled={busy || !farmId}
       className={`flex-1 text-sm px-3 py-3 rounded-xl flex items-center justify-center gap-2 font-bold hover:brightness-95 disabled:opacity-50 ${FOCUS}`}
-      style={primary ? { background: C.greenDk, color: "white" } : { background: "white", color: C.soil, border: `1.5px solid ${C.border}` }}>
+      style={primary ? { background: C.greenDk, color: "#fff" } : { background: "var(--paper)", color: C.soil, border: `1.5px solid ${C.border}` }}>
       {busy === kind ? <Loader2 size={16} className="animate-spin" /> : <Icon size={16} />}{label}
     </button>
   );

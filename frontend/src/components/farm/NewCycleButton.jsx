@@ -8,8 +8,8 @@
 import { Plus } from "lucide-react";
 
 const C = {
-  green:   "#6AA84F",
-  greenDk: "#3E7B1F",
+  green:   "var(--green)",
+  greenDk: "var(--green-dk)",
 };
 
 export default function NewCycleButton({ disabled, onClick }) {

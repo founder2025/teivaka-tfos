@@ -27,7 +27,7 @@ const CATEGORIES = [["CROPS", "Crops"], ["LIVESTOCK", "Livestock"], ["FISHING", 
 const CAT_LABEL = Object.fromEntries(CATEGORIES);
 
 const COVERS = [
-  "linear-gradient(135deg,#6aa84f,#3d6b2e)", "linear-gradient(135deg,#bf9000,#7a5c00)",
+  "linear-gradient(135deg,var(--green),#3d6b2e)", "linear-gradient(135deg,var(--amber),#7a5c00)",
   "linear-gradient(135deg,#2e7d6b,#174f42)", "linear-gradient(135deg,#7b5ea7,#4a3168)",
   "linear-gradient(135deg,#c0603a,#83402a)", "linear-gradient(135deg,#3a7ca5,#235a7c)",
 ];
@@ -169,10 +169,10 @@ function GroupChat({ groupId }) {
             const day = gcDayLabel(m.created_at); const showDay = day !== prevDay; prevDay = day;
             return (
               <div key={m.message_id} style={{ display: "contents" }}>
-                {showDay && <div style={{ alignSelf: "center", fontSize: 10.5, color: "var(--muted)", background: "#fff", border: "1px solid var(--line)", borderRadius: 10, padding: "1px 10px", margin: "4px 0" }}>{day}</div>}
+                {showDay && <div style={{ alignSelf: "center", fontSize: 10.5, color: "var(--muted)", background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 10, padding: "1px 10px", margin: "4px 0" }}>{day}</div>}
                 <div style={{ alignSelf: m.mine ? "flex-end" : "flex-start", maxWidth: "82%", display: "flex", gap: 7, flexDirection: m.mine ? "row-reverse" : "row", alignItems: "flex-end" }}>
                   {!m.mine && (m.sender_avatar ? <img src={m.sender_avatar} alt="" style={{ width: 26, height: 26, borderRadius: "50%", objectFit: "cover", flexShrink: 0 }} /> : <span style={{ width: 26, height: 26, borderRadius: "50%", background: "var(--green)", color: "#fff", fontSize: 10, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{gcInitials(m.sender_name)}</span>)}
-                  <div style={{ background: isMedia ? "transparent" : (m.mine ? "var(--green)" : "#fff"), color: m.mine ? "#fff" : "var(--soil)", border: (isMedia || m.mine) ? "none" : "1px solid var(--line)", borderRadius: 12, padding: isMedia ? 0 : "7px 11px", fontSize: 13.5, lineHeight: 1.45 }}>
+                  <div style={{ background: isMedia ? "transparent" : (m.mine ? "var(--green)" : "var(--paper)"), color: m.mine ? "var(--paper)" : "var(--soil)", border: (isMedia || m.mine) ? "none" : "1px solid var(--line)", borderRadius: 12, padding: isMedia ? 0 : "7px 11px", fontSize: 13.5, lineHeight: 1.45 }}>
                     {!m.mine && !isMedia && <div style={{ fontSize: 11, fontWeight: 700, color: "var(--green-dk)", marginBottom: 2 }}>{m.sender_name}</div>}
                     {renderBody(m)}
                     <div style={{ fontSize: 9.5, opacity: 0.7, marginTop: 2, textAlign: "right", color: isMedia ? "var(--muted)" : undefined }}>{gcTime(m.created_at)}</div>
@@ -183,10 +183,10 @@ function GroupChat({ groupId }) {
           })}
         <div ref={endRef} />
       </div>
-      <div style={{ display: "flex", gap: 6, padding: 8, borderTop: "1px solid var(--line)", background: "#fff", alignItems: "center" }}>
+      <div style={{ display: "flex", gap: 6, padding: 8, borderTop: "1px solid var(--line)", background: "var(--paper)", alignItems: "center" }}>
         <input ref={fileRef} type="file" accept="image/*,video/*" onChange={onPick} style={{ display: "none" }} />
         <button onClick={() => fileRef.current?.click()} disabled={busy || recording} title="Send photo or video" style={ICONBTN}><ImageIcon size={18} /></button>
-        <button onClick={recording ? stopRec : startRec} disabled={busy} title={recording ? "Stop & send voice note" : "Record voice note"} style={{ ...ICONBTN, color: recording ? "var(--danger,#D4442E)" : "var(--muted)" }}>{recording ? <Square size={16} /> : <Mic size={18} />}</button>
+        <button onClick={recording ? stopRec : startRec} disabled={busy} title={recording ? "Stop & send voice note" : "Record voice note"} style={{ ...ICONBTN, color: recording ? "var(--danger,var(--red))" : "var(--muted)" }}>{recording ? <Square size={16} /> : <Mic size={18} />}</button>
         <input value={text} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => e.key === "Enter" && doSend()} placeholder={recording ? "Recording… tap ■ to send" : "Message the group…"} disabled={recording} style={{ flex: 1, border: "1px solid var(--line)", borderRadius: 18, padding: "9px 13px", fontSize: 14, outline: "none" }} />
         <button onClick={doSend} disabled={busy || recording || !text.trim()} style={{ border: "none", background: "var(--green)", color: "#fff", borderRadius: "50%", width: 40, height: 40, flexShrink: 0, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><Send size={16} /></button>
       </div>
@@ -308,7 +308,7 @@ export default function Groups() {
   return (
     <div>
       <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 12, flexWrap: "wrap" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, flex: 1, minWidth: 200, border: "1px solid var(--line)", borderRadius: 999, padding: "7px 14px", background: "#fff" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flex: 1, minWidth: 200, border: "1px solid var(--line)", borderRadius: 999, padding: "7px 14px", background: "var(--paper)" }}>
           <Search size={14} style={{ color: "var(--muted)" }} />
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search groups — crops, regions, export…"
             style={{ border: "none", outline: "none", flex: 1, fontSize: 13.5, background: "transparent", color: "var(--soil)" }} />

@@ -31,7 +31,7 @@ export default function OfflineBanner() {
   if (online && pending === 0) return null;
 
   const offline = !online;
-  const bg = offline ? "#5C4033" : "#3E7B1F";
+  const bg = offline ? "var(--soil)" : "var(--green-dk)";
   const text = offline
     ? (pending > 0 ? `You're offline — ${pending} entr${pending === 1 ? "y" : "ies"} saved, will sync` : "You're offline — your entries are saved and will sync")
     : `Syncing ${pending} saved entr${pending === 1 ? "y" : "ies"}…`;

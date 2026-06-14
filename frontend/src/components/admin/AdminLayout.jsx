@@ -15,7 +15,7 @@ import {
   Settings, Cog, Map as MapIcon, ArrowLeft, Award, Crosshair, Globe, Bug,
   CloudRain, Coins, Megaphone,
 } from "lucide-react";
-const C = { soil: "#5C4033", cream: "#F8F3E9", green: "#6AA84F", greenDk: "#3E7B1F", line: "#E5DCC9", muted: "#8A8678", gold: "#BF9000" };
+const C = { soil: "var(--soil)", cream: "var(--cream)", green: "var(--green)", greenDk: "var(--green-dk)", line: "var(--line)", muted: "var(--muted)", gold: "var(--amber)" };
 
 /* The six command sections — every admin surface lands in exactly one. */
 const SECTIONS = [

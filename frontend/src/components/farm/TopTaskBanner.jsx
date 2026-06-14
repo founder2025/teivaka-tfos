@@ -13,8 +13,8 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Droplet } from "lucide-react";
 
 const C = {
-  green:   "#6AA84F",
-  greenDk: "#3E7B1F",
+  green:   "var(--green)",
+  greenDk: "var(--green-dk)",
 };
 
 function authHeaders() {
@@ -126,7 +126,7 @@ export default function TopTaskBanner() {
       className="rounded-2xl px-4 py-4 flex items-center gap-3 flex-wrap"
       style={{
         background: `linear-gradient(135deg, ${C.green}, ${C.greenDk})`,
-        color: "white",
+        color: "#fff",
       }}
     >
       <div
@@ -160,7 +160,7 @@ export default function TopTaskBanner() {
             onClick={handleDone}
             disabled={isBusy}
             className={`text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors ${busyClass}`}
-            style={{ background: "white", color: C.greenDk }}
+            style={{ background: "var(--paper)", color: C.greenDk }}
           >
             {submitting === "DONE" ? "Done…" : "Done"}
           </button>
@@ -169,7 +169,7 @@ export default function TopTaskBanner() {
             onClick={handleSkip}
             disabled={isBusy}
             className={`text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors ${busyClass}`}
-            style={{ background: "rgba(255,255,255,0.18)", color: "white" }}
+            style={{ background: "rgba(255,255,255,0.18)", color: "#fff" }}
           >
             {submitting === "SKIP" ? "Skip…" : "Skip"}
           </button>
@@ -178,7 +178,7 @@ export default function TopTaskBanner() {
             onClick={handleHelp}
             disabled={isBusy}
             className={`text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors ${busyClass}`}
-            style={{ background: "rgba(255,255,255,0.18)", color: "white" }}
+            style={{ background: "rgba(255,255,255,0.18)", color: "#fff" }}
           >
             Help
           </button>

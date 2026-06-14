@@ -22,15 +22,15 @@ import CapacityCalc from "../../components/farm/CapacityCalc";
 
 L.Icon.Default.mergeOptions({ iconRetinaUrl: iconRetina, iconUrl: icon, shadowUrl: shadow });
 
-const C = { soil: "#5C4033", cream: "#F8F3E9", border: "#E6DED0", muted: "#8A7863", green: "#6AA84F", greenDk: "#3E7B1F", amber: "#BF9000", red: "#D4442E" };
+const C = { soil: "var(--soil)", cream: "var(--cream)", border: "#E6DED0", muted: "#8A7863", green: "var(--green)", greenDk: "var(--green-dk)", amber: "var(--amber)", red: "var(--red)" };
 const FIJI = [-17.8, 178.0];
 const KIND_STYLE = {
-  BOUNDARY: { color: "#F8F3E9", weight: 3, fill: false, dashArray: "6 6" },
-  ZONE: { color: "#6AA84F", weight: 2, fillColor: "#6AA84F", fillOpacity: 0.18 },
-  BLOCK: { color: "#BF9000", weight: 2, fillColor: "#BF9000", fillOpacity: 0.22 },
+  BOUNDARY: { color: "var(--cream)", weight: 3, fill: false, dashArray: "6 6" },
+  ZONE: { color: "var(--green)", weight: 2, fillColor: "var(--green)", fillOpacity: 0.18 },
+  BLOCK: { color: "var(--amber)", weight: 2, fillColor: "var(--amber)", fillOpacity: 0.22 },
 };
 const POLY_KINDS = ["ZONE", "BLOCK", "BOUNDARY"];
-const SWATCHES = ["#6AA84F", "#BF9000", "#D4442E", "#3E7B1F", "#2D6CDF", "#8E44AD", "#E67E22", "#5C4033"];
+const SWATCHES = ["var(--green)", "var(--amber)", "var(--red)", "var(--green-dk)", "#2D6CDF", "#8E44AD", "#E67E22", "var(--soil)"];
 const FACILITY_TYPES = ["Barn / shed", "Greenhouse", "Paddock", "Poultry house", "Pond / tank", "Storage / cold room", "Water point", "Gate", "Office", "Other"];
 
 // Base layers — all on Esri's arcgisonline host (already CSP-allowed; no Caddy change).
@@ -626,7 +626,7 @@ export default function FarmMap({ farmId, onCountsChange, openRequest, onSaved }
                 {addMenu && (
                   <>
                     <div className="fixed inset-0 z-[1090]" onClick={() => setAddMenu(false)} />
-                    <div className="absolute left-0 top-full mt-1.5 z-[1100] rounded-xl shadow-xl overflow-hidden" style={{ width: 210, background: "white", border: `1px solid ${C.border}` }}>
+                    <div className="absolute left-0 top-full mt-1.5 z-[1100] rounded-xl shadow-xl overflow-hidden" style={{ width: 210, background: "var(--paper)", border: `1px solid ${C.border}` }}>
                       {[["BOUNDARY", "Farm boundary", C.soil], ["ZONE", "Zone", C.green], ["BLOCK", "Block", C.amber]].map(([k, label, dot]) => (
                         <button key={k} onClick={() => addDraw(k)} className="w-full text-left flex items-center gap-2.5 px-3.5 py-2.5 text-sm font-semibold hover:bg-[#FCFAF5]" style={{ color: C.soil }}>
                           <span className="w-2.5 h-2.5 rounded-full" style={{ background: dot }} />{label}
@@ -644,7 +644,7 @@ export default function FarmMap({ farmId, onCountsChange, openRequest, onSaved }
                 )}
               </div>
               <button onClick={() => setEditMode((v) => !v)} className="h-10 px-4 rounded-xl flex items-center gap-1.5 shadow-lg font-semibold hover:brightness-95"
-                style={editMode ? { background: C.soil, color: "white" } : { background: "rgba(255,255,255,0.97)", color: C.soil, border: `1px solid ${C.border}` }}>
+                style={editMode ? { background: C.soil, color: "#fff" } : { background: "rgba(255,255,255,0.97)", color: C.soil, border: `1px solid ${C.border}` }}>
                 <Pencil size={16} />Edit
               </button>
               <button onClick={() => setFullscreen(false)} className="h-10 px-4 rounded-xl flex items-center gap-1.5 shadow-lg font-semibold hover:brightness-95"
@@ -657,20 +657,20 @@ export default function FarmMap({ farmId, onCountsChange, openRequest, onSaved }
             <div className="flex items-center gap-2 flex-wrap">
               <div className="flex items-center h-10 rounded-xl shadow-lg overflow-hidden" style={{ border: `1px solid ${C.border}`, background: "rgba(255,255,255,0.97)" }}>
                 {Object.entries(BASE_LAYERS).map(([k, b]) => (
-                  <button key={k} onClick={() => switchBase(k)} className="h-full px-3 text-sm font-semibold" style={baseLayer === k ? { background: C.greenDk, color: "white" } : { color: C.soil }}>{b.label}</button>
+                  <button key={k} onClick={() => switchBase(k)} className="h-full px-3 text-sm font-semibold" style={baseLayer === k ? { background: C.greenDk, color: "#fff" } : { color: C.soil }}>{b.label}</button>
                 ))}
               </div>
               <div className="flex items-center h-10 rounded-xl shadow-lg overflow-hidden" style={{ border: `1px solid ${C.border}`, background: "rgba(255,255,255,0.97)" }}>
                 {Object.entries(AREA_UNITS).map(([k, u]) => (
-                  <button key={k} onClick={() => setAreaUnit(k)} className="h-full px-3 text-sm font-semibold" style={areaUnit === k ? { background: C.soil, color: "white" } : { color: C.soil }}>{u.label}</button>
+                  <button key={k} onClick={() => setAreaUnit(k)} className="h-full px-3 text-sm font-semibold" style={areaUnit === k ? { background: C.soil, color: "#fff" } : { color: C.soil }}>{u.label}</button>
                 ))}
               </div>
               <button onClick={() => (measuring ? stopMeasure() : startMeasure())} className="h-10 px-3.5 rounded-xl shadow-lg text-sm font-semibold flex items-center gap-1.5"
-                style={measuring ? { background: C.soil, color: "white" } : { background: "rgba(255,255,255,0.97)", color: C.soil, border: `1px solid ${C.border}` }}>
+                style={measuring ? { background: C.soil, color: "#fff" } : { background: "rgba(255,255,255,0.97)", color: C.soil, border: `1px solid ${C.border}` }}>
                 <Ruler size={15} />Measure
               </button>
               <button onClick={() => { setCalcOpen((o) => !o); if (measuring) stopMeasure(); }} className="h-10 px-3.5 rounded-xl shadow-lg text-sm font-semibold flex items-center gap-1.5"
-                style={calcOpen ? { background: C.greenDk, color: "white" } : { background: "rgba(255,255,255,0.97)", color: C.soil, border: `1px solid ${C.border}` }}>
+                style={calcOpen ? { background: C.greenDk, color: "#fff" } : { background: "rgba(255,255,255,0.97)", color: C.soil, border: `1px solid ${C.border}` }}>
                 <Calculator size={15} />Calculator
               </button>
             </div>
@@ -684,11 +684,11 @@ export default function FarmMap({ farmId, onCountsChange, openRequest, onSaved }
           </div>
 
           {renameTarget && (
-            <div className="absolute z-[1002] bottom-3 left-1/2 -translate-x-1/2 w-[min(380px,calc(100%-1.5rem))] rounded-2xl shadow-xl p-3.5" style={{ background: "white", border: `1px solid ${C.border}` }}>
+            <div className="absolute z-[1002] bottom-3 left-1/2 -translate-x-1/2 w-[min(380px,calc(100%-1.5rem))] rounded-2xl shadow-xl p-3.5" style={{ background: "var(--paper)", border: `1px solid ${C.border}` }}>
               <div className="text-sm font-bold mb-1.5" style={{ color: C.soil }}>Rename {String(renameTarget.kind || "shape").toLowerCase()}</div>
               <input autoFocus value={renameTarget.name} onChange={(e) => setRenameTarget((t) => ({ ...t, name: e.target.value }))}
                 onKeyDown={(e) => { if (e.key === "Enter") saveShapeName(); if (e.key === "Escape") setRenameTarget(null); }}
-                className="w-full px-3 py-2.5 rounded-lg text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-[#6AA84F]" style={{ border: `1.5px solid ${C.border}`, background: C.paper, color: C.soil }} placeholder="Name" />
+                className="w-full px-3 py-2.5 rounded-lg text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--green)]" style={{ border: `1.5px solid ${C.border}`, background: C.paper, color: C.soil }} placeholder="Name" />
               {(renameTarget.kind === "BLOCK" || renameTarget.kind === "ZONE") && !renameTarget.ref_id && (
                 <p className="text-[10px] mt-1" style={{ color: C.muted }}>Save the map first to link this shape, then renaming updates it everywhere.</p>
               )}
@@ -706,7 +706,7 @@ export default function FarmMap({ farmId, onCountsChange, openRequest, onSaved }
               <button onClick={startWalk} className="h-10 px-4 rounded-xl flex items-center gap-2 shadow-lg text-sm font-semibold text-white hover:brightness-95" style={{ background: C.soil }}>
                 <Footprints size={16} />Walk {drawKind === "BLOCK" ? "block" : drawKind === "BOUNDARY" ? "boundary" : "zone"}
               </button>
-              <button onClick={locateMe} className="h-10 px-4 rounded-xl flex items-center gap-2 shadow-lg text-sm font-semibold hover:brightness-95" style={{ background: "white", color: C.soil, border: `1px solid ${C.border}` }}>
+              <button onClick={locateMe} className="h-10 px-4 rounded-xl flex items-center gap-2 shadow-lg text-sm font-semibold hover:brightness-95" style={{ background: "var(--paper)", color: C.soil, border: `1px solid ${C.border}` }}>
                 <LocateFixed size={16} />GPS
               </button>
               <button onClick={save} disabled={saving === "saving"} className="h-10 px-5 rounded-xl flex items-center gap-2 shadow-lg text-sm text-white font-semibold hover:brightness-95 disabled:opacity-70"
@@ -719,7 +719,7 @@ export default function FarmMap({ farmId, onCountsChange, openRequest, onSaved }
 
           {/* MEASURE panel */}
           {measuring && (
-            <div className="absolute z-[1001] bottom-3 left-1/2 -translate-x-1/2 w-[min(420px,calc(100%-1.5rem))] rounded-2xl shadow-xl p-3.5" style={{ background: "white", border: `1px solid ${C.border}` }}>
+            <div className="absolute z-[1001] bottom-3 left-1/2 -translate-x-1/2 w-[min(420px,calc(100%-1.5rem))] rounded-2xl shadow-xl p-3.5" style={{ background: "var(--paper)", border: `1px solid ${C.border}` }}>
               <div className="flex items-center justify-between gap-2 mb-1.5">
                 <div className="flex items-center gap-2"><Ruler size={16} style={{ color: C.soil }} /><span className="text-sm font-bold" style={{ color: C.soil }}>Measure distance</span></div>
                 <button onClick={() => setDistFt((v) => !v)} className="text-[11px] px-2 py-0.5 rounded-full font-semibold" style={{ color: C.soil, border: `1px solid ${C.border}` }}>{distFt ? "feet/mi" : "metres/km"}</button>
@@ -738,7 +738,7 @@ export default function FarmMap({ farmId, onCountsChange, openRequest, onSaved }
 
           {/* CALCULATOR panel */}
           {calcOpen && (
-            <div className="absolute z-[1001] bottom-3 right-3 w-[min(360px,calc(100%-1.5rem))] rounded-2xl shadow-xl p-3.5" style={{ background: "white", border: `1px solid ${C.border}` }}>
+            <div className="absolute z-[1001] bottom-3 right-3 w-[min(360px,calc(100%-1.5rem))] rounded-2xl shadow-xl p-3.5" style={{ background: "var(--paper)", border: `1px solid ${C.border}` }}>
               <div className="flex items-center justify-end mb-1">
                 <button onClick={() => setCalcOpen(false)} className="text-xs font-semibold" style={{ color: C.muted }}><X size={15} /></button>
               </div>
@@ -749,7 +749,7 @@ export default function FarmMap({ farmId, onCountsChange, openRequest, onSaved }
 
           {/* FIELD WALK panel — stand at each corner, tap Drop corner, walk to next */}
           {walking && (
-            <div className="absolute z-[1001] bottom-3 left-1/2 -translate-x-1/2 w-[min(440px,calc(100%-1.5rem))] rounded-2xl shadow-xl p-3.5" style={{ background: "white", border: `1px solid ${C.border}` }}>
+            <div className="absolute z-[1001] bottom-3 left-1/2 -translate-x-1/2 w-[min(440px,calc(100%-1.5rem))] rounded-2xl shadow-xl p-3.5" style={{ background: "var(--paper)", border: `1px solid ${C.border}` }}>
               <div className="flex items-center justify-between gap-2 mb-2">
                 <div className="flex items-center gap-2">
                   <Footprints size={16} style={{ color: C.soil }} />
@@ -806,7 +806,7 @@ export default function FarmMap({ farmId, onCountsChange, openRequest, onSaved }
       {nameModal.open && (
         <div className="absolute inset-0 z-[1002] flex items-center justify-center p-4" style={{ background: "rgba(58,46,38,0.45)" }}
           onKeyDown={(e) => { if (e.key === "Enter") confirmName(); if (e.key === "Escape") cancelName(); }}>
-          <div className="rounded-2xl shadow-xl w-full max-w-sm p-5" style={{ background: "white", border: `1px solid ${C.border}` }}>
+          <div className="rounded-2xl shadow-xl w-full max-w-sm p-5" style={{ background: "var(--paper)", border: `1px solid ${C.border}` }}>
             <div className="flex items-center gap-2 mb-1">
               <MapPin size={16} style={{ color: nameModal.kind === "BLOCK" ? C.amber : nameModal.kind === "FACILITY" ? C.soil : C.greenDk }} />
               <h3 className="text-base font-bold" style={{ color: C.soil }}>Name this {nameModal.kind.toLowerCase()}</h3>
@@ -815,13 +815,13 @@ export default function FarmMap({ farmId, onCountsChange, openRequest, onSaved }
             <input ref={nameInputRef} value={nameModal.value}
               onChange={(e) => setNameModal((m) => ({ ...m, value: e.target.value }))}
               placeholder={`${nameModal.kind.charAt(0) + nameModal.kind.slice(1).toLowerCase()} name`}
-              className="w-full px-3 py-2.5 rounded-lg text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-[#6AA84F]"
+              className="w-full px-3 py-2.5 rounded-lg text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--green)]"
               style={{ border: `1.5px solid ${C.border}`, background: C.cream, color: C.soil }} />
             {nameModal.kind === "FACILITY" && (
               <div className="mt-3">
                 <span className="text-[11px] block mb-1.5" style={{ color: C.muted }}>Facility type</span>
                 <select value={nameModal.facilityType} onChange={(e) => setNameModal((m) => ({ ...m, facilityType: e.target.value }))}
-                  className="w-full px-3 py-2 rounded-lg text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-[#6AA84F]"
+                  className="w-full px-3 py-2 rounded-lg text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--green)]"
                   style={{ border: `1.5px solid ${C.border}`, background: C.cream, color: C.soil }}>
                   <option value="">Choose a type…</option>
                   {FACILITY_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
@@ -856,10 +856,10 @@ const THEME_CSS = `
 }
 /* Bigger, easier-to-tap zoom controls */
 .tfos-map .leaflet-bar a {
-  color: #5C4033 !important; background: #FCFAF5 !important;
+  color: var(--soil) !important; background: #FCFAF5 !important;
   width: 42px !important; height: 42px !important; line-height: 42px !important; font-size: 22px !important;
 }
-.tfos-map .leaflet-bar a:hover { background: #F8F3E9 !important; }
+.tfos-map .leaflet-bar a:hover { background: var(--cream) !important; }
 /* Bigger Geoman draw toolbar + icons */
 .tfos-map .leaflet-pm-toolbar .leaflet-buttons-control-button {
   background-color: #FCFAF5 !important; box-shadow: 0 1px 2px rgba(58,46,38,.12) !important;
@@ -870,13 +870,13 @@ const THEME_CSS = `
 .tfos-map .leaflet-pm-toolbar .button-container.active .leaflet-buttons-control-button,
 .tfos-map .leaflet-pm-toolbar .leaflet-buttons-control-button:hover { background-color: #E9F2DD !important; }
 .tfos-map .leaflet-pm-actions-container .leaflet-pm-action {
-  background: #5C4033 !important; color: #F8F3E9 !important; border: none !important;
+  background: var(--soil) !important; color: var(--cream) !important; border: none !important;
   font-weight: 600 !important; padding: 4px 8px !important;
 }
 .tfos-map .leaflet-pm-actions-container .leaflet-pm-action:hover { background: #3A2E26 !important; }
-.tfos-map .leaflet-pm-actions-container .leaflet-pm-action.action-cancel { background: #D4442E !important; }
+.tfos-map .leaflet-pm-actions-container .leaflet-pm-action.action-cancel { background: var(--red) !important; }
 .tfos-map .leaflet-tooltip {
-  background: #F8F3E9 !important; border: 1px solid #E6DED0 !important; color: #3A2E26 !important;
+  background: var(--cream) !important; border: 1px solid #E6DED0 !important; color: #3A2E26 !important;
   font-weight: 600 !important; border-radius: 8px !important; box-shadow: 0 1px 3px rgba(58,46,38,.15) !important;
 }
 .tfos-map .leaflet-tooltip-top:before, .tfos-map .leaflet-tooltip-bottom:before,
@@ -884,7 +884,7 @@ const THEME_CSS = `
 .tfos-map .leaflet-control-attribution { background: rgba(248,243,233,.85) !important; color: #8A7863 !important; border-radius: 6px 0 0 0; }
 /* Walk-mode corner number badges */
 .tfos-map .leaflet-tooltip.tfos-vtx {
-  background: #3E7B1F !important; color: #fff !important; border: 2px solid #fff !important;
+  background: var(--green-dk) !important; color: #fff !important; border: 2px solid #fff !important;
   border-radius: 999px !important; font-weight: 700 !important; font-size: 11px !important;
   padding: 0 !important; width: 18px; height: 18px; line-height: 14px; text-align: center; box-shadow: none !important;
 }

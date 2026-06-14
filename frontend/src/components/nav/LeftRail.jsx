@@ -6,9 +6,9 @@ import { useLeftRail } from "../../context/LeftRailContext";
 import { useTaskCount } from "../../hooks/useTaskCount";
 
 const C = {
-  soil:     "#5C4033",
-  greenDk:  "#3E7B1F",
-  border:   "#E8E2D4",
+  soil:     "var(--soil)",
+  greenDk:  "var(--green-dk)",
+  border:   "var(--line)",
   activeBg: "rgba(106, 168, 79, 0.08)",
   hoverBg:  "rgba(92, 64, 51, 0.04)",
   hoverBg2: "rgba(92, 64, 51, 0.06)",
@@ -82,7 +82,7 @@ function RailItem({ item, onNavigate, badge, badgeOverdue }) {
       {badge > 0 && (
         <span style={{ minWidth: 18, height: 18, padding: "0 5px", borderRadius: 9, fontSize: 11, fontWeight: 700,
           display: "inline-flex", alignItems: "center", justifyContent: "center", color: "#fff",
-          background: badgeOverdue ? "#D4442E" : "#3E7B1F" }}>{badge > 99 ? "99+" : badge}</span>
+          background: badgeOverdue ? "var(--red)" : "var(--green-dk)" }}>{badge > 99 ? "99+" : badge}</span>
       )}
       {isPhase && <Lock size={12} style={{ opacity: 0.6 }} aria-label="Coming soon" />}
     </NavLink>
@@ -149,7 +149,7 @@ export default function LeftRail() {
           top: 56,
           bottom: 0,
           width,
-          background: "#FFFFFF",
+          background: "var(--paper)",
           borderRight: `1px solid ${C.border}`,
           padding: "12px 8px",
           zIndex: mobile ? 40 : 30,
@@ -163,7 +163,7 @@ export default function LeftRail() {
         >
           <span
             className="text-[13px] font-semibold uppercase tracking-wide"
-            style={{ color: "#8A7B6F", letterSpacing: "0.04em" }}
+            style={{ color: "var(--muted)", letterSpacing: "0.04em" }}
           >
             {pillar.label}
           </span>

@@ -16,7 +16,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import ThemedSelect from "../../components/inputs/ThemedSelect.jsx";
 
-const C = { soil: "#2C1A0E", green: "#3D8C40", cream: "#F5EFE0", gold: "#D4A017", border: "#E0D5C0", red: "#B91C1C" };
+const C = { soil: "#2C1A0E", green: "var(--green)", cream: "var(--cream)", gold: "var(--amber)", border: "var(--line)", red: "#B91C1C" };
 
 const GRADES = ["A", "B", "C"];
 const DESTINATIONS = ["NAYANS", "MARKET", "WASTE", "OTHER"];
@@ -243,7 +243,7 @@ export default function HarvestLog() {
           <div className="flex items-center gap-2">
             <button type="button" onClick={checkCompliance} disabled={checking}
                     className="px-3 py-2 rounded-lg text-sm font-semibold border"
-                    style={{ borderColor: C.green, color: C.green, background: "white" }}>
+                    style={{ borderColor: C.green, color: C.green, background: "var(--paper)" }}>
               {checking ? "Checking…" : "Check compliance"}
             </button>
             {compliance && (compliance.compliant

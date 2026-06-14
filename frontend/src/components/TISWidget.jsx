@@ -16,7 +16,7 @@ const GREETING = {
   timestamp: Date.now(),
 };
 
-const C = { green: "#3D8C40", soil: "#2C1A0E", cream: "#F5EFE0", border: "#E0D5C0" };
+const C = { green: "var(--green)", soil: "#2C1A0E", cream: "var(--cream)", border: "var(--line)" };
 
 function loadState() {
   try {
@@ -164,8 +164,8 @@ export default function TISWidget() {
               className="max-w-[85%] px-3 py-2 rounded-2xl text-sm whitespace-pre-wrap break-words"
               style={
                 m.role === "user"
-                  ? { background: C.green, color: "white", borderBottomRightRadius: 4 }
-                  : { background: "white", color: C.soil, border: `1px solid ${C.border}`, borderBottomLeftRadius: 4 }
+                  ? { background: C.green, color: "#fff", borderBottomRightRadius: 4 }
+                  : { background: "var(--paper)", color: C.soil, border: `1px solid ${C.border}`, borderBottomLeftRadius: 4 }
               }
             >
               {m.content}
@@ -179,7 +179,7 @@ export default function TISWidget() {
         ))}
         {loading && (
           <div className="flex justify-start">
-            <div className="px-3 py-2 rounded-2xl text-sm italic text-gray-500" style={{ background: "white", border: `1px solid ${C.border}` }}>
+            <div className="px-3 py-2 rounded-2xl text-sm italic text-gray-500" style={{ background: "var(--paper)", border: `1px solid ${C.border}` }}>
               Tei is thinking…
             </div>
           </div>
@@ -187,7 +187,7 @@ export default function TISWidget() {
       </div>
 
       {/* Input */}
-      <div className="flex items-end gap-2 p-3" style={{ borderTop: `1px solid ${C.border}`, background: "white" }}>
+      <div className="flex items-end gap-2 p-3" style={{ borderTop: `1px solid ${C.border}`, background: "var(--paper)" }}>
         <textarea
           ref={inputRef}
           rows={1}

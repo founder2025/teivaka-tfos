@@ -35,11 +35,11 @@ const ACRES_PER_HECTARE = 2.47105;
 
 const C = {
   soil:    "#2C1A0E",
-  green:   "#3D8C40",
+  green:   "var(--green)",
   greenDk: "#2C6A2E",
-  red:     "#D4442E",
-  cream:   "#F5EFE0",
-  border:  "#E0D5C0",
+  red:     "var(--red)",
+  cream:   "var(--cream)",
+  border:  "var(--line)",
   muted:   "#8A7863",
 };
 
@@ -215,7 +215,7 @@ export default function VoiceInput({
             onClick={tryAgain}
             className="flex flex-col items-center gap-1 px-3 py-3 rounded-xl"
             style={{
-              background: "white",
+              background: "var(--paper)",
               border: `1px solid ${C.border}`,
               color: C.soil,
             }}
@@ -228,7 +228,7 @@ export default function VoiceInput({
             onClick={() => switchToTyping(parseValue ? `${parsed}` : heard)}
             className="flex flex-col items-center gap-1 px-3 py-3 rounded-xl"
             style={{
-              background: "white",
+              background: "var(--paper)",
               border: `1px solid ${C.border}`,
               color: C.soil,
             }}
@@ -296,7 +296,7 @@ export default function VoiceInput({
           autoFocus
           className="w-full px-4 py-3 rounded-xl text-base focus:outline-none"
           style={{
-            background: "white",
+            background: "var(--paper)",
             border: `1px solid ${C.border}`,
             color: C.soil,
           }}
@@ -316,7 +316,7 @@ export default function VoiceInput({
             onClick={skip}
             className="px-4 py-3 rounded-xl"
             style={{
-              background: "white",
+              background: "var(--paper)",
               border: `1px solid ${C.border}`,
               color: C.soil,
             }}
@@ -361,7 +361,7 @@ export default function VoiceInput({
             sttSupported ? "" : "col-span-2"
           }`}
           style={{
-            background: "white",
+            background: "var(--paper)",
             border: `1px solid ${C.border}`,
             color: C.soil,
           }}
@@ -374,7 +374,7 @@ export default function VoiceInput({
           onClick={skip}
           className="flex flex-col items-center gap-1 px-3 py-4 rounded-xl"
           style={{
-            background: "white",
+            background: "var(--paper)",
             border: `1px solid ${C.border}`,
             color: C.soil,
           }}

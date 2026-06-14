@@ -77,7 +77,7 @@ export default function WeatherStrip() {
     <button onClick={() => setTab(id)} style={{
       fontSize: 11.5, padding: "4px 12px", borderRadius: 999, cursor: "pointer", fontWeight: 600,
       border: tab === id ? "1px solid var(--green)" : "1px solid var(--line)",
-      background: tab === id ? "rgba(106,168,79,0.12)" : "#fff",
+      background: tab === id ? "rgba(106,168,79,0.12)" : "var(--paper)",
       color: tab === id ? "var(--green-dk)" : "var(--muted)",
     }}>{label}</button>
   );

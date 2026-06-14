@@ -8,7 +8,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { X } from "lucide-react";
 
-const C = { soil: "#5C4033", green: "#6AA84F", line: "#E8E2D4", muted: "#8A7B6F" };
+const C = { soil: "var(--soil)", green: "var(--green)", line: "var(--line)", muted: "var(--muted)" };
 const BOX = 280;   // on-screen crop viewport (square)
 const OUT = 512;   // exported avatar resolution
 
@@ -85,7 +85,7 @@ export default function AvatarCropper({ file, onCancel, onCropped }) {
 
   return (
     <div onMouseUp={onUp} onMouseLeave={onUp} style={{ position: "fixed", inset: 0, zIndex: 4000, background: "rgba(40,30,20,.55)", display: "flex", justifyContent: "center", alignItems: "center", padding: 16 }}>
-      <div style={{ width: "min(360px, 100%)", background: "#fff", borderRadius: 14, overflow: "hidden" }}>
+      <div style={{ width: "min(360px, 100%)", background: "var(--paper)", borderRadius: 14, overflow: "hidden" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", borderBottom: `1px solid ${C.line}` }}>
           <strong style={{ color: C.soil }}>Position your photo</strong>
           <button onClick={onCancel} style={{ border: "none", background: "transparent", cursor: "pointer", color: C.muted }}><X size={18} /></button>
@@ -103,7 +103,7 @@ export default function AvatarCropper({ file, onCancel, onCropped }) {
           <div style={{ fontSize: 11.5, color: C.muted }}>Drag to move · slide to zoom</div>
         </div>
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, padding: "12px 16px", borderTop: `1px solid ${C.line}` }}>
-          <button onClick={onCancel} disabled={busy} style={{ border: `1px solid ${C.line}`, background: "#fff", borderRadius: 8, padding: "9px 14px", cursor: "pointer", minHeight: 44 }}>Cancel</button>
+          <button onClick={onCancel} disabled={busy} style={{ border: `1px solid ${C.line}`, background: "var(--paper)", borderRadius: 8, padding: "9px 14px", cursor: "pointer", minHeight: 44 }}>Cancel</button>
           <button onClick={apply} disabled={busy || !img} style={{ border: "none", background: C.green, color: "#fff", borderRadius: 8, padding: "9px 18px", cursor: "pointer", fontWeight: 600, minHeight: 44 }}>{busy ? "…" : "Use photo"}</button>
         </div>
       </div>

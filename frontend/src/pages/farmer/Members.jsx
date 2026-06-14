@@ -3,7 +3,7 @@
  * Full build: searchable farmer directory, profiles, crop filters, region filters.
  */
 import FarmerLayout from "../../components/farmer/FarmerLayout";
-const C = { soil: "#2C1A0E", green: "#3D8C40", cream: "#F5EFE0", border: "#E0D5C0", gold: "#D4A017" };
+const C = { soil: "#2C1A0E", green: "var(--green)", cream: "var(--cream)", border: "var(--line)", gold: "var(--amber)" };
 export default function Members() {
   return (
     <FarmerLayout>

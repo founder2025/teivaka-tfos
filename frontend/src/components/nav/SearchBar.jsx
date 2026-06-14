@@ -2,9 +2,9 @@ import { useEffect, useRef, useState } from "react";
 import { Search } from "lucide-react";
 
 const C = {
-  soil:   "#5C4033",
+  soil:   "var(--soil)",
   border: "#D4CFC3",
-  cream:  "#F8F3E9",
+  cream:  "var(--cream)",
 };
 
 function isMac() {
@@ -39,7 +39,7 @@ export default function SearchBar() {
         className="relative flex items-center"
         style={{
           height: 36,
-          background: "#FFFFFF",
+          background: "var(--paper)",
           border: `1px solid ${C.border}`,
           borderRadius: 18,
         }}

@@ -109,7 +109,7 @@ export default function ExportData() {
               }}>
               <span style={{
                 position: "absolute", top: 3, left: consent.aggregate_consent ? 23 : 3, width: 20, height: 20,
-                borderRadius: "50%", background: "#fff", boxShadow: "0 1px 2px rgba(0,0,0,.25)", transition: "left .15s",
+                borderRadius: "50%", background: "var(--paper)", boxShadow: "0 1px 2px rgba(0,0,0,.25)", transition: "left .15s",
               }} />
             </button>
           </div>

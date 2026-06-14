@@ -1,6 +1,6 @@
 import { useNavigate } from "react-router-dom";
 import { ArrowRight, AlertTriangle, ChevronRight } from "lucide-react";
-const C={paper:"#FFFFFF",green:"#6AA84F",greenDk:"#3E7B1F",soil:"#5C4033",amber:"#BF9000",red:"#A32D2D",line:"#E2D8C3",muted:"#8A7B6F",cream:"#F8F3E9"};
+const C={paper:"var(--paper)",green:"var(--green)",greenDk:"var(--green-dk)",soil:"var(--soil)",amber:"var(--amber)",red:"var(--red)",line:"var(--line)",muted:"var(--muted)",cream:"var(--cream)"};
 const D={supply:90,demand:64,matched:71,confirmed:[{buyer:"Nayans",crop:"Eggplant",kg:40,when:"Wed"},{buyer:"Market",crop:"Tomato",kg:24,when:"Fri"}],unmatched:[{kg:26,crop:"Tomato",date:"Sat"}]};
 export default function DemandPipeline(){const nav=useNavigate();return(
 <section className="rounded-2xl px-4 py-4" style={{background:C.paper,border:`1px solid ${C.line}`}}>

@@ -20,8 +20,8 @@ import FarmSelector from "../../components/farm/FarmSelector";
 import Modal from "../../components/ui/Modal.jsx";
 import { taskTarget } from "../../utils/taskBridge";
 
-const C = { soil: "#5C4033", cream: "#F8F3E9", border: "#E6DED0", muted: "#8A7863", green: "#6AA84F", greenDk: "#3E7B1F", amber: "#BF9000", red: "#D4442E", paper: "#FCFAF5", greenTint: "#E9F2DD" };
-const FOCUS = "focus:outline-none focus-visible:ring-2 focus-visible:ring-[#6AA84F]";
+const C = { soil: "var(--soil)", cream: "var(--cream)", border: "#E6DED0", muted: "#8A7863", green: "var(--green)", greenDk: "var(--green-dk)", amber: "var(--amber)", red: "var(--red)", paper: "#FCFAF5", greenTint: "#E9F2DD" };
+const FOCUS = "focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--green)]";
 
 function authHeaders() { const t = localStorage.getItem("tfos_access_token"); return t ? { "Content-Type": "application/json", Authorization: `Bearer ${t}` } : { "Content-Type": "application/json" }; }
 function emitToast(m) { window.dispatchEvent(new CustomEvent("tfos:toast", { detail: { message: m } })); }
@@ -32,8 +32,8 @@ const dayN = (planting) => { if (!planting) return null; const d = Math.floor((D
 // task_rank -> severity
 function sev(rank) {
   if (rank == null) return { k: "NORMAL", c: C.muted, bg: C.cream };
-  if (rank < 100) return { k: "CRITICAL", c: "#fff", bg: C.red };
-  if (rank < 300) return { k: "HIGH", c: "#fff", bg: C.amber };
+  if (rank < 100) return { k: "CRITICAL", c: "var(--paper)", bg: C.red };
+  if (rank < 300) return { k: "HIGH", c: "var(--paper)", bg: C.amber };
   if (rank < 600) return { k: "MED", c: C.greenDk, bg: C.greenTint };
   return { k: "NORMAL", c: C.muted, bg: C.cream };
 }
@@ -184,7 +184,7 @@ function Board({ farmId, navigate }) {
   }
 
   const Pill = ({ active, onClick, children }) => (
-    <button onClick={onClick} className={`text-xs px-3 py-1.5 rounded-full font-semibold shrink-0 whitespace-nowrap ${FOCUS}`} style={active ? { background: C.greenDk, color: "white" } : { color: C.soil, background: "white", border: `1px solid ${C.border}` }}>{children}</button>
+    <button onClick={onClick} className={`text-xs px-3 py-1.5 rounded-full font-semibold shrink-0 whitespace-nowrap ${FOCUS}`} style={active ? { background: C.greenDk, color: "#fff" } : { color: C.soil, background: "var(--paper)", border: `1px solid ${C.border}` }}>{children}</button>
   );
 
   return (
@@ -192,7 +192,7 @@ function Board({ farmId, navigate }) {
       {/* summary strip */}
       <div className="grid gap-2 grid-cols-2 sm:grid-cols-4">
         {[["To do today", stats.today, "due in the next day", C.red], ["This week", stats.week, "next 7 days", C.greenDk], ["Urgent", stats.urgent, "do these first", C.amber], ["Done", stats.done, "this session", C.green]].map(([l, v, s, col]) => (
-          <div key={l} className="rounded-xl border p-3" style={{ borderColor: C.border, background: "white" }}>
+          <div key={l} className="rounded-xl border p-3" style={{ borderColor: C.border, background: "var(--paper)" }}>
             <div className="text-[10px] uppercase tracking-wide" style={{ color: C.muted }}>{l}</div>
             <div className="text-2xl font-bold leading-tight" style={{ color: col }}>{v}</div>
             <div className="text-[10px]" style={{ color: C.muted }}>{s}</div>

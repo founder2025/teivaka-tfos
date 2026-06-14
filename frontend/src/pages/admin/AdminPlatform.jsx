@@ -9,8 +9,8 @@ import { Link } from "react-router-dom";
 import { Shield, Power } from "lucide-react";
 import { getJSON, send } from "../../utils/api";
 
-const C = { soil: "#5C4033", green: "#6AA84F", greenDk: "#3E7B1F", line: "#E6E1D6", muted: "#8A8678", cream: "#F8F3E9", red: "#A32D2D" };
-const card = { background: "#fff", border: `1px solid ${C.line}`, borderRadius: 12, padding: 18, marginBottom: 16 };
+const C = { soil: "var(--soil)", green: "var(--green)", greenDk: "var(--green-dk)", line: "var(--line)", muted: "var(--muted)", cream: "var(--cream)", red: "var(--red)" };
+const card = { background: "var(--paper)", border: `1px solid ${C.line}`, borderRadius: 12, padding: 18, marginBottom: 16 };
 const toast = (m, t) => { try { window.dispatchEvent(new CustomEvent("tfos:toast", { detail: { message: m, type: t } })); } catch { /* noop */ } };
 
 export default function AdminPlatform() {
@@ -52,7 +52,7 @@ export default function AdminPlatform() {
               </div>
               <button onClick={() => flip(f)}
                 style={{ width: 50, height: 26, borderRadius: 13, border: "none", cursor: "pointer", position: "relative", background: f.enabled ? C.green : C.line }}>
-                <span style={{ position: "absolute", top: 3, left: f.enabled ? 27 : 3, width: 20, height: 20, borderRadius: "50%", background: "#fff", transition: "left .15s" }} />
+                <span style={{ position: "absolute", top: 3, left: f.enabled ? 27 : 3, width: 20, height: 20, borderRadius: "50%", background: "var(--paper)", transition: "left .15s" }} />
               </button>
             </div>
           ))}
@@ -63,7 +63,7 @@ export default function AdminPlatform() {
 
       <div style={card}>
         <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 10 }}>
-          <Shield size={16} style={{ color: "#BF9000" }} />
+          <Shield size={16} style={{ color: "var(--amber)" }} />
           <strong style={{ color: C.soil, fontSize: 15 }}>Admin access — trusted figures</strong>
         </div>
         {admins == null ? <div style={{ color: C.muted }}>Loading…</div>
@@ -74,7 +74,7 @@ export default function AdminPlatform() {
                 <span style={{ fontSize: 12, color: C.muted }}> · {a.email} · {a.role}</span>
               </div>
               {a.role === "ADMIN" && (
-                <button onClick={() => grant(false, a.email)} style={{ border: `1px solid ${C.line}`, background: "#fff", color: C.red, borderRadius: 8, padding: "6px 12px", fontSize: 12, cursor: "pointer" }}>Revoke</button>
+                <button onClick={() => grant(false, a.email)} style={{ border: `1px solid ${C.line}`, background: "var(--paper)", color: C.red, borderRadius: 8, padding: "6px 12px", fontSize: 12, cursor: "pointer" }}>Revoke</button>
               )}
             </div>
           ))}
@@ -91,7 +91,7 @@ export default function AdminPlatform() {
         <strong style={{ color: C.soil, fontSize: 15 }}>All settings surfaces</strong>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
           {[["/admin/classroom", "Classroom settings"], ["/me/affiliate/console", "Affiliate program"], ["/admin/requests", "Tier requests"], ["/admin/settings", "Platform settings"], ["/admin/task-engine", "Task engine"]].map(([to, label]) => (
-            <Link key={to} to={to} style={{ border: `1px solid ${C.line}`, background: "#fff", color: C.soil, borderRadius: 8, padding: "8px 14px", fontSize: 12.5, fontWeight: 600, textDecoration: "none" }}>{label}</Link>
+            <Link key={to} to={to} style={{ border: `1px solid ${C.line}`, background: "var(--paper)", color: C.soil, borderRadius: 8, padding: "8px 14px", fontSize: 12.5, fontWeight: 600, textDecoration: "none" }}>{label}</Link>
           ))}
         </div>
       </div>

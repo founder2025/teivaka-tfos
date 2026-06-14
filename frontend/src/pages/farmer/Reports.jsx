@@ -26,8 +26,8 @@ import FarmSelector from "../../components/farm/FarmSelector";
 import ModeDropdown from "../../components/farm/ModeDropdown";
 
 const C = {
-  soil: "#5C4033", cream: "#F8F3E9", border: "#E6DED0", muted: "#8A7863",
-  green: "#6AA84F", greenDk: "#3E7B1F", amber: "#BF9000", red: "#D4442E", greenTint: "#E9F2DD",
+  soil: "var(--soil)", cream: "var(--cream)", border: "#E6DED0", muted: "#8A7863",
+  green: "var(--green)", greenDk: "var(--green-dk)", amber: "var(--amber)", red: "var(--red)", greenTint: "#E9F2DD",
 };
 
 const TABS = [
@@ -251,7 +251,7 @@ function BankDocCard({ farmId }) {
   }
 
   return (
-    <div className="rounded-xl border p-4" style={{ background: "white", borderColor: C.border }}>
+    <div className="rounded-xl border p-4" style={{ background: "var(--paper)", borderColor: C.border }}>
       <div className="flex items-center justify-between gap-2 flex-wrap" style={{ borderBottom: `2px solid ${C.soil}`, paddingBottom: 10 }}>
         <div><div className="text-base font-extrabold" style={{ color: C.soil }}>{farm.name} — Farm Evidence</div><div className="text-xs" style={{ color: C.muted }}>Whole farm · crops + animals · built from logged records</div></div>
         <span className="text-[11px] inline-flex items-center gap-1 rounded-full px-2.5 py-1" style={{ color: C.greenDk, border: `1px solid ${C.green}` }}><CheckCircle2 size={11} />Verifiable</span>
@@ -474,7 +474,7 @@ function ReportDocument({ typeId, farmId, onBack }) {
   const issued = new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
   const ABtn = ({ onClick, children, primary }) => (
     <button onClick={onClick} className="text-sm px-3 py-2 rounded-lg shrink-0 inline-flex items-center gap-1.5"
-      style={primary ? { background: C.greenDk, color: "white" } : { color: C.soil, border: `1px solid ${C.border}` }}>{children}</button>
+      style={primary ? { background: C.greenDk, color: "#fff" } : { color: C.soil, border: `1px solid ${C.border}` }}>{children}</button>
   );
   return (
     <div className="space-y-4">
@@ -497,7 +497,7 @@ function ReportDocument({ typeId, farmId, onBack }) {
         </div>
       </div>
       {/* document paper */}
-      <div className="mx-auto w-full max-w-3xl rounded-2xl border p-5 sm:p-7" style={{ background: "white", borderColor: C.border }}>
+      <div className="mx-auto w-full max-w-3xl rounded-2xl border p-5 sm:p-7" style={{ background: "var(--paper)", borderColor: C.border }}>
         <DocHeader title={kind.name} docId={docId} issued={issued} farm={farm} />
         <div className="mt-2">
           <ReportDocBody typeId={typeId} farmId={farmId} />
@@ -512,7 +512,7 @@ function ReportDocument({ typeId, farmId, onBack }) {
 function ReportRow({ r, onOpen }) {
   const kind = REPORT_KINDS[r.typeId] || { name: r.typeId, Icon: FileText };
   return (
-    <div className="flex items-center gap-3 rounded-xl border p-3 cursor-pointer" style={{ background: "white", borderColor: C.border }} onClick={() => onOpen(r.typeId)}>
+    <div className="flex items-center gap-3 rounded-xl border p-3 cursor-pointer" style={{ background: "var(--paper)", borderColor: C.border }} onClick={() => onOpen(r.typeId)}>
       <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={{ background: C.cream, color: C.greenDk }}><kind.Icon size={16} /></div>
       <div className="flex-1 min-w-0"><div className="font-medium text-sm" style={{ color: C.soil }}>{kind.name}</div><div className="text-xs truncate" style={{ color: C.muted }}>{r.what}</div></div>
       <button onClick={(e) => { e.stopPropagation(); onOpen(r.typeId); }} className="text-xs px-3 py-1.5 rounded-lg shrink-0" style={{ color: C.greenDk, border: `1px solid ${C.border}` }}>Open</button>
@@ -521,7 +521,7 @@ function ReportRow({ r, onOpen }) {
 }
 function Tile({ label, value, sub, onClick, color }) {
   return (
-    <div onClick={onClick} className="rounded-xl border p-3" style={{ background: "white", borderColor: C.border, cursor: onClick ? "pointer" : "default" }}>
+    <div onClick={onClick} className="rounded-xl border p-3" style={{ background: "var(--paper)", borderColor: C.border, cursor: onClick ? "pointer" : "default" }}>
       <div className="text-[10px] uppercase tracking-wide" style={{ color: C.muted }}>{label}</div>
       <div className="text-lg font-bold" style={{ color: color || C.soil }}>{value}</div>
       {sub && <div className="text-[11px]" style={{ color: C.muted }}>{sub}</div>}
@@ -541,7 +541,7 @@ function LibraryTab({ farmId, setTab, onOpen }) {
         <Tile label="Net so far" value={net == null ? "—" : fjd(net)} sub="crops + animals" onClick={() => navigate("/farm/cash")} color={Number(net) < 0 ? C.red : C.greenDk} />
         <Tile label="Bank readiness score" value="Building" sub="needs a season of records" color={C.amber} />
       </div>
-      <div className="rounded-xl border-2 p-4 flex items-center gap-3 cursor-pointer" style={{ background: "white", borderColor: C.green }} onClick={() => onOpen("bank-evidence")}>
+      <div className="rounded-xl border-2 p-4 flex items-center gap-3 cursor-pointer" style={{ background: "var(--paper)", borderColor: C.green }} onClick={() => onOpen("bank-evidence")}>
         <div className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0" style={{ background: C.greenTint, color: C.greenDk }}><Award size={20} /></div>
         <div className="flex-1 min-w-0"><div className="font-semibold text-sm" style={{ color: C.soil }}>Bank Evidence</div><div className="text-xs" style={{ color: C.muted }}>The whole-farm summary a lender reads — identity, money, standing, verification.</div></div>
         <button onClick={(e) => { e.stopPropagation(); onOpen("bank-evidence"); }} className="text-sm px-4 py-2 rounded-lg text-white shrink-0" style={{ background: C.greenDk }}>Open</button>
@@ -564,7 +564,7 @@ function BankEvidenceTab({ farmId }) {
     <div className="space-y-3">
       <ChainBanner />
       <BankDocCard farmId={farmId} />
-      <div className="rounded-xl border p-4 flex items-start gap-3" style={{ background: "white", borderColor: C.border, borderStyle: "dashed" }}>
+      <div className="rounded-xl border p-4 flex items-start gap-3" style={{ background: "var(--paper)", borderColor: C.border, borderStyle: "dashed" }}>
         <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0" style={{ background: C.greenTint, color: C.greenDk }}><Award size={16} /></div>
         <div>
           <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: C.cream, color: C.amber }}>building baseline</span>
@@ -572,7 +572,7 @@ function BankEvidenceTab({ farmId }) {
           <div className="text-xs mt-1" style={{ color: C.muted }}>A credit-style score that tells a bank how reliable your records are. It builds from a season of verified harvests, sales and compliance — TFOS will not show a score until it is earned from your real records, because a bank can tell the difference.</div>
         </div>
       </div>
-      <div className="rounded-xl border p-3" style={{ background: "white", borderColor: C.border }}>
+      <div className="rounded-xl border p-3" style={{ background: "var(--paper)", borderColor: C.border }}>
         <div className="text-sm font-semibold mb-2" style={{ color: C.soil }}>Send this report</div>
         <div className="flex gap-2 flex-wrap">
           {[[Phone, "WhatsApp to Operator"], [FileText, "Email to banker"], [QrCode, "QR for a buyer"]].map(([Ic, t]) => (
@@ -589,7 +589,7 @@ function NetWorthTab() {
   return (
     <div className="space-y-3">
       <ChainBanner />
-      <div className="rounded-xl border p-4" style={{ background: "white", borderColor: C.border }}>
+      <div className="rounded-xl border p-4" style={{ background: "var(--paper)", borderColor: C.border }}>
         <div className="text-sm font-semibold" style={{ color: C.soil }}>What you are worth</div>
         <div className="text-xs mb-3" style={{ color: C.muted }}>value held across crops + animals</div>
         <KV k="Total worth" v="—" strong />
@@ -604,7 +604,7 @@ function DispatchLogTab() {
   return (
     <div className="space-y-3">
       <ChainBanner />
-      <div className="rounded-xl border p-4" style={{ background: "white", borderColor: C.border }}>
+      <div className="rounded-xl border p-4" style={{ background: "var(--paper)", borderColor: C.border }}>
         <div className="text-sm font-semibold" style={{ color: C.soil }}>Dispatch log</div>
         <div className="text-xs mb-3" style={{ color: C.muted }}>what is recorded, and what has been sent</div>
         <div className="overflow-x-auto">
@@ -627,13 +627,13 @@ function RecipientsTab() {
   ];
   return (
     <div className="space-y-3">
-      <div className="rounded-xl border p-4" style={{ background: "white", borderColor: C.border }}>
+      <div className="rounded-xl border p-4" style={{ background: "var(--paper)", borderColor: C.border }}>
         <div className="text-sm font-semibold" style={{ color: C.soil }}>Who can receive your reports</div>
         <div className="text-xs mb-3" style={{ color: C.muted }}>you choose, every time</div>
         <div className="space-y-2">
           {rows.map((r) => (
             <div key={r.name} className="flex items-center gap-3 rounded-xl p-3" style={{ background: C.cream }}>
-              <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={{ background: "white", color: C.greenDk, border: `1px solid ${C.border}` }}><r.Icon size={16} /></div>
+              <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={{ background: "var(--paper)", color: C.greenDk, border: `1px solid ${C.border}` }}><r.Icon size={16} /></div>
               <div className="min-w-0"><div className="font-medium text-sm" style={{ color: C.soil }}>{r.name}</div><div className="text-xs" style={{ color: C.muted }}>{r.what}</div></div>
             </div>
           ))}
@@ -648,7 +648,7 @@ function RecipientsTab() {
 function ScheduleTab({ setTab }) {
   return (
     <div className="space-y-3">
-      <div className="rounded-xl border p-4 flex items-center gap-3" style={{ background: "white", borderColor: C.border, borderStyle: "dashed" }}>
+      <div className="rounded-xl border p-4 flex items-center gap-3" style={{ background: "var(--paper)", borderColor: C.border, borderStyle: "dashed" }}>
         <div className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0" style={{ background: C.cream, color: C.amber }}><Calendar size={20} /></div>
         <div className="flex-1 min-w-0"><div className="font-semibold text-sm" style={{ color: C.soil }}>Automatic monthly reports</div><div className="text-xs" style={{ color: C.muted }}>building baseline — have your Bank Evidence report made and sent on the first of every month. This turns on with the live system; for now make and send any report yourself from the Library.</div></div>
       </div>

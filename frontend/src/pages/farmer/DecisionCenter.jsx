@@ -23,8 +23,8 @@ import FarmSelector from "../../components/farm/FarmSelector";
 import ModeDropdown from "../../components/farm/ModeDropdown";
 
 const C = {
-  soil: "#5C4033", cream: "#F8F3E9", border: "#E6DED0", muted: "#8A7863", ink: "#3A2E26",
-  green: "#6AA84F", greenDk: "#3E7B1F", amber: "#BF9000", red: "#D4442E", greenTint: "#E9F2DD",
+  soil: "var(--soil)", cream: "var(--cream)", border: "#E6DED0", muted: "#8A7863", ink: "#3A2E26",
+  green: "var(--green)", greenDk: "var(--green-dk)", amber: "var(--amber)", red: "var(--red)", greenTint: "#E9F2DD",
 };
 
 function authHeaders() {
@@ -84,7 +84,7 @@ function Head({ icon: Icon, title, link, onLink }) {
 }
 function Tile({ label, value, sub, color, onClick }) {
   return (
-    <div onClick={onClick} className="rounded-xl border p-3 min-w-0" style={{ background: "white", borderColor: C.border, cursor: onClick ? "pointer" : "default" }}>
+    <div onClick={onClick} className="rounded-xl border p-3 min-w-0" style={{ background: "var(--paper)", borderColor: C.border, cursor: onClick ? "pointer" : "default" }}>
       <div className="text-[10px] uppercase tracking-wide truncate" style={{ color: C.muted }}>{label}</div>
       <div className="text-lg font-bold truncate" style={{ color: color || C.soil }}>{value}</div>
       {sub && <div className="text-[11px] truncate" style={{ color: C.muted }}>{sub}</div>}
@@ -93,7 +93,7 @@ function Tile({ label, value, sub, color, onClick }) {
 }
 function MiniCard({ icon: Icon, title, badge, badgeColor, desc, onClick }) {
   return (
-    <div onClick={onClick} className="rounded-xl border p-3 mb-2.5" style={{ background: "white", borderColor: C.border, cursor: onClick ? "pointer" : "default" }}>
+    <div onClick={onClick} className="rounded-xl border p-3 mb-2.5" style={{ background: "var(--paper)", borderColor: C.border, cursor: onClick ? "pointer" : "default" }}>
       <div className="flex items-center justify-between gap-2">
         <span className="flex items-center gap-2 text-sm font-semibold" style={{ color: C.soil }}><Icon size={15} style={{ color: C.green }} />{title}</span>
         <span className="text-[11px] font-semibold shrink-0" style={{ color: badgeColor || C.muted }}>{badge}</span>
@@ -296,18 +296,18 @@ function DecisionInner() {
         <Head icon={Sparkles} title="AI advisor" />
         <div className="text-xs px-4" style={{ color: C.muted }}>What to do next, and what you are ready for</div>
         <div className="p-4 pt-2 space-y-2.5">
-          <div className="rounded-xl border p-3" style={{ background: "white", borderColor: C.border }}>
+          <div className="rounded-xl border p-3" style={{ background: "var(--paper)", borderColor: C.border }}>
             <div className="text-sm font-semibold mb-1.5" style={{ color: C.soil }}>Recommended actions</div>
             {acts.map((a, i) => <div key={i} className="text-sm py-0.5" style={{ color: C.soil }}>• {a}</div>)}
           </div>
-          <div className="rounded-xl border p-3" style={{ background: "white", borderColor: C.border }}>
+          <div className="rounded-xl border p-3" style={{ background: "var(--paper)", borderColor: C.border }}>
             <div className="flex items-center justify-between">
               <span className="text-sm font-semibold" style={{ color: C.soil }}>Expansion readiness</span>
               <span className="text-[11px] font-semibold" style={{ color: ready ? C.greenDk : C.muted }}>{ready ? "Looking ready" : "Building"}</span>
             </div>
             <div className="text-xs mt-1" style={{ color: C.muted }}>{ready ? `Your farm is standing strong and net is positive — a good base to consider growing ${strongest ? strongest.production_name : "your strongest business"}.` : "Expansion readiness builds as your standing and cash position strengthen over a season."}</div>
           </div>
-          <div className="rounded-xl border p-3" style={{ background: "white", borderColor: C.border }}>
+          <div className="rounded-xl border p-3" style={{ background: "var(--paper)", borderColor: C.border }}>
             <div className="text-sm font-semibold mb-0.5" style={{ color: C.soil }}>Enterprise health rankings</div>
             <div className="text-xs" style={{ color: C.muted }}>Every business scored and ranked above, strongest first.</div>
           </div>

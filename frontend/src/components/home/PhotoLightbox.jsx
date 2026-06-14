@@ -84,7 +84,7 @@ export default function PhotoLightbox({ post, startIndex = 0, onClose }) {
           const n = cur.counts[r.key] || 0;
           const mine = cur.mine === r.key;
           return (
-            <button key={r.key} onClick={() => react(r.key)} style={{ display: "inline-flex", alignItems: "center", gap: 5, minHeight: 40, padding: "7px 12px", borderRadius: 999, cursor: "pointer", fontSize: 12.5, border: mine ? "1px solid var(--green, #6AA84F)" : "1px solid rgba(255,255,255,0.3)", background: mine ? "rgba(106,168,79,0.25)" : "rgba(255,255,255,0.08)", color: "#fff" }}>
+            <button key={r.key} onClick={() => react(r.key)} style={{ display: "inline-flex", alignItems: "center", gap: 5, minHeight: 40, padding: "7px 12px", borderRadius: 999, cursor: "pointer", fontSize: 12.5, border: mine ? "1px solid var(--green, var(--green))" : "1px solid rgba(255,255,255,0.3)", background: mine ? "rgba(106,168,79,0.25)" : "rgba(255,255,255,0.08)", color: "#fff" }}>
               <r.Icon size={14} />{r.label}{n > 0 ? ` · ${n}` : ""}
             </button>
           );

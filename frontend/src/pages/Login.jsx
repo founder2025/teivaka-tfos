@@ -16,10 +16,10 @@ import { setStoredTokens, setOnboardingComplete, getOnboardingComplete } from ".
 
 const C = {
   soil:   "#2C1A0E",
-  green:  "#3D8C40",
-  cream:  "#F5EFE0",
-  gold:   "#D4A017",
-  border: "#E0D5C0",
+  green:  "var(--green)",
+  cream:  "var(--cream)",
+  gold:   "var(--amber)",
+  border: "var(--line)",
 };
 
 function EyeIcon({ open }) {

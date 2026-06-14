@@ -23,10 +23,10 @@ import FarmSelector from "../../components/farm/FarmSelector";
 import ModeDropdown from "../../components/farm/ModeDropdown";
 
 const C = {
-  soil: "#5C4033", cream: "#F8F3E9", border: "#E6DED0", muted: "#8A7863", ink: "#3A2E26",
-  green: "#6AA84F", greenDk: "#3E7B1F", amber: "#BF9000", red: "#D4442E", greenTint: "#E9F2DD", paper: "#FCFAF5",
+  soil: "var(--soil)", cream: "var(--cream)", border: "#E6DED0", muted: "#8A7863", ink: "#3A2E26",
+  green: "var(--green)", greenDk: "var(--green-dk)", amber: "var(--amber)", red: "var(--red)", greenTint: "#E9F2DD", paper: "#FCFAF5",
 };
-const FOCUS = "focus:outline-none focus-visible:ring-2 focus-visible:ring-[#6AA84F] focus-visible:ring-offset-1 transition";
+const FOCUS = "focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--green)] focus-visible:ring-offset-1 transition";
 const PAGE = 100;
 
 const CHIPS = [
@@ -191,22 +191,22 @@ function printHistoryBook(rows, farmId, from, to) {
   const rangeTxt = from || to ? `${from || "start"} → ${to || todayStr()}` : "All time";
   const issued = new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
   const bodyHtml = days.map((k) => `
-    <h3 style="margin:18px 0 4px;color:#5C4033;font-size:13px">${esc(dayLabel(k))}</h3>
+    <h3 style="margin:18px 0 4px;color:var(--soil);font-size:13px">${esc(dayLabel(k))}</h3>
     <table style="width:100%;border-collapse:collapse;font-size:11px">
       ${groups[k].slice().sort((a, b) => (a.time || "").localeCompare(b.time || "")).map((e) => `
         <tr style="border-bottom:1px solid #eee">
           <td style="padding:4px 8px;color:#8A7863;white-space:nowrap;width:48px">${esc(e.time || "—")}</td>
-          <td style="padding:4px 8px;font-weight:600;color:#5C4033;white-space:nowrap">${esc(e.label)}</td>
+          <td style="padding:4px 8px;font-weight:600;color:var(--soil);white-space:nowrap">${esc(e.label)}</td>
           <td style="padding:4px 8px;color:#3A2E26">${esc(e.summary)}</td>
           <td style="padding:4px 8px;color:#8A7863;white-space:nowrap">${esc([e.pu, e.who].filter(Boolean).join(" · "))}</td>
         </tr>`).join("")}
     </table>`).join("");
   const html = `<!doctype html><html><head><meta charset="utf-8"><title>Farm History — ${esc(farmId || "")}</title></head>
   <body style="font-family:Georgia,serif;color:#3A2E26;max-width:780px;margin:24px auto;padding:0 16px">
-    <div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #5C4033;padding-bottom:10px">
-      <div><div style="font-size:18px;font-weight:800;color:#5C4033">${esc(farmId || "Your farm")} — Farm History</div>
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid var(--soil);padding-bottom:10px">
+      <div><div style="font-size:18px;font-weight:800;color:var(--soil)">${esc(farmId || "Your farm")} — Farm History</div>
       <div style="font-size:11px;color:#8A7863">Range: ${esc(rangeTxt)} · ${rows.length} records · hash-stamped, nothing lost</div></div>
-      <div style="text-align:right"><div style="font-weight:800;color:#3E7B1F">TEIVAKA</div><div style="font-size:10px;color:#8A7863">Verified farm platform</div>
+      <div style="text-align:right"><div style="font-weight:800;color:var(--green-dk)">TEIVAKA</div><div style="font-size:10px;color:#8A7863">Verified farm platform</div>
       <div style="font-size:10px;color:#8A7863;margin-top:4px">Issued ${esc(issued)}</div></div>
     </div>
     ${bodyHtml || '<p style="color:#8A7863">No records in this range.</p>'}
@@ -236,7 +236,7 @@ const PRESETS = [["month", "This month"], ["last3", "Last 3 months"], ["season",
 // ── atoms ────────────────────────────────────────────────────────────
 function Card({ children, style }) { return <div className="rounded-2xl border bg-white" style={{ borderColor: C.border, ...style }}>{children}</div>; }
 function Chip({ active, label, onClick }) {
-  return <button onClick={onClick} className={`text-xs px-3 py-1.5 rounded-full shrink-0 hover:brightness-95 ${FOCUS}`} style={{ border: `1px solid ${active ? C.green : C.border}`, background: active ? C.green : "white", color: active ? "white" : C.muted }}>{label}</button>;
+  return <button onClick={onClick} className={`text-xs px-3 py-1.5 rounded-full shrink-0 hover:brightness-95 ${FOCUS}`} style={{ border: `1px solid ${active ? C.green : C.border}`, background: active ? C.green : "var(--paper)", color: active ? "var(--paper)" : C.muted }}>{label}</button>;
 }
 
 function HistoryInner() {
@@ -291,10 +291,10 @@ function HistoryInner() {
       <div className="flex items-center justify-between gap-2 flex-wrap rounded-xl border p-3" style={{ background: C.greenTint, borderColor: C.border }}>
         <div className="flex items-center gap-2 text-xs" style={{ color: C.greenDk }}><ShieldCheck size={15} />Verification chain · <strong>INTACT</strong> — nothing edited after the fact.</div>
         <div className="flex items-center gap-1.5 flex-wrap">
-          <span className="text-[11px] flex items-center gap-1 px-2 py-1 rounded-lg" style={{ color: C.muted, border: `1px solid ${C.border}`, background: "white" }}><Database size={11} />Full history kept · metering later</span>
-          <button onClick={exportCSV} disabled={exporting} className={`text-[11px] px-2.5 py-1 rounded-lg flex items-center gap-1.5 hover:brightness-95 disabled:opacity-50 ${FOCUS}`} style={{ color: C.greenDk, border: `1px solid ${C.border}`, background: "white" }}><Download size={12} />CSV</button>
-          <button onClick={exportPDF} disabled={exporting} className={`text-[11px] px-2.5 py-1 rounded-lg flex items-center gap-1.5 hover:brightness-95 disabled:opacity-50 ${FOCUS}`} style={{ color: C.greenDk, border: `1px solid ${C.border}`, background: "white" }}><Printer size={12} />History book</button>
-          <button onClick={() => go("reports")} className={`text-[11px] px-2.5 py-1 rounded-lg flex items-center gap-1.5 hover:brightness-95 ${FOCUS}`} style={{ color: C.greenDk, border: `1px solid ${C.border}`, background: "white" }}><FileText size={12} />Audit report</button>
+          <span className="text-[11px] flex items-center gap-1 px-2 py-1 rounded-lg" style={{ color: C.muted, border: `1px solid ${C.border}`, background: "var(--paper)" }}><Database size={11} />Full history kept · metering later</span>
+          <button onClick={exportCSV} disabled={exporting} className={`text-[11px] px-2.5 py-1 rounded-lg flex items-center gap-1.5 hover:brightness-95 disabled:opacity-50 ${FOCUS}`} style={{ color: C.greenDk, border: `1px solid ${C.border}`, background: "var(--paper)" }}><Download size={12} />CSV</button>
+          <button onClick={exportPDF} disabled={exporting} className={`text-[11px] px-2.5 py-1 rounded-lg flex items-center gap-1.5 hover:brightness-95 disabled:opacity-50 ${FOCUS}`} style={{ color: C.greenDk, border: `1px solid ${C.border}`, background: "var(--paper)" }}><Printer size={12} />History book</button>
+          <button onClick={() => go("reports")} className={`text-[11px] px-2.5 py-1 rounded-lg flex items-center gap-1.5 hover:brightness-95 ${FOCUS}`} style={{ color: C.greenDk, border: `1px solid ${C.border}`, background: "var(--paper)" }}><FileText size={12} />Audit report</button>
         </div>
       </div>
 
@@ -390,9 +390,9 @@ function HistoryInner() {
 
           {/* load more: render more of loaded, then fetch deeper pages */}
           {render < view.length ? (
-            <button onClick={() => setRender((r) => r + 60)} className={`w-full text-sm py-2.5 rounded-xl hover:brightness-95 ${FOCUS}`} style={{ color: C.greenDk, border: `1px solid ${C.border}`, background: "white" }}>Show more ({view.length - render} more loaded)</button>
+            <button onClick={() => setRender((r) => r + 60)} className={`w-full text-sm py-2.5 rounded-xl hover:brightness-95 ${FOCUS}`} style={{ color: C.greenDk, border: `1px solid ${C.border}`, background: "var(--paper)" }}>Show more ({view.length - render} more loaded)</button>
           ) : tl.hasMore ? (
-            <button onClick={tl.loadMore} disabled={tl.loading} className={`w-full text-sm py-2.5 rounded-xl flex items-center justify-center gap-1.5 hover:brightness-95 disabled:opacity-50 ${FOCUS}`} style={{ color: C.greenDk, border: `1px solid ${C.border}`, background: "white" }}>
+            <button onClick={tl.loadMore} disabled={tl.loading} className={`w-full text-sm py-2.5 rounded-xl flex items-center justify-center gap-1.5 hover:brightness-95 disabled:opacity-50 ${FOCUS}`} style={{ color: C.greenDk, border: `1px solid ${C.border}`, background: "var(--paper)" }}>
               {tl.loading ? <><RefreshCw size={14} className="animate-spin" />Loading…</> : "Load older records"}
             </button>
           ) : (

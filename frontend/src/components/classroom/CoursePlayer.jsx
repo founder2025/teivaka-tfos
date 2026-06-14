@@ -40,7 +40,7 @@ export function VideoStage({ kind, url }) {
 export function Stars({ value, size = 13 }) {
   return (
     <span className="cls-stars" title={`${value} of 5`}>
-      {[1, 2, 3, 4, 5].map((i) => <Star key={i} size={size} style={{ verticalAlign: "-2px" }} fill={i <= Math.round(value) ? "#bf9000" : "none"} />)}
+      {[1, 2, 3, 4, 5].map((i) => <Star key={i} size={size} style={{ verticalAlign: "-2px" }} fill={i <= Math.round(value) ? "var(--amber)" : "none"} />)}
     </span>
   );
 }
@@ -69,7 +69,7 @@ function UnlockPanel({ course }) {
           <Stars value={course.avg_rating} /> {course.avg_rating} from {course.rating_count} learner{course.rating_count === 1 ? "" : "s"}
         </div>
       )}
-      <div style={{ fontSize: 13, color: "var(--soil)", background: "#fff", border: "1px solid var(--line)", borderRadius: 10, padding: "10px 12px", marginTop: 8, whiteSpace: "pre-wrap" }}>
+      <div style={{ fontSize: 13, color: "var(--soil)", background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 10, padding: "10px 12px", marginTop: 8, whiteSpace: "pre-wrap" }}>
         {course.payment_instructions || "Contact Teivaka to unlock this course."}
       </div>
     </div>
@@ -88,14 +88,14 @@ function RatingBlock({ course, onRated }) {
     } catch (e) { toast(`${e.userMessage || e.message}`, "error"); }
   };
   return (
-    <div style={{ marginTop: 16, padding: "12px 14px", border: "1px solid var(--line)", borderRadius: 12, background: "#fff" }}>
+    <div style={{ marginTop: 16, padding: "12px 14px", border: "1px solid var(--line)", borderRadius: 12, background: "var(--paper)" }}>
       <div style={{ fontWeight: 700, fontSize: 13.5, color: "var(--soil)", marginBottom: 8 }}>
         {course.my_rating ? "Your rating" : "Rate this course"}
       </div>
       <div style={{ display: "flex", gap: 4, marginBottom: 8 }}>
         {[1, 2, 3, 4, 5].map((i) => (
           <button key={i} onClick={() => setStars(i)} style={{ background: "transparent", border: "none", cursor: "pointer", padding: 2 }}>
-            <Star size={22} style={{ color: "#bf9000" }} fill={i <= stars ? "#bf9000" : "none"} />
+            <Star size={22} style={{ color: "var(--amber)" }} fill={i <= stars ? "var(--amber)" : "none"} />
           </button>
         ))}
       </div>

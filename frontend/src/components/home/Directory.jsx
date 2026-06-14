@@ -87,9 +87,9 @@ export default function Directory() {
       </div>
       <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 12, alignItems: "center" }}>
         {GROUP_TABS.map(([v, l]) => (
-          <button key={v} onClick={() => setProf(v)} style={{ padding: "6px 12px", borderRadius: 999, fontSize: 12, fontWeight: 600, cursor: "pointer", minHeight: 34, border: `1px solid ${prof === v ? "var(--green-dk)" : "var(--line)"}`, background: prof === v ? "var(--green)" : "#fff", color: prof === v ? "#fff" : "var(--soil)" }}>{l}</button>
+          <button key={v} onClick={() => setProf(v)} style={{ padding: "6px 12px", borderRadius: 999, fontSize: 12, fontWeight: 600, cursor: "pointer", minHeight: 34, border: `1px solid ${prof === v ? "var(--green-dk)" : "var(--line)"}`, background: prof === v ? "var(--green)" : "var(--paper)", color: prof === v ? "var(--paper)" : "var(--soil)" }}>{l}</button>
         ))}
-        <button onClick={() => setSort(sort === "verified" ? "newest" : "verified")} style={{ marginLeft: "auto", padding: "6px 12px", borderRadius: 999, fontSize: 12, cursor: "pointer", border: "1px solid var(--line)", background: "#fff", color: "var(--muted)" }}>
+        <button onClick={() => setSort(sort === "verified" ? "newest" : "verified")} style={{ marginLeft: "auto", padding: "6px 12px", borderRadius: 999, fontSize: 12, cursor: "pointer", border: "1px solid var(--line)", background: "var(--paper)", color: "var(--muted)" }}>
           Sort: {sort === "verified" ? "Verified first" : "Newest"}
         </button>
       </div>
@@ -99,7 +99,7 @@ export default function Directory() {
         : (
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             {people.map((p) => (
-              <div key={p.user_id} style={{ display: "flex", gap: 12, alignItems: "flex-start", padding: "12px 12px", border: "1px solid var(--line)", borderRadius: 12, background: "#fff" }}>
+              <div key={p.user_id} style={{ display: "flex", gap: 12, alignItems: "flex-start", padding: "12px 12px", border: "1px solid var(--line)", borderRadius: 12, background: "var(--paper)" }}>
                 <button onClick={() => navigate(`/u/${p.user_id}`)} style={{ position: "relative", background: "transparent", border: "none", cursor: "pointer", padding: 0, flexShrink: 0 }}>
                   <Avatar src={p.avatar_url} name={p.full_name} size={46} />
                   {p.online && <span style={{ position: "absolute", bottom: 1, right: 1, width: 12, height: 12, borderRadius: "50%", background: "#4caf50", border: "2px solid #fff" }} />}
@@ -124,7 +124,7 @@ export default function Directory() {
                           <Tag size={11} /> {p.active_listings} listing{p.active_listings === 1 ? "" : "s"}
                         </button>
                       )}
-                      {p.wanted_count > 0 && <span style={{ fontSize: 11, fontWeight: 600, color: "#BF9000", background: "rgba(191,144,0,0.1)", border: "1px solid rgba(191,144,0,0.4)", borderRadius: 999, padding: "3px 10px" }}>{p.wanted_count} wanted</span>}
+                      {p.wanted_count > 0 && <span style={{ fontSize: 11, fontWeight: 600, color: "var(--amber)", background: "rgba(191,144,0,0.1)", border: "1px solid rgba(191,144,0,0.4)", borderRadius: 999, padding: "3px 10px" }}>{p.wanted_count} wanted</span>}
                     </div>
                   )}
                 </div>

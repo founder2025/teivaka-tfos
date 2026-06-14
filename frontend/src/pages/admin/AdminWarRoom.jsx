@@ -5,8 +5,8 @@ import AdminLayout from "../../components/admin/AdminLayout";
 import { Crosshair, TrendingDown, Layers } from "lucide-react";
 import { getJSON } from "../../utils/api";
 
-const C = { soil: "#5C4033", green: "#6AA84F", greenDk: "#3E7B1F", line: "#E6E1D6", muted: "#8A8678", cream: "#F8F3E9", gold: "#BF9000", red: "#A32D2D" };
-const card = { background: "#fff", border: `1px solid ${C.line}`, borderRadius: 12, padding: 18, marginBottom: 16 };
+const C = { soil: "var(--soil)", green: "var(--green)", greenDk: "var(--green-dk)", line: "var(--line)", muted: "var(--muted)", cream: "var(--cream)", gold: "var(--amber)", red: "var(--red)" };
+const card = { background: "var(--paper)", border: `1px solid ${C.line}`, borderRadius: 12, padding: 18, marginBottom: 16 };
 const h2 = { fontSize: 15, fontWeight: 800, color: C.soil, margin: "0 0 10px" };
 
 function Bar({ label, n, pct, color }) {

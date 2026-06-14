@@ -4,7 +4,7 @@ import { Plus } from "lucide-react";
 import { useLauncher } from "../../context/LauncherContext";
 
 const C = {
-  green:     "#6AA84F",
+  green:     "var(--green)",
   greenDark: "#568A3F",
 };
 
@@ -43,7 +43,7 @@ export default function UniversalLogButton({ variant = "pill" }) {
           height: 56,
           background: C.green,
           boxShadow: "0 6px 14px rgba(0,0,0,0.18)",
-          border: "3px solid #F8F3E9",
+          border: "3px solid var(--cream)",
         }}
       >
         <Plus size={28} strokeWidth={2.25} />

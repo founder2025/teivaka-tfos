@@ -40,11 +40,11 @@ import { GuidedTour, useTour } from "../components/tour/GuidedTour";
 import { FARM_TOURS } from "../config/farmTours";
 
 const C = {
-  soil:    "#5C4033",
-  cream:   "#F8F3E9",
-  green:   "#6AA84F",
-  greenDk: "#3E7B1F",
-  red:     "#D4442E",
+  soil:    "var(--soil)",
+  cream:   "var(--cream)",
+  green:   "var(--green)",
+  greenDk: "var(--green-dk)",
+  red:     "var(--red)",
 };
 
 import { tisIdentityBody } from "../utils/tisIdentity";
@@ -132,8 +132,8 @@ function FarmPillarLogFab() {
         height: 64,
         borderRadius: "50%",
         background: C.green,
-        color: "#FFFFFF",
-        border: "3px solid #F8F3E9",
+        color: "#fff",
+        border: "3px solid var(--cream)",
         boxShadow: "0 6px 20px rgba(0,0,0,0.18)",
         cursor: "pointer",
         zIndex: 40,
@@ -166,7 +166,7 @@ function TisFab({ unread, onClick, active }) {
         height: 56,
         borderRadius: "50%",
         background: C.green,
-        color: "#FFFFFF",
+        color: "#fff",
         border: "none",
         boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
         cursor: "pointer",
@@ -396,13 +396,13 @@ function ActiveTour({ cfg }) {
           className="fixed flex items-center gap-1.5"
           style={{
             left: 16, bottom: 84, zIndex: 45,
-            background: "#FFFFFF", color: "#5C4033",
+            background: "var(--paper)", color: "var(--soil)",
             border: "1px solid #E6DED0", borderRadius: 999,
             padding: "7px 12px", fontSize: 12.5, fontWeight: 600,
             boxShadow: "0 3px 10px rgba(44,26,14,0.12)", cursor: "pointer",
           }}
         >
-          <HelpCircle size={15} style={{ color: "#3E7B1F" }} />
+          <HelpCircle size={15} style={{ color: "var(--green-dk)" }} />
           Show me around
         </button>
       )}

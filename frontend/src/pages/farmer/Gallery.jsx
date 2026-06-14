@@ -160,7 +160,7 @@ export default function Gallery() {
             {VIEWS.map(([v, label]) => {
               const on = view === v;
               return (
-                <button key={v} onClick={() => setView(v)} style={{ border: `1px solid ${on ? "var(--green)" : "var(--line)"}`, background: on ? "var(--green)" : "var(--paper)", color: on ? "#fff" : "var(--soil)", fontSize: 12.5, fontWeight: 600, padding: "6px 12px", borderRadius: 18, cursor: "pointer" }}>{label}</button>
+                <button key={v} onClick={() => setView(v)} style={{ border: `1px solid ${on ? "var(--green)" : "var(--line)"}`, background: on ? "var(--green)" : "var(--paper)", color: on ? "var(--paper)" : "var(--soil)", fontSize: 12.5, fontWeight: 600, padding: "6px 12px", borderRadius: 18, cursor: "pointer" }}>{label}</button>
               );
             })}
           </div>

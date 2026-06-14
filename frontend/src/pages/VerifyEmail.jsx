@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 
-const C = { soil: "#2C1A0E", green: "#3D8C40", cream: "#F5EFE0", border: "#E0D5C0" };
+const C = { soil: "#2C1A0E", green: "var(--green)", cream: "var(--cream)", border: "var(--line)" };
 
 export default function VerifyEmail() {
   const [params] = useSearchParams();

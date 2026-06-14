@@ -18,12 +18,12 @@ import Modal from "../ui/Modal";
 import ThemedCombobox from "../inputs/ThemedCombobox.jsx";
 
 const C = {
-  soil:    "#5C4033",
-  green:   "#6AA84F",
-  greenDk: "#3E7B1F",
-  amber:   "#BF9000",
-  red:     "#D4442E",
-  cream:   "#F8F3E9",
+  soil:    "var(--soil)",
+  green:   "var(--green)",
+  greenDk: "var(--green-dk)",
+  amber:   "var(--amber)",
+  red:     "var(--red)",
+  cream:   "var(--cream)",
   border:  "#E6DED0",
   muted:   "#8A7863",
   blue:    "#2E6BB8",
@@ -154,7 +154,7 @@ function AlternativesList({ alternatives, onPick }) {
             type="button"
             onClick={() => onPick(a.production_id)}
             className="text-xs font-medium px-2 py-1 rounded"
-            style={{ background: "white", border: `1px solid ${C.border}`, color: C.soil }}
+            style={{ background: "var(--paper)", border: `1px solid ${C.border}`, color: C.soil }}
           >
             {a.production_name || a.production_id}
           </button>
@@ -354,7 +354,7 @@ export default function NewCycleModal({ isOpen, onClose, onCreated, farmId }) {
         onClick={onClose}
         disabled={submitting}
         className="text-sm font-medium px-3 py-2 rounded-lg disabled:opacity-40"
-        style={{ background: "white", border: `1px solid ${C.border}`, color: C.soil }}
+        style={{ background: "var(--paper)", border: `1px solid ${C.border}`, color: C.soil }}
       >
         Cancel
       </button>
@@ -405,7 +405,7 @@ export default function NewCycleModal({ isOpen, onClose, onCreated, farmId }) {
               onChange={(e) => setProductionId(e.target.value)}
               disabled={productionsQuery.isLoading}
               className="w-full px-3 py-2 rounded-lg text-sm focus:outline-none"
-              style={{ background: "white", border: `1px solid ${C.border}`, color: C.soil }}
+              style={{ background: "var(--paper)", border: `1px solid ${C.border}`, color: C.soil }}
             >
               <option value="">
                 {productionsQuery.isLoading ? "Loading catalog…" : "Pick a crop…"}
@@ -425,7 +425,7 @@ export default function NewCycleModal({ isOpen, onClose, onCreated, farmId }) {
               disabled={!productionId}
               required
               className="w-full px-3 py-2 rounded-lg text-sm focus:outline-none"
-              style={{ background: "white", border: `1px solid ${C.border}`, color: C.soil }}
+              style={{ background: "var(--paper)", border: `1px solid ${C.border}`, color: C.soil }}
             >
               <option value="">
                 {!productionId
@@ -456,7 +456,7 @@ export default function NewCycleModal({ isOpen, onClose, onCreated, farmId }) {
               min={todayISO()}
               onChange={(e) => setPlantingDate(e.target.value)}
               className="w-full px-3 py-2 rounded-lg text-sm focus:outline-none"
-              style={{ background: "white", border: `1px solid ${C.border}`, color: C.soil }}
+              style={{ background: "var(--paper)", border: `1px solid ${C.border}`, color: C.soil }}
             />
           </div>
 
@@ -501,7 +501,7 @@ export default function NewCycleModal({ isOpen, onClose, onCreated, farmId }) {
                 rows={3}
                 placeholder="Why are you proceeding despite the rotation warning?"
                 className="w-full px-3 py-2 rounded-lg text-sm focus:outline-none"
-                style={{ background: "white", border: `1px solid ${C.border}`, color: C.soil }}
+                style={{ background: "var(--paper)", border: `1px solid ${C.border}`, color: C.soil }}
               />
               <div className="text-[11px] mt-0.5 text-right" style={{ color: C.muted }}>
                 {overrideReason.length}/280

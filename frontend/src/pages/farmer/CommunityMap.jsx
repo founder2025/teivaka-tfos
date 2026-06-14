@@ -27,9 +27,9 @@ import FarmerLayout from "../../components/farmer/FarmerLayout";
 
 const C = {
   soil:    "#2C1A0E",
-  green:   "#3D8C40",
-  cream:   "#F5EFE0",
-  gold:    "#D4A017",
+  green:   "var(--green)",
+  cream:   "var(--cream)",
+  gold:    "var(--amber)",
   mapBg:   "#1A1F2E",
 };
 
@@ -59,10 +59,10 @@ const MOCK_FARMERS = [
 
 const STATUS_STYLE = {
   online:   { color: "#4ADE80", pulse: true,  label: "Online now"       },
-  today:    { color: "#3D8C40", pulse: false, label: "Active today"     },
+  today:    { color: "var(--green)", pulse: false, label: "Active today"     },
   week:     { color: "#1A5C1E", pulse: false, label: "Active this week" },
   inactive: { color: "#6B7280", pulse: false, label: "Inactive"         },
-  admin:    { color: "#D4A017", pulse: true,  label: "Admin"            },
+  admin:    { color: "var(--amber)", pulse: true,  label: "Admin"            },
 };
 
 function ProfileCard({ farmer, onClose }) {
@@ -72,7 +72,7 @@ function ProfileCard({ farmer, onClose }) {
 
   return (
     <div className="absolute z-50 w-64 rounded-2xl shadow-2xl overflow-hidden"
-      style={{ background: "white", border: `1px solid #E0D5C0`, top: "60px", right: "16px" }}>
+      style={{ background: "var(--paper)", border: `1px solid var(--line)`, top: "60px", right: "16px" }}>
       <div className="h-16 flex items-center justify-center relative"
         style={{ background: `linear-gradient(135deg, ${C.soil}, ${C.green})` }}>
         <div className="w-14 h-14 rounded-full border-4 border-white flex items-center justify-center text-white font-bold text-lg absolute -bottom-7"
@@ -99,7 +99,7 @@ function ProfileCard({ farmer, onClose }) {
           <span className="text-xs" style={{ color: s.color }}>{s.label}</span>
         </div>
 
-        <div className="mt-3 text-left space-y-1 text-xs text-gray-500 border-t pt-3" style={{ borderColor: "#E0D5C0" }}>
+        <div className="mt-3 text-left space-y-1 text-xs text-gray-500 border-t pt-3" style={{ borderColor: "var(--line)" }}>
           <div className="flex justify-between">
             <span>Farm</span>
             <span className="font-medium" style={{ color: C.soil }}>{farmer.farm}</span>
@@ -278,7 +278,7 @@ export default function CommunityMap() {
             {["all", "online"].map(s => (
               <button key={s} onClick={() => setFilter(f => ({ ...f, status: s }))}
                 className="px-3 py-2 text-xs font-medium transition-colors capitalize"
-                style={{ background: filter.status === s ? C.green : "transparent", color: filter.status === s ? "white" : "rgba(255,255,255,0.6)" }}>
+                style={{ background: filter.status === s ? C.green : "transparent", color: filter.status === s ? "var(--paper)" : "rgba(255,255,255,0.6)" }}>
                 {s === "all" ? "All Farmers" : "🟢 Online Now"}
               </button>
             ))}
@@ -317,10 +317,10 @@ export default function CommunityMap() {
           style={{ background: "rgba(26,31,46,0.9)", border: "1px solid rgba(255,255,255,0.1)" }}>
           {[
             { color: "#4ADE80", pulse: true,  label: "Online now" },
-            { color: "#3D8C40", pulse: false, label: "Active today" },
+            { color: "var(--green)", pulse: false, label: "Active today" },
             { color: "#1A5C1E", pulse: false, label: "This week" },
             { color: "#6B7280", pulse: false, label: "Inactive" },
-            { color: "#D4A017", pulse: false, label: "Admin" },
+            { color: "var(--amber)", pulse: false, label: "Admin" },
           ].map(d => (
             <div key={d.label} className="flex items-center gap-2 text-white/70">
               <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: d.color }} />

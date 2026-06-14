@@ -12,9 +12,9 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 const C = {
-  soil: "#5C4033", green: "#6AA84F", greenDk: "#3E7B1F", amber: "#BF9000",
-  red: "#B00020", cream: "#F8F3E9", border: "#E6DED0", muted: "#8A7863",
-  ink: "#3A2E26", panel: "#FFFFFF",
+  soil: "var(--soil)", green: "var(--green)", greenDk: "var(--green-dk)", amber: "var(--amber)",
+  red: "#B00020", cream: "var(--cream)", border: "#E6DED0", muted: "#8A7863",
+  ink: "#3A2E26", panel: "var(--paper)",
 };
 function authHeaders() {
   const t = localStorage.getItem("tfos_access_token");
@@ -142,9 +142,9 @@ export default function NurseryNew() {
         <p className="text-xs mb-4" style={{ color: C.muted }}>Propagation batch — seedlings before they become a field cycle.</p>
 
         {loading ? (
-          <div className="rounded-2xl animate-pulse" style={{ height: 240, background: "#fff" }} />
+          <div className="rounded-2xl animate-pulse" style={{ height: 240, background: "var(--paper)" }} />
         ) : (
-          <form onSubmit={submit} className="rounded-2xl border p-4 space-y-4" style={{ borderColor: C.border, background: "#fff" }}>
+          <form onSubmit={submit} className="rounded-2xl border p-4 space-y-4" style={{ borderColor: C.border, background: "var(--paper)" }}>
             {error && (
               <div className="rounded-lg border px-3 py-2 text-sm" style={{ borderColor: C.red, background: "#FBEAE6", color: C.red }}>{error}</div>
             )}
@@ -217,7 +217,7 @@ export default function NurseryNew() {
               </button>
               <button type="button" onClick={() => navigate("/farm/cycles")}
                 className="px-4 py-2 rounded-lg text-sm font-semibold"
-                style={{ border: `1px solid ${C.border}`, color: C.soil, background: "#fff" }}>
+                style={{ border: `1px solid ${C.border}`, color: C.soil, background: "var(--paper)" }}>
                 Cancel
               </button>
             </div>

@@ -19,11 +19,11 @@ import { Check, ArrowRight } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 const C = {
-  soil:   "#5C4033",
-  green:  "#6AA84F",
+  soil:   "var(--soil)",
+  green:  "var(--green)",
   greenDk:"#4F8138",
-  amber:  "#BF9000",
-  cream:  "#F8F3E9",
+  amber:  "var(--amber)",
+  cream:  "var(--cream)",
   muted:  "#8A7863",
 };
 
@@ -132,7 +132,7 @@ export default function RecentLoggedStrip({ farmId }) {
                 onClick={() => navigate(`/farm/cycles?cycle=${encodeURIComponent(e.cycle_id)}`)}
                 style={{
                   display: "inline-flex", alignItems: "center", gap: 3,
-                  fontSize: 11, color: C.greenDk, background: "#fff",
+                  fontSize: 11, color: C.greenDk, background: "var(--paper)",
                   border: `1px solid ${C.green}`, borderRadius: 7,
                   padding: "3px 8px", cursor: "pointer", whiteSpace: "nowrap",
                 }}

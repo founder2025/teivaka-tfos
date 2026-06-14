@@ -9,11 +9,11 @@ import Avatar from "../ui/Avatar";
 import { resolvedMode, setThemePref } from "../../utils/theme";
 
 const C = {
-  soil:    "#5C4033",
-  cream:   "#F8F3E9",
+  soil:    "var(--soil)",
+  cream:   "var(--cream)",
   border:  "#D4CFC3",
-  green:   "#6AA84F",
-  amber:   "#BF9000",
+  green:   "var(--green)",
+  amber:   "var(--amber)",
   hoverBg: "rgba(92, 64, 51, 0.06)",
 };
 
@@ -57,7 +57,7 @@ function IconButton({ icon: Icon, label, onClick, disabled, title, badgeCount, a
       style={{
         width: 36,
         height: 36,
-        color: disabled ? "#9A8F7A" : (active ? "#3E7B1F" : C.soil),
+        color: disabled ? "#9A8F7A" : (active ? "var(--green-dk)" : C.soil),
         cursor: disabled ? "not-allowed" : "pointer",
         background: active ? activeBg : "transparent",
         borderRadius: 8,
@@ -77,7 +77,7 @@ function IconButton({ icon: Icon, label, onClick, disabled, title, badgeCount, a
             height: 16,
             borderRadius: "50%",
             background: C.amber,
-            color: "white",
+            color: "#fff",
             fontSize: 10,
             fontWeight: 700,
             lineHeight: 1,

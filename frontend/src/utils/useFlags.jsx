@@ -16,8 +16,8 @@ export function useFlags() {
 
 export function DisabledNotice({ what }) {
   return (
-    <div style={{ background: "#fff", border: "1px solid #E6E1D6", borderRadius: 12, padding: 28, textAlign: "center", color: "#8A8678", margin: "20px auto", maxWidth: 520 }}>
-      <div style={{ fontWeight: 800, color: "#5C4033", fontSize: 16, marginBottom: 6 }}>{what} is temporarily unavailable</div>
+    <div style={{ background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 12, padding: 28, textAlign: "center", color: "var(--muted)", margin: "20px auto", maxWidth: 520 }}>
+      <div style={{ fontWeight: 800, color: "var(--soil)", fontSize: 16, marginBottom: 6 }}>{what} is temporarily unavailable</div>
       <div style={{ fontSize: 13.5 }}>The Teivaka team has paused this area for maintenance. Your data is safe — check back shortly.</div>
     </div>
   );
@@ -55,7 +55,7 @@ export function AnnouncementBanner() {
   }, []);
   if (!b?.banner_enabled || !b?.banner_text) return null;
   return (
-    <div style={{ background: "#BF9000", color: "#fff", textAlign: "center", padding: "8px 14px", fontSize: 13, fontWeight: 600 }}>
+    <div style={{ background: "var(--amber)", color: "#fff", textAlign: "center", padding: "8px 14px", fontSize: 13, fontWeight: 600 }}>
       {b.banner_text}
     </div>
   );
