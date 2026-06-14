@@ -12,7 +12,7 @@ import {
   Eye, Layers, Play, Image as ImageIcon, Bookmark, Activity as ActivityIcon, Settings as Cog,
   Rss, Users, Store, Contact, Camera, Pencil, Download, Shield, BadgeCheck, Phone, Calendar,
   Clock, MapPin, MessageCircle, UserPlus, UserCheck, ArrowRight, X, Award, QrCode,
-  PenSquare, Tag,
+  PenSquare, Tag, Megaphone,
 } from "lucide-react";
 import { C, getJSON, send, card } from "./_meCommon";
 import { personaOf, personaLabel, pillarsFor, isProducer, PERSONA_OPTIONS } from "../../utils/personas";
@@ -44,6 +44,7 @@ const TABS = [
   { id: "reels", label: "Reels", Icon: Play },
   { id: "photos", label: "Photos", Icon: ImageIcon },
   { id: "saved", label: "Saved", Icon: Bookmark, route: "/home/saved", selfOnly: true },
+  { id: "promote", label: "Promote", Icon: Megaphone, route: "/me/promote", selfOnly: true },
   { id: "records", label: "My records", Icon: ActivityIcon, selfOnly: true },
   { id: "activity", label: "Activity", Icon: ActivityIcon, selfOnly: true },
   { id: "settings", label: "Settings", Icon: Cog, route: "/me/settings", selfOnly: true },

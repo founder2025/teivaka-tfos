@@ -45,6 +45,7 @@ const CommunityMap  = lazy(() => import("./pages/farmer/CommunityMap"));
 const Onboarding    = lazy(() => import("./pages/farmer/Onboarding"));
 const FarmBasics    = lazy(() => import("./pages/onboarding/FarmBasics"));
 const MeSettings    = lazy(() => import("./pages/farmer/MeSettings"));
+const Promote       = lazy(() => import("./pages/me/Promote"));
 const MeVerification = lazy(() => import("./pages/me/MeVerification"));
 const FieldEventNew = lazy(() => import("./pages/farmer/FieldEventNew"));
 const KnowledgeBase = lazy(() => import("./pages/farmer/KnowledgeBase"));
@@ -391,6 +392,7 @@ export default function App() {
             <Route path="/tis/usage"   element={<ComingSoon title="TIS Usage"   phase="4.3" />} />
 
             <Route path="/me/settings"          element={<MeSettings />} />
+            <Route path="/me/promote"           element={<Promote />} />
             <Route path="/me/verification"      element={<MeVerification />} />
             <Route path="/me/subscription"      element={<Subscription />} />
             <Route path="/me/referrals"         element={<Referrals />} />

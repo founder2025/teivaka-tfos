@@ -44,6 +44,22 @@ export default function AdminSponsors() {
     if (!window.confirm("Delete this placement?")) return;
     try { await fetch(`${API}/${id}`, { method: "DELETE", headers: authHeader() }); load(); } catch { toast("Delete failed", "error"); }
   };
+  const act = async (id, verb, body) => {
+    try { const r = await fetch(`${API}/${id}/${verb}`, { method: "POST", headers: { ...authHeader(), "Content-Type": "application/json" }, body: JSON.stringify(body || {}) }); if (!r.ok) throw new Error(); load(); }
+    catch { toast(`Couldn't ${verb}`, "error"); }
+  };
+  const approve = (id) => act(id, "approve");
+  const reject = (id) => { const note = window.prompt("Reason for rejection (shown to the advertiser):"); if (note === null) return; act(id, "reject", { note }); };
+  const markPaid = (id) => { const ref = window.prompt("Payment reference (invoice / M-PAiSA ref) — optional:") || ""; act(id, "mark-paid", { payment_ref: ref }); };
+
+  // rate card
+  const [rates, setRates] = useState(null);
+  const loadRates = useCallback(() => { fetch(`/api/v1/community/admin/ad-rates`, { headers: authHeader() }).then((r) => r.json()).then((d) => setRates(d?.data || [])).catch(() => setRates([])); }, []);
+  useEffect(() => { loadRates(); }, [loadRates]);
+  const saveRate = async (id, price_fjd, active) => {
+    try { await fetch(`/api/v1/community/admin/ad-rates/${id}`, { method: "PATCH", headers: { ...authHeader(), "Content-Type": "application/json" }, body: JSON.stringify({ price_fjd: Number(price_fjd), active }) }); toast("Rate saved ✓", "success"); loadRates(); }
+    catch { toast("Couldn't save rate", "error"); }
+  };
 
   return (
     <AdminLayout>
@@ -71,24 +87,48 @@ export default function AdminSponsors() {
           <button onClick={create} disabled={busy} style={{ background: "#6AA84F", color: "#fff", border: "none", borderRadius: 8, padding: "9px 18px", fontWeight: 700, cursor: "pointer" }}>{busy ? "Creating…" : "Create placement"}</button>
         </div>
 
-        <div style={{ fontWeight: 700, color: "#5C4033", marginBottom: 10 }}>Placements</div>
-        {rows == null ? <div style={{ color: "#8A8678" }}>Loading…</div>
-          : rows.length === 0 ? <div style={{ color: "#8A8678", fontSize: 13 }}>No placements yet. Create one above — it appears in the Home Sponsor Corner immediately.</div>
-            : rows.map((r) => (
-              <div key={r.placement_id} style={{ background: "#fff", border: "1px solid #E5DCC9", borderRadius: 10, padding: "12px 14px", marginBottom: 10, display: "flex", gap: 12, alignItems: "center" }}>
-                {r.sponsor_logo && <img src={r.sponsor_logo} alt="" style={{ width: 36, height: 36, borderRadius: 6, objectFit: "cover" }} />}
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontWeight: 700, color: "#5C4033", fontSize: 14 }}>{r.title}</div>
-                  <div style={{ fontSize: 12, color: "#8A8678" }}>{r.sponsor_name}{r.target_country ? ` · ${r.target_country}` : " · all"} · priority {r.priority} · {r.impressions} views · {r.clicks} clicks</div>
-                </div>
-                <select value={r.status} onChange={(e) => patch(r.placement_id, { status: e.target.value })} style={{ border: "1px solid #E5DCC9", borderRadius: 6, padding: "5px 8px", fontSize: 12 }}>
-                  <option value="ACTIVE">Active</option>
-                  <option value="PAUSED">Paused</option>
-                  <option value="ENDED">Ended</option>
-                </select>
-                <button onClick={() => del(r.placement_id)} style={{ background: "transparent", border: "1px solid #D4442E", color: "#D4442E", borderRadius: 6, padding: "5px 10px", fontSize: 12, cursor: "pointer" }}>Delete</button>
+        <div style={{ fontWeight: 700, color: "#5C4033", marginBottom: 10 }}>Rate card (FJD) — self-serve ad prices</div>
+        <div style={{ background: "#fff", border: "1px solid #E5DCC9", borderRadius: 10, padding: "10px 14px", marginBottom: 22, display: "flex", flexWrap: "wrap", gap: 16 }}>
+          {rates == null ? <span style={{ color: "#8A8678", fontSize: 13 }}>Loading…</span>
+            : rates.map((rt) => (
+              <div key={rt.rate_id} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <span style={{ fontSize: 12, color: "#8A8678", textTransform: "capitalize", minWidth: 56 }}>{rt.billing_period.toLowerCase()}</span>
+                <input type="number" defaultValue={rt.price_fjd} onBlur={(e) => { if (Number(e.target.value) !== rt.price_fjd) saveRate(rt.rate_id, e.target.value, rt.active); }} style={{ width: 80, border: "1px solid #E5DCC9", borderRadius: 6, padding: "5px 8px", fontSize: 13 }} />
+                <label style={{ fontSize: 11, color: "#8A8678", display: "flex", alignItems: "center", gap: 3 }}><input type="checkbox" checked={rt.active} onChange={(e) => saveRate(rt.rate_id, rt.price_fjd, e.target.checked)} /> on</label>
               </div>
             ))}
+        </div>
+
+        <div style={{ fontWeight: 700, color: "#5C4033", marginBottom: 10 }}>Placements & ad requests</div>
+        {rows == null ? <div style={{ color: "#8A8678" }}>Loading…</div>
+          : rows.length === 0 ? <div style={{ color: "#8A8678", fontSize: 13 }}>No placements yet.</div>
+            : rows.map((r) => {
+              const selfServe = !!r.owner_user_id;
+              return (
+                <div key={r.placement_id} style={{ background: "#fff", border: `1px solid ${r.status === "PENDING_REVIEW" ? "#BF9000" : "#E5DCC9"}`, borderRadius: 10, padding: "12px 14px", marginBottom: 10, display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+                  {r.sponsor_logo && <img src={r.sponsor_logo} alt="" style={{ width: 36, height: 36, borderRadius: 6, objectFit: "cover" }} />}
+                  <div style={{ flex: 1, minWidth: 180 }}>
+                    <div style={{ fontWeight: 700, color: "#5C4033", fontSize: 14 }}>{r.title} {selfServe && <span style={{ fontSize: 10, fontWeight: 700, color: "#3E7B1F", background: "#EAF5E5", borderRadius: 4, padding: "1px 6px", marginLeft: 6 }}>SELF-SERVE</span>}</div>
+                    <div style={{ fontSize: 12, color: "#8A8678" }}>
+                      {r.sponsor_name}{r.target_country ? ` · ${r.target_country}` : " · all"} · {r.status}{selfServe ? ` · ${(r.billing_period || "").toLowerCase()} · FJD ${r.price_fjd != null ? Number(r.price_fjd).toFixed(2) : "—"} · ${r.payment_status}` : ""} · {r.impressions} views · {r.clicks} clicks
+                    </div>
+                  </div>
+                  {r.status === "PENDING_REVIEW" && <>
+                    <button onClick={() => approve(r.placement_id)} style={{ background: "#6AA84F", color: "#fff", border: "none", borderRadius: 6, padding: "5px 12px", fontSize: 12, cursor: "pointer" }}>Approve</button>
+                    <button onClick={() => reject(r.placement_id)} style={{ background: "transparent", border: "1px solid #BF9000", color: "#BF9000", borderRadius: 6, padding: "5px 10px", fontSize: 12, cursor: "pointer" }}>Reject</button>
+                  </>}
+                  {r.status === "PENDING_PAYMENT" && <button onClick={() => markPaid(r.placement_id)} style={{ background: "#3E7B1F", color: "#fff", border: "none", borderRadius: 6, padding: "5px 12px", fontSize: 12, cursor: "pointer" }}>Mark paid → activate</button>}
+                  {["ACTIVE", "PAUSED", "ENDED"].includes(r.status) && (
+                    <select value={r.status} onChange={(e) => patch(r.placement_id, { status: e.target.value })} style={{ border: "1px solid #E5DCC9", borderRadius: 6, padding: "5px 8px", fontSize: 12 }}>
+                      <option value="ACTIVE">Active</option>
+                      <option value="PAUSED">Paused</option>
+                      <option value="ENDED">Ended</option>
+                    </select>
+                  )}
+                  <button onClick={() => del(r.placement_id)} style={{ background: "transparent", border: "1px solid #D4442E", color: "#D4442E", borderRadius: 6, padding: "5px 10px", fontSize: 12, cursor: "pointer" }}>Delete</button>
+                </div>
+              );
+            })}
       </div>
     </AdminLayout>
   );

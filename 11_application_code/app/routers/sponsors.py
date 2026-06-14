@@ -69,6 +69,38 @@ class InquiryIn(BaseModel):
     note: str | None = None
 
 
+class AdIn(BaseModel):
+    """Self-serve ad created by a profile owner."""
+    title: str
+    sponsor_name: str | None = None     # defaults to the owner's name
+    sponsor_logo: str | None = None
+    blurb: str | None = None
+    image_url: str | None = None
+    cta_label: str | None = None
+    cta_url: str | None = None
+    surface: str | None = "HOME_RAIL"
+    billing_period: str = "WEEKLY"      # DAILY | WEEKLY | MONTHLY
+    target_country: str | None = None
+    target_vertical: str | None = None
+    starts_at: str | None = None
+
+
+class RejectIn(BaseModel):
+    note: str | None = None
+
+
+class MarkPaidIn(BaseModel):
+    payment_ref: str | None = None
+
+
+class RatePatch(BaseModel):
+    price_fjd: float
+    active: bool | None = None
+
+
+_PERIOD_DAYS = {"DAILY": 1, "WEEKLY": 7, "MONTHLY": 30}
+
+
 def _row(m):
     d = dict(m)
     d["placement_id"] = str(d["placement_id"])
@@ -88,6 +120,8 @@ async def list_sponsors(limit: int = Query(4, ge=1, le=10), user: dict = Depends
             SELECT placement_id, sponsor_name, sponsor_logo, title, blurb, image_url, cta_label, cta_url
             FROM community.sponsor_placements
             WHERE status = 'ACTIVE'
+              AND payment_status IN ('PAID','WAIVED')
+              AND (paid_through IS NULL OR paid_through >= now())
               AND (starts_at IS NULL OR starts_at <= now())
               AND (ends_at   IS NULL OR ends_at   >= now())
               AND (target_country IS NULL OR target_country = :vc)
@@ -127,18 +161,167 @@ async def sponsor_inquiry(body: InquiryIn, user: dict = Depends(get_current_user
     return {"data": {"ok": True}}
 
 
+# ----------------------------------------------------------------------------- rate card (public)
+@router.get("/ad-rates")
+async def ad_rates(user: dict = Depends(get_current_user)):
+    """Active flat-rate prices per surface + duration so the advertiser UI can
+    show the live price. Rates are data (admin-configurable), never hardcoded."""
+    async with get_rls_db(str(user["tenant_id"])) as db:
+        rows = (await db.execute(text(
+            "SELECT surface, billing_period, price_fjd FROM community.ad_rates WHERE active = true ORDER BY surface, "
+            "CASE billing_period WHEN 'DAILY' THEN 1 WHEN 'WEEKLY' THEN 2 ELSE 3 END"))).mappings().all()
+    return {"data": [{"surface": r["surface"], "billing_period": r["billing_period"], "price_fjd": float(r["price_fjd"])} for r in rows]}
+
+
+# ----------------------------------------------------------------------------- self-serve ads (owner)
+@router.get("/me/ads")
+async def my_ads(user: dict = Depends(get_current_user)):
+    uid = str(user["user_id"])
+    async with get_rls_db(str(user["tenant_id"])) as db:
+        rows = (await db.execute(text("""
+            SELECT placement_id, title, sponsor_name, blurb, image_url, cta_label, cta_url,
+                   surface, billing_period, price_fjd, status, payment_status, paid_through,
+                   target_country, starts_at, ends_at, impressions, clicks, review_note, created_at
+            FROM community.sponsor_placements
+            WHERE owner_user_id = cast(:uid AS uuid)
+            ORDER BY created_at DESC
+        """), {"uid": uid})).mappings().all()
+    out = []
+    for r in rows:
+        d = _row(r)
+        if d.get("price_fjd") is not None:
+            d["price_fjd"] = float(d["price_fjd"])
+        out.append(d)
+    return {"data": out}
+
+
+@router.post("/me/ads")
+async def create_my_ad(body: AdIn, user: dict = Depends(get_current_user)):
+    """Create a self-serve ad → PENDING_REVIEW, UNPAID. Price is resolved
+    server-side from ad_rates (never trust the client). Never serves until an
+    admin approves AND marks it paid (Step 2 activation gate)."""
+    uid = str(user["user_id"])
+    period = (body.billing_period or "WEEKLY").upper()
+    if period not in _PERIOD_DAYS:
+        raise HTTPException(status_code=422, detail="billing_period must be DAILY, WEEKLY or MONTHLY")
+    if not (body.title and body.title.strip()):
+        raise HTTPException(status_code=422, detail="Title is required")
+    surface = (body.surface or "HOME_RAIL").upper()
+    cta = (body.cta_url or "").strip() or None
+    if cta and not (cta.startswith("http://") or cta.startswith("https://")):
+        raise HTTPException(status_code=422, detail="CTA URL must start with http:// or https://")
+    async with get_rls_db(str(user["tenant_id"])) as db:
+        price = (await db.execute(text(
+            "SELECT price_fjd FROM community.ad_rates WHERE surface = :s AND billing_period = :p AND active = true"),
+            {"s": surface, "p": period})).scalar()
+        if price is None:
+            raise HTTPException(status_code=400, detail="No active rate for that surface/duration")
+        name = (body.sponsor_name or user.get("full_name") or "Sponsor").strip()
+        row = (await db.execute(text("""
+            INSERT INTO community.sponsor_placements
+                (owner_user_id, sponsor_name, sponsor_logo, title, blurb, image_url, cta_label, cta_url,
+                 surface, billing_period, price_fjd, target_country, target_vertical, starts_at,
+                 status, payment_status, placement_type, priority)
+            VALUES (cast(:uid AS uuid), :name, :logo, :title, :blurb, :image, :clabel, :curl,
+                 :surface, :period, :price, :country, :vertical, :starts,
+                 'PENDING_REVIEW', 'UNPAID', 'SELF_SERVE', 0)
+            RETURNING placement_id
+        """), {"uid": uid, "name": name, "logo": body.sponsor_logo, "title": body.title.strip(),
+               "blurb": body.blurb, "image": body.image_url, "clabel": body.cta_label, "curl": cta,
+               "surface": surface, "period": period, "price": price,
+               "country": body.target_country, "vertical": body.target_vertical, "starts": body.starts_at})).mappings().first()
+    return {"data": {"placement_id": str(row["placement_id"]), "price_fjd": float(price), "status": "PENDING_REVIEW"}}
+
+
 # ----------------------------------------------------------------------------- admin
 @router.get("/admin/sponsors")
 async def admin_list_sponsors(admin: dict = Depends(require_admin())):
     async with get_rls_db(str(admin["tenant_id"])) as db:
         rows = (await db.execute(text("""
-            SELECT placement_id, sponsor_name, sponsor_logo, title, blurb, image_url, cta_label, cta_url,
+            SELECT placement_id, owner_user_id, sponsor_name, sponsor_logo, title, blurb, image_url, cta_label, cta_url,
                    placement_type, priority, target_country, target_vertical, starts_at, ends_at,
+                   surface, billing_period, price_fjd, payment_status, paid_through, payment_ref, review_note,
                    status, impressions, clicks, created_at
             FROM community.sponsor_placements
-            ORDER BY status, priority DESC, created_at DESC
+            ORDER BY (status = 'PENDING_REVIEW') DESC, status, priority DESC, created_at DESC
         """))).mappings().all()
-    return {"data": [_row(r) for r in rows]}
+    out = []
+    for r in rows:
+        d = _row(r)
+        if d.get("price_fjd") is not None:
+            d["price_fjd"] = float(d["price_fjd"])
+        out.append(d)
+    return {"data": out}
+
+
+@router.post("/admin/sponsors/{placement_id}/approve")
+async def admin_approve(placement_id: str, admin: dict = Depends(require_admin())):
+    """Approve a self-serve ad → PENDING_PAYMENT (awaiting payment)."""
+    async with get_rls_db(str(admin["tenant_id"])) as db:
+        res = await db.execute(text("""
+            UPDATE community.sponsor_placements SET status = 'PENDING_PAYMENT', review_note = NULL
+            WHERE placement_id = cast(:id AS uuid) AND status IN ('PENDING_REVIEW','REJECTED')
+        """), {"id": placement_id})
+        if not res.rowcount:
+            raise HTTPException(status_code=404, detail="Not found or not awaiting review")
+    return {"data": {"ok": True, "status": "PENDING_PAYMENT"}}
+
+
+@router.post("/admin/sponsors/{placement_id}/reject")
+async def admin_reject(placement_id: str, body: RejectIn, admin: dict = Depends(require_admin())):
+    async with get_rls_db(str(admin["tenant_id"])) as db:
+        res = await db.execute(text("""
+            UPDATE community.sponsor_placements SET status = 'REJECTED', review_note = :note
+            WHERE placement_id = cast(:id AS uuid)
+        """), {"id": placement_id, "note": (body.note or "").strip() or None})
+        if not res.rowcount:
+            raise HTTPException(status_code=404, detail="Not found")
+    return {"data": {"ok": True, "status": "REJECTED"}}
+
+
+@router.post("/admin/sponsors/{placement_id}/mark-paid")
+async def admin_mark_paid(placement_id: str, body: MarkPaidIn, admin: dict = Depends(require_admin())):
+    """Interim payment confirmation (admin/invoice/M-PAiSA ref). Sets PAID,
+    computes paid_through from the billing period, and activates. A real payment
+    rail later calls the same transition — no rework."""
+    async with get_rls_db(str(admin["tenant_id"])) as db:
+        row = (await db.execute(text(
+            "SELECT billing_period, starts_at FROM community.sponsor_placements WHERE placement_id = cast(:id AS uuid)"),
+            {"id": placement_id})).mappings().first()
+        if not row:
+            raise HTTPException(status_code=404, detail="Not found")
+        days = _PERIOD_DAYS.get(row["billing_period"], 7)
+        res = await db.execute(text(f"""
+            UPDATE community.sponsor_placements
+            SET payment_status = 'PAID', payment_ref = :ref, status = 'ACTIVE',
+                starts_at = COALESCE(starts_at, now()),
+                paid_through = COALESCE(starts_at, now()) + INTERVAL '{days} days'
+            WHERE placement_id = cast(:id AS uuid)
+        """), {"id": placement_id, "ref": (body.payment_ref or "").strip() or None})
+        if not res.rowcount:
+            raise HTTPException(status_code=404, detail="Not found")
+    return {"data": {"ok": True, "status": "ACTIVE"}}
+
+
+@router.get("/admin/ad-rates")
+async def admin_ad_rates(admin: dict = Depends(require_admin())):
+    async with get_rls_db(str(admin["tenant_id"])) as db:
+        rows = (await db.execute(text("SELECT rate_id, surface, billing_period, price_fjd, active FROM community.ad_rates ORDER BY surface, billing_period"))).mappings().all()
+    return {"data": [{"rate_id": str(r["rate_id"]), "surface": r["surface"], "billing_period": r["billing_period"], "price_fjd": float(r["price_fjd"]), "active": r["active"]} for r in rows]}
+
+
+@router.patch("/admin/ad-rates/{rate_id}")
+async def admin_update_rate(rate_id: str, body: RatePatch, admin: dict = Depends(require_admin())):
+    fields = {"price_fjd": body.price_fjd, "id": rate_id}
+    sets = "price_fjd = :price_fjd, updated_at = now()"
+    if body.active is not None:
+        fields["active"] = body.active
+        sets += ", active = :active"
+    async with get_rls_db(str(admin["tenant_id"])) as db:
+        res = await db.execute(text(f"UPDATE community.ad_rates SET {sets} WHERE rate_id = cast(:id AS uuid)"), fields)
+        if not res.rowcount:
+            raise HTTPException(status_code=404, detail="Rate not found")
+    return {"data": {"ok": True}}
 
 
 @router.post("/admin/sponsors")
