@@ -20,7 +20,7 @@
 set -uo pipefail
 
 BRANCH="${1:-claude/beautiful-fermi-F0dLX}"
-EXPECTED_HEAD="${2:-144_reseed_geo_regions}"
+EXPECTED_HEAD="${2:-145_chat_reply_to}"
 ROOT="/opt/teivaka"
 COMPOSE="docker compose -f ${ROOT}/04_environment/docker-compose.yml"
 PSQL="docker exec -i teivaka_db psql -v ON_ERROR_STOP=1 -tA -U teivaka -d teivaka_db"
@@ -145,6 +145,8 @@ IDEM="$($PSQL -c "SELECT to_regclass('tenant.idempotency_keys') IS NOT NULL;" 2>
 [ "$IDEM" = "t" ] && ok "idempotency_keys present (143 — offline-safe replays)" || bad "idempotency_keys missing (migration 143)"
 PROVINCES="$($PSQL -c "SELECT count(*) FROM shared.geo_regions WHERE level='PROVINCE';" 2>/dev/null | tr -d '[:space:]')"
 [ "${PROVINCES:-0}" -ge 14 ] 2>/dev/null && ok "geo_regions provinces seeded = ${PROVINCES} (144 — region dropdown)" || bad "Fiji provinces missing (${PROVINCES}/14 — migration 144)"
+REPLYTO="$($PSQL -c "SELECT count(*) FROM information_schema.columns WHERE table_schema='community' AND table_name='chat_messages' AND column_name='reply_to_message_id';" 2>/dev/null | tr -d '[:space:]')"
+[ "${REPLYTO:-0}" = "1" ] && ok "chat reply_to_message_id present (145 — reply to message)" || bad "reply_to_message_id missing (migration 145)"
 
 # ---------------------------------------------------------------------------
 say "5/7  Bring API up + wait healthy + parity check"

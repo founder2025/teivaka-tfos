@@ -110,6 +110,7 @@ class ChatSend(BaseModel):
     message_type: str = "text"        # text | image | video | audio | card
     media_url: str | None = None      # must be one of our own /uploads URLs
     media_meta: dict | None = None    # optional: name / bytes / duration
+    reply_to_message_id: str | None = None  # quote/reply to an earlier message
 
 
 _MSG_TYPES = {"text", "image", "video", "audio", "card"}
@@ -348,8 +349,10 @@ async def chat_with(other_id: str, after: str = Query(None), user: dict = Depend
             params["after"] = after
         msgs = (await db.execute(text(f"""
             SELECT m.message_id, m.sender_user_id, m.body, m.created_at, m.read_at,
-                   m.message_type, m.media_url, m.media_meta
+                   m.message_type, m.media_url, m.media_meta, m.reply_to_message_id,
+                   rm.body AS reply_body, rm.sender_user_id AS reply_sender, rm.message_type AS reply_type
             FROM community.chat_messages m
+            LEFT JOIN community.chat_messages rm ON rm.message_id = m.reply_to_message_id
             WHERE m.thread_id = :tid{clause}
             ORDER BY m.created_at ASC LIMIT 200
         """), params)).mappings().all()
@@ -382,10 +385,22 @@ async def chat_with(other_id: str, after: str = Query(None), user: dict = Depend
         other_typing = (await rc.get(f"typing:{lo}:{hi}:{other_id}")) is not None
     except Exception:  # noqa: BLE001
         pass
-    return {"data": {"thread_id": tid, "other_typing": other_typing, "messages": [
-        {**dict(m), "message_id": str(m["message_id"]), "sender_user_id": str(m["sender_user_id"]),
-         "mine": str(m["sender_user_id"]) == uid,
-         "reactions": rmap.get(str(m["message_id"]), [])} for m in msgs]}}
+    def _shape(m):
+        d = {**dict(m), "message_id": str(m["message_id"]), "sender_user_id": str(m["sender_user_id"]),
+             "mine": str(m["sender_user_id"]) == uid, "reactions": rmap.get(str(m["message_id"]), [])}
+        if m["reply_to_message_id"]:
+            label = m["reply_body"] or _MEDIA_LABEL.get(m["reply_type"], "Message")
+            d["reply"] = {
+                "message_id": str(m["reply_to_message_id"]),
+                "preview": (label[:120] if label else ""),
+                "mine": (str(m["reply_sender"]) == uid) if m["reply_sender"] else False,
+            }
+        else:
+            d["reply"] = None
+        for k in ("reply_body", "reply_sender", "reply_type", "reply_to_message_id"):
+            d.pop(k, None)
+        return d
+    return {"data": {"thread_id": tid, "other_typing": other_typing, "messages": [_shape(m) for m in msgs]}}
 
 
 @router.post("/chat/with/{other_id}")
@@ -408,6 +423,7 @@ async def chat_send(other_id: str, body: ChatSend, user: dict = Depends(rate_lim
             raise HTTPException(status_code=422, detail="media_url must be an uploaded Teivaka asset")
 
     mmeta = json.dumps(body.media_meta) if body.media_meta else None
+    reply_to = (body.reply_to_message_id or "").strip() or None
     # what the push notification + connection-list preview shows
     preview = text_body or _MEDIA_LABEL.get(mt, "New message")
 
@@ -432,10 +448,10 @@ async def chat_send(other_id: str, body: ChatSend, user: dict = Depends(rate_lim
             raise HTTPException(status_code=403, detail="You can't message this person — connect first, or they may have blocked you.")
         tid = await _thread_id(db, uid, other_id, create=True)
         row = (await db.execute(text("""
-            INSERT INTO community.chat_messages (thread_id, sender_user_id, body, message_type, media_url, media_meta)
-            VALUES (:tid, :uid, :body, :mt, :murl, CAST(:mmeta AS jsonb))
+            INSERT INTO community.chat_messages (thread_id, sender_user_id, body, message_type, media_url, media_meta, reply_to_message_id)
+            VALUES (:tid, :uid, :body, :mt, :murl, CAST(:mmeta AS jsonb), CAST(:reply AS uuid))
             RETURNING message_id, created_at
-        """), {"tid": tid, "uid": uid, "body": text_body, "mt": mt, "murl": media_url, "mmeta": mmeta})).mappings().first()
+        """), {"tid": tid, "uid": uid, "body": text_body, "mt": mt, "murl": media_url, "mmeta": mmeta, "reply": reply_to})).mappings().first()
         await db.execute(text("UPDATE community.chat_threads SET last_message_at = now() WHERE thread_id = :tid"), {"tid": tid})
         # Web Push to the recipient (best-effort; no-op until VAPID configured)
         await push_to_user(db, other_id, user.get("full_name") or "New message", preview, url="/home")

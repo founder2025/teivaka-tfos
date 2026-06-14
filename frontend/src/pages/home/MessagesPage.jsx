@@ -200,9 +200,14 @@ export default function MessagesPage() {
       <main className="main-content">
         <div className="main-inner" style={{ maxWidth: 1100, height: "calc(100dvh - 132px)", display: "flex", flexDirection: "column", minHeight: 0 }}>
           <div className="page-header" style={{ flexShrink: 0 }}>
-            <div>
-              <h1>Messages</h1>
-              <p className="subtitle">Everyone you're talking to, in one place.</p>
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <span style={{ width: 44, height: 44, borderRadius: 13, background: "rgba(106,168,79,0.14)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                <MessageCircle size={23} style={{ color: C.greenDk }} />
+              </span>
+              <div>
+                <h1 style={{ margin: 0 }}>Messages</h1>
+                <p className="subtitle" style={{ margin: "2px 0 0" }}>Everyone you're talking to, in one place.</p>
+              </div>
             </div>
           </div>
           <div className="card" style={{ padding: 0, overflow: "hidden", flex: 1, minHeight: 0, display: "flex" }}>

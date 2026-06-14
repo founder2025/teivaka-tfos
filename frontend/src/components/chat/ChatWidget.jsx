@@ -16,7 +16,7 @@
  */
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { X, Send, Minus, ArrowLeft, Image as ImageIcon, Mic, Square, MoreVertical, SmilePlus, User, UserPlus } from "lucide-react";
+import { X, Send, Minus, ArrowLeft, Image as ImageIcon, Mic, Square, MoreVertical, SmilePlus, User, UserPlus, Reply } from "lucide-react";
 import { useChat } from "../../context/ChatContext";
 
 const API = "/api/v1/community";
@@ -94,6 +94,7 @@ export function Convo({ conn, onActivity }) {
   const [recording, setRecording] = useState(false);
   const [otherTyping, setOtherTyping] = useState(false);
   const [picker, setPicker] = useState(null); // message_id with an open reaction picker
+  const [replyTo, setReplyTo] = useState(null); // message being replied to
   const [showJump, setShowJump] = useState(false); // "↓ new messages" pill while scrolled up
   const endRef = useRef(null);
   const scrollRef = useRef(null);      // the messages scroll container
@@ -153,7 +154,7 @@ export function Convo({ conn, onActivity }) {
     } catch { /* ignore */ }
   };
 
-  const send = async () => { if (!text.trim() || busy) return; setBusy(true); const b = text.trim(); setText(""); try { await postJSON(`${API}/chat/with/${conn.user_id}`, { body: b }); await load(); } catch { setText(b); } finally { setBusy(false); } };
+  const send = async () => { if (!text.trim() || busy) return; setBusy(true); const b = text.trim(); const rid = replyTo?.message_id || null; setText(""); setReplyTo(null); try { await postJSON(`${API}/chat/with/${conn.user_id}`, { body: b, reply_to_message_id: rid }); await load(); } catch { setText(b); } finally { setBusy(false); } };
 
   const sendMedia = async (file) => {
     if (!file || busy) return;
@@ -163,7 +164,8 @@ export function Convo({ conn, onActivity }) {
     try {
       const up = await uploadFile(file);
       const url = up?.data?.url; if (!url) throw new Error("upload failed");
-      await postJSON(`${API}/chat/with/${conn.user_id}`, { message_type: kind, media_url: url, media_meta: { name: up.data?.name, bytes: up.data?.bytes } });
+      const rid = replyTo?.message_id || null; setReplyTo(null);
+      await postJSON(`${API}/chat/with/${conn.user_id}`, { message_type: kind, media_url: url, media_meta: { name: up.data?.name, bytes: up.data?.bytes }, reply_to_message_id: rid });
       await load();
     } catch (e) {
       const s = String(e);
@@ -234,9 +236,16 @@ export function Convo({ conn, onActivity }) {
                 {showDay && <div style={{ alignSelf: "center", fontSize: 10, color: C.muted, background: "#fff", border: `1px solid ${C.line}`, borderRadius: 10, padding: "1px 10px", margin: "4px 0" }}>{day}</div>}
                 <div style={{ alignSelf: m.mine ? "flex-end" : "flex-start", maxWidth: "85%", display: "flex", flexDirection: "column", alignItems: m.mine ? "flex-end" : "flex-start", gap: 2 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 4, flexDirection: m.mine ? "row-reverse" : "row" }}>
-                    <div style={{ background: isMedia ? "transparent" : (m.mine ? C.green : "#fff"), color: m.mine ? "#fff" : C.soil, border: (isMedia || m.mine) ? "none" : `1px solid ${C.line}`, borderRadius: 12, padding: isMedia ? 0 : "7px 11px", fontSize: 13, lineHeight: 1.4 }}>
-                      {renderBody(m)}<div style={{ fontSize: 9, opacity: 0.7, marginTop: 2, textAlign: "right", color: isMedia ? C.muted : undefined }}>{ago(m.created_at)}</div>
+                    <div style={{ background: isMedia && !m.reply ? "transparent" : (m.mine ? C.green : "#fff"), color: m.mine ? "#fff" : C.soil, border: ((isMedia && !m.reply) || m.mine) ? "none" : `1px solid ${C.line}`, borderRadius: 12, padding: (isMedia && !m.reply) ? 0 : "7px 11px", fontSize: 13, lineHeight: 1.4 }}>
+                      {m.reply && (
+                        <div style={{ borderLeft: `3px solid ${m.mine ? "rgba(255,255,255,0.7)" : C.green}`, paddingLeft: 7, marginBottom: 5, opacity: 0.85, fontSize: 11.5 }}>
+                          <div style={{ fontWeight: 700 }}>{m.reply.mine ? "You" : conn.full_name.split(" ")[0]}</div>
+                          <div style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 180 }}>{m.reply.preview}</div>
+                        </div>
+                      )}
+                      {renderBody(m)}<div style={{ fontSize: 9, opacity: 0.7, marginTop: 2, textAlign: "right", color: isMedia && !m.reply ? C.muted : undefined }}>{ago(m.created_at)}</div>
                     </div>
+                    <button onClick={() => { setReplyTo({ message_id: m.message_id, preview: (m.body || (m.message_type !== "text" ? "📎 Attachment" : "")).slice(0, 120), mine: m.mine }); }} title="Reply" style={{ ...iconBtn, padding: 2, opacity: 0.55 }}><Reply size={15} /></button>
                     <button onClick={() => setPicker(picker === m.message_id ? null : m.message_id)} title="React" style={{ ...iconBtn, padding: 2, opacity: 0.55 }}><SmilePlus size={15} /></button>
                   </div>
                   {picker === m.message_id && (
@@ -260,6 +269,15 @@ export function Convo({ conn, onActivity }) {
         )}
         <div ref={endRef} />
       </div>
+      {replyTo && (
+        <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 10px", borderTop: `1px solid ${C.line}`, background: C.cream }}>
+          <div style={{ borderLeft: `3px solid ${C.green}`, paddingLeft: 8, flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: C.greenDk }}>Replying to {replyTo.mine ? "yourself" : conn.full_name.split(" ")[0]}</div>
+            <div style={{ fontSize: 12, color: C.muted, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{replyTo.preview || "Attachment"}</div>
+          </div>
+          <button onClick={() => setReplyTo(null)} title="Cancel reply" style={{ ...iconBtn, padding: 2 }}><X size={16} /></button>
+        </div>
+      )}
       <div style={{ display: "flex", gap: 6, padding: 8, borderTop: `1px solid ${C.line}`, background: "#fff", alignItems: "center" }}>
         <input ref={fileRef} type="file" accept="image/*,video/*" onChange={onPick} style={{ display: "none" }} />
         <button onClick={() => fileRef.current?.click()} disabled={busy || recording} title="Send photo or video" style={iconBtn}><ImageIcon size={18} /></button>
