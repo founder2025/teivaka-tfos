@@ -500,9 +500,12 @@ async def register(
             failure_detail=str(e)[:500],
         )
         await db.commit()
+        # Surface a short, controlled reason (NOT a stack trace) so the signup
+        # screen can show what actually failed — full detail is in
+        # shared.registration_audit_log.failure_detail.
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Registration failed due to a server error. Please try again.",
+            detail=f"Couldn't create your account: {type(e).__name__} — {str(e)[:180]}",
         ) from e
 
     return {
