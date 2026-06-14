@@ -16,7 +16,7 @@
  */
 
 import { useMutation } from '@tanstack/react-query';
-import { apiClient } from './apiClient';
+import { submitEvent } from './outbox';
 
 /**
  * @param {object} options
@@ -30,10 +30,18 @@ export function useEventMutation({ eventType, successMessage = 'Logged ✓', onS
     mutationFn: async ({ anchors, payload, occurred_at }) => {
       const body = { event_type: eventType, anchors, payload };
       if (occurred_at) body.occurred_at = occurred_at;
-      const result = await apiClient.post('/events', body);
+      const result = await submitEvent(body);
+      if (result?._queued) return { _queued: true };   // stored offline, will sync
       return result.data;
     },
     onSuccess: (data) => {
+      if (data?._queued) {
+        window.dispatchEvent(new CustomEvent('tfos:toast', {
+          detail: { message: "Saved — will sync when you're back online.", type: 'success' },
+        }));
+        if (onSuccess) onSuccess(data);
+        return;
+      }
       const hash = data?.audit_hash;
       window.dispatchEvent(new CustomEvent('tfos:toast', {
         detail: { message: successMessage, type: 'success', hash },

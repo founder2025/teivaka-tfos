@@ -30,6 +30,7 @@ import { useUniversalLogShortcut } from "../components/nav/UniversalLogButton";
 import TisChatPanel from "../components/tis/TisChatPanel";
 import Toast from "../components/ui/Toast";
 import ChatWidget from "../components/chat/ChatWidget";
+import OfflineBanner from "../components/OfflineBanner";
 import { ChatProvider } from "../context/ChatContext";
 import { firePings, AnnouncementBanner } from "../utils/useFlags.jsx";
 import LogSheet from "../components/launcher/LogSheet";
@@ -362,6 +363,7 @@ function ShellContent() {
       <ChatWidget />
       <LauncherSheet />
       <FarmTourHost />
+      <OfflineBanner />
       <Toast />
     </div>
   );
