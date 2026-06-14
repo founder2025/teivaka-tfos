@@ -15,7 +15,7 @@
  * VAPID provisioning — see summary), not here.
  */
 import { useEffect, useRef, useState, useCallback } from "react";
-import { X, Send, Video, Minus, ArrowLeft } from "lucide-react";
+import { X, Send, Minus, ArrowLeft, Image as ImageIcon, Mic, Square } from "lucide-react";
 import { useChat } from "../../context/ChatContext";
 
 const API = "/api/v1/community";
@@ -23,8 +23,18 @@ const tok = () => localStorage.getItem("tfos_access_token");
 const H = () => { const t = tok(); return t ? { "Content-Type": "application/json", Authorization: `Bearer ${t}` } : { "Content-Type": "application/json" }; };
 async function getJSON(u) { const r = await fetch(u, { headers: H() }); if (!r.ok) throw new Error(String(r.status)); return r.json(); }
 async function postJSON(u, b) { const r = await fetch(u, { method: "POST", headers: H(), body: b ? JSON.stringify(b) : undefined }); if (!r.ok) throw new Error(String(r.status)); return r.json().catch(() => ({})); }
+async function uploadFile(file) {
+  // multipart → reuse the community /uploads endpoint (15 MB, image/video/audio).
+  // Do NOT set Content-Type — the browser sets the multipart boundary.
+  const t = tok();
+  const fd = new FormData(); fd.append("file", file);
+  const r = await fetch(`${API}/uploads`, { method: "POST", headers: t ? { Authorization: `Bearer ${t}` } : {}, body: fd });
+  if (!r.ok) throw new Error(String(r.status));
+  return r.json();
+}
 
 const C = { soil: "#5C4033", green: "#6AA84F", greenDk: "#3E7B1F", line: "#E8E2D4", cream: "#F8F3E9", muted: "#8A7B6F", red: "#D4442E" };
+const iconBtn = { border: "none", background: "transparent", cursor: "pointer", color: "#8A7B6F", padding: 6, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 };
 const initials = (n) => (n || "?").split(" ").map((s) => s[0]).slice(0, 2).join("").toUpperCase();
 const ago = (iso) => { if (!iso) return ""; const s = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000); if (s < 60) return "just now"; if (s < 3600) return `${Math.floor(s / 60)}m`; if (s < 86400) return `${Math.floor(s / 3600)}h`; return `${Math.floor(s / 86400)}d`; };
 const isMuted = () => localStorage.getItem("tfos_chat_muted") === "1";
@@ -67,26 +77,84 @@ function Convo({ conn, onActivity }) {
   const [msgs, setMsgs] = useState(null);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
+  const [recording, setRecording] = useState(false);
   const endRef = useRef(null);
+  const fileRef = useRef(null);
+  const recRef = useRef(null);
+  const chunksRef = useRef([]);
   const load = useCallback(() => getJSON(`${API}/chat/with/${conn.user_id}`).then((r) => { setMsgs(r.data?.messages || []); onActivity?.(); }).catch(() => setMsgs([])), [conn.user_id, onActivity]);
   useEffect(() => { load(); const id = setInterval(load, 4000); return () => clearInterval(id); }, [load]);
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [msgs]);
+  // stop any in-flight recording if the convo unmounts
+  useEffect(() => () => { try { recRef.current?.stream?.getTracks?.().forEach((t) => t.stop()); } catch { /* ignore */ } }, []);
+
   const send = async () => { if (!text.trim() || busy) return; setBusy(true); const b = text.trim(); setText(""); try { await postJSON(`${API}/chat/with/${conn.user_id}`, { body: b }); await load(); } catch { setText(b); } finally { setBusy(false); } };
+
+  const sendMedia = async (file) => {
+    if (!file || busy) return;
+    const type = file.type || "";
+    const kind = type.startsWith("video/") ? "video" : type.startsWith("audio/") ? "audio" : "image";
+    setBusy(true);
+    try {
+      const up = await uploadFile(file);
+      const url = up?.data?.url; if (!url) throw new Error("upload failed");
+      await postJSON(`${API}/chat/with/${conn.user_id}`, { message_type: kind, media_url: url, media_meta: { name: up.data?.name, bytes: up.data?.bytes } });
+      await load();
+    } catch (e) {
+      const s = String(e);
+      alert("Couldn't send that file. " + (s.includes("413") ? "Max 15 MB." : s.includes("415") ? "Unsupported file type." : "Please try again."));
+    } finally { setBusy(false); }
+  };
+
+  const onPick = (e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) sendMedia(f); };
+
+  const startRec = async () => {
+    if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") { alert("Voice notes aren't supported on this device/browser."); return; }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mr = new MediaRecorder(stream);
+      mr.stream = stream; chunksRef.current = [];
+      mr.ondataavailable = (e) => { if (e.data && e.data.size) chunksRef.current.push(e.data); };
+      mr.onstop = async () => {
+        stream.getTracks().forEach((t) => t.stop());
+        const mtype = mr.mimeType || "audio/webm";
+        const ext = (mtype.includes("mp4") || mtype.includes("m4a")) ? "m4a" : mtype.includes("ogg") ? "ogg" : "webm";
+        const blob = new Blob(chunksRef.current, { type: mtype });
+        if (blob.size > 0) await sendMedia(new File([blob], `voice-${Date.now()}.${ext}`, { type: mtype }));
+      };
+      mr.start(); recRef.current = mr; setRecording(true);
+    } catch { alert("Microphone permission is needed for voice notes."); }
+  };
+  const stopRec = () => { try { recRef.current?.stop(); } catch { /* ignore */ } setRecording(false); };
+
+  const renderBody = (m) => {
+    if (m.message_type === "image") return <img src={m.media_url} alt="photo" onClick={() => window.open(m.media_url, "_blank")} style={{ maxWidth: 200, maxHeight: 240, borderRadius: 10, display: "block", cursor: "pointer" }} />;
+    if (m.message_type === "video") return <video src={m.media_url} controls style={{ maxWidth: 220, maxHeight: 240, borderRadius: 10, display: "block" }} />;
+    if (m.message_type === "audio") return <audio src={m.media_url} controls style={{ width: 200, display: "block" }} />;
+    return m.body;
+  };
+
   return (
     <>
       <div style={{ flex: 1, overflowY: "auto", padding: 10, display: "flex", flexDirection: "column", gap: 6, background: C.cream, WebkitOverflowScrolling: "touch" }}>
         {msgs == null ? <div style={{ color: C.muted, fontSize: 12, textAlign: "center", marginTop: 16 }}>Loading…</div>
           : msgs.length === 0 ? <div style={{ color: C.muted, fontSize: 12, textAlign: "center", marginTop: 16 }}>Say hello to {conn.full_name.split(" ")[0]}.</div>
-          : msgs.map((m) => (
-            <div key={m.message_id} style={{ alignSelf: m.mine ? "flex-end" : "flex-start", maxWidth: "80%", background: m.mine ? C.green : "#fff", color: m.mine ? "#fff" : C.soil, border: m.mine ? "none" : `1px solid ${C.line}`, borderRadius: 12, padding: "7px 11px", fontSize: 13, lineHeight: 1.4 }}>
-              {m.body}<div style={{ fontSize: 9, opacity: 0.7, marginTop: 2, textAlign: "right" }}>{ago(m.created_at)}</div>
-            </div>
-          ))}
+          : msgs.map((m) => {
+            const isMedia = m.message_type && m.message_type !== "text";
+            return (
+              <div key={m.message_id} style={{ alignSelf: m.mine ? "flex-end" : "flex-start", maxWidth: "80%", background: isMedia ? "transparent" : (m.mine ? C.green : "#fff"), color: m.mine ? "#fff" : C.soil, border: (isMedia || m.mine) ? "none" : `1px solid ${C.line}`, borderRadius: 12, padding: isMedia ? 0 : "7px 11px", fontSize: 13, lineHeight: 1.4 }}>
+                {renderBody(m)}<div style={{ fontSize: 9, opacity: 0.7, marginTop: 2, textAlign: "right", color: isMedia ? C.muted : undefined }}>{ago(m.created_at)}</div>
+              </div>
+            );
+          })}
         <div ref={endRef} />
       </div>
-      <div style={{ display: "flex", gap: 8, padding: 8, borderTop: `1px solid ${C.line}`, background: "#fff" }}>
-        <input value={text} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => e.key === "Enter" && send()} placeholder="Message…" style={{ flex: 1, border: `1px solid ${C.line}`, borderRadius: 18, padding: "9px 13px", fontSize: 14, outline: "none" }} />
-        <button onClick={send} disabled={busy || !text.trim()} style={{ border: "none", background: C.green, color: "#fff", borderRadius: "50%", width: 40, height: 40, flexShrink: 0, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><Send size={16} /></button>
+      <div style={{ display: "flex", gap: 6, padding: 8, borderTop: `1px solid ${C.line}`, background: "#fff", alignItems: "center" }}>
+        <input ref={fileRef} type="file" accept="image/*,video/*" onChange={onPick} style={{ display: "none" }} />
+        <button onClick={() => fileRef.current?.click()} disabled={busy || recording} title="Send photo or video" style={iconBtn}><ImageIcon size={18} /></button>
+        <button onClick={recording ? stopRec : startRec} disabled={busy} title={recording ? "Stop & send voice note" : "Record voice note"} style={{ ...iconBtn, color: recording ? C.red : C.muted }}>{recording ? <Square size={16} /> : <Mic size={18} />}</button>
+        <input value={text} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => e.key === "Enter" && send()} placeholder={recording ? "Recording… tap ■ to send" : "Message…"} disabled={recording} style={{ flex: 1, border: `1px solid ${C.line}`, borderRadius: 18, padding: "9px 13px", fontSize: 14, outline: "none", background: recording ? C.cream : "#fff" }} />
+        <button onClick={send} disabled={busy || recording || !text.trim()} style={{ border: "none", background: C.green, color: "#fff", borderRadius: "50%", width: 40, height: 40, flexShrink: 0, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><Send size={16} /></button>
       </div>
     </>
   );
@@ -160,7 +228,6 @@ function FloatingChat({ conn, index, onClose }) {
           <div style={{ fontWeight: 700, fontSize: 13, color: C.soil, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{conn.full_name}</div>
           <div style={{ fontSize: 10.5, color: conn.online ? C.greenDk : C.muted }}>{conn.online ? "Active now" : "Offline"}</div>
         </div>
-        <button title="Video (coming soon)" onClick={(e) => { e.stopPropagation(); alert("Video calling launches in a later phase."); }} style={{ border: "none", background: "transparent", cursor: "pointer", color: C.muted }}><Video size={17} /></button>
         <button title="Collapse" onClick={(e) => { e.stopPropagation(); persist({ ...st, collapsed: true }); }} style={{ border: "none", background: "transparent", cursor: "pointer", color: C.muted }}><Minus size={17} /></button>
         <button title="Close" onClick={(e) => { e.stopPropagation(); onClose(); }} style={{ border: "none", background: "transparent", cursor: "pointer", color: C.muted }}><X size={17} /></button>
       </div>
@@ -245,7 +312,6 @@ export default function ChatWidget() {
                 <div style={{ fontWeight: 700, fontSize: 14, color: C.soil }}>{c.full_name}</div>
                 <div style={{ fontSize: 11, color: c.online ? C.greenDk : C.muted }}>{c.online ? "Active now" : "Offline"}</div>
               </div>
-              <button title="Video (coming soon)" onClick={() => alert("Video calling launches in a later phase.")} style={{ border: "none", background: "transparent", cursor: "pointer", color: C.muted, width: 40, height: 40 }}><Video size={18} /></button>
               <button onClick={() => { chat.closeChat(mobileExpanded); setMobileExpanded(null); }} aria-label="Close" style={{ border: "none", background: "transparent", cursor: "pointer", color: C.muted, width: 40, height: 40 }}><X size={20} /></button>
             </div>
             <Convo conn={c} />

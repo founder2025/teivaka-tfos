@@ -71,7 +71,14 @@ async def _presence_map(user_ids):
 
 
 class ChatSend(BaseModel):
-    body: str
+    body: str | None = None
+    message_type: str = "text"        # text | image | video | audio | card
+    media_url: str | None = None      # must be one of our own /uploads URLs
+    media_meta: dict | None = None    # optional: name / bytes / duration
+
+
+_MSG_TYPES = {"text", "image", "video", "audio", "card"}
+_MEDIA_LABEL = {"image": "📷 Photo", "video": "🎬 Video", "audio": "🎙 Voice message", "card": "🔗 Shared item"}
 
 
 class PushSub(BaseModel):
@@ -188,7 +195,11 @@ async def list_connections(user: dict = Depends(get_current_user)):
                    th.thread_id, th.last_message_at,
                    (SELECT count(*) FROM community.chat_messages m
                       WHERE m.thread_id = th.thread_id AND m.sender_user_id = u.user_id AND m.read_at IS NULL) AS unread,
-                   (SELECT body FROM community.chat_messages m
+                   (SELECT COALESCE(m.body, CASE m.message_type
+                              WHEN 'image' THEN '📷 Photo' WHEN 'video' THEN '🎬 Video'
+                              WHEN 'audio' THEN '🎙 Voice message' WHEN 'card' THEN '🔗 Shared item'
+                              ELSE 'Message' END)
+                      FROM community.chat_messages m
                       WHERE m.thread_id = th.thread_id ORDER BY m.created_at DESC LIMIT 1) AS last_body
             FROM peers pr
             JOIN tenant.users u ON u.user_id = pr.peer_id AND u.is_active = TRUE
@@ -245,7 +256,8 @@ async def chat_with(other_id: str, after: str = Query(None), user: dict = Depend
             clause = " AND m.created_at > :after"
             params["after"] = after
         msgs = (await db.execute(text(f"""
-            SELECT m.message_id, m.sender_user_id, m.body, m.created_at, m.read_at
+            SELECT m.message_id, m.sender_user_id, m.body, m.created_at, m.read_at,
+                   m.message_type, m.media_url, m.media_meta
             FROM community.chat_messages m
             WHERE m.thread_id = :tid{clause}
             ORDER BY m.created_at ASC LIMIT 200
@@ -263,19 +275,38 @@ async def chat_with(other_id: str, after: str = Query(None), user: dict = Depend
 @router.post("/chat/with/{other_id}")
 async def chat_send(other_id: str, body: ChatSend, user: dict = Depends(get_current_user)):
     uid = str(user["user_id"])
-    if not (body.body and body.body.strip()):
-        raise HTTPException(status_code=422, detail="Message body is required")
+    mt = (body.message_type or "text").strip().lower()
+    if mt not in _MSG_TYPES:
+        raise HTTPException(status_code=422, detail="Unsupported message type")
+    text_body = (body.body or "").strip() or None
+    media_url = (body.media_url or "").strip() or None
+
+    if mt == "text":
+        if not text_body:
+            raise HTTPException(status_code=422, detail="Message body is required")
+    else:
+        if not media_url:
+            raise HTTPException(status_code=422, detail="media_url is required for a media message")
+        # Only ever store our OWN upload URLs — never an arbitrary external link.
+        if not media_url.startswith("/api/v1/community/uploads/"):
+            raise HTTPException(status_code=422, detail="media_url must be an uploaded Teivaka asset")
+
+    mmeta = json.dumps(body.media_meta) if body.media_meta else None
+    # what the push notification + connection-list preview shows
+    preview = text_body or _MEDIA_LABEL.get(mt, "New message")
+
     async with get_rls_db(str(user["tenant_id"])) as db:
         if not await _connected(db, uid, other_id):
             raise HTTPException(status_code=403, detail="Connect first — you can only chat with mutual connections")
         tid = await _thread_id(db, uid, other_id, create=True)
         row = (await db.execute(text("""
-            INSERT INTO community.chat_messages (thread_id, sender_user_id, body)
-            VALUES (:tid, :uid, :body) RETURNING message_id, created_at
-        """), {"tid": tid, "uid": uid, "body": body.body.strip()})).mappings().first()
+            INSERT INTO community.chat_messages (thread_id, sender_user_id, body, message_type, media_url, media_meta)
+            VALUES (:tid, :uid, :body, :mt, :murl, CAST(:mmeta AS jsonb))
+            RETURNING message_id, created_at
+        """), {"tid": tid, "uid": uid, "body": text_body, "mt": mt, "murl": media_url, "mmeta": mmeta})).mappings().first()
         await db.execute(text("UPDATE community.chat_threads SET last_message_at = now() WHERE thread_id = :tid"), {"tid": tid})
         # Web Push to the recipient (best-effort; no-op until VAPID configured)
-        await push_to_user(db, other_id, user.get("full_name") or "New message", body.body.strip(), url="/home")
+        await push_to_user(db, other_id, user.get("full_name") or "New message", preview, url="/home")
     return {"data": {"thread_id": tid, "message_id": str(row["message_id"]), "created_at": str(row["created_at"])}}
 
 

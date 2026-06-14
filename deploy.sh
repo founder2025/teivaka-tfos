@@ -20,7 +20,7 @@
 set -uo pipefail
 
 BRANCH="${1:-claude/beautiful-fermi-F0dLX}"
-EXPECTED_HEAD="${2:-135_fix_field_event_verbs}"
+EXPECTED_HEAD="${2:-136_chat_media}"
 ROOT="/opt/teivaka"
 COMPOSE="docker compose -f ${ROOT}/04_environment/docker-compose.yml"
 PSQL="docker exec -i teivaka_db psql -v ON_ERROR_STOP=1 -tA -U teivaka -d teivaka_db"
@@ -127,6 +127,8 @@ NONULL="$($PSQL -c "SELECT count(*) FROM tenant.production_units WHERE enterpris
 [ "${NONULL:-1}" = "0" ] && ok "all production_units backfilled with enterprise_type (130)" || bad "production_units rows with NULL enterprise_type = ${NONULL} (backfill incomplete)"
 MILK="$($PSQL -c "SELECT pg_get_constraintdef(oid) LIKE '%MILK_COLLECTED%' FROM pg_constraint WHERE conname='events_event_type_check';" 2>/dev/null | tr -d '[:space:]')"
 [ "$MILK" = "t" ] && ok "audit.events CHECK includes MILK_COLLECTED (livestock pack)" || bad "MILK_COLLECTED not in audit CHECK"
+CHATMEDIA="$($PSQL -c "SELECT count(*) FROM information_schema.columns WHERE table_schema='community' AND table_name='chat_messages' AND column_name IN ('message_type','media_url','media_meta');" 2>/dev/null | tr -d '[:space:]')"
+[ "${CHATMEDIA:-0}" = "3" ] && ok "chat_messages media columns present (136 — chat photo/voice)" || bad "chat_messages media columns missing (${CHATMEDIA}/3 — migration 136)"
 
 # ---------------------------------------------------------------------------
 say "5/7  Bring API up + wait healthy + parity check"

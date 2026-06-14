@@ -73,7 +73,9 @@ try:
     MEDIA_DIR.mkdir(parents=True, exist_ok=True)
 except Exception:  # noqa: BLE001 — never let upload-dir setup block API boot
     pass
-_ALLOWED_EXT = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".mp4", ".webm", ".mov"}
+_ALLOWED_EXT = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".mp4", ".webm", ".mov",
+                # audio (chat voice notes — MediaRecorder emits webm/mp4; others for Safari/iOS)
+                ".m4a", ".mp3", ".ogg", ".oga", ".wav", ".aac", ".weba"}
 _MAX_BYTES = 15 * 1024 * 1024  # 15 MB
 _MENTION_RE = re.compile(r"@\[([^\]]+)\]")
 
