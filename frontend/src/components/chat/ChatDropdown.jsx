@@ -4,6 +4,7 @@
  * Reads the live connection list written by ChatWidget's poll (context.conns).
  */
 import { useEffect, useRef, useState } from "react";
+import { NavLink } from "react-router-dom";
 import { X, Volume2, VolumeX, Bell } from "lucide-react";
 import { useChat } from "../../context/ChatContext";
 import { enablePush } from "../../utils/push";
@@ -88,6 +89,12 @@ export default function ChatDropdown() {
               {c.unread > 0 && <span style={{ background: C.red, color: "#fff", borderRadius: 9, minWidth: 18, height: 18, padding: "0 5px", fontSize: 11, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>{c.unread}</span>}
             </button>
           ))}
+      </div>
+      <div style={{ display: "flex", justifyContent: "center", padding: "8px 12px", borderTop: `1px solid ${C.line}` }}>
+        <NavLink to="/messages" onClick={() => chat.setDropdownOpen(false)}
+          style={{ color: C.greenDk, fontSize: 12.5, fontWeight: 600, textDecoration: "none" }}>
+          View all messages
+        </NavLink>
       </div>
     </div>
   );

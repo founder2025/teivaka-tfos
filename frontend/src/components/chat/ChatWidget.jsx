@@ -86,7 +86,7 @@ const dayLabel = (iso) => {
   return d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
 };
 
-function Convo({ conn, onActivity }) {
+export function Convo({ conn, onActivity }) {
   const [msgs, setMsgs] = useState(null);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
