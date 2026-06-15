@@ -8,11 +8,9 @@
 import { useEffect, useRef, useState } from "react";
 import { Plus, Send } from "lucide-react";
 
-// Routed through the backend TIS service (farm-context aware, cites layers in the
-// reply, rate-limited, logged to ai_commands -> Usage). The OpenClaw bridge remains
-// available but is no longer the in-app path.
-const TIS_API = "/api/v1/tis/chat";
-function authToken() { try { return localStorage.getItem("tfos_access_token") || ""; } catch { return ""; } }
+import { tisIdentityBody } from "../../utils/tisIdentity";
+const TIS_ENDPOINT = import.meta.env.VITE_TIS_ENDPOINT || "/tis/chat";
+const TIS_TOKEN = import.meta.env.VITE_TIS_BRIDGE_TOKEN || "";
 
 
 
@@ -198,33 +196,44 @@ export default function TIS() {
   async function send() {
     const text = input.trim();
     if (!text || loading) return;
-    // Conversation history = the existing thread minus the opener, so TIS keeps
-    // context within the session. The current message is sent separately.
-    const history = messages
-      .filter((m) => !m.isOpener)
-      .map((m) => ({ role: m.role, content: m.content }));
     setMessages((m) => [...m, { role: "user", content: text }]);
     setInput("");
     setLoading(true);
     const start = performance.now();
     try {
-      const res = await fetch(TIS_API, {
+      const headers = { "Content-Type": "application/json" };
+      if (TIS_TOKEN) headers.Authorization = `Bearer ${TIS_TOKEN}`;
+      const res = await fetch(TIS_ENDPOINT, {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken()}` },
-        body: JSON.stringify({ message: text, conversation_history: history, farm_id: null }),
+        headers,
+        body: JSON.stringify({
+          message: text,
+          ...tisIdentityBody(),
+        }),
       });
+      if (!res.ok) throw new Error(`TIS ${res.status}: ${await res.text()}`);
+      const data = await res.json();
       const ms = Math.max(1, Math.round(performance.now() - start));
-      if (res.status === 429) {
-        setMessages((m) => [...m, { role: "assistant", content: "You've reached today's TIS limit. It resets tomorrow — or upgrade your plan for more questions.", responseTimeMs: ms }]);
-        return;
-      }
-      if (!res.ok) throw new Error(`TIS ${res.status}`);
-      const body = await res.json();
-      const reply = body?.data?.response ?? body?.response ?? "I couldn't form a reply just now — please try again.";
-      setMessages((m) => [...m, { role: "assistant", content: reply, responseTimeMs: ms }]);
-    } catch {
+      setMessages((m) => [
+        ...m,
+        {
+          role: "assistant",
+          content: parseReply(data),
+          layer: parseLayer(data),
+          responseTimeMs: ms,
+        },
+      ]);
+    } catch (err) {
       const ms = Math.max(1, Math.round(performance.now() - start));
-      setMessages((m) => [...m, { role: "assistant", content: "Something went wrong reaching TIS. Please try again in a moment.", responseTimeMs: ms }]);
+      setMessages((m) => [
+        ...m,
+        {
+          role: "assistant",
+          content: `Something broke: ${err.message}`,
+          layer: LAYER_LABEL[2],
+          responseTimeMs: ms,
+        },
+      ]);
     } finally {
       setLoading(false);
     }
@@ -291,8 +300,8 @@ export default function TIS() {
         {messages.map((m, i) => {
           if (m.role === "user") return <UserBubble key={i} content={m.content} />;
           const footer = m.isOpener
-            ? "TIS · cites its sources inline · ready"
-            : `TIS · ${m.responseTimeMs ?? "—"}ms`;
+            ? "TIS · Fiji Intelligence Layer · ready"
+            : `TIS · ${m.layer || LAYER_LABEL[2]} · ${m.responseTimeMs ?? "—"}ms`;
           return <AssistantBubble key={i} content={m.content} footer={footer} />;
         })}
         {loading && (
