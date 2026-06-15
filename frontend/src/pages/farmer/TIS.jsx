@@ -252,8 +252,12 @@ export default function TIS() {
   }
 
   function onNewSession() {
-    // Day 4: POST /api/v1/tis/sessions to mint a fresh conversation id.
-    console.log("TODO: new session");
+    // Reset to a fresh thread (back to the opener + starter chips). Clears the
+    // in-memory conversation so the next question starts a new session.
+    setMessages([OPENER]);
+    setInput("");
+    setLoading(false);
+    inputRef.current?.focus();
   }
 
   return (
