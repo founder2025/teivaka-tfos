@@ -1,20 +1,16 @@
 /**
  * Waitlist.jsx — public launch-waitlist signup + shareable QR.
  *
- * Posts to /api/v1/waitlist/join (public, idempotent). On success shows the QR
- * (served from /api/v1/waitlist/qr.png) so it can be shared/printed at events.
- * Brand light theme; no auth required.
+ * Submits to POST /api/v1/waitlist/join (public, idempotent on email). Each
+ * signup is stored as a shared.attribution_events row (event_type
+ * 'waitlist_signup') AND emailed to the team via Resend. On success this page
+ * shows a shareable QR (served from /api/v1/waitlist/qr.png).
+ *
+ * Brand light theme; scoped .wl styles for consistent inputs + focus states.
  */
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { Check, Download } from "lucide-react";
-
-const T = {
-  cream: "var(--cream)", paper: "var(--paper)", soil: "var(--soil)",
-  green: "var(--green)", greenDk: "var(--green-dk)", greenTint: "var(--green-tint)",
-  line: "var(--line)", muted: "var(--muted)", red: "var(--red)",
-};
-const FONT = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif";
+import { Check, Download, ShieldCheck } from "lucide-react";
 
 const COUNTRIES = [
   ["FJ", "Fiji"], ["WS", "Samoa"], ["TO", "Tonga"], ["VU", "Vanuatu"],
@@ -24,6 +20,54 @@ const COUNTRIES = [
 const ROLES = ["Farmer", "Buyer / Trader", "Supplier / Service provider", "Banker / Investor", "Government / NGO", "Other"];
 
 const QR_URL = "/api/v1/waitlist/qr.png";
+
+const WL_CSS = `
+.wl{min-height:100vh;display:flex;flex-direction:column;background:var(--cream);
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;color:var(--soil)}
+.wl-top{text-align:center;padding:22px 16px;border-bottom:1px solid var(--line)}
+.wl-top img{height:58px;width:auto;display:block;margin:0 auto}
+.wl-main{flex:1;display:flex;align-items:center;justify-content:center;padding:24px 16px 44px}
+.wl-wrap{width:100%;max-width:460px}
+.wl-card{background:var(--paper);border:1px solid var(--line);border-radius:20px;padding:34px 30px;
+  box-shadow:0 10px 30px rgba(92,64,51,0.10)}
+@media (max-width:480px){.wl-card{padding:28px 22px}}
+.wl-head{text-align:center}
+.wl-badge{display:inline-block;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;
+  color:var(--green-dk);background:var(--green-tint);padding:5px 14px;border-radius:999px}
+.wl-title{font-size:27px;font-weight:800;color:var(--soil);line-height:1.18;margin:14px 0 0;letter-spacing:-0.3px}
+.wl-sub{color:var(--muted);font-size:14.5px;line-height:1.55;margin:10px 0 0}
+.wl-form{margin-top:26px;display:flex;flex-direction:column;gap:16px;text-align:left}
+.wl-field label{display:block;font-size:12.5px;font-weight:600;color:var(--soil);margin-bottom:6px}
+.wl-input{width:100%;height:48px;padding:0 14px;border:1.5px solid var(--line);border-radius:12px;
+  background:var(--cream);color:var(--soil);font-size:15px;font-family:inherit;box-sizing:border-box;
+  transition:border-color .15s,box-shadow .15s}
+.wl-input::placeholder{color:#a59a86}
+.wl-input:focus{outline:none;border-color:var(--green);box-shadow:0 0 0 3px rgba(106,168,79,0.18)}
+select.wl-input{appearance:none;-webkit-appearance:none;cursor:pointer;padding-right:40px;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%237A6E5C' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'><path d='m6 9 6 6 6-6'/></svg>");
+  background-repeat:no-repeat;background-position:right 13px center}
+.wl-row{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media (max-width:430px){.wl-row{grid-template-columns:1fr}}
+.wl-btn{width:100%;height:52px;border:none;border-radius:12px;background:var(--green);color:#fff;
+  font-size:16px;font-weight:700;cursor:pointer;margin-top:4px;transition:background .15s,transform .05s}
+.wl-btn:hover{background:var(--green-dk)}
+.wl-btn:active{transform:translateY(1px)}
+.wl-btn:disabled{opacity:.65;cursor:default}
+.wl-trust{display:flex;align-items:center;justify-content:center;gap:6px;font-size:12px;color:var(--muted);margin-top:14px}
+.wl-err{font-size:13px;color:var(--red);margin:2px 0 0}
+.wl-back{display:block;text-align:center;margin-top:24px;padding-top:18px;border-top:1px solid var(--line);
+  font-size:13.5px;color:var(--muted);text-decoration:none}
+.wl-back:hover{text-decoration:underline}
+.wl-tag{text-align:center;font-size:12px;color:var(--muted);margin-top:18px}
+.wl-check{width:64px;height:64px;border-radius:50%;background:var(--green-tint);display:flex;
+  align-items:center;justify-content:center;margin:0 auto 16px}
+.wl-qrcard{margin-top:22px;background:var(--cream);border:1px solid var(--line);border-radius:16px;padding:20px;text-align:center}
+.wl-qr{width:184px;height:184px;border-radius:14px;border:1px solid var(--line);background:#fff;display:block;margin:14px auto 0}
+.wl-dl{margin-top:14px;display:inline-flex;align-items:center;justify-content:center;gap:7px;width:100%;height:46px;
+  border:1.5px solid var(--line);border-radius:12px;background:var(--paper);color:var(--green-dk);
+  font-size:14px;font-weight:600;text-decoration:none}
+.wl-dl:hover{border-color:var(--green)}
+`;
 
 export default function Waitlist() {
   const [f, setF] = useState({ name: "", email: "", country: "FJ", role: "Farmer" });
@@ -57,96 +101,78 @@ export default function Waitlist() {
     }
   }
 
-  const input = {
-    width: "100%", padding: "11px 13px", borderRadius: 12, fontSize: 15,
-    border: `1px solid ${T.line}`, background: T.cream, color: T.soil, fontFamily: FONT,
-  };
-
   return (
-    <div className="min-h-screen flex flex-col" style={{ background: T.cream, fontFamily: FONT }}>
-      <div className="text-center py-5" style={{ borderBottom: `1px solid ${T.line}` }}>
-        <img src="/teivaka_logo.png" alt="Teivaka" style={{ height: 64, width: "auto", display: "block", margin: "0 auto" }} />
+    <div className="wl">
+      <style>{WL_CSS}</style>
+
+      <div className="wl-top">
+        <img src="/teivaka_logo.png" alt="Teivaka" />
       </div>
 
-      <div className="flex-1 flex items-center justify-center p-4">
-        <div className="w-full max-w-md">
-          <div className="rounded-2xl p-7 sm:p-8" style={{ background: T.paper, border: `1px solid ${T.line}`, boxShadow: "0 4px 16px rgba(92,64,51,0.10)" }}>
+      <div className="wl-main">
+        <div className="wl-wrap">
+          <div className="wl-card">
 
             {state !== "done" ? (
               <>
-                <div className="text-center">
-                  <span style={{ display: "inline-block", fontSize: 12, fontWeight: 700, letterSpacing: 0.8, textTransform: "uppercase", color: T.greenDk, background: T.greenTint, padding: "4px 12px", borderRadius: 999 }}>
-                    Launching soon
-                  </span>
-                  <h1 className="mt-3" style={{ fontSize: 26, fontWeight: 800, color: T.soil, lineHeight: 1.2 }}>
-                    Join the launch waitlist
-                  </h1>
-                  <p className="mt-2" style={{ color: T.muted, fontSize: 14.5, lineHeight: 1.55 }}>
-                    Transform idle land into wealth. Be first to know when Teivaka — Fiji's AI-powered
-                    agriculture ecosystem — opens to your area.
-                  </p>
+                <div className="wl-head">
+                  <span className="wl-badge">Launching soon</span>
+                  <h1 className="wl-title">Join the launch waitlist</h1>
+                  <p className="wl-sub">Transform idle land into wealth. Be first to know when Teivaka — Fiji's AI-powered agriculture ecosystem — opens to your area.</p>
                 </div>
 
-                <form onSubmit={submit} className="mt-6 flex flex-col gap-3.5">
-                  <div>
-                    <label style={{ fontSize: 13, fontWeight: 600, color: T.soil }}>Your name</label>
-                    <input style={{ ...input, marginTop: 5 }} value={f.name} onChange={(e) => set("name", e.target.value)} placeholder="e.g. Sera Naidu" required />
+                <form className="wl-form" onSubmit={submit}>
+                  <div className="wl-field">
+                    <label htmlFor="wl-name">Your name</label>
+                    <input id="wl-name" className="wl-input" value={f.name} onChange={(e) => set("name", e.target.value)} placeholder="e.g. Sera Naidu" required />
                   </div>
-                  <div>
-                    <label style={{ fontSize: 13, fontWeight: 600, color: T.soil }}>Email</label>
-                    <input style={{ ...input, marginTop: 5 }} type="email" value={f.email} onChange={(e) => set("email", e.target.value)} placeholder="you@example.com" required />
+                  <div className="wl-field">
+                    <label htmlFor="wl-email">Email</label>
+                    <input id="wl-email" className="wl-input" type="email" value={f.email} onChange={(e) => set("email", e.target.value)} placeholder="you@example.com" required />
                   </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label style={{ fontSize: 13, fontWeight: 600, color: T.soil }}>Country</label>
-                      <select style={{ ...input, marginTop: 5 }} value={f.country} onChange={(e) => set("country", e.target.value)}>
+                  <div className="wl-row">
+                    <div className="wl-field">
+                      <label htmlFor="wl-country">Country</label>
+                      <select id="wl-country" className="wl-input" value={f.country} onChange={(e) => set("country", e.target.value)}>
                         {COUNTRIES.map(([c, n]) => <option key={c} value={c}>{n}</option>)}
                       </select>
                     </div>
-                    <div>
-                      <label style={{ fontSize: 13, fontWeight: 600, color: T.soil }}>I am a…</label>
-                      <select style={{ ...input, marginTop: 5 }} value={f.role} onChange={(e) => set("role", e.target.value)}>
+                    <div className="wl-field">
+                      <label htmlFor="wl-role">I am a…</label>
+                      <select id="wl-role" className="wl-input" value={f.role} onChange={(e) => set("role", e.target.value)}>
                         {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
                       </select>
                     </div>
                   </div>
 
-                  {state === "error" && <p style={{ fontSize: 13, color: T.red }}>{msg}</p>}
+                  {state === "error" && <p className="wl-err">{msg}</p>}
 
-                  <button type="submit" disabled={state === "sending"}
-                    className="mt-1 w-full py-3.5 rounded-xl font-semibold"
-                    style={{ background: T.green, color: "#fff", fontSize: 15.5, cursor: state === "sending" ? "default" : "pointer", opacity: state === "sending" ? 0.7 : 1 }}>
+                  <button type="submit" className="wl-btn" disabled={state === "sending"}>
                     {state === "sending" ? "Joining…" : "Join the waitlist →"}
                   </button>
+                  <div className="wl-trust">
+                    <ShieldCheck size={14} strokeWidth={2} /> No spam — we'll only email you about the launch.
+                  </div>
                 </form>
               </>
             ) : (
-              <div className="text-center">
-                <div style={{ width: 60, height: 60, borderRadius: "50%", background: T.greenTint, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px" }}>
-                  <Check size={30} strokeWidth={2.75} color={T.greenDk} />
-                </div>
-                <h1 style={{ fontSize: 24, fontWeight: 800, color: T.soil }}>You're on the list!</h1>
-                <p className="mt-2" style={{ color: T.muted, fontSize: 14.5, lineHeight: 1.55 }}>{msg}</p>
+              <div style={{ textAlign: "center" }}>
+                <div className="wl-check"><Check size={32} strokeWidth={2.75} color="var(--green-dk)" /></div>
+                <h1 className="wl-title">You're on the list!</h1>
+                <p className="wl-sub">{msg}</p>
 
-                <div className="mt-6 rounded-xl p-4" style={{ background: T.cream, border: `1px solid ${T.line}` }}>
-                  <p style={{ fontSize: 13, fontWeight: 600, color: T.soil }}>Spread the word</p>
-                  <p style={{ fontSize: 12.5, color: T.muted, marginTop: 2 }}>Scan or share this code to invite another farmer.</p>
-                  <img src={QR_URL} alt="Waitlist QR code" width={180} height={180}
-                    style={{ display: "block", margin: "14px auto 0", borderRadius: 12, border: `1px solid ${T.line}`, background: "#fff" }} />
-                  <a href={QR_URL} download="teivaka-waitlist-qr.png"
-                    className="mt-3 inline-flex items-center justify-center gap-1.5 w-full py-2.5 rounded-xl font-medium"
-                    style={{ background: T.paper, color: T.greenDk, border: `1px solid ${T.line}`, fontSize: 14 }}>
-                    <Download size={15} /> Download QR
-                  </a>
+                <div className="wl-qrcard">
+                  <p style={{ fontSize: 13.5, fontWeight: 700, color: "var(--soil)", margin: 0 }}>Spread the word</p>
+                  <p style={{ fontSize: 12.5, color: "var(--muted)", margin: "3px 0 0" }}>Scan or share this code to invite another farmer.</p>
+                  <img className="wl-qr" src={QR_URL} alt="Waitlist QR code" width={184} height={184} />
+                  <a className="wl-dl" href={QR_URL} download="teivaka-waitlist-qr.png"><Download size={15} /> Download QR</a>
                 </div>
               </div>
             )}
 
-            <div className="mt-6 pt-5 text-center" style={{ borderTop: `1px solid ${T.line}` }}>
-              <Link to="/" className="font-medium hover:underline" style={{ color: T.muted, fontSize: 13.5 }}>← Back to teivaka.com</Link>
-            </div>
+            <Link to="/" className="wl-back">← Back to teivaka.com</Link>
           </div>
-          <p className="text-center text-xs mt-5" style={{ color: T.muted }}>Building the operating system for Pacific agriculture 🌏</p>
+          <p className="wl-tag">Building the operating system for Pacific agriculture 🌏</p>
         </div>
       </div>
     </div>
