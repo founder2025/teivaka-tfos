@@ -68,45 +68,18 @@ export function AdminRoute({ children }) {
  *        than mistakenly let a user past the gate)
  */
 export function FarmerRoute({ children }) {
+  // Slice 1: the blocking onboarding wall is retired. A new user lands INSIDE
+  // the platform and completes setup at their own pace via the in-platform
+  // welcome card + "Getting started" checklist (SetupHost in FarmerShell).
+  // No onboarding gate here — only auth + admin redirects remain.
   const user = getCurrentUser();
   const location = useLocation();
-  const cached = getOnboardingComplete();
-
-  // Reconcile state machine: "ok" (proceed), "checking" (fetch in flight),
-  // "redirect" (server confirmed incomplete or unreachable).
-  const [reconcile, setReconcile] = useState(cached ? "ok" : "checking");
-
-  useEffect(() => {
-    if (cached || !user || isAdmin()) return undefined;
-    let cancelled = false;
-    fetch("/api/v1/onboarding/status", { headers: { ...authHeader() } })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((body) => {
-        if (cancelled) return;
-        const complete = body?.data?.onboarding_complete === true;
-        setOnboardingComplete(complete);
-        setReconcile(complete ? "ok" : "redirect");
-      })
-      .catch(() => { if (!cancelled) setReconcile("redirect"); });
-    return () => { cancelled = true; };
-  }, [cached, user]);
 
   if (!user) {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
   if (isAdmin()) {
     return <Navigate to="/admin" replace />;
-  }
-  if (cached) {
-    return children;
-  }
-  if (reconcile === "checking") {
-    // Render nothing while we ask the server. The wait is one small JSON
-    // round-trip and only happens on cache miss.
-    return null;
-  }
-  if (reconcile === "redirect") {
-    return <Navigate to="/onboarding" replace />;
   }
   return children;
 }

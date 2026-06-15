@@ -19,7 +19,7 @@
 
 import { lazy, Suspense } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import { AdminRoute, FarmerRoute, OnboardingRoute, PrivateRoute } from "./components/PrivateRoute";
+import { AdminRoute, FarmerRoute, PrivateRoute } from "./components/PrivateRoute";
 
 // ── Auth pages (public) ──────────────────────────────────────────────────────
 import Login    from "./pages/Login";
@@ -42,8 +42,6 @@ const Landing       = lazy(() => import("./pages/Landing"));
 const MarketingPage = lazy(() => import("./pages/MarketingPage"));
 const Community     = lazy(() => import("./pages/farmer/Community"));
 const CommunityMap  = lazy(() => import("./pages/farmer/CommunityMap"));
-const Onboarding    = lazy(() => import("./pages/farmer/Onboarding"));
-const FarmBasics    = lazy(() => import("./pages/onboarding/FarmBasics"));
 const MeSettings    = lazy(() => import("./pages/farmer/MeSettings"));
 const Promote       = lazy(() => import("./pages/me/Promote"));
 const MeVerification = lazy(() => import("./pages/me/MeVerification"));
@@ -200,13 +198,11 @@ export default function App() {
               gates the asset — the page just renders it in an iframe). */}
           <Route path="/prototype" element={<PrivateRoute><Prototype /></PrivateRoute>} />
 
-          {/* ── Onboarding (authenticated, not yet onboarded) ───────────── */}
-          <Route path="/onboarding" element={
-            <OnboardingRoute><Onboarding /></OnboardingRoute>
-          } />
-          <Route path="/onboarding/farm-basics" element={
-            <OnboardingRoute><FarmBasics /></OnboardingRoute>
-          } />
+          {/* ── Onboarding wall RETIRED (Slice 1) — users land in-platform and
+              complete setup at their own pace via the welcome card + checklist.
+              SOLO landing (Login.jsx / onboarding next_route) points at /solo*;
+              that surface isn't built yet, so seal both 404 paths to /home. */}
+          <Route path="/solo/*" element={<Navigate to="/home" replace />} />
 
           {/* ── Admin routes ────────────────────────────────────────────── */}
           {/* AdminRoute checks role = ADMIN. All others get /403.          */}
