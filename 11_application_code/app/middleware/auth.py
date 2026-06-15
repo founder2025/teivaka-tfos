@@ -46,6 +46,8 @@ class AuthMiddleware:
         "/api/v1/webhooks/whatsapp",
         "/api/v1/webhooks/stripe",
         "/api/v1/attribution/capture",
+        "/api/v1/waitlist/join",
+        "/api/v1/waitlist/qr.png",
         "/api/v1/platform/flags",
         "/api/v1/platform/metric",
         "/api/v1/platform/banner",

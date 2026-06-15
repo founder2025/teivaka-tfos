@@ -17,6 +17,7 @@ from app.routers import (
     auth,
     admin,
     analytics,
+    waitlist,
     buyers_crm,
     partners,
     equipment_records,
@@ -257,6 +258,7 @@ PREFIX = "/api/v1"
 # Auth
 app.include_router(auth.router,               prefix=f"{PREFIX}/auth",               tags=["Auth"])
 app.include_router(attribution.router,        prefix=f"{PREFIX}/attribution",        tags=["attribution"])
+app.include_router(waitlist.router,            prefix=f"{PREFIX}/waitlist",            tags=["Launch Waitlist"])
 app.include_router(me_router.router,          prefix=f"{PREFIX}/me",                 tags=["Me"])
 
 # Admin (ADMIN role only — require_admin() enforced inside each route)

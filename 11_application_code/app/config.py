@@ -106,6 +106,9 @@ class Settings(BaseSettings):
     email_otp_resend_cooldown_seconds: int = 30
     email_otp_hourly_cap: int = 5
 
+    # ── Launch waitlist ───────────────────────────────────────────────────────
+    waitlist_notify_email: str = "founder@teivaka.com"
+
     # ── SMTP / Transactional email ────────────────────────────────────────────
     smtp_host: str = ""
     smtp_port: int = 587

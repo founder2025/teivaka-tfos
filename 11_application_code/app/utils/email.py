@@ -239,6 +239,43 @@ def send_otp_email(to_email: str, code: str, name: str) -> bool:
         return False
 
 
+def send_waitlist_notification(name: str, email: str, country: str, role: str | None, total: int) -> bool:
+    """Notify the team that someone joined the launch waitlist. Best-effort —
+    never raises (a failed notify must not fail the visitor's signup)."""
+    if not _is_resend():
+        logger.warning("Waitlist notify skipped (Resend not configured) — %s", email)
+        return False
+    api_key = settings.smtp_password.strip()
+    to = settings.waitlist_notify_email
+    payload = {
+        "from": settings.smtp_from,
+        "to": [to],
+        "subject": f"New launch-waitlist signup: {name} ({email})",
+        "text": (
+            f"New Teivaka launch-waitlist signup:\n\n"
+            f"Name:    {name}\n"
+            f"Email:   {email}\n"
+            f"Country: {country or '—'}\n"
+            f"Role:    {role or '—'}\n\n"
+            f"Total on the waitlist: {total}\n"
+        ),
+    }
+    try:
+        resp = httpx.post(
+            "https://api.resend.com/emails",
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            content=json.dumps(payload),
+            timeout=15.0,
+        )
+        if resp.status_code >= 400:
+            logger.error("Resend rejected waitlist notify: HTTP %d %s", resp.status_code, resp.text[:300])
+            return False
+        return True
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("Resend waitlist notify failed: %s", exc)
+        return False
+
+
 def send_password_reset_email(to_email: str, token: str, name: str) -> bool:
     """
     Send a password reset email via Resend HTTPS API.

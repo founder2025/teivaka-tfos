@@ -80,20 +80,51 @@ export default function Landing() {
   }, [navigate]);
 
   return (
-    <iframe
-      ref={frameRef}
-      title="Teivaka"
-      srcDoc={L3_HTML}
-      style={{
-        position: "fixed",
-        inset: 0,
-        width: "100%",
-        height: "100%",
-        border: "none",
-        margin: 0,
-        padding: 0,
-        display: "block",
-      }}
-    />
+    <>
+      <iframe
+        ref={frameRef}
+        title="Teivaka"
+        srcDoc={L3_HTML}
+        style={{
+          position: "fixed",
+          inset: 0,
+          width: "100%",
+          height: "100%",
+          border: "none",
+          margin: 0,
+          padding: 0,
+          display: "block",
+        }}
+      />
+      {/* Launch-waitlist CTA — overlaid so the pixel-exact L3 design stays
+          untouched. Can be folded into the hero markup later with placement
+          guidance from the operator. */}
+      <button
+        type="button"
+        onClick={() => navigate("/waitlist")}
+        aria-label="Join the launch waitlist"
+        style={{
+          position: "fixed",
+          right: 16,
+          bottom: "calc(16px + env(safe-area-inset-bottom, 0px))",
+          zIndex: 2147483000,
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 8,
+          padding: "13px 20px",
+          borderRadius: 999,
+          border: "none",
+          background: "#6AA84F",
+          color: "#fff",
+          fontWeight: 700,
+          fontSize: 15,
+          fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+          boxShadow: "0 8px 22px rgba(44,26,14,0.28)",
+          cursor: "pointer",
+        }}
+      >
+        🚀 Join the launch waitlist
+      </button>
+    </>
   );
 }

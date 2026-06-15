@@ -30,6 +30,7 @@ import Terms    from "./pages/Terms";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
 import VerifyEmail from "./pages/VerifyEmail";
+import Waitlist from "./pages/Waitlist";
 import Home from "./pages/farmer/Home";
 const HomePillar = lazy(() => import("./pages/home/HomePillar"));
 const NotificationsPage = lazy(() => import("./pages/home/NotificationsPage"));
@@ -193,6 +194,7 @@ export default function App() {
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/reset-password"  element={<ResetPassword />} />
           <Route path="/verify-email"    element={<VerifyEmail />} />
+          <Route path="/waitlist"        element={<Waitlist />} />
 
           {/* Design-reference prototype (founder/admin only; backend require_admin
               gates the asset — the page just renders it in an iframe). */}
