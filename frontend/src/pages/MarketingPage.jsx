@@ -219,7 +219,7 @@ const PAGE_CONTENT = {
       },
       {
         heading: "How TAE changes that",
-        body: "Every event a farmer logs on TAE is hash-chained into an immutable audit record. After a season or two of consistent use, that record is no longer a story the farmer tells the bank; it is mathematics the bank can verify in seconds via a public verification endpoint. The farmer scans a QR code from their phone. The banker scans it on the other side of the desk. Both see the same provable production history.",
+        body: "Every event a farmer logs becomes part of a secure, verifiable record. After a season or two of consistent use, that record is no longer a story the farmer tells the bank; it is evidence the bank can confirm. The farmer shows it from their phone; the lender confirms it. Both see the same provable production history.",
       },
       {
         heading: "Who benefits",
@@ -249,7 +249,7 @@ const PAGE_CONTENT = {
     sections: [
       {
         heading: "Lenders and credit providers",
-        body: "TAE produces auditable, hash-chained production records that can be verified by any third party with a public verification endpoint. If you are a bank, microfinance institution, or rural credit provider trying to underwrite smallholder loans without a paper trail to underwrite against, the audit chain is the asset you have been missing.",
+        body: "TAE produces verifiable production records a lender can independently confirm. If you are a bank, microfinance institution, or rural credit provider trying to underwrite smallholder loans without a paper trail, that verifiable record is the asset you have been missing.",
       },
       {
         heading: "Buyers, exporters, and supermarket groups",
@@ -1562,6 +1562,42 @@ function PillarModal({ pillar, onClose }) {
   );
 }
 
+const TAE_PILLARS = [
+  {
+    n: "1",
+    name: "Community",
+    subtitle: "The Agricultural Marketplace & Trade Network",
+    problem: "Many farmers produce crops without knowing who is buying, what buyers need, current market demand, or current prices. As a result, crops are often sold below value, wasted, or left unsold.",
+    does: ["Buy and sell produce", "Connect buyers and farmers", "Access market opportunities", "Discover suppliers and service providers", "Build trusted farming networks", "Enable digital transactions and mobile money integration", "Improve transparency within agricultural trade"],
+    outcome: "A stronger agricultural economy where farmers can access markets faster, sell with confidence, and reduce post-harvest losses.",
+  },
+  {
+    n: "2",
+    name: "TFOS — Teivaka Farm Operating System",
+    subtitle: "The Record Engine That Makes Farmers Bankable",
+    problem: "Many farmers are productive but invisible. Banks, investors, insurers, and buyers often require records before making decisions, yet most farmers rely on memory, notebooks, or incomplete documentation. Without records, opportunities are lost.",
+    does: ["Records all farm activities", "Tracks crops, livestock, labor, and expenses", "Monitors yields and productivity", "Generates farm performance reports", "Creates digital production histories", "Measures profitability", "Builds a verifiable farming record over time"],
+    outcome: "Farmers move from undocumented operations to data-backed agricultural businesses — the foundation for financing, investment, insurance, supply contracts, and long-term growth. TFOS transforms farm activity into farm credibility.",
+  },
+  {
+    n: "3",
+    name: "Classroom",
+    subtitle: "The Knowledge & Skills Development Pillar",
+    problem: "Many farmers know how to grow crops but lack access to structured, up-to-date information that improves profitability. Poor timing, poor crop selection, and outdated practices often reduce income.",
+    does: ["Crop-specific training modules", "Production planning guides", "Seasonal planting recommendations", "Market timing strategies", "Financial literacy education", "Farm business management training", "Best-practice agricultural techniques"],
+    outcome: "Farmers gain the knowledge needed to make better decisions, increase yields, improve quality, and maximise returns — answering what to plant, when to plant, how to plant, and who will buy it.",
+  },
+  {
+    n: "4",
+    name: "TIS — Teivaka Intelligence System",
+    subtitle: "The AI Mentor for Every Farmer",
+    problem: "Many farmers do not have immediate access to agronomists, advisors, consultants, or experienced mentors. Critical decisions are often made with limited information.",
+    does: ["Answers farming questions", "Provides personalized recommendations", "Interprets farm data", "Assists with planning and decision-making", "Helps identify risks and opportunities", "Guides farmers toward better outcomes"],
+    outcome: "Every farmer gains access to intelligent support, regardless of location or farm size. TIS transforms data into action and uncertainty into confidence.",
+    cta: true,
+  },
+];
+
 function TFOSPage({ navigate }) {
   const [activePillar, setActivePillar] = useState(null);
 
@@ -1587,12 +1623,12 @@ function TFOSPage({ navigate }) {
       {/* 1. Hero */}
       <section className="tvm-hero2">
         <div>
-          <p className="tvm-eyebrow">The Agriculture Ecosystem</p>
-          <h1 className="tvm-h1">Built so Pacific farms finally have a record.</h1>
-          <p className="tvm-sub">TAE guides your daily work, keeps your harvest, cash, and labour straight, and grows with you — from one task at a time to full commercial operations. Built in Fiji, on two working farms, before it touches any other farm.</p>
+          <p className="tvm-eyebrow">Teivaka Agriculture Ecosystem</p>
+          <h1 className="tvm-h1">Building the operating system for Pacific agriculture.</h1>
+          <p className="tvm-sub">Teivaka is Fiji's first AI-powered agriculture ecosystem — connecting farmers, buyers, knowledge, finance, and production data into one unified platform. For decades, farmers have operated in isolation: selling without market visibility, farming without records, learning through trial and error, and struggling to access finance despite owning productive land. Through a single login, farmers gain the tools, knowledge, data, and opportunities to turn farming from a subsistence activity into a scalable, profitable business.</p>
           <div className="tvm-cta-row">
-            <button type="button" className="tvm-pill-primary" onClick={() => navigate("/contact")}>Start with TAE <Icon name="arrowRight" /></button>
-            <button type="button" className="tvm-pill-secondary" onClick={() => navigate("/partner")}>Explore partnership <Icon name="arrowRight" /></button>
+            <button type="button" className="tvm-pill-primary" onClick={() => navigate("/waitlist")}>Join the launch waitlist <Icon name="arrowRight" /></button>
+            <button type="button" className="tvm-pill-secondary" onClick={() => navigate("/tis-public")}>Meet TIS <Icon name="arrowRight" /></button>
           </div>
         </div>
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
@@ -1604,129 +1640,73 @@ function TFOSPage({ navigate }) {
       {/* 2. Four pillars */}
       <section className="tvm-section">
         <div className="tvm-wrap">
-          <p className="tvm-eyebrow">Four pillars, one farmer login</p>
+          <p className="tvm-eyebrow">The four pillars of the Teivaka ecosystem</p>
           <h2 className="tvm-h2">Everything a farm needs, in one place.</h2>
-          <p className="tvm-sub" style={{ maxWidth: 680 }}>Pacific farmers don't need four apps. They need one place where knowledge, neighbours, daily work, and an AI advisor live together.</p>
-          <div className="tvm-grid-2" style={{ marginTop: 30 }}>
-            {TFOS_PILLARS.map((p) => (
-              <button type="button" key={p.key} className="tvm-card tappable" onClick={() => setActivePillar(p.key)}>
-                <div className="tvm-isq"><Icon name={p.icon} /></div>
-                <span className="tvm-tag">{p.tag}</span>
-                <h3>{p.name}</h3>
-                <p>{p.blurb}</p>
-                <span className="tvm-seeinside">See inside <Icon name="arrowRight" /></span>
-              </button>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* 3. Three modes */}
-      <section className="tvm-section">
-        <div className="tvm-wrap">
-          <p className="tvm-eyebrow">Three modes, derived not chosen</p>
-          <h2 className="tvm-h2">One platform that meets every farmer where they are.</h2>
-          <p className="tvm-sub" style={{ maxWidth: 680 }}>TAE adapts to how your farm is operating — size, active cycles, tenure. A subsistence grower never sees what a commercial operator sees.</p>
-          <div className="tvm-grid-3" style={{ marginTop: 30 }}>
-            <div className="tvm-mode">
-              <TaskPhone small />
-              <h4>Solo</h4>
-              <p className="tvm-modetag">Subsistence</p>
-              <p>One task at a time. Voice playback, three buttons, nothing to learn.</p>
-            </div>
-            <div className="tvm-mode">
-              <div className="tvm-phone sm">
-                <div className="tvm-gscreen">
-                  <div className="tvm-ghead"><span /></div>
-                  <div className="tvm-gbody">
-                    <div className="tvm-grow big" />
-                    <div className="tvm-grow" />
-                    <div className="tvm-grow" />
-                  </div>
-                  <div className="tvm-gnav"><i /><i className="on" /><i /><i /><i /></div>
+          {TAE_PILLARS.map((p) => (
+            <div key={p.n} className="tvm-card" style={{ marginTop: 22, textAlign: "left" }}>
+              <span className="tvm-tag">Pillar {p.n}</span>
+              <h3 style={{ marginTop: 8 }}>{p.name}</h3>
+              <p style={{ color: "#4F8A37", fontWeight: 600, margin: "2px 0 12px" }}>{p.subtitle}</p>
+              <p><strong>The problem.</strong> {p.problem}</p>
+              <p style={{ marginTop: 10 }}><strong>What it does</strong></p>
+              <ul style={{ margin: "12px 0 0", paddingLeft: 20, color: "#5C4033", lineHeight: 1.75, fontSize: 15.5 }}>
+                {p.does.map((d, i) => <li key={i}>{d}</li>)}
+              </ul>
+              <p style={{ marginTop: 12 }}><strong>The outcome.</strong> {p.outcome}</p>
+              {p.cta ? (
+                <div className="tvm-cta-row" style={{ marginTop: 14 }}>
+                  <button type="button" className="tvm-pill-secondary" onClick={() => navigate("/tis-public")}>See the full TIS page <Icon name="arrowRight" /></button>
                 </div>
-              </div>
-              <h4>Growth</h4>
-              <p className="tvm-modetag">Mid-tier</p>
-              <p>Five pillars across Home, Classroom, Farm, TIS, and Me. More depth as you grow.</p>
+              ) : null}
             </div>
-            <div className="tvm-mode">
-              <div className="tvm-desk">
-                <div className="tvm-desk-side"><i className="on" /><i /><i /><i /></div>
-                <div className="tvm-desk-main">
-                  <div className="tvm-desk-tiles"><div /><div /><div /></div>
-                  <div className="tvm-spark" />
-                </div>
-              </div>
-              <h4>Commercial</h4>
-              <p className="tvm-modetag">Multi-block</p>
-              <p>Analytics, multi-farm rollup, full operational depth for serious operations.</p>
-            </div>
-          </div>
+          ))}
         </div>
       </section>
 
-      {/* 4. Seven verticals */}
-      <section className="tvm-section">
-        <div className="tvm-wrap">
-          <p className="tvm-eyebrow">The seven verticals</p>
-          <h2 className="tvm-h2">Seven verticals. One system.</h2>
-          <p className="tvm-sub" style={{ maxWidth: 560 }}>Pacific farms aren't monoculture. TAE isn't either.</p>
-          <div className="tvm-grid-4" style={{ marginTop: 30 }}>
-            {TFOS_VERTICALS.map((v) => (
-              <div className="tvm-vtile" key={v.name}>
-                <div className="tvm-isq"><Icon name={v.icon} /></div>
-                <h4>{v.name}</h4>
-                <p>{v.desc}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* 5. Moat (dark) */}
-      <section className="tvm-section tvm-dark">
-        <div className="tvm-wrap">
-          <p className="tvm-eyebrow light">Why this matters long-term</p>
-          <h2 className="tvm-h2">Your farm history, finally something you can prove.</h2>
-          <p className="tvm-sub" style={{ maxWidth: 760, marginBottom: 36 }}>Every action on a TAE farm becomes one structured record. Over a season, that record is useful. Over years, it becomes something a buyer can trust, a lender can lend against, a government can build programmes on.</p>
-          <div className="tvm-darkcard">
-            <div className="tvm-chain">
-              {[
-                { icon: "event", name: "Action", desc: "A farmer logs what they did." },
-                { icon: "doc", name: "Record", desc: "Captured as one structured row." },
-                { icon: "chain", name: "Chain", desc: "Hash-linked to the row before." },
-                { icon: "hash", name: "Evidence", desc: "A tamper-evident history." },
-                { icon: "bank", name: "Trust", desc: "A lender can lend against it.", terminal: true },
-              ].map((n, i, arr) => (
-                <React.Fragment key={n.name}>
-                  <div className={n.terminal ? "tvm-cnode terminal" : "tvm-cnode"}>
-                    <div className="tvm-isq"><Icon name={n.icon} /></div>
-                    <span className="tvm-cname">{n.name}</span>
-                    <span className="tvm-cdesc">{n.desc}</span>
-                  </div>
-                  {i < arr.length - 1 ? <span className="tvm-carrow"><Icon name="arrowRight" /></span> : null}
-                </React.Fragment>
-              ))}
-            </div>
-          </div>
-          <div className="tvm-stats">
-            <div className="tvm-stat"><p className="tvm-statk">Immutable</p><p>Records are not editable. Corrections create new linked records.</p></div>
-            <div className="tvm-stat"><p className="tvm-statk">Chain-linked</p><p>Every record cryptographically links to the one before it.</p></div>
-            <div className="tvm-stat"><p className="tvm-statk">Publicly verifiable</p><p>Open verification endpoint. Anyone can validate the chain.</p></div>
-            <div className="tvm-stat"><p className="tvm-statk">Banker-ready</p><p>Monthly evidence PDF via WhatsApp. QR-scannable. No translation layer.</p></div>
-          </div>
-        </div>
-      </section>
-
-      {/* 6. Closing CTAs */}
+      {/* 3. One ecosystem */}
       <section className="tvm-section tvm-center">
         <div className="tvm-narrow">
-          <p className="tvm-eyebrow">See it in action</p>
-          <h2 className="tvm-h2">Want to walk through it?</h2>
-          <div className="tvm-cta-row">
-            <a className="tvm-pill-primary" href={wa(WA_FOUNDER, "Bula Cody, I want to see TAE in action.")} target="_blank" rel="noopener noreferrer">Talk to Cody on WhatsApp <Icon name="arrowRight" /></a>
-            <button type="button" className="tvm-pill-secondary" onClick={() => navigate("/our-farms")}>See the farms TAE runs on <Icon name="arrowRight" /></button>
+          <p className="tvm-eyebrow">One ecosystem. One login. One farmer record.</p>
+          <h2 className="tvm-h2">Individually powerful. Together, transformative.</h2>
+          <p className="tvm-sub">Each pillar solves a major agricultural challenge. Together they create a connected ecosystem where farmers can learn, produce, sell, track performance, build credibility, and grow — all from a single platform.</p>
+        </div>
+      </section>
+
+      {/* 4. Purpose */}
+      <section className="tvm-section">
+        <div className="tvm-narrow">
+          <p className="tvm-eyebrow">Our purpose</p>
+          <h2 className="tvm-h2">Turn idle land into productive wealth.</h2>
+          <ul style={{ margin: "16px 0 0", paddingLeft: 20, color: "#5C4033", lineHeight: 1.8, fontSize: 16 }}>
+            <li>To turn idle land into productive wealth.</li>
+            <li>To make invisible farmers visible.</li>
+            <li>To make productive farmers bankable.</li>
+            <li>To create a future where every farmer has access to the tools, knowledge, markets, and opportunities needed to succeed.</li>
+          </ul>
+        </div>
+      </section>
+
+      {/* 5. Positioning + proof */}
+      <section className="tvm-section tvm-dark tvm-center">
+        <div className="tvm-narrow">
+          <p className="tvm-eyebrow light">Teivaka positioning</p>
+          <h2 className="tvm-h2">The first AI-powered agriculture operating system built for Fiji and the Pacific.</h2>
+          <div className="tvm-stats" style={{ marginTop: 30 }}>
+            <div className="tvm-stat"><p className="tvm-statk">🌱 83,000+</p><p>Farmers addressable market</p></div>
+            <div className="tvm-stat"><p className="tvm-statk">💰 $10–$12</p><p>Returned for every dollar spent, consistently</p></div>
+            <div className="tvm-stat"><p className="tvm-statk">🚜 Two farms</p><p>Working farms operating within the ecosystem</p></div>
+          </div>
+        </div>
+      </section>
+
+      {/* 6. Closing */}
+      <section className="tvm-section tvm-center">
+        <div className="tvm-narrow">
+          <h2 className="tvm-h2">Turning data into decisions. Turning land into wealth.</h2>
+          <p className="tvm-sub">Building the future of Pacific agriculture.</p>
+          <div className="tvm-cta-row" style={{ justifyContent: "center" }}>
+            <button type="button" className="tvm-pill-primary" onClick={() => navigate("/waitlist")}>Join the launch waitlist <Icon name="arrowRight" /></button>
+            <button type="button" className="tvm-pill-secondary" onClick={() => navigate("/tis-public")}>Meet TIS <Icon name="arrowRight" /></button>
           </div>
         </div>
       </section>
