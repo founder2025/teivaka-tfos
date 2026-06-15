@@ -1762,16 +1762,26 @@ function TFOSPage({ navigate }) {
 // ══════════════════════════════════════════════════════════════════════════════
 function TISPage({ navigate }) {
   const tisLink = wa(WA_TIS, "Bula, I want to get connected to TIS.");
+  const listStyle = { margin: "16px 0 0", paddingLeft: 20, color: "#5C4033", lineHeight: 1.75, fontSize: 15.5 };
+  const examples = [
+    "How far apart should I plant watermelon?",
+    "My cassava leaves are turning yellow.",
+    "When should I plant tomatoes for the Christmas market?",
+    "How much fertiliser should I apply this month?",
+    "What crop should I plant on clay soil?",
+    "How do I improve my yaqona yield?",
+    "What is affecting my dalo plants?",
+  ];
   return (
     <main className="tvm">
       <style>{TVM_CSS}</style>
 
-      {/* 1. Hero */}
+      {/* 1. Hero — Every farmer deserves a mentor */}
       <section className="tvm-hero2">
         <div>
           <p className="tvm-eyebrow">TIS — Teivaka Intelligence System</p>
-          <h1 className="tvm-h1">The advisor every Pacific farmer should have, on WhatsApp.</h1>
-          <p className="tvm-sub">Send a message. Get an answer. Voice or text. Your language. About your farm specifically — TIS knows your cycles, your buyers, your weather. Live today.</p>
+          <h1 className="tvm-h1">Every farmer deserves a mentor.</h1>
+          <p className="tvm-sub">TIS is a 24/7 AI-powered farming mentor built specifically for farmers in Fiji and the Pacific. It combines modern artificial intelligence with local agricultural knowledge to provide practical guidance whenever a farmer needs it — day or night, from any location. No appointments. No waiting. No travel. Just answers.</p>
           <div className="tvm-cta-row">
             <a className="tvm-pill-primary" href={tisLink} target="_blank" rel="noopener noreferrer">Get connected to TIS <Icon name="arrowRight" /></a>
           </div>
@@ -1785,48 +1795,135 @@ function TISPage({ navigate }) {
             </div>
           </div>
           <div className="tvm-bubbles">
-            <div className="tvm-bub them">Bula TIS, my eggplants in Block 3 have white spots on the leaves. What should I do?</div>
-            <div className="tvm-bub tis">Bula! White spots on eggplant leaves usually means powdery mildew, especially this time of year. Don't spray anything yet — first take 3 photos of an affected leaf, top and underside, and send them back. I'll confirm before recommending treatment.</div>
-            <div className="tvm-bub photos">[3 photos sent]</div>
-            <div className="tvm-bub tis">Confirmed — powdery mildew. Your last chemical application on Block 3 was 18 days ago (acceptable). I recommend a sulphur-based spray within 48 hours, evening application only. Remember 7-day withholding before harvest. Want me to add this to your task list?</div>
+            <div className="tvm-bub them">Bula TIS, my cassava leaves are turning yellow. What should I do?</div>
+            <div className="tvm-bub tis">Bula! Yellowing cassava leaves can mean a few things — nutrient shortage, waterlogging, or pests. To narrow it down: are the lower (older) leaves yellowing first, or the new growth at the top? And has it been very wet lately?</div>
+            <div className="tvm-bub them">The bottom leaves first. And yes, lots of rain.</div>
+            <div className="tvm-bub tis">That points to nitrogen leaching from heavy rain. Hold off on anything drastic — improve drainage around the rows first, then a light nitrogen top-dressing once the soil drains. Want me to remind you in 5 days to check progress?</div>
           </div>
         </div>
       </section>
 
-      {/* 2. What makes TIS different */}
+      {/* 2. Why TIS exists */}
+      <section className="tvm-section">
+        <div className="tvm-narrow">
+          <p className="tvm-eyebrow">Why TIS exists</p>
+          <h2 className="tvm-h2">Knowledge shouldn't depend on who you know or where you live.</h2>
+          <p className="tvm-sub">For generations, farming knowledge has been passed from parent to child, neighbour to neighbour, and farmer to farmer. That knowledge has built farms, fed families, and sustained communities across Fiji and the Pacific. But what happens when a pest appears for the first time? When market conditions suddenly change? When a farmer needs advice immediately and there is no agricultural officer nearby? For too long, access to knowledge has depended on who you know, where you live, and whether help is available when you need it. TIS was built to change that.</p>
+        </div>
+      </section>
+
+      {/* 3. Built for Fiji */}
+      <section className="tvm-section" style={{ paddingTop: 0, borderTop: 0 }}>
+        <div className="tvm-narrow">
+          <p className="tvm-eyebrow">Built for Fiji. Trained for Pacific agriculture.</p>
+          <h2 className="tvm-h2">Advice that understands Fiji — not another country.</h2>
+          <p className="tvm-sub">Unlike generic AI tools built for global audiences, TIS is designed around the realities of farming in Fiji and the Pacific. It is being developed using local agronomy knowledge, farming practices, crop production systems, climate conditions, seasonal patterns, and expertise relevant to our region. TIS understands the challenges farmers face every day:</p>
+          <ul style={listStyle}>
+            <li>Tropical growing conditions</li>
+            <li>Cyclones and extreme weather events</li>
+            <li>Seasonal production cycles</li>
+            <li>Local pest and disease pressures</li>
+            <li>Market timing challenges</li>
+            <li>Smallholder and commercial farming realities</li>
+            <li>Fiji's most important crops and farming systems</li>
+          </ul>
+          <p className="tvm-sub" style={{ marginTop: 18 }}>As the Teivaka ecosystem grows, TIS continues to learn from verified farm records, production data, agricultural experts, and real-world farming outcomes. The goal is simple: to provide every farmer with advice that understands Fiji — not recommendations designed for completely different countries and growing conditions.</p>
+        </div>
+      </section>
+
+      {/* 4. WhatsApp + Language */}
       <section className="tvm-section">
         <div className="tvm-wrap">
-          <p className="tvm-eyebrow">What makes TIS different</p>
-          <h2 className="tvm-h2">Grounded. Honest. In your language.</h2>
+          <p className="tvm-eyebrow">Farm advice through WhatsApp</p>
+          <h2 className="tvm-h2">No app. No login. No digital-literacy barrier.</h2>
           <div className="tvm-grid-3" style={{ marginTop: 30 }}>
             <div className="tvm-card">
-              <div className="tvm-isq"><Icon name="shield" /></div>
-              <h3>Grounded, never invented</h3>
-              <p>TIS only answers from your farm's data and the Teivaka knowledge base. It never guesses a price, a date, or a yield. If it doesn't know, it says so.</p>
+              <div className="tvm-isq"><Icon name="tis" /></div>
+              <h3>Where you already are</h3>
+              <p>Most farmers already use WhatsApp. There is nothing to download, no complicated software, no passwords, and no training required. Simply send a message and start asking questions — whether you farm in Tailevu, Naitasiri, Sigatoka, Labasa, Taveuni, Kadavu, or the outer islands. Knowledge should not be limited by geography.</p>
             </div>
             <div className="tvm-card">
               <div className="tvm-isq"><Icon name="globe" /></div>
-              <h3>Fijian, Hindi, English</h3>
-              <p>Speak the language you actually speak. TIS adapts. Voice notes welcome.</p>
+              <h3>Speak your language</h3>
+              <p>TIS communicates in English, Fijian, and Hindi, and supports both voice messages and text messages. Ask naturally in the language you are most comfortable using and receive clear, practical guidance in return. No technical terms. No complicated instructions.</p>
             </div>
             <div className="tvm-card">
-              <div className="tvm-isq"><Icon name="tis" /></div>
-              <h3>On WhatsApp today</h3>
-              <p>No new app to learn. The phone you already use, the number you already have. In-app coming soon.</p>
+              <div className="tvm-isq"><Icon name="shield" /></div>
+              <h3>Clear, useful advice</h3>
+              <p>Just answers you can act on — grounded in local knowledge, given the moment you need them.</p>
             </div>
           </div>
         </div>
       </section>
 
-      {/* 3. Closing CTAs */}
+      {/* 5. What TIS can do */}
+      <section className="tvm-section">
+        <div className="tvm-wrap">
+          <p className="tvm-eyebrow">What TIS can do</p>
+          <h2 className="tvm-h2">A companion for the whole season.</h2>
+          <div className="tvm-grid-3" style={{ marginTop: 30 }}>
+            <div className="tvm-card">
+              <h3>Crop production guidance</h3>
+              <p>Practical, step-by-step support for land preparation, crop selection, plant spacing, fertiliser application, irrigation, weed control, harvest planning, post-harvest handling, and yield improvement — whether you're growing watermelon, cassava, dalo, yaqona, vegetables, root crops, or commercial crops.</p>
+            </div>
+            <div className="tvm-card">
+              <h3>Pest &amp; disease support</h3>
+              <p>When problems appear in the field, every day matters. TIS helps identify likely pests, recognise disease symptoms, understand possible causes, and apply management recommendations — reducing crop losses through early intervention. Respond quickly and confidently instead of guessing.</p>
+            </div>
+            <div className="tvm-card">
+              <h3>Planting &amp; market timing</h3>
+              <p>Growing the right crop matters; growing it at the right time matters more. TIS helps with when to plant, what to plant, seasonal production patterns, market opportunities, and supply-and-demand planning. The goal isn't simply to grow more — it's to grow profitably.</p>
+            </div>
+            <div className="tvm-card">
+              <h3>Seasonal farm guidance</h3>
+              <p>TIS is a farming companion throughout the entire season. From land preparation to harvest, you get guidance at every stage — not one answer and then silence.</p>
+            </div>
+            <div className="tvm-card">
+              <h3>Connected to farm records</h3>
+              <p>Unlike generic chatbots, TIS is designed to work directly with the Teivaka ecosystem. As integration expands, it will draw on farm activities, production records, crop histories, expenses, yield data, and performance reports — so recommendations become increasingly personalised. The more the system understands the farm, the better the guidance.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* 6. Why it matters */}
+      <section className="tvm-section">
+        <div className="tvm-narrow">
+          <p className="tvm-eyebrow">Why TIS matters</p>
+          <h2 className="tvm-h2">Every farming decision carries risk.</h2>
+          <p className="tvm-sub">Planting too early. Planting too late. Using the wrong fertiliser. Misdiagnosing a disease. Missing a market opportunity. One mistake can mean lower yields, reduced income, wasted inputs, missed opportunities, and financial setbacks. TIS reduces uncertainty by giving farmers access to guidance whenever they need it — because every farmer deserves trusted advice, not just those near agricultural offices, consultants, or major towns.</p>
+        </div>
+      </section>
+
+      {/* 7. Live today + How to start */}
       <section className="tvm-section tvm-center">
         <div className="tvm-narrow">
-          <p className="tvm-eyebrow">Try it</p>
-          <h2 className="tvm-h2">Send a message. See what it can do.</h2>
-          <div className="tvm-cta-row">
+          <p className="tvm-eyebrow">Live on WhatsApp today</p>
+          <h2 className="tvm-h2">Not a concept. Not a prototype. Live.</h2>
+          <p className="tvm-sub">TIS is already live on WhatsApp today. Farmers can begin asking questions and receiving guidance immediately. No special equipment, no software installation, no technical experience — just WhatsApp.</p>
+          <ul style={{ ...listStyle, textAlign: "left", display: "inline-block", marginTop: 22 }}>
+            <li><strong>Step 1.</strong> Save the TIS WhatsApp number.</li>
+            <li><strong>Step 2.</strong> Send a message or voice note.</li>
+            <li><strong>Step 3.</strong> Ask anything about farming.</li>
+            <li><strong>Step 4.</strong> Receive practical guidance instantly.</li>
+          </ul>
+          <div className="tvm-grid-3" style={{ marginTop: 30, textAlign: "left" }}>
+            {examples.map((q, i) => (
+              <div className="tvm-card" key={i}><p style={{ fontStyle: "italic" }}>“{q}”</p></div>
+            ))}
+          </div>
+          <div className="tvm-cta-row" style={{ marginTop: 30, justifyContent: "center" }}>
             <a className="tvm-pill-primary" href={tisLink} target="_blank" rel="noopener noreferrer">Get connected to TIS <Icon name="arrowRight" /></a>
             <button type="button" className="tvm-pill-secondary" onClick={() => navigate("/tfos")}>See the rest of TAE <Icon name="arrowRight" /></button>
           </div>
+        </div>
+      </section>
+
+      {/* 8. Sign-off */}
+      <section className="tvm-section tvm-center" style={{ paddingTop: 0, borderTop: 0 }}>
+        <div className="tvm-narrow">
+          <h2 className="tvm-h2">TIS — Fiji's digital agricultural advisor.</h2>
+          <p className="tvm-sub">Built on local knowledge. Powered by artificial intelligence. Available 24 hours a day. Powered by Teivaka. Built for farmers. Built for Fiji. Built for the Pacific.</p>
         </div>
       </section>
 
