@@ -111,8 +111,13 @@ class LivestockIn(BaseModel):
 
 async def _rls_session(tenant_id: str) -> AsyncSession:
     session = AsyncSessionLocal()
+    # txn-local (true), NOT session-scoped (false): a pooled connection must return
+    # to the pool clean. Session-scoped set_config leaked app.tenant_id to the next
+    # request that reused the connection, corrupting its RLS context. Every handler
+    # below runs all queries in one transaction and commits once at the end, so
+    # txn-local holds for the whole request and auto-clears on commit/rollback.
     await session.execute(
-        text("SELECT set_config('app.tenant_id', :tid, false)"),
+        text("SELECT set_config('app.tenant_id', :tid, true)"),
         {"tid": tenant_id},
     )
     return session

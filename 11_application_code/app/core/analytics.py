@@ -71,24 +71,27 @@ async def track(db, *, pillar: str, event_type: str, user: dict | None = None,
     Unknown event_types are still recorded (with empty props) so volume is
     visible, but their payload is dropped until whitelisted."""
     try:
-        await db.execute(text("""
-            INSERT INTO analytics.events
-                (actor_user_id, tenant_id, region, pillar, event_type, entity_type, entity_id, props, session_id)
-            VALUES
-                (:uid, :tid, :region, :pillar, :etype, :entype, :enid, cast(:props AS jsonb), :sid)
-        """), {
-            "uid": str(user["user_id"]) if user else None,
-            "tid": str(user["tenant_id"]) if user and user.get("tenant_id") else None,
-            "region": (region or "")[:80] or None,
-            "pillar": (pillar or "unknown")[:20],
-            "etype": (event_type or "unknown")[:60],
-            "entype": (entity_type or None),
-            "enid": (str(entity_id)[:80] if entity_id else None),
-            "props": json.dumps(clean_props(event_type, props)),
-            "sid": (session_id or None),
-        })
+        # SAVEPOINT-isolate the telemetry insert so a failure rolls back ONLY this
+        # row, never the caller's transaction. A bare `db.rollback()` here used to
+        # nuke the whole session — e.g. during signup `track()` runs before the
+        # account commit, so a failed telemetry insert silently discarded the
+        # just-created user (endpoint still returned 201, but login then failed).
+        async with db.begin_nested():
+            await db.execute(text("""
+                INSERT INTO analytics.events
+                    (actor_user_id, tenant_id, region, pillar, event_type, entity_type, entity_id, props, session_id)
+                VALUES
+                    (:uid, :tid, :region, :pillar, :etype, :entype, :enid, cast(:props AS jsonb), :sid)
+            """), {
+                "uid": str(user["user_id"]) if user else None,
+                "tid": str(user["tenant_id"]) if user and user.get("tenant_id") else None,
+                "region": (region or "")[:80] or None,
+                "pillar": (pillar or "unknown")[:20],
+                "etype": (event_type or "unknown")[:60],
+                "entype": (entity_type or None),
+                "enid": (str(entity_id)[:80] if entity_id else None),
+                "props": json.dumps(clean_props(event_type, props)),
+                "sid": (session_id or None),
+            })
     except Exception:  # noqa: BLE001 — telemetry must never break a user action
-        try:
-            await db.rollback()
-        except Exception:  # noqa: BLE001
-            pass
+        pass
