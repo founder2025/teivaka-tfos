@@ -1472,6 +1472,7 @@ function NetworkSignup() {
 // COMPONENT 2 — <AboutPage />
 // ══════════════════════════════════════════════════════════════════════════════
 function AboutPage({ navigate }) {
+  const listStyle = { margin: "16px 0 0", paddingLeft: 20, color: "#5C4033", lineHeight: 1.8, fontSize: 16 };
   return (
     <main className="tvm">
       <style>{TVM_CSS}</style>
@@ -1479,53 +1480,68 @@ function AboutPage({ navigate }) {
       <section className="tvm-section first">
         <div className="tvm-narrow tvm-center">
           <p className="tvm-eyebrow">About Teivaka</p>
-          <h1 className="tvm-h1">A Fiji company redefining farming as a business, not a risk.</h1>
-          <p className="tvm-sub">Built on two operational farms before it touches any other. Pacific-built, Pacific-owned, Pacific-led.</p>
+          <h1 className="tvm-h1">Cultivating opportunity. Generating wealth from idle lands.</h1>
+          <p className="tvm-sub">Teivaka is an agriculture technology company on a mission to transform Pacific agriculture by helping farmers turn idle land into productive wealth.</p>
         </div>
       </section>
 
       <section className="tvm-section">
         <div className="tvm-narrow">
-          <p className="tvm-lead">Teivaka PTE LTD is a Fiji agricultural company. We activate idle customary land, equip Fijian farmers with proven, field-tested systems, and build resilient, profitable farm businesses that deliver predictable income.</p>
-          <p className="tvm-p">We don't just advise — we operate. Our own farms generate real revenue today. That is what earns us the right to turn the system into software for every Pacific smallholder: the knowledge in our platform is proven in the field, not theorised.</p>
+          <p className="tvm-lead">The name <strong>Teivaka</strong> comes from the Fijian language (Vosa Vakaviti) and means <strong>“to plant”</strong> or <strong>“to cultivate.”</strong> It reflects our belief that prosperity begins with cultivation — not only of crops, but also of knowledge, opportunity, and communities.</p>
+          <p className="tvm-p">Across Fiji and the Pacific, thousands of farmers work hard every day to feed families and support local economies. Yet many continue to face the same challenges:</p>
+          <ul style={listStyle}>
+            <li>Limited access to markets</li>
+            <li>Limited access to agricultural knowledge</li>
+            <li>Poor record keeping</li>
+            <li>Difficulty accessing finance</li>
+            <li>Limited visibility to buyers and investors</li>
+            <li>Lost opportunities due to disconnected systems</li>
+          </ul>
+          <p className="tvm-p" style={{ marginTop: 18 }}>As a result, many productive farmers remain invisible despite their potential. Teivaka exists to change that. We are building the digital backbone of Pacific agriculture by connecting farmers, buyers, knowledge, farm records, and artificial intelligence into one integrated ecosystem. Our platform helps farmers learn better, farm better, sell better, and earn better.</p>
+        </div>
+      </section>
+
+      <section className="tvm-section tvm-center">
+        <div className="tvm-narrow">
+          <h2 className="tvm-h2">The Pacific does not lack land. We do not lack farmers. We do not lack potential.</h2>
+          <p className="tvm-sub">What we need is better access to information, markets, technology, and opportunity. That is why we are building Teivaka.</p>
         </div>
       </section>
 
       <section className="tvm-section">
         <div className="tvm-wrap">
-          <p className="tvm-eyebrow">The team</p>
-          <h2 className="tvm-h2">Small team, full ownership of every part.</h2>
-          <div className="tvm-grid-2" style={{ marginTop: 28 }}>
-            <div className="tvm-team">
-              <p className="tvm-tname">Uraia Koroi Kama (Cody)</p>
-              <p className="tvm-trole">Founder</p>
-              <p>Founded Teivaka and operates the company's pilot farms in Fiji. Builds the platform against the daily reality of running them.</p>
-            </div>
-            <div className="tvm-team">
-              <p className="tvm-tname">Kinisimere Wati</p>
-              <p className="tvm-trole">Finance &amp; Operations</p>
-              <p>Bookkeeping, payroll, revenue. Every figure tight and transparent.</p>
-            </div>
+          <p className="tvm-eyebrow">Vision · Mission · Goal</p>
+          <h2 className="tvm-h2">What we're here to do.</h2>
+          <div className="tvm-grid-3" style={{ marginTop: 30 }}>
+            <div className="tvm-card"><span className="tvm-tag">Our vision</span><h3 style={{ marginTop: 8 }}>Transform idle land into wealth.</h3></div>
+            <div className="tvm-card"><span className="tvm-tag">Our mission</span><h3 style={{ marginTop: 8 }}>Empower every farmer to prosper.</h3></div>
+            <div className="tvm-card"><span className="tvm-tag">Our goal</span><h3 style={{ marginTop: 8 }}>Build the future of Pacific agriculture.</h3></div>
           </div>
         </div>
       </section>
 
       <section className="tvm-section">
         <div className="tvm-narrow">
-          <p className="tvm-eyebrow">Why Teivaka exists</p>
-          <h2 className="tvm-h2">From the founder.</h2>
-          <p className="tvm-p">I left a Science Degree and came home to Kadavu to farm — and in one season I learned what every Pacific farmer carries but no one says out loud: we work harder than farmers anywhere in the world, on land we cannot prove, with numbers we never had, for buyers who decide our worth in silence.</p>
-          <p className="tvm-p">Our grandfathers farmed by memory. We have been farming by memory too — and calling it tradition. It is not tradition. It is the reason a banker can look at a man with twenty years of harvest behind him and see nothing. The land is not the problem. The farmer is not the problem. The absence of a system that respects what we do — that is the problem.</p>
-          <p className="tvm-p">So I built one. On my own farms first. Before I asked a single other farmer to trust it with their season.</p>
-          <p className="tvm-sig">— Uraia Koroi Kama, Founder</p>
+          <p className="tvm-eyebrow">What we believe</p>
+          <ul style={listStyle}>
+            <li>Every farmer deserves access to the tools, knowledge, and opportunities needed to succeed.</li>
+            <li>Productive farmers should be visible.</li>
+            <li>Visible farmers should be bankable.</li>
+            <li>Agriculture can become one of the Pacific's greatest engines of economic growth.</li>
+            <li>Technology should serve farmers — not replace them.</li>
+          </ul>
         </div>
       </section>
 
       <section className="tvm-section tvm-center">
         <div className="tvm-narrow">
-          <button type="button" className="tvm-pill-secondary" onClick={() => navigate("/our-farms")}>
-            See the farms <Icon name="arrowRight" />
-          </button>
+          <p className="tvm-eyebrow">Our future</p>
+          <h2 className="tvm-h2">The operating system for Pacific agriculture.</h2>
+          <p className="tvm-sub">Our ambition is to connect every farmer, every farm, and every opportunity through one trusted ecosystem. One farmer. One farm. One opportunity at a time.</p>
+          <div className="tvm-cta-row" style={{ justifyContent: "center" }}>
+            <button type="button" className="tvm-pill-primary" onClick={() => navigate("/waitlist")}>Join the launch waitlist <Icon name="arrowRight" /></button>
+            <button type="button" className="tvm-pill-secondary" onClick={() => navigate("/tfos")}>Explore the ecosystem <Icon name="arrowRight" /></button>
+          </div>
         </div>
       </section>
 
