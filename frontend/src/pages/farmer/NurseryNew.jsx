@@ -13,7 +13,7 @@ import { useNavigate } from "react-router-dom";
 
 const C = {
   soil: "var(--soil)", green: "var(--green)", greenDk: "var(--green-dk)", amber: "var(--amber)",
-  red: "#B00020", cream: "var(--cream)", border: "#E6DED0", muted: "#8A7863",
+  red: "#B00020", cream: "var(--cream)", border: "#E6DED0", muted: "var(--muted)",
   ink: "#3A2E26", panel: "var(--paper)",
 };
 function authHeaders() {

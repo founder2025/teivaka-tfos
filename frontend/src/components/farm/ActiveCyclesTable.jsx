@@ -13,7 +13,7 @@ const C = {
   greenDk: "var(--green-dk)",
   cream:   "var(--cream)",
   border:  "#E6DED0",
-  muted:   "#8A7863",
+  muted:   "var(--muted)",
 };
 
 function authHeaders() {

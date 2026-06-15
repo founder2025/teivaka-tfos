@@ -15,7 +15,7 @@ const C = {
   soil:   "var(--soil)",
   cream:  "var(--cream)",
   border: "#E6DED0",
-  muted:  "#8A7863",
+  muted:  "var(--muted)",
 };
 
 function UserIcon({ size = 48, color = C.soil }) {

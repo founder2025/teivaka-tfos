@@ -31,7 +31,7 @@ const useBlockStatus = (id) => useQuery({ queryKey: ["loc-status", id], queryFn:
 
 // Block state machine → pill colour (Phase 2)
 const STATE_STYLE = {
-  EMPTY:      { bg: "#EFEAE0", fg: "#8A7863", label: "Empty" },
+  EMPTY:      { bg: "#EFEAE0", fg: "var(--muted)", label: "Empty" },
   PREPARING:  { bg: "#EFE6D6", fg: "var(--soil)", label: "Preparing" },
   ACTIVE:     { bg: "#E9F2DD", fg: "var(--green-dk)", label: "Growing" },
   HARVESTING: { bg: "#FBF0D8", fg: "var(--amber)", label: "Harvesting" },
@@ -40,7 +40,7 @@ const STATE_STYLE = {
 };
 
 const C = {
-  soil: "var(--soil)", cream: "var(--cream)", border: "#E6DED0", muted: "#8A7863", ink: "#3A2E26",
+  soil: "var(--soil)", cream: "var(--cream)", border: "#E6DED0", muted: "var(--muted)", ink: "#3A2E26",
   green: "var(--green)", greenDk: "var(--green-dk)", amber: "var(--amber)", red: "var(--red)", greenTint: "#E9F2DD", paper: "#FCFAF5",
 };
 const FOCUS = "focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--green)] focus-visible:ring-offset-1 transition";

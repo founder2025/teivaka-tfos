@@ -24,7 +24,7 @@ const C = {
   greenDk:"#4F8138",
   amber:  "var(--amber)",
   cream:  "var(--cream)",
-  muted:  "#8A7863",
+  muted:  "var(--muted)",
 };
 
 const EVENT_LABEL = {

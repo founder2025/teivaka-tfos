@@ -22,7 +22,7 @@ import { useParams, Link, useNavigate } from "react-router-dom";
 const C = {
   soil: "var(--soil)", green: "var(--green)", greenDk: "var(--green-dk)", greenTint: "#E9F2DD",
   amber: "var(--amber)", amberTint: "#FBF1D6", red: "#B00020", redTint: "#FBEAE6",
-  cream: "var(--cream)", border: "#E6DED0", muted: "#8A7863", ink: "#3A2E26", panel: "var(--paper)",
+  cream: "var(--cream)", border: "#E6DED0", muted: "var(--muted)", ink: "#3A2E26", panel: "var(--paper)",
 };
 function authHeaders() {
   const t = localStorage.getItem("tfos_access_token");

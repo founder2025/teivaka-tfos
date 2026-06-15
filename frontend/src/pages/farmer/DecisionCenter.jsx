@@ -23,7 +23,7 @@ import FarmSelector from "../../components/farm/FarmSelector";
 import ModeDropdown from "../../components/farm/ModeDropdown";
 
 const C = {
-  soil: "var(--soil)", cream: "var(--cream)", border: "#E6DED0", muted: "#8A7863", ink: "#3A2E26",
+  soil: "var(--soil)", cream: "var(--cream)", border: "#E6DED0", muted: "var(--muted)", ink: "#3A2E26",
   green: "var(--green)", greenDk: "var(--green-dk)", amber: "var(--amber)", red: "var(--red)", greenTint: "#E9F2DD",
 };
 

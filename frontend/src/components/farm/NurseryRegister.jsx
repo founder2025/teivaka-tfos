@@ -14,7 +14,7 @@ import { Sprout, MapPin, ChevronDown, Check, AlertTriangle } from "lucide-react"
 
 const C = {
   soil: "var(--soil)", green: "var(--green)", greenDk: "#4F8138", amber: "var(--amber)",
-  cream: "var(--cream)", border: "#E6DED0", muted: "#8A7863", panel: "var(--paper)", red: "var(--red)",
+  cream: "var(--cream)", border: "#E6DED0", muted: "var(--muted)", panel: "var(--paper)", red: "var(--red)",
 };
 
 const BATCH_STATUS = {

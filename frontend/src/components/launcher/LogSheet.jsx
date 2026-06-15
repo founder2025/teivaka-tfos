@@ -305,7 +305,7 @@ function UniversalSection({ navigate, onClose }) {
   const go = (route) => { onClose(); navigate(route); };
   return (
     <div className="mb-4">
-      <div className="text-[11px] font-semibold uppercase tracking-wide mb-2" style={{ color: "#8A7863" }}>Start here · works for any farm</div>
+      <div className="text-[11px] font-semibold uppercase tracking-wide mb-2" style={{ color: "var(--muted)" }}>Start here · works for any farm</div>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
         {UNIVERSAL_ACTIONS.map(({ key, label, sub, Icon, route, accent }) => (
           <button key={key} type="button" onClick={() => go(route)}
@@ -316,7 +316,7 @@ function UniversalSection({ navigate, onClose }) {
             </span>
             <span className="min-w-0">
               <span className="block text-sm font-semibold truncate" style={{ color: "var(--soil)" }}>{label}</span>
-              <span className="block text-[11px] truncate" style={{ color: "#8A7863" }}>{sub}</span>
+              <span className="block text-[11px] truncate" style={{ color: "var(--muted)" }}>{sub}</span>
             </span>
           </button>
         ))}

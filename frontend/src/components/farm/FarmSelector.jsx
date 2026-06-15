@@ -16,7 +16,7 @@ import { useCurrentFarm } from "../../context/CurrentFarmContext";
 import { getCurrentUser } from "../../utils/auth";
 import Modal from "../ui/Modal.jsx";
 
-const C = { soil: "var(--soil)", border: "#E6DED0", muted: "#8A7863", green: "var(--green)", greenDk: "var(--green-dk)", cream: "var(--cream)", paper: "#FCFAF5", greenTint: "#E9F2DD" };
+const C = { soil: "var(--soil)", border: "#E6DED0", muted: "var(--muted)", green: "var(--green)", greenDk: "var(--green-dk)", cream: "var(--cream)", paper: "#FCFAF5", greenTint: "#E9F2DD" };
 
 function authHeaders() {
   const tok = localStorage.getItem("tfos_access_token");

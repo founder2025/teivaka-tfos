@@ -57,7 +57,7 @@ export default function Prototype() {
     return (
       <div style={{ padding: 24, fontFamily: "system-ui", color: "#3A2E26" }}>
         <h1 style={{ fontSize: 18, fontWeight: 700, marginBottom: 8 }}>Prototype reference</h1>
-        <p style={{ color: "#8A7863" }}>{err}</p>
+        <p style={{ color: "var(--muted)" }}>{err}</p>
       </div>
     );
   }
@@ -87,7 +87,7 @@ export default function Prototype() {
       </div>
       {src == null ? (
         <div style={{ position: "absolute", top: BANNER_H, left: 0, right: 0,
-          padding: 24, color: "#8A7863", fontFamily: "system-ui" }}>
+          padding: 24, color: "var(--muted)", fontFamily: "system-ui" }}>
           Loading prototype…
         </div>
       ) : (

@@ -29,7 +29,7 @@ const COLORS = {
   red:      "#A32D2D",
   line:     "#E2D8C3",
   ink:      "#2A2118",
-  muted:    "#7A6E5C",
+  muted:    "var(--muted)",
   inkOnDark:"#F8F3E9",
 };
 

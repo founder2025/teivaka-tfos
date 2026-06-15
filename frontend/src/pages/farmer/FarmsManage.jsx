@@ -14,7 +14,7 @@ import { useNavigate } from "react-router-dom";
 import { CurrentFarmProvider, useCurrentFarm } from "../../context/CurrentFarmContext";
 import Modal from "../../components/ui/Modal.jsx";
 
-const C = { soil: "var(--soil)", cream: "var(--cream)", border: "#E6DED0", muted: "#8A7863", green: "var(--green)", greenDk: "var(--green-dk)", red: "var(--red)", paper: "#FCFAF5", greenTint: "#E9F2DD" };
+const C = { soil: "var(--soil)", cream: "var(--cream)", border: "#E6DED0", muted: "var(--muted)", green: "var(--green)", greenDk: "var(--green-dk)", red: "var(--red)", paper: "#FCFAF5", greenTint: "#E9F2DD" };
 const FOCUS = "focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--green)]";
 
 function authHeaders() { const t = localStorage.getItem("tfos_access_token"); return t ? { "Content-Type": "application/json", Authorization: `Bearer ${t}` } : { "Content-Type": "application/json" }; }

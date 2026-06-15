@@ -22,7 +22,7 @@ import CapacityCalc from "../../components/farm/CapacityCalc";
 
 L.Icon.Default.mergeOptions({ iconRetinaUrl: iconRetina, iconUrl: icon, shadowUrl: shadow });
 
-const C = { soil: "var(--soil)", cream: "var(--cream)", border: "#E6DED0", muted: "#8A7863", green: "var(--green)", greenDk: "var(--green-dk)", amber: "var(--amber)", red: "var(--red)" };
+const C = { soil: "var(--soil)", cream: "var(--cream)", border: "#E6DED0", muted: "var(--muted)", green: "var(--green)", greenDk: "var(--green-dk)", amber: "var(--amber)", red: "var(--red)" };
 const FIJI = [-17.8, 178.0];
 const KIND_STYLE = {
   BOUNDARY: { color: "var(--cream)", weight: 3, fill: false, dashArray: "6 6" },
@@ -881,7 +881,7 @@ const THEME_CSS = `
 }
 .tfos-map .leaflet-tooltip-top:before, .tfos-map .leaflet-tooltip-bottom:before,
 .tfos-map .leaflet-tooltip-left:before, .tfos-map .leaflet-tooltip-right:before { display: none; }
-.tfos-map .leaflet-control-attribution { background: rgba(248,243,233,.85) !important; color: #8A7863 !important; border-radius: 6px 0 0 0; }
+.tfos-map .leaflet-control-attribution { background: rgba(248,243,233,.85) !important; color: var(--muted) !important; border-radius: 6px 0 0 0; }
 /* Walk-mode corner number badges */
 .tfos-map .leaflet-tooltip.tfos-vtx {
   background: var(--green-dk) !important; color: #fff !important; border: 2px solid #fff !important;

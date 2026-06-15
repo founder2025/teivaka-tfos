@@ -9,7 +9,7 @@
 import { useState } from "react";
 import { Calculator, Sprout, Beef } from "lucide-react";
 
-const C = { soil: "var(--soil)", cream: "var(--cream)", border: "#E6DED0", muted: "#8A7863", green: "var(--green)", greenDk: "var(--green-dk)", paper: "#FCFAF5" };
+const C = { soil: "var(--soil)", cream: "var(--cream)", border: "#E6DED0", muted: "var(--muted)", green: "var(--green)", greenDk: "var(--green-dk)", paper: "#FCFAF5" };
 const HA_TO = { acres: 2.47105, ha: 1, m2: 10000 };
 const PER_ANIMAL_TO_M2 = { acres: 4046.86, ha: 10000, m2: 1 };
 

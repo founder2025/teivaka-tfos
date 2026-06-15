@@ -13,7 +13,7 @@ import {
   BookOpen, Image as ImageIcon, Share2, Settings,
 } from "lucide-react";
 
-const C = { soil: "var(--soil)", greenDk: "var(--green-dk)", border: "#E6DED0", muted: "#8A7863", panel: "var(--paper)", cream: "var(--cream)" };
+const C = { soil: "var(--soil)", greenDk: "var(--green-dk)", border: "#E6DED0", muted: "var(--muted)", panel: "var(--paper)", cream: "var(--cream)" };
 
 const SECTIONS = [
   ["Overview", "/farm", Eye],

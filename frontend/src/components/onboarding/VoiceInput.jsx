@@ -40,7 +40,7 @@ const C = {
   red:     "var(--red)",
   cream:   "var(--cream)",
   border:  "var(--line)",
-  muted:   "#8A7863",
+  muted:   "var(--muted)",
 };
 
 export default function VoiceInput({

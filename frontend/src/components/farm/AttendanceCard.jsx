@@ -8,7 +8,7 @@
 import { useEffect, useState } from "react";
 import { LogIn, LogOut, MapPin, CheckCircle2, AlertTriangle, Loader2, Clock } from "lucide-react";
 
-const C = { soil: "var(--soil)", cream: "var(--cream)", border: "#E6DED0", muted: "#8A7863", green: "var(--green)", greenDk: "var(--green-dk)", amber: "var(--amber)", red: "var(--red)", paper: "#FCFAF5" };
+const C = { soil: "var(--soil)", cream: "var(--cream)", border: "#E6DED0", muted: "var(--muted)", green: "var(--green)", greenDk: "var(--green-dk)", amber: "var(--amber)", red: "var(--red)", paper: "#FCFAF5" };
 const FOCUS = "focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--green)]";
 
 function authHeaders() { const t = localStorage.getItem("tfos_access_token"); return t ? { Authorization: `Bearer ${t}` } : {}; }

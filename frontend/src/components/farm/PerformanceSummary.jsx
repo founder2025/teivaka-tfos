@@ -9,7 +9,7 @@
  */
 import { BarChart3 } from "lucide-react";
 
-const C = { soil: "var(--soil)", border: "#E6DED0", muted: "#8A7863", panel: "var(--paper)" };
+const C = { soil: "var(--soil)", border: "#E6DED0", muted: "var(--muted)", panel: "var(--paper)" };
 
 export default function PerformanceSummary() {
   return (

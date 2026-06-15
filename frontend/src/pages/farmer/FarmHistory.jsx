@@ -23,7 +23,7 @@ import FarmSelector from "../../components/farm/FarmSelector";
 import ModeDropdown from "../../components/farm/ModeDropdown";
 
 const C = {
-  soil: "var(--soil)", cream: "var(--cream)", border: "#E6DED0", muted: "#8A7863", ink: "#3A2E26",
+  soil: "var(--soil)", cream: "var(--cream)", border: "#E6DED0", muted: "var(--muted)", ink: "#3A2E26",
   green: "var(--green)", greenDk: "var(--green-dk)", amber: "var(--amber)", red: "var(--red)", greenTint: "#E9F2DD", paper: "#FCFAF5",
 };
 const FOCUS = "focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--green)] focus-visible:ring-offset-1 transition";
@@ -195,22 +195,22 @@ function printHistoryBook(rows, farmId, from, to) {
     <table style="width:100%;border-collapse:collapse;font-size:11px">
       ${groups[k].slice().sort((a, b) => (a.time || "").localeCompare(b.time || "")).map((e) => `
         <tr style="border-bottom:1px solid #eee">
-          <td style="padding:4px 8px;color:#8A7863;white-space:nowrap;width:48px">${esc(e.time || "—")}</td>
+          <td style="padding:4px 8px;color:var(--muted);white-space:nowrap;width:48px">${esc(e.time || "—")}</td>
           <td style="padding:4px 8px;font-weight:600;color:var(--soil);white-space:nowrap">${esc(e.label)}</td>
           <td style="padding:4px 8px;color:#3A2E26">${esc(e.summary)}</td>
-          <td style="padding:4px 8px;color:#8A7863;white-space:nowrap">${esc([e.pu, e.who].filter(Boolean).join(" · "))}</td>
+          <td style="padding:4px 8px;color:var(--muted);white-space:nowrap">${esc([e.pu, e.who].filter(Boolean).join(" · "))}</td>
         </tr>`).join("")}
     </table>`).join("");
   const html = `<!doctype html><html><head><meta charset="utf-8"><title>Farm History — ${esc(farmId || "")}</title></head>
   <body style="font-family:Georgia,serif;color:#3A2E26;max-width:780px;margin:24px auto;padding:0 16px">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid var(--soil);padding-bottom:10px">
       <div><div style="font-size:18px;font-weight:800;color:var(--soil)">${esc(farmId || "Your farm")} — Farm History</div>
-      <div style="font-size:11px;color:#8A7863">Range: ${esc(rangeTxt)} · ${rows.length} records · hash-stamped, nothing lost</div></div>
-      <div style="text-align:right"><div style="font-weight:800;color:var(--green-dk)">TEIVAKA</div><div style="font-size:10px;color:#8A7863">Verified farm platform</div>
-      <div style="font-size:10px;color:#8A7863;margin-top:4px">Issued ${esc(issued)}</div></div>
+      <div style="font-size:11px;color:var(--muted)">Range: ${esc(rangeTxt)} · ${rows.length} records · hash-stamped, nothing lost</div></div>
+      <div style="text-align:right"><div style="font-weight:800;color:var(--green-dk)">TEIVAKA</div><div style="font-size:10px;color:var(--muted)">Verified farm platform</div>
+      <div style="font-size:10px;color:var(--muted);margin-top:4px">Issued ${esc(issued)}</div></div>
     </div>
-    ${bodyHtml || '<p style="color:#8A7863">No records in this range.</p>'}
-    <div style="border-top:1px solid #ccc;margin-top:24px;padding-top:8px;font-size:10px;color:#8A7863">
+    ${bodyHtml || '<p style="color:var(--muted)">No records in this range.</p>'}
+    <div style="border-top:1px solid #ccc;margin-top:24px;padding-top:8px;font-size:10px;color:var(--muted)">
       Audit-anchored record — every figure is summed from logged events and carries a verifiable stamp. Verify on TEIVAKA at teivaka.com/verify.<br>
       Records managed on TEIVAKA · Teivaka PTE LTD · Co. No. 2025RC001894
     </div>

@@ -40,7 +40,7 @@ const C = {
   red:     "var(--red)",
   cream:   "var(--cream)",
   border:  "#E6DED0",
-  muted:   "#8A7863",
+  muted:   "var(--muted)",
 };
 
 // Canonical EVENT_TYPES — must match field_events.py:43-47 frozenset.

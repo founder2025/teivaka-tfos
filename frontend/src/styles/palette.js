@@ -24,7 +24,7 @@
 export const PALETTE_FARM = {
   bg:         "var(--cream)",
   text:       "var(--soil)",
-  textMuted:  "#8A7863",
+  textMuted:  "var(--muted)",
   border:     "#E6DED0",
   accent:     "var(--green)",
   accentTint: "#E9F2DD",
@@ -34,7 +34,7 @@ export const PALETTE_FARM = {
 export const PALETTE_DARK = {
   bg:         "var(--cream)",
   text:       "#2C1A0E",
-  textMuted:  "#8A7863",
+  textMuted:  "var(--muted)",
   border:     "var(--line)",
   accent:     "var(--green)",
   accentTint: "#E6EFD4",

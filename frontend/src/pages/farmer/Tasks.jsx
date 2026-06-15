@@ -23,7 +23,7 @@ import { CheckCircle2, SkipForward, AlertTriangle } from "lucide-react";
 
 const C = {
   soil: "var(--soil)", green: "var(--green)", greenDk: "#4F8138", amber: "var(--amber)",
-  red: "#B00020", cream: "var(--cream)", border: "#E6DED0", muted: "#8A7863", panel: "var(--paper)",
+  red: "#B00020", cream: "var(--cream)", border: "#E6DED0", muted: "var(--muted)", panel: "var(--paper)",
 };
 
 const TABS = [
