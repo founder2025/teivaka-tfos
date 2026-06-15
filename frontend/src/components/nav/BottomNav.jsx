@@ -4,9 +4,11 @@
  * Slots: [Home][Learn][(+)][Farm][TIS]. Me is removed (now the avatar
  * dropdown in the top bar). Icons come from lucide-react.
  */
-import { NavLink } from "react-router-dom";
+import { NavLink, useLocation } from "react-router-dom";
 import { Users, BookOpen, Tractor, Sparkles } from "lucide-react";
 import UniversalLogButton from "./UniversalLogButton";
+import { getLauncher } from "../launcher/launcherRegistry";
+import { useCapabilities } from "../../utils/capabilities";
 
 const C = {
   soil:   "var(--soil)",
@@ -41,9 +43,18 @@ function NavItem({ tab }) {
 }
 
 export default function BottomNav() {
+  const { pathname } = useLocation();
+  const { can } = useCapabilities();
+  // The (+) appears only when the current pillar has create-actions (Farm always;
+  // Community always; Classroom for instructors; never on TIS). Otherwise the
+  // center slot stays empty rather than opening an irrelevant sheet.
+  const showPlus = Boolean(getLauncher(pathname, can));
+
+  // Shown up to 1024px (phone + tablet); LeftRail takes over at >=1025px. This
+  // closes the old 768–1024 dead zone where neither nav rendered.
   return (
     <nav
-      className="fixed bottom-0 left-0 right-0 z-40 md:hidden"
+      className="fixed bottom-0 left-0 right-0 z-40 min-[1025px]:hidden"
       style={{
         background: C.cream,
         borderTop: `1px solid ${C.border}`,
@@ -55,11 +66,13 @@ export default function BottomNav() {
       <div className="flex items-stretch max-w-md mx-auto h-full relative">
         {LEFT_TABS.map((t) => <NavItem key={t.path} tab={t} />)}
 
-        {/* Raised center (+) slot */}
+        {/* Raised center (+) slot — only when the pillar has actions */}
         <div className="flex-1 flex items-center justify-center relative">
-          <div className="absolute -top-3">
-            <UniversalLogButton variant="center" />
-          </div>
+          {showPlus && (
+            <div className="absolute -top-3">
+              <UniversalLogButton variant="center" />
+            </div>
+          )}
         </div>
 
         {RIGHT_TABS.map((t) => <NavItem key={t.path} tab={t} />)}

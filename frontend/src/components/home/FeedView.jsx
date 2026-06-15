@@ -680,6 +680,30 @@ export default function FeedView({ initialFilter = "all", groupId = null }) {
     try { window.scrollTo({ top: 0, behavior: "smooth" }); } catch { /* ignore */ }
   }, [focusId]);
   const clearFocus = () => { const n = new URLSearchParams(sp); n.delete("post"); setSp(n, { replace: true }); };
+  // Pillar (+) → "New post" / "Post a story" land on /home with these params.
+  // Defensive: focus the composer / reveal the story rail once mounted; never
+  // throws if the element isn't present (e.g. inside a group feed).
+  useEffect(() => {
+    if (groupId) return undefined;
+    const wantsCompose = sp.get("compose") === "1";
+    const wantsStory = sp.get("story") === "1";
+    if (!wantsCompose && !wantsStory) return undefined;
+    const t = setTimeout(() => {
+      try {
+        if (wantsCompose) {
+          const el = document.querySelector(".cm-composer textarea");
+          if (el) { el.scrollIntoView({ block: "center", behavior: "smooth" }); el.focus(); }
+        } else {
+          const el = document.querySelector(".cm-stories") || document.querySelector(".cm-composer");
+          if (el) el.scrollIntoView({ block: "center", behavior: "smooth" });
+        }
+      } catch { /* ignore */ }
+      const n = new URLSearchParams(sp);
+      n.delete("compose"); n.delete("story");
+      setSp(n, { replace: true });
+    }, 150);
+    return () => clearTimeout(t);
+  }, [sp, groupId, setSp]);
   const [topicsOpen, setTopicsOpen] = useState(false);
   const [more, setMore] = useState(false);
   const [end, setEnd] = useState(false);

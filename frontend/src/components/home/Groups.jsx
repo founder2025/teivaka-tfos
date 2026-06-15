@@ -6,6 +6,7 @@
  * replies, photos all work). Owner can edit/close; admin can feature.
  */
 import { useEffect, useState, useRef } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Users, Plus, Search, X, Star, Lock as LockIcon, Settings as Cog, Send, Image as ImageIcon, Mic, Square } from "lucide-react";
 import { getJSON, send } from "../../utils/api";
 import FeedView from "./FeedView";
@@ -293,6 +294,16 @@ export default function Groups() {
   };
   useEffect(() => { load(q); /* eslint-disable-next-line */ }, [mine]);
   useEffect(() => { const id = setTimeout(() => load(q), 300); return () => clearTimeout(id); /* eslint-disable-next-line */ }, [q]);
+  // Pillar (+) → "New group" lands here with ?new=1 — open the create form.
+  const [sp, setSp] = useSearchParams();
+  useEffect(() => {
+    if (sp.get("new") === "1") {
+      setCreating(true);
+      const next = new URLSearchParams(sp);
+      next.delete("new");
+      setSp(next, { replace: true });
+    }
+  }, [sp, setSp]);
 
   const join = async (g, e) => {
     e.stopPropagation();

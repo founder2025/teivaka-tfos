@@ -8,7 +8,7 @@
  * window event. Real endpoints only; honest empty states.
  */
 import { useEffect, useRef, useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { Search, MapPin, BadgeCheck, MessageCircle, Bookmark, Share2, X, ChevronLeft, ChevronRight, Tag, CheckCircle2, RotateCcw, Image as ImageIcon } from "lucide-react";
 import { getJSON, send } from "../../utils/api";
 import { uploadMedia } from "../../utils/imageCompress";
@@ -305,6 +305,16 @@ export default function Marketplace() {
     window.addEventListener("tfos:new-listing", on);
     return () => window.removeEventListener("tfos:new-listing", on);
   }, []);
+  // The pillar (+) → "Sell an item" lands here with ?new=1 — open the form.
+  const [sp, setSp] = useSearchParams();
+  useEffect(() => {
+    if (sp.get("new") === "1") {
+      setCreating(true);
+      const next = new URLSearchParams(sp);
+      next.delete("new");
+      setSp(next, { replace: true });
+    }
+  }, [sp, setSp]);
 
   return (
     <div>

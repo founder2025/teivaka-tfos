@@ -34,6 +34,9 @@ import OfflineBanner from "../components/OfflineBanner";
 import { ChatProvider } from "../context/ChatContext";
 import { firePings, AnnouncementBanner } from "../utils/useFlags.jsx";
 import LogSheet from "../components/launcher/LogSheet";
+import ActionSheet from "../components/launcher/ActionSheet";
+import { getLauncher } from "../components/launcher/launcherRegistry";
+import { useCapabilities } from "../utils/capabilities";
 import { LeftRailProvider, useLeftRail } from "../context/LeftRailContext";
 import { LauncherProvider, useLauncher } from "../context/LauncherContext";
 import { GuidedTour, useTour } from "../components/tour/GuidedTour";
@@ -417,7 +420,16 @@ function ActiveTour({ cfg }) {
 // Cmd/Ctrl+L) converges on one sheet instance.
 function LauncherSheet() {
   const { sheetOpen, close, mode } = useLauncher();
-  return <LogSheet isOpen={sheetOpen} onClose={close} mode={mode} />;
+  const { pathname } = useLocation();
+  const { can } = useCapabilities();
+  const cfg = getLauncher(pathname, can);
+  // Pillar with no create-actions (TIS, learner Classroom, non-pillar routes) →
+  // render nothing so the (+) never opens an irrelevant/empty sheet.
+  if (!cfg) return null;
+  if (cfg.kind === "farmCatalog") {
+    return <LogSheet isOpen={sheetOpen} onClose={close} mode={mode} />;
+  }
+  return <ActionSheet isOpen={sheetOpen} onClose={close} title={cfg.title} actions={cfg.actions} />;
 }
 
 export default function FarmerShell() {
