@@ -132,81 +132,10 @@ const PAGE_CONTENT = {
   },
 
   "what-we-do": {
-    title: "The Teivaka Agriculture Ecosystem",
-    tagline: "Building the operating system for Pacific agriculture.",
-    sections: [
-      {
-        heading: "One unified platform",
-        body: "Teivaka is Fiji's first AI-powered agriculture ecosystem designed to connect farmers, buyers, knowledge, finance, and production data into one unified platform. For decades, farmers have operated in isolation — selling without market visibility, farming without records, learning through trial and error, and struggling to access finance despite owning productive land. Through a single login, farmers gain access to the tools, knowledge, data, and opportunities needed to transform farming from a subsistence activity into a scalable and profitable business.",
-      },
-      {
-        heading: "1. Community — The Agricultural Marketplace & Trade Network",
-        body: "The Community pillar connects farmers directly with buyers, traders, wholesalers, retailers, exporters, and agricultural service providers. Many farmers produce crops without knowing who is buying, what buyers need, current demand, or current prices — so crops are sold below value, wasted, or left unsold. Community changes that:",
-        list: [
-          "Buy and sell produce",
-          "Connect buyers and farmers",
-          "Access market opportunities",
-          "Discover suppliers and service providers",
-          "Build trusted farming networks",
-          "Enable digital transactions and mobile money integration",
-          "Improve transparency within agricultural trade",
-        ],
-      },
-      {
-        heading: "2. TFOS — The Record Engine That Makes Farmers Bankable",
-        body: "TFOS (Teivaka Farm Operating System) is the production intelligence backbone. Every activity performed on a farm is captured, organized, and transformed into valuable business data. Many farmers are productive but invisible — banks, investors, insurers, and buyers require records, yet most rely on memory or notebooks. TFOS transforms farm activity into farm credibility:",
-        list: [
-          "Records all farm activities",
-          "Tracks crops, livestock, labor, and expenses",
-          "Monitors yields and productivity",
-          "Generates farm performance reports",
-          "Creates digital production histories",
-          "Measures profitability",
-          "Builds a verifiable farming record over time",
-        ],
-      },
-      {
-        heading: "3. Classroom — Knowledge & Skills Development",
-        body: "Classroom delivers practical agricultural education directly to farmers. Knowledge should not depend on location, personal networks, or expensive training programs. It helps farmers answer what to plant, when to plant, how to plant, and who will buy it:",
-        list: [
-          "Crop-specific training modules",
-          "Production planning guides",
-          "Seasonal planting recommendations",
-          "Market timing strategies",
-          "Financial literacy education",
-          "Farm business management training",
-          "Best-practice agricultural techniques",
-        ],
-      },
-      {
-        heading: "4. TIS — The AI Mentor for Every Farmer",
-        body: "TIS (Teivaka Intelligence System) is the intelligence layer. Powered by artificial intelligence and real agricultural data, TIS acts as a digital advisor available whenever farmers need guidance:",
-        list: [
-          "Answers farming questions",
-          "Provides personalized recommendations",
-          "Interprets farm data",
-          "Assists with planning and decision-making",
-          "Helps identify risks and opportunities",
-          "Guides farmers toward better outcomes",
-        ],
-      },
-      {
-        heading: "One ecosystem. One login. One farmer record.",
-        body: "Individually, each pillar solves a major agricultural challenge. Together, they create a connected ecosystem where farmers can learn, produce, sell, track performance, build credibility, and grow — all from a single platform.",
-      },
-      {
-        heading: "Our purpose",
-        body: "To turn idle land into productive wealth. To make invisible farmers visible. To make productive farmers bankable. To create a future where every farmer has access to the tools, knowledge, markets, and opportunities needed to succeed.",
-      },
-      {
-        heading: "Proof of execution",
-        body: "The first AI-powered agriculture operating system built for Fiji and the Pacific.",
-        list: [
-          "83,000+ farmers addressable market",
-          "Two working farms piloting the ecosystem",
-        ],
-      },
-    ],
+    title: "What we do",
+    tagline: "Helping farmers learn better, farm better, sell better, and earn better.",
+    // Content is rendered by the inline `pageKey === "what-we-do"` block below.
+    sections: [],
   },
 
   impact: {
@@ -2239,43 +2168,64 @@ export default function MarketingPage({ pageKey }) {
         {pageKey === "what-we-do" && (
           <div className="wwd">
             <style>{`
-.wwd .wwd-lead{max-width:800px;margin:0 0 0;font-family:'IBM Plex Sans',-apple-system,BlinkMacSystemFont,sans-serif;font-size:19px;line-height:1.5;color:#5C4033}
-.wwd .wwd-descriptor{max-width:800px;margin:18px 0 36px;font-family:'IBM Plex Sans',-apple-system,BlinkMacSystemFont,sans-serif;font-size:17px;line-height:1.65;color:#241910;opacity:0.85}
-.wwd .wwd-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;margin-bottom:8px}
-.wwd .wwd-card{background:#FBF8F1;border:1px solid rgba(92,64,51,0.16);border-radius:4px;padding:34px 30px}
-.wwd .wwd-card .wwd-lt{font-family:'IBM Plex Mono','SF Mono',Menlo,monospace;font-size:11px;color:#4F8A37;letter-spacing:0.12em;text-transform:uppercase;font-weight:500}
-.wwd .wwd-card h3{font-family:'IBM Plex Serif',Georgia,serif;font-size:23px;font-weight:600;line-height:1.08;margin:12px 0;color:#241910}
-.wwd .wwd-card .wwd-pill{display:inline-flex;align-items:center;gap:7px;font-family:'IBM Plex Mono','SF Mono',Menlo,monospace;font-size:11px;font-weight:600;color:#fff;padding:5px 13px;border-radius:30px;margin-bottom:14px}
-.wwd .wwd-card .wwd-dot{width:7px;height:7px;border-radius:50%;background:#fff;display:inline-block}
-.wwd .wwd-pill-live{background:#6AA84F}
-.wwd .wwd-pill-build{background:#BF9000}
-.wwd .wwd-card p{font-size:15px;color:#5C4033;line-height:1.6;margin:0}
-@media (max-width:768px){
-  .wwd .wwd-cards{grid-template-columns:1fr}
-}
+.wwd .wwd-lead{max-width:820px;margin:0 0 8px;font-family:'IBM Plex Sans',-apple-system,BlinkMacSystemFont,sans-serif;font-size:18px;line-height:1.6;color:#5C4033}
+.wwd .wwd-cards{display:grid;grid-template-columns:repeat(2,1fr);gap:22px;margin:30px 0 8px}
+.wwd .wwd-card{background:#FBF8F1;border:1px solid rgba(92,64,51,0.16);border-radius:10px;padding:30px 28px}
+.wwd .wwd-card .wwd-lt{font-family:'IBM Plex Mono','SF Mono',Menlo,monospace;font-size:11px;color:#4F8A37;letter-spacing:0.12em;text-transform:uppercase;font-weight:600}
+.wwd .wwd-card h3{font-family:'IBM Plex Serif',Georgia,serif;font-size:22px;font-weight:600;line-height:1.1;margin:10px 0 2px;color:#241910}
+.wwd .wwd-card .wwd-st{color:#4F8A37;font-weight:600;font-size:14px;margin:0 0 12px}
+.wwd .wwd-card p{font-size:14.5px;color:#5C4033;line-height:1.6;margin:0}
+.wwd .wwd-card ul{margin:12px 0 0;padding-left:18px;color:#5C4033;line-height:1.7;font-size:14px}
+.wwd .wwd-h2{font-family:'IBM Plex Serif',Georgia,serif;font-size:24px;font-weight:600;color:#241910;margin:42px 0 10px}
+.wwd .wwd-body{max-width:820px;font-size:16px;line-height:1.65;color:#5C4033;margin:0}
+.wwd .wwd-checks{list-style:none;margin:16px 0 0;padding:0;display:flex;flex-wrap:wrap;gap:10px}
+.wwd .wwd-checks li{display:inline-flex;align-items:center;gap:8px;background:#E8F0E0;color:#3F6B2E;border-radius:999px;padding:8px 16px;font-size:14px;font-weight:600}
+@media (max-width:768px){.wwd .wwd-cards{grid-template-columns:1fr}}
 `}</style>
-            <p className="wwd-lead">We are transparent about the stage of each part of Teivaka — because trust is the product.</p>
-            <p className="wwd-descriptor">Farmers use Teivaka daily to log what actually happens on their farm — the harvest, the irrigation, the chemical application, the cash sale, the worker hours, the goat that died. Each event is anchored to farm, block, crop, and operator. Each is chained into a verified record that cannot be altered after the fact.</p>
+            <p className="wwd-lead">Teivaka brings together everything a farmer needs to succeed into one connected ecosystem. Instead of using multiple disconnected tools, farmers access knowledge, records, markets, and support from a single platform. Our ecosystem is built around four connected pillars.</p>
             <div className="wwd-cards">
               <div className="wwd-card">
-                <div className="wwd-lt">Layer 01</div>
-                <h3>The Operator</h3>
-                <div className="wwd-pill wwd-pill-live"><span className="wwd-dot"></span>Earning today</div>
-                <p>A working Fiji farm business that activates idle land through profit-share partnerships, manages it end-to-end, and sells to confirmed buyers. Real, and generating revenue now.</p>
+                <div className="wwd-lt">Pillar 01</div>
+                <h3>Community</h3>
+                <p className="wwd-st">Connecting farmers to markets and opportunities</p>
+                <p>Community helps farmers connect with buyers, suppliers, service providers, and fellow farmers — discovering opportunities, building relationships, and accessing markets more efficiently. The goal is simple: help farmers sell more and waste less.</p>
               </div>
               <div className="wwd-card">
-                <div className="wwd-lt">Layer 02</div>
-                <h3>TIS — Live Pillar</h3>
-                <div className="wwd-pill wwd-pill-live"><span className="wwd-dot"></span>Live on WhatsApp</div>
-                <p>Teivaka Intelligent System — the live pillar of TAE — turns Fiji's field-tested production systems into operational guidance on WhatsApp today, in the farmer's own language. No app to download.</p>
+                <div className="wwd-lt">Pillar 02</div>
+                <h3>TFOS — Teivaka Farm Operating System</h3>
+                <p className="wwd-st">Turning farm activities into bankable records</p>
+                <p>Many farmers rely on memory or notebooks. TFOS helps farmers digitally record their operations:</p>
+                <ul><li>Farm activities</li><li>Production</li><li>Expenses</li><li>Labour</li><li>Inputs</li><li>Harvests</li><li>Sales</li></ul>
+                <p style={{ marginTop: 10 }}>These records create a trusted history of farm performance — greater visibility, credibility, and access to financing, contracts, insurance, and investment.</p>
               </div>
               <div className="wwd-card">
-                <div className="wwd-lt">Layer 03</div>
-                <h3>TAE — Platform</h3>
-                <div className="wwd-pill wwd-pill-build"><span className="wwd-dot"></span>In active build</div>
-                <p>The full agricultural operating system around four pillars — built on a disciplined, income-funded plan. It turns our proven method into a system every farmer can use.</p>
+                <div className="wwd-lt">Pillar 03</div>
+                <h3>Classroom</h3>
+                <p className="wwd-st">Practical agricultural education</p>
+                <p>Accessible learning resources designed specifically for farmers:</p>
+                <ul><li>What to plant</li><li>When to plant</li><li>How to plant</li><li>Market timing strategies</li><li>Farm business management</li><li>Best agricultural practices</li></ul>
+                <p style={{ marginTop: 10 }}>The goal is to improve productivity and profitability through knowledge.</p>
+              </div>
+              <div className="wwd-card">
+                <div className="wwd-lt">Pillar 04</div>
+                <h3>TIS — Teivaka Intelligence System</h3>
+                <p className="wwd-st">Your digital agricultural advisor</p>
+                <p>A 24/7 advisor on WhatsApp — in English, Fijian, or Hindi, by text or voice. Practical guidance on crop production, pest and disease management, planting schedules, farm planning, and decision-making. Built on local knowledge and Pacific farming realities, so farmers can access trusted advice whenever they need it.</p>
               </div>
             </div>
+
+            <h2 className="wwd-h2">Why it matters</h2>
+            <p className="wwd-body">When these four pillars work together, farmers gain access to something much bigger than software — an ecosystem that helps them:</p>
+            <ul className="wwd-checks">
+              <li>✓ Learn better</li>
+              <li>✓ Farm better</li>
+              <li>✓ Record better</li>
+              <li>✓ Sell better</li>
+              <li>✓ Earn better</li>
+            </ul>
+
+            <h2 className="wwd-h2">The outcome</h2>
+            <p className="wwd-body">Our purpose is to make farmers visible, bankable, and connected to opportunity. By combining knowledge, records, markets, and intelligence into one platform, Teivaka helps transform idle land into productive wealth — and creates a stronger future for Pacific agriculture.</p>
           </div>
         )}
 
