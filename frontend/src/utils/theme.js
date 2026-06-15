@@ -18,8 +18,13 @@ function systemPrefersDark() {
   try { return window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches; } catch { return false; }
 }
 
-export function resolvedMode(pref = getThemePref()) {
-  return pref === "system" ? (systemPrefersDark() ? "dark" : "light") : pref;
+export function resolvedMode(_pref = getThemePref()) {
+  // Dark/System mode retired — Teivaka renders the single light theme only,
+  // regardless of any saved preference or the device's OS dark setting. Keeps the
+  // UI exactly as designed (the prototype's light .tfp theme) on every device.
+  // The dark CSS tokens remain in the stylesheets but are never matched because
+  // data-theme is always "light".
+  return "light";
 }
 
 export function applyTheme(pref = getThemePref()) {

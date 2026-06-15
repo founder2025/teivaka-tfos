@@ -4,8 +4,8 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#F8F3E9" />
-    <!-- Apply saved Light/Dark theme before first paint (no flash). -->
-    <script>(function(){try{var p=localStorage.getItem('tfos_theme')||'system';var d=p==='dark'||(p==='system'&&window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches);var r=document.documentElement;r.setAttribute('data-theme',d?'dark':'light');var m=document.querySelector('meta[name=theme-color]');if(m)m.setAttribute('content',d?'#16130E':'#F8F3E9');}catch(e){}})();</script>
+    <!-- Single light theme only (dark/system mode retired). Force light before first paint. -->
+    <script>(function(){try{var r=document.documentElement;r.setAttribute('data-theme','light');var m=document.querySelector('meta[name=theme-color]');if(m)m.setAttribute('content','#F8F3E9');}catch(e){}})();</script>
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
