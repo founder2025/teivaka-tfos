@@ -97,48 +97,114 @@ const SocialIconLinks = () => (
 const PAGE_CONTENT = {
   about: {
     title: "About Teivaka",
-    tagline: "A Fiji agricultural company building the system for every Pacific smallholder.",
+    tagline: "Building Fiji's first AI-powered agriculture ecosystem.",
     sections: [
       {
-        heading: "Who we are",
-        body: "Teivaka PTE LTD is a Fiji-incorporated agricultural company (Co. No. 2025RC001894) building the Teivaka Agriculture Ecosystem. We are headquartered in Fiji, with active pilot farms in Korovou (Tailevu Province, mainland) and on Kadavu Island.",
-      },
-      {
-        heading: "Why we exist",
-        body: "Smallholder farmers across the Pacific have been told for decades that software wasn't built for them. The interfaces were too cluttered, the language too technical, the connectivity assumptions too generous, the workflows imported from continental agribusiness that has nothing to do with island reality. Teivaka exists to end that. We are building the operational nervous system that turns smallholder farmers — starting in the Pacific, expanding globally — from uncertain traditional practitioners into systemized, data-driven operators. Without abandoning what already works for them.",
-      },
-      {
-        heading: "What guides us",
-        body: "Three commitments shape every decision we make:",
+        heading: "Our Vision, Mission & Goal",
+        body: "Three statements guide everything we build:",
         list: [
-          "The farmer opens the app, sees one task, does it, closes the app. If a feature does not serve that loop, it is debt.",
-          "The reference user is a Kadavu Island farmer on a flaky 3G connection — not an edge case. If it breaks there, it is broken everywhere.",
-          "Every line we ship must work for a farmer in Sigatoka, a farmer in Solomon Islands, and eventually a farmer in Kenya. Pacific first. Global by design.",
+          "Vision — Transform idle land into wealth.",
+          "Mission — Empower every farmer to prosper.",
+          "Goal — Build the future of Pacific agriculture.",
         ],
+      },
+      {
+        heading: "Who we are",
+        body: "Teivaka is building Fiji's first AI-powered agriculture ecosystem designed to help farmers become more productive, profitable, and bankable.",
+      },
+      {
+        heading: "The challenge we address",
+        body: "Today, many farmers across Fiji and the Pacific face the same challenges. They lack access to timely information, reliable market connections, proper farm records, and the data needed to access finance and growth opportunities. As a result, productive farmers often remain invisible to buyers, lenders, and investors.",
+      },
+      {
+        heading: "What makes Teivaka unique",
+        body: "Teivaka brings these services together into one ecosystem with one farmer profile and one source of truth. Farmers can learn, plan, record, sell, and receive advice from a single platform.",
+      },
+      {
+        heading: "Our purpose",
+        body: "Our vision is to become the operating system for Pacific agriculture — turning idle land into productive wealth, making invisible farmers visible, and helping productive farmers become bankable.",
+      },
+      {
+        heading: "More than software",
+        body: "Teivaka is not just building software. We are building the digital infrastructure that will help transform agriculture across Fiji and the Pacific for generations to come.",
       },
     ],
   },
 
   "what-we-do": {
-    title: "What we do",
-    tagline: "One company. Three honest layers.",
+    title: "The Teivaka Agriculture Ecosystem",
+    tagline: "Building the operating system for Pacific agriculture.",
     sections: [
       {
-        heading: "How farmers use it",
-        body: "TAE adapts to the farmer. A subsistence smallholder sees a single task card with voice playback and three buttons. A growing operation sees a five-pillar navigation across Home, Classroom, Farm, TIS, and Me. A commercial operator with multiple farms and many hectares sees analytics, multi-farm rollup, and the full operational depth. The same database. The same audit chain. Three different surfaces.",
+        heading: "One unified platform",
+        body: "Teivaka is Fiji's first AI-powered agriculture ecosystem designed to connect farmers, buyers, knowledge, finance, and production data into one unified platform. For decades, farmers have operated in isolation — selling without market visibility, farming without records, learning through trial and error, and struggling to access finance despite owning productive land. Through a single login, farmers gain access to the tools, knowledge, data, and opportunities needed to transform farming from a subsistence activity into a scalable and profitable business.",
       },
       {
-        heading: "What it produces",
-        body: "Three byproducts emerge from farmers doing what they were going to do anyway:",
+        heading: "1. Community — The Agricultural Marketplace & Trade Network",
+        body: "The Community pillar connects farmers directly with buyers, traders, wholesalers, retailers, exporters, and agricultural service providers. Many farmers produce crops without knowing who is buying, what buyers need, current demand, or current prices — so crops are sold below value, wasted, or left unsold. Community changes that:",
         list: [
-          "A complete operational record of the farm — what was planted, when, how it performed, what it cost, what it earned.",
-          "A bank-grade evidence trail (audit-anchored, hash-chained, publicly verifiable) that opens credit access for farmers who have used the system long enough to accumulate verifiable record.",
-          "A continuous AI mentor (TIS) grounded in the farmer's actual operation — not a generic chatbot, but an assistant that knows the farm and gives advice that fits it.",
+          "Buy and sell produce",
+          "Connect buyers and farmers",
+          "Access market opportunities",
+          "Discover suppliers and service providers",
+          "Build trusted farming networks",
+          "Enable digital transactions and mobile money integration",
+          "Improve transparency within agricultural trade",
         ],
       },
       {
-        heading: "What it does not do",
-        body: "TAE is not a marketplace. It is not a payments rail. It is not a co-op management system. It is the operational layer underneath farming itself. Other things may sit on top of it later; the core remains the farmer's daily execution.",
+        heading: "2. TFOS — The Record Engine That Makes Farmers Bankable",
+        body: "TFOS (Teivaka Farm Operating System) is the production intelligence backbone. Every activity performed on a farm is captured, organized, and transformed into valuable business data. Many farmers are productive but invisible — banks, investors, insurers, and buyers require records, yet most rely on memory or notebooks. TFOS transforms farm activity into farm credibility:",
+        list: [
+          "Records all farm activities",
+          "Tracks crops, livestock, labor, and expenses",
+          "Monitors yields and productivity",
+          "Generates farm performance reports",
+          "Creates digital production histories",
+          "Measures profitability",
+          "Builds a verifiable farming record over time",
+        ],
+      },
+      {
+        heading: "3. Classroom — Knowledge & Skills Development",
+        body: "Classroom delivers practical agricultural education directly to farmers. Knowledge should not depend on location, personal networks, or expensive training programs. It helps farmers answer what to plant, when to plant, how to plant, and who will buy it:",
+        list: [
+          "Crop-specific training modules",
+          "Production planning guides",
+          "Seasonal planting recommendations",
+          "Market timing strategies",
+          "Financial literacy education",
+          "Farm business management training",
+          "Best-practice agricultural techniques",
+        ],
+      },
+      {
+        heading: "4. TIS — The AI Mentor for Every Farmer",
+        body: "TIS (Teivaka Intelligence System) is the intelligence layer. Powered by artificial intelligence and real agricultural data, TIS acts as a digital advisor available whenever farmers need guidance:",
+        list: [
+          "Answers farming questions",
+          "Provides personalized recommendations",
+          "Interprets farm data",
+          "Assists with planning and decision-making",
+          "Helps identify risks and opportunities",
+          "Guides farmers toward better outcomes",
+        ],
+      },
+      {
+        heading: "One ecosystem. One login. One farmer record.",
+        body: "Individually, each pillar solves a major agricultural challenge. Together, they create a connected ecosystem where farmers can learn, produce, sell, track performance, build credibility, and grow — all from a single platform.",
+      },
+      {
+        heading: "Our purpose",
+        body: "To turn idle land into productive wealth. To make invisible farmers visible. To make productive farmers bankable. To create a future where every farmer has access to the tools, knowledge, markets, and opportunities needed to succeed.",
+      },
+      {
+        heading: "Proof of execution",
+        body: "The first AI-powered agriculture operating system built for Fiji and the Pacific.",
+        list: [
+          "83,000+ farmers addressable market",
+          "Two working farms piloting the ecosystem",
+        ],
       },
     ],
   },
@@ -237,55 +303,83 @@ const PAGE_CONTENT = {
 
   tis: {
     title: "TIS — Teivaka Intelligence System",
-    tagline: "The AI mentor that knows your farm.",
+    tagline: "Every farmer deserves a mentor.",
     sections: [
       {
-        heading: "What it is",
-        body: "TIS is the AI assistant inside Teivaka. Unlike generic chatbots, TIS is anchored to each individual farmer's actual operation. When a farmer asks it a question — by voice through WhatsApp, by tap in the app, or by typing — TIS answers grounded in three layers: what is happening on the farmer's farm right now, what is happening across the region (weather, market prices, peer signal), and general agronomy.",
+        heading: "A 24/7 farming mentor",
+        body: "For generations, farming knowledge has been passed from parent to child, neighbour to neighbour. But what happens when a pest appears for the first time, when market conditions suddenly change, or when a farmer needs advice immediately and there is no agricultural officer nearby? TIS is a 24/7 AI-powered farming mentor built specifically for farmers in Fiji and the Pacific. No appointments. No waiting. No travel. Just answers.",
       },
       {
-        heading: "How it works",
-        body: "TIS is built on Claude — currently the strongest reasoning AI publicly available — accessed via the OpenClaw gateway that lets Teivaka serve TIS to farmers at zero per-message cost. That economics is what makes a continuous AI mentor possible at smallholder pricing. The same architecture would be impossible to sustain at the per-token rates that other AI assistants are billed at.",
+        heading: "Built for Fiji. Trained for Pacific agriculture.",
+        body: "Unlike generic AI tools built for global audiences, TIS is designed around the realities of farming in Fiji and the Pacific — local agronomy knowledge, farming practices, crop systems, climate conditions, and seasonal patterns. TIS understands the challenges farmers face every day:",
+        list: [
+          "Tropical growing conditions",
+          "Cyclones and extreme weather events",
+          "Seasonal production cycles",
+          "Local pest and disease pressures",
+          "Market timing challenges",
+          "Smallholder and commercial farming realities",
+          "Fiji's most important crops and farming systems",
+        ],
       },
       {
-        heading: "How farmers use it",
-        body: "TIS responds in the farmer's own language and idiom. A farmer in Kadavu can ask in iTaukei or Fiji Hindi or English why their eggplants are wilting, and TIS will give them an answer based on what the farmer logged about that block over the past three weeks — not a generic 'eggplants need water' response. TIS will also cite which layer the answer came from, so the farmer knows whether it is reading their own data, regional intelligence, or general knowledge.",
+        heading: "Farm advice through WhatsApp",
+        body: "Most farmers already use WhatsApp, so TIS meets farmers where they already are. There is nothing to download, no complicated software, no passwords, and no training required. Simply send a message and start asking questions — whether you are farming in Tailevu, Naitasiri, Sigatoka, Labasa, Taveuni, Kadavu, or the outer islands.",
       },
       {
-        heading: "What it does not do",
-        body: "TIS does not pretend to be a person. TIS does not make claims it cannot ground. When TIS doesn't know, TIS says so and offers to escalate to the founder. The farmer is always in control of what gets logged, what gets acted on, and what stays private.",
+        heading: "Speak your language",
+        body: "TIS communicates in English, Fijian, and Hindi, and supports both voice messages and text messages. Farmers can ask questions naturally in the language they are most comfortable using, and receive clear, practical guidance in return. No technical terms. No complicated instructions.",
+      },
+      {
+        heading: "What TIS can do",
+        body: "Practical, step-by-step support across the whole farming journey:",
+        list: [
+          "Crop production guidance — land preparation, crop selection, spacing, fertiliser, irrigation, weed control, harvest planning, post-harvest handling, yield improvement",
+          "Pest & disease support — identify likely pests, recognise symptoms, understand causes, get management recommendations, reduce losses through early intervention",
+          "Planting & market timing — when to plant, what to plant, seasonal patterns, market opportunities",
+          "Seasonal farm guidance — a farming companion from land preparation through to harvest",
+          "Connected to farm records — as integration expands, recommendations become increasingly personalised",
+        ],
+      },
+      {
+        heading: "Why TIS matters",
+        body: "Every farming decision carries risk — planting too early or too late, the wrong fertiliser, a misdiagnosed disease, a missed market. TIS helps reduce uncertainty by giving farmers access to trusted guidance whenever they need it — not just those located near agricultural offices, consultants, or major towns.",
+      },
+      {
+        heading: "Live on WhatsApp today",
+        body: "TIS is not a future concept and not a prototype — it is live on WhatsApp today. Save the TIS WhatsApp number, send a message or voice note, and ask anything about farming. For example: \"How far apart should I plant watermelon?\", \"My cassava leaves are turning yellow.\", \"When should I plant tomatoes for the Christmas market?\" You'll receive practical guidance instantly.",
       },
     ],
   },
 
   tfos: {
-    title: "Teivaka Agriculture Ecosystem",
-    tagline: "The full agricultural management platform underneath everything else.",
+    title: "TFOS — Teivaka Farm Operating System",
+    tagline: "The record engine that makes farmers bankable.",
     sections: [
       {
         heading: "What it is",
-        body: "TAE is the heart of Teivaka. It is where the farm becomes data. Every event — every planting, every harvest, every chemical application, every cash transaction, every worker check-in, every dead animal — is captured as a structured, time-stamped, audit-anchored record. There is no parallel data entry. There are no spreadsheets running in the background. TAE is the system of record.",
+        body: "TFOS is the production intelligence backbone of the Teivaka ecosystem. Every activity performed on a farm is captured, organized, and transformed into valuable business data. It allows farmers to digitally record farm activities, production, expenses, and yields.",
       },
       {
-        heading: "What it tracks",
-        body: "Seven verticals, every operation type:",
+        heading: "The problem",
+        body: "Many farmers are productive but invisible. Banks, investors, insurers, and buyers often require records before making decisions, yet most farmers rely on memory, notebooks, or incomplete documentation. Without records, opportunities are lost.",
+      },
+      {
+        heading: "What TFOS does",
+        body: "TFOS turns everyday farm activity into credible business data:",
         list: [
-          "Crops — planting, irrigation, fertilizer, chemical application, harvest, post-harvest loss, grading, sales.",
-          "Horticulture — protected agriculture, propagation, nursery management, transplant.",
-          "Livestock — poultry, cattle, goats, pigs, sheep, apiculture. Group-level and individual.",
-          "Aquaculture — pond management, stocking, feed, harvest.",
-          "Forestry — long-rotation crops, timber, replanting.",
-          "Floriculture — ornamental and cut-flower production.",
-          "Integrated Systems — operations that cross verticals (worker time, cash, equipment, observations).",
+          "Records all farm activities",
+          "Tracks crops, livestock, labor, and expenses",
+          "Monitors yields and productivity",
+          "Generates farm performance reports",
+          "Creates digital production histories",
+          "Measures profitability",
+          "Builds a verifiable farming record over time",
         ],
       },
       {
-        heading: "How it adapts",
-        body: "TAE recognizes three modes — Solo, Growth, and Commercial — derived from how the farm is operating (size, active cycles, tenure). A subsistence farmer never sees the commercial interface. A commercial operator never sees the simplified single-task surface. The same data flows underneath all three.",
-      },
-      {
-        heading: "Why this matters",
-        body: "Smallholder agriculture has been data-poor not because farmers do not have data, but because no one has built a tool that fits how they actually work. TAE is built farm-up, not boardroom-down. It is being hardened on two real Fiji farms before it is offered to anyone else.",
+        heading: "The outcome",
+        body: "Farmers move from undocumented operations to data-backed agricultural businesses. This creates the foundation for financing, investment, insurance, supply contracts, and long-term growth. TFOS transforms farm activity into farm credibility.",
       },
     ],
   },
@@ -309,6 +403,25 @@ const PAGE_CONTENT = {
       {
         heading: "Real, not theatre",
         body: "These are operating farms, not demo installations. They earn real revenue, employ real people, and ship to real buyers. The data that flows into TAE is the data the farms are generating in their normal course of business. That is the only way to build a tool that other farms will trust.",
+      },
+    ],
+  },
+
+  "the-work": {
+    title: "The Work",
+    tagline: "Turning data into decisions. Turning land into wealth.",
+    sections: [
+      {
+        heading: "Proof of execution",
+        body: "Teivaka is the first AI-powered agriculture operating system built for Fiji and the Pacific.",
+        list: [
+          "83,000+ farmers addressable market",
+          "Two working farms piloting the ecosystem",
+        ],
+      },
+      {
+        heading: "Building the future of Pacific agriculture",
+        body: "Teivaka is not just building software. We are building the digital infrastructure that will help transform agriculture across Fiji and the Pacific for generations to come.",
       },
     ],
   },
