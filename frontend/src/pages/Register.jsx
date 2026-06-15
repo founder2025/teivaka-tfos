@@ -20,7 +20,7 @@
  */
 
 import { useState, useEffect, useRef } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import {
   Sprout, ShoppingCart, Factory, Truck, Landmark, Building2,
   Ship, Package, Users, Eye, EyeOff, Mail, Check, ShieldCheck,
@@ -939,46 +939,114 @@ export default function Register() {
 }
 
 // ---------------------------------------------------------------------------
-// Post-signup success — lazy verification: the user enters the app immediately;
-// the email link is a nudge, not a gate. Resend is the secondary action.
+// Post-signup verification — OTP-first. We email a 6-digit code; the user enters
+// it here to verify and go straight into the app. "Verify later" stays as an
+// escape hatch so a missed code never hard-blocks signup. Google accounts arrive
+// verified and skip the code entirely.
 // ---------------------------------------------------------------------------
 function AccountCreated({ data }) {
   const highTrust = HIGH_TRUST.has(data.account_type);
   const profileLabel = PROFILE_LABELS[data.account_type] || data.account_type;
   const needsVerify = data.email_unverified !== false; // Google accounts arrive verified
   const firstName = (data.display_name || "").trim().split(/\s+/)[0] || "there";
+  const destination = data.verification?.destination || data.email;
+  const navigate = useNavigate();
+  const authToken = (() => {
+    try { return data.access_token || localStorage.getItem("tfos_access_token") || ""; }
+    catch { return data.access_token || ""; }
+  })();
 
+  // --- 6-digit code entry ---------------------------------------------------
+  const [digits, setDigits] = useState(["", "", "", "", "", ""]);
+  const boxRefs = useRef([]);
+  const [verifying, setVerifying] = useState(false);
+  const [verifyErr, setVerifyErr] = useState("");
+
+  // --- resend ---------------------------------------------------------------
   const [state, setState] = useState("idle"); // idle | sending | sent | error
   const [msg, setMsg] = useState("");
-  const [cooldown, setCooldown] = useState(0); // seconds until resend is allowed again
+  const [cooldown, setCooldown] = useState(0);
 
-  // tick the cooldown down to zero
+  useEffect(() => {
+    if (needsVerify) boxRefs.current[0]?.focus();
+  }, [needsVerify]);
+
   useEffect(() => {
     if (cooldown <= 0) return;
     const t = setInterval(() => setCooldown((c) => Math.max(0, c - 1)), 1000);
     return () => clearInterval(t);
   }, [cooldown]);
 
+  async function submitCode(code) {
+    if (verifying) return;
+    setVerifying(true); setVerifyErr("");
+    try {
+      const res = await fetch("/api/v1/auth/verify-email-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
+        body: JSON.stringify({ code }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setVerifyErr(extractErrorMessage(d.detail) || "That code isn’t right. Please try again.");
+        setDigits(["", "", "", "", "", ""]);
+        boxRefs.current[0]?.focus();
+        return;
+      }
+      navigate("/home");
+    } catch {
+      setVerifyErr("Couldn’t verify right now. Please try again in a moment.");
+    } finally {
+      setVerifying(false);
+    }
+  }
+
+  function setDigit(i, val) {
+    const v = val.replace(/\D/g, "");
+    setVerifyErr("");
+    setDigits((prev) => {
+      const next = [...prev];
+      if (v.length > 1) {
+        // paste: distribute across boxes from here
+        const chars = v.slice(0, 6 - i).split("");
+        chars.forEach((c, k) => { next[i + k] = c; });
+        const landed = Math.min(i + chars.length, 5);
+        setTimeout(() => boxRefs.current[landed]?.focus(), 0);
+      } else {
+        next[i] = v;
+        if (v && i < 5) setTimeout(() => boxRefs.current[i + 1]?.focus(), 0);
+      }
+      const joined = next.join("");
+      if (joined.length === 6 && !next.includes("")) setTimeout(() => submitCode(joined), 0);
+      return next;
+    });
+  }
+
+  function onKeyDown(i, e) {
+    if (e.key === "Backspace" && !digits[i] && i > 0) boxRefs.current[i - 1]?.focus();
+  }
+
   async function resend() {
     if (cooldown > 0 || state === "sending") return;
     setState("sending"); setMsg("");
     try {
-      const res = await fetch("/api/v1/auth/resend-verification", {
+      const res = await fetch("/api/v1/auth/resend-email-otp", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: data.email }),
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
       });
       const d = await res.json().catch(() => ({}));
       const retry = parseInt(res.headers.get("Retry-After") || "0", 10);
       if (res.status === 429) {
         setState("error");
-        setMsg(d.detail || "Please wait a little before requesting another email.");
+        setMsg(d.detail || "Please wait a little before requesting another code.");
         setCooldown(retry > 0 ? retry : 60);
         return;
       }
       setState("sent");
-      setMsg("Sent — check your inbox, plus spam/promotions.");
+      setMsg("New code sent — check your inbox, plus spam/promotions.");
       setCooldown(retry > 0 ? retry : 30);
+      setDigits(["", "", "", "", "", ""]);
+      boxRefs.current[0]?.focus();
     } catch {
       setState("error");
       setMsg("Couldn't send right now. Please try again in a moment.");
@@ -988,9 +1056,9 @@ function AccountCreated({ data }) {
   const resendDisabled = state === "sending" || cooldown > 0;
   const resendLabel =
     state === "sending" ? "Sending…"
-    : cooldown > 0 ? `Resend available in ${cooldown}s`
-    : state === "sent" ? "Resend again"
-    : "Resend verification email";
+    : cooldown > 0 ? `Resend code in ${cooldown}s`
+    : state === "sent" ? "Resend code"
+    : "Resend code";
 
   return (
     <div className="min-h-screen flex flex-col" style={{ background: T.cream, fontFamily: FONT }}>
@@ -1002,38 +1070,57 @@ function AccountCreated({ data }) {
         <div className="w-full max-w-md">
           <div className="rounded-2xl p-8" style={{ background: T.paper, border: `1px solid ${T.line}`, boxShadow: "0 4px 16px rgba(92,64,51,0.10)" }}>
 
-            {/* header: icon + headline */}
-            <div className="text-center">
-              <div style={{ width: 60, height: 60, borderRadius: "50%", background: T.greenTint, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px" }}>
-                <Check size={30} strokeWidth={2.75} color={T.greenDk} aria-hidden="true" />
-              </div>
-              <h2 className="text-2xl font-bold" style={{ color: T.soil }}>You're in, {firstName}!</h2>
-              <p className="mt-1.5" style={{ color: T.muted, fontSize: 14.5 }}>Your Teivaka account is ready.</p>
-            </div>
-
-            {/* primary action — straight into the app (lazy verification) */}
-            <Link to="/home" className="mt-6 flex items-center justify-center w-full py-3.5 rounded-xl font-semibold"
-              style={{ background: T.green, color: "#fff", fontSize: 15.5 }}>
-              Continue to Teivaka →
-            </Link>
-
-            {/* verify section — secondary; or a confirmation for Google accounts */}
             {needsVerify ? (
-              <div className="mt-6 rounded-xl p-4" style={{ background: T.cream, border: `1px solid ${T.line}` }}>
-                <div className="flex items-center gap-2.5">
-                  <Mail size={18} strokeWidth={2} color={T.greenDk} />
-                  <p style={{ color: T.soil, fontWeight: 700, fontSize: 14.5 }}>Verify your email</p>
+              <>
+                {/* header */}
+                <div className="text-center">
+                  <div style={{ width: 60, height: 60, borderRadius: "50%", background: T.greenTint, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px" }}>
+                    <Mail size={28} strokeWidth={2.25} color={T.greenDk} aria-hidden="true" />
+                  </div>
+                  <h2 className="text-2xl font-bold" style={{ color: T.soil }}>Enter your code</h2>
+                  <p className="mt-1.5" style={{ color: T.muted, fontSize: 14.5, lineHeight: 1.5 }}>
+                    We emailed a 6-digit code to<br /><strong style={{ color: T.soil }}>{destination}</strong>
+                  </p>
                 </div>
-                <p className="mt-2" style={{ color: T.soil2, fontSize: 13, lineHeight: 1.55 }}>
-                  Sent to <strong style={{ color: T.soil }}>{data.email}</strong>. Optional now — it secures your
-                  account and unlocks Bank Evidence &amp; selling later.
-                </p>
 
+                {/* 6-box code input */}
+                <div className="mt-6 flex justify-center gap-2" style={{ direction: "ltr" }}>
+                  {digits.map((d, i) => (
+                    <input
+                      key={i}
+                      ref={(el) => (boxRefs.current[i] = el)}
+                      type="text"
+                      inputMode="numeric"
+                      autoComplete={i === 0 ? "one-time-code" : "off"}
+                      maxLength={6}
+                      value={d}
+                      onChange={(e) => setDigit(i, e.target.value)}
+                      onKeyDown={(e) => onKeyDown(i, e)}
+                      disabled={verifying}
+                      aria-label={`Digit ${i + 1}`}
+                      className="text-center rounded-xl font-bold"
+                      style={{
+                        width: 46, height: 56, fontSize: 24,
+                        border: `1.5px solid ${verifyErr ? T.red : T.line}`,
+                        background: T.cream, color: T.soil, outlineColor: T.green,
+                      }}
+                    />
+                  ))}
+                </div>
+
+                {verifyErr && (
+                  <p className="mt-3 text-center" style={{ fontSize: 13, color: T.red }}>{verifyErr}</p>
+                )}
+                {verifying && (
+                  <p className="mt-3 text-center" style={{ fontSize: 13, color: T.muted }}>Verifying…</p>
+                )}
+
+                {/* resend */}
                 <button
                   type="button"
                   onClick={resend}
                   disabled={resendDisabled}
-                  className="mt-3 w-full py-2.5 rounded-xl font-medium"
+                  className="mt-5 w-full py-2.5 rounded-xl font-medium"
                   style={{
                     background: resendDisabled ? T.cream : T.paper,
                     color: resendDisabled ? T.muted : T.greenDk,
@@ -1046,23 +1133,42 @@ function AccountCreated({ data }) {
                 </button>
 
                 {msg && (
-                  <div className="mt-2.5 flex items-start gap-1.5" style={{ fontSize: 12.5, color: state === "error" ? T.red : T.greenDk }}>
+                  <div className="mt-2.5 flex items-start justify-center gap-1.5" style={{ fontSize: 12.5, color: state === "error" ? T.red : T.greenDk }}>
                     {state === "sent" && <Check size={14} strokeWidth={3} style={{ marginTop: 1, flexShrink: 0 }} />}
                     <span>{msg}</span>
                   </div>
                 )}
 
-                <p className="mt-2.5" style={{ fontSize: 12, color: T.muted, lineHeight: 1.5 }}>
-                  Didn't get it? Check spam/promotions — you can also verify anytime from your account.
-                </p>
-              </div>
+                {/* escape hatch — verify later */}
+                <div className="mt-6 pt-5 text-center" style={{ borderTop: `1px solid ${T.line}` }}>
+                  <Link to="/home" className="font-medium hover:underline" style={{ color: T.muted, fontSize: 13.5 }}>
+                    Skip for now — verify later
+                  </Link>
+                </div>
+              </>
             ) : (
-              <div className="mt-6 rounded-xl p-4 flex items-center gap-2.5" style={{ background: T.greenTint, border: `1px solid ${T.green}` }}>
-                <ShieldCheck size={20} strokeWidth={2} color={T.greenDk} style={{ flexShrink: 0 }} />
-                <p style={{ color: T.soil, fontSize: 13.5, lineHeight: 1.5 }}>
-                  <strong style={{ color: T.greenDk }}>Email verified via Google.</strong> {data.email} is confirmed — you're all set.
-                </p>
-              </div>
+              <>
+                {/* Google: already verified */}
+                <div className="text-center">
+                  <div style={{ width: 60, height: 60, borderRadius: "50%", background: T.greenTint, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px" }}>
+                    <Check size={30} strokeWidth={2.75} color={T.greenDk} aria-hidden="true" />
+                  </div>
+                  <h2 className="text-2xl font-bold" style={{ color: T.soil }}>You're in, {firstName}!</h2>
+                  <p className="mt-1.5" style={{ color: T.muted, fontSize: 14.5 }}>Your Teivaka account is ready.</p>
+                </div>
+
+                <Link to="/home" className="mt-6 flex items-center justify-center w-full py-3.5 rounded-xl font-semibold"
+                  style={{ background: T.green, color: "#fff", fontSize: 15.5 }}>
+                  Continue to Teivaka →
+                </Link>
+
+                <div className="mt-6 rounded-xl p-4 flex items-center gap-2.5" style={{ background: T.greenTint, border: `1px solid ${T.green}` }}>
+                  <ShieldCheck size={20} strokeWidth={2} color={T.greenDk} style={{ flexShrink: 0 }} />
+                  <p style={{ color: T.soil, fontSize: 13.5, lineHeight: 1.5 }}>
+                    <strong style={{ color: T.greenDk }}>Email verified via Google.</strong> {data.email} is confirmed — you're all set.
+                  </p>
+                </div>
+              </>
             )}
 
             {highTrust && (

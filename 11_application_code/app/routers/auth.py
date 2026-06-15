@@ -28,10 +28,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.core.account_types import derive_role, normalize_account_type
 from app.core.capabilities import compute_capabilities
+from app.core.otp import mask_email, request_otp, verify_otp
 from app.core.verification_routing import dispatch_verification, resolve_channel
 from app.db.session import get_db
 from app.middleware.rls import get_current_user, get_tenant_db
-from app.utils.email import send_password_reset_email, send_verification_email
+from app.utils.email import send_otp_email, send_password_reset_email, send_verification_email
 from app.utils.referral import generate_referral_code
 from app.utils.sms import send_otp_sms
 from app.utils.fraud_guard import (
@@ -669,14 +670,28 @@ async def register(
             pass
         await db.commit()
 
-        # Fire-and-forget verification via the CFO-routed channel. Never raises.
-        # (email is live; whatsapp/sms fall back to email until provisioned — Q8.)
+        # Primary verification = email OTP code (Redis-backed, 6-digit). The link
+        # path (/verify-email via verification_token, still stored above) remains a
+        # fallback for any already-issued links and if a code can't be issued.
+        # WhatsApp/SMS OTP are wired in otp.py but not provisioned (creds empty),
+        # so email is the only live channel — never break signup on a send failure.
         # Google accounts are already verified by Google — nothing to dispatch.
         if not is_google:
-            dispatch_verification(
-                verify_channel, email=email, phone=phone,
-                token=verification_token, name=full_name, logger=logger, uid=user_id,
-            )
+            try:
+                res = await request_otp(email, purpose="email_verify")
+                if res.get("ok"):
+                    send_otp_email(email, res["code"], full_name)
+                else:
+                    dispatch_verification(
+                        verify_channel, email=email, phone=phone,
+                        token=verification_token, name=full_name, logger=logger, uid=user_id,
+                    )
+            except Exception as e:  # noqa: BLE001 — verification send must never break signup
+                logger.warning("Email OTP issue failed for %s (link fallback): %s", email, e)
+                dispatch_verification(
+                    verify_channel, email=email, phone=phone,
+                    token=verification_token, name=full_name, logger=logger, uid=user_id,
+                )
 
     except HTTPException:
         raise
@@ -715,10 +730,16 @@ async def register(
         "email": email,
         "email_unverified": not is_google,
         "capabilities": compute_capabilities({"role": role, "tier": "BASIC", "email_verified": is_google, "account_type": req.account_type}),
+        # Tells the frontend which verification surface to show next. Email OTP is
+        # the live channel; destination is masked so the UI can say where it went.
+        "verification": (
+            None if is_google else
+            {"method": "email_otp", "destination": mask_email(email)}
+        ),
         "message": (
             "Account created — your email is verified via Google."
             if is_google else
-            "Account created. Please check your email to verify your address."
+            "Account created. Enter the 6-digit code we emailed you."
         ),
     }
 
@@ -887,6 +908,107 @@ async def resend_verification(
 
     send_verification_email(email, token_to_send, row["full_name"] or "there", uid=str(row["user_id"]))
     return generic_response
+
+
+# ---------------------------------------------------------------------------
+# Email OTP verification (primary signup flow)
+# ---------------------------------------------------------------------------
+
+class VerifyEmailOtpRequest(BaseModel):
+    code: str
+
+    @field_validator("code")
+    @classmethod
+    def code_format(cls, v: str) -> str:
+        v = (v or "").strip()
+        if not (v.isdigit() and len(v) == 6):
+            raise ValueError("Enter the 6-digit code from your email.")
+        return v
+
+
+# Plain farmer-voice messages keyed off the otp engine's reason codes. We never
+# echo back internals — the user just needs to know what to do next.
+_OTP_REASON_MESSAGES = {
+    "expired": "That code has expired. Tap “Resend code” to get a new one.",
+    "too_many_attempts": "Too many tries. Tap “Resend code” to get a new one.",
+    "invalid": "That code isn’t right. Check the digits and try again.",
+    "cooldown": "Please wait a few seconds before requesting another code.",
+    "hourly_cap": "Too many codes requested. Please try again later.",
+}
+
+
+async def _current_user_email(db: AsyncSession, uid: str) -> tuple[str | None, bool]:
+    row = (
+        await db.execute(
+            text("SELECT email, COALESCE(email_verified, false) AS v "
+                 "FROM tenant.users WHERE user_id = :uid"),
+            {"uid": uid},
+        )
+    ).first()
+    if not row:
+        return None, False
+    return row.email, bool(row.v)
+
+
+@router.post("/verify-email-otp")
+async def verify_email_otp(
+    req: VerifyEmailOtpRequest,
+    user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_tenant_db),
+):
+    """Verify the 6-digit code emailed at signup. Authenticated with the token the
+    register/login response already returns, so it's enumeration-safe (we only
+    ever check the caller's own email). On success flips email_verified=true."""
+    uid = str(user["user_id"])
+    email, already = await _current_user_email(db, uid)
+    if email is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Account not found.")
+    if already:
+        return {"verified": True, "message": "Your email is already verified."}
+
+    res = await verify_otp(email, req.code, purpose="email_verify")
+    if not res.get("ok"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=_OTP_REASON_MESSAGES.get(res.get("reason", "invalid"),
+                                            "That code isn’t right. Please try again."),
+        )
+
+    await db.execute(
+        text("UPDATE tenant.users SET email_verified = true, updated_at = NOW() "
+             "WHERE user_id = :uid"),
+        {"uid": uid},
+    )
+    await db.commit()
+    logger.info("Email verified via OTP for user %s", uid)
+    return {"verified": True, "message": "Email verified — you’re all set."}
+
+
+@router.post("/resend-email-otp")
+async def resend_email_otp(
+    user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_tenant_db),
+):
+    """Issue a fresh signup OTP to the caller's own email. Rate-limited by the otp
+    engine (cooldown + hourly cap). Never reveals anything but the masked address."""
+    uid = str(user["user_id"])
+    email, already = await _current_user_email(db, uid)
+    if email is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Account not found.")
+    if already:
+        return {"sent": False, "message": "Your email is already verified."}
+
+    res = await request_otp(email, purpose="email_verify")
+    if not res.get("ok"):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=_OTP_REASON_MESSAGES.get(res.get("reason", "cooldown"),
+                                            "Please wait before requesting another code."),
+            headers={"Retry-After": str(res.get("retry_after", 30))},
+        )
+    send_otp_email(email, res["code"], user.get("full_name") or "there")
+    return {"sent": True, "destination": mask_email(email),
+            "message": f"New code sent to {mask_email(email)}."}
 
 
 # ---------------------------------------------------------------------------

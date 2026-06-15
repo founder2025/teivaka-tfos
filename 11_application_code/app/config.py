@@ -97,6 +97,15 @@ class Settings(BaseSettings):
     phone_otp_expire_minutes: int = 5
     phone_otp_max_attempts: int = 3
 
+    # ── Email OTP (signup verification — Redis-backed, no DB/migration) ────────
+    # 6-digit code emailed via Resend; stored hashed in Redis with a TTL. These
+    # are the live signup-verification defaults (WhatsApp/SMS OTP wired but not
+    # enabled until their providers are provisioned + receipt-verified, PR.2).
+    email_otp_expire_minutes: int = 10
+    email_otp_max_attempts: int = 5
+    email_otp_resend_cooldown_seconds: int = 30
+    email_otp_hourly_cap: int = 5
+
     # ── SMTP / Transactional email ────────────────────────────────────────────
     smtp_host: str = ""
     smtp_port: int = 587

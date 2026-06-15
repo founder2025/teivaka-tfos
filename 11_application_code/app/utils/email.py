@@ -152,6 +152,93 @@ def _verification_html(name: str, verify_url: str) -> str:
 """
 
 
+def _otp_html(name: str, code: str, minutes: int) -> str:
+    return f"""\
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="utf-8"></head>
+<body style="margin:0;padding:0;background:#F5EFE0;font-family:Georgia,'Times New Roman',serif;color:#1A1410;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#F5EFE0;padding:40px 16px;">
+    <tr><td align="center">
+      <table role="presentation" width="560" cellpadding="0" cellspacing="0"
+             style="max-width:560px;background:#ffffff;border:1px solid #E0D5C0;border-radius:12px;overflow:hidden;">
+        <tr><td style="background:#2C1A0E;padding:24px 40px;">
+          <img src="{_logo_url()}" alt="Teivaka" width="170" height="37"
+               style="display:block;width:170px;height:37px;border:0;outline:none;text-decoration:none;-ms-interpolation-mode:bicubic;color:#F5EFE0;font-family:Georgia,serif;font-size:24px;font-weight:bold;letter-spacing:0.5px;" />
+        </td></tr>
+        <tr><td style="padding:40px;">
+          <h1 style="font-family:'Playfair Display',Georgia,serif;font-size:28px;color:#2C1A0E;margin:0 0 20px 0;line-height:1.25;">
+            Your verification code
+          </h1>
+          <p style="font-size:16px;line-height:1.6;color:#1A1410;margin:0 0 24px 0;">Hello {name},</p>
+          <p style="font-size:16px;line-height:1.6;color:#1A1410;margin:0 0 28px 0;">
+            Enter this code to verify your email and finish setting up your Teivaka account:
+          </p>
+          <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 0 28px 0;">
+            <tr><td style="background:#F5EFE0;border:1px solid #E0D5C0;border-radius:8px;padding:18px 32px;">
+              <span style="font-family:'Courier New',monospace;font-size:34px;font-weight:bold;letter-spacing:10px;color:#2C1A0E;">{code}</span>
+            </td></tr>
+          </table>
+          <p style="font-size:13px;color:#6b6156;line-height:1.6;margin:0;">
+            This code expires in {minutes} minutes. If you didn't create an account,
+            you can safely ignore this email — never share this code with anyone.
+          </p>
+        </td></tr>
+        <tr><td style="background:#F5EFE0;padding:20px 40px;border-top:1px solid #E0D5C0;">
+          <p style="font-size:12px;color:#6b6156;margin:0;font-style:italic;">
+            Built in Fiji, for the Pacific. Teivaka PTE LTD, Suva, Fiji.
+          </p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>
+"""
+
+
+def send_otp_email(to_email: str, code: str, name: str) -> bool:
+    """Send a 6-digit signup verification code via Resend's HTTPS API. Never
+    raises; returns True on accepted dispatch. The code is rendered in the body
+    but is never logged here (callers must not log it either)."""
+    minutes = settings.email_otp_expire_minutes
+    if not _is_resend():
+        # Dev / unconfigured: surface that we couldn't send so the caller can
+        # honestly tell the user, but never print the code in a real deployment.
+        logger.warning("Email OTP skipped for %s — Resend not configured", to_email)
+        return False
+    api_key = settings.smtp_password.strip()
+    payload = {
+        "from": settings.smtp_from,
+        "to": [to_email],
+        "subject": f"Your Teivaka code: {code}",
+        "text": (
+            f"Hello {name},\n\n"
+            f"Your Teivaka verification code is: {code}\n\n"
+            f"It expires in {minutes} minutes. If you didn't create an account, "
+            "you can ignore this email. Never share this code with anyone.\n\n"
+            "— The Teivaka team\nSuva, Fiji"
+        ),
+        "html": _otp_html(name, code, minutes),
+    }
+    try:
+        resp = httpx.post(
+            "https://api.resend.com/emails",
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            content=json.dumps(payload),
+            timeout=15.0,
+        )
+        if resp.status_code >= 400:
+            logger.error("Resend rejected OTP email for %s: HTTP %d %s",
+                         to_email, resp.status_code, resp.text[:400])
+            return False
+        logger.info("OTP email dispatched via Resend to %s", to_email)
+        return True
+    except Exception as exc:  # noqa: BLE001 — never break signup on telemetry/email
+        logger.exception("Resend OTP call failed for %s: %s", to_email, exc)
+        return False
+
+
 def send_password_reset_email(to_email: str, token: str, name: str) -> bool:
     """
     Send a password reset email via Resend HTTPS API.
