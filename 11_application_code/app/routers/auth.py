@@ -247,6 +247,13 @@ async def login(
     db: AsyncSession = Depends(get_db),
 ):
     """Login with email + password. Returns access token (24h) + refresh token (30d)."""
+    # Login is a pre-auth, cross-tenant lookup (the tenant is unknown until we
+    # find the user). tenant.users has FORCE RLS; on a pooled connection left
+    # polluted with some other tenant's app.tenant_id, this SELECT would return
+    # NO ROW for a valid user and the handler would wrongly answer "Invalid
+    # credentials". Clear the RLS context (transaction-local) so the policy's
+    # empty-context branch admits the row regardless of pool state.
+    await db.execute(text("SELECT set_config('app.tenant_id', '', true)"))
     result = await db.execute(
         text("""
             SELECT u.user_id, u.tenant_id, u.email, u.full_name,
@@ -311,6 +318,9 @@ async def google_auth(req: GoogleAuthRequest, db: AsyncSession = Depends(get_db)
                              POST /register with google_credential.
     """
     g = await _verify_google_credential(req.credential)
+    # Same pre-auth cross-tenant lookup as /login — clear any polluted RLS
+    # context (transaction-local) so a valid user is never hidden by FORCE RLS.
+    await db.execute(text("SELECT set_config('app.tenant_id', '', true)"))
     result = await db.execute(
         text("""
             SELECT u.user_id, u.tenant_id, u.email, u.full_name,
@@ -418,9 +428,12 @@ async def register(
             pass
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Couldn't start your registration: {type(e).__name__} — {str(e)[:180]}",
+            detail="Something went wrong starting your registration — please try again.",
         ) from e
 
+    # Cross-tenant duplicate-email check — clear any polluted RLS context first
+    # (transaction-local) so an existing account is never hidden by FORCE RLS.
+    await db.execute(text("SELECT set_config('app.tenant_id', '', true)"))
     dup_email = await db.execute(
         text("SELECT 1 FROM tenant.users WHERE email = :email LIMIT 1"),
         {"email": email}
@@ -497,6 +510,19 @@ async def register(
             {"tenant_id": tenant_id, "company_name": company_name, "country": req.country}
         )
 
+        # Bind the RLS context to THIS new tenant BEFORE the tenant.users INSERT.
+        # tenant.users has FORCE RLS; its policy only admits the row when
+        # app.tenant_id is unset/empty OR equals the row's tenant_id. On a pooled
+        # connection polluted with another tenant's app.tenant_id, the INSERT would
+        # violate the WITH CHECK and the account would be silently discarded
+        # ("new row violates row-level security policy for table users"). Set it
+        # unconditionally, here, for ALL account types. true = transaction-local
+        # (auto-reverts at commit; no pool pollution) — mirrors get_tenant_db.
+        await db.execute(
+            text("SELECT set_config('app.tenant_id', :tid, true)"),
+            {"tid": tenant_id},
+        )
+
         await db.execute(
             text("""
                 INSERT INTO tenant.users (
@@ -565,66 +591,73 @@ async def register(
         # (Master-Child). RLS is FORCED on this table, so set the tenant context
         # for this just-created tenant before the WITH CHECK insert. Best-effort.
         if req.is_company and (req.business_name or "").strip():
+            # SAVEPOINT-isolated: a failure here must not poison the parent
+            # transaction (which already holds the tenant + user). app.tenant_id is
+            # already bound to this tenant above. Best-effort.
             try:
-                await db.execute(
-                    text("SELECT set_config('app.tenant_id', :tid, true)"),
-                    {"tid": tenant_id},
-                )
-                await db.execute(
-                    text("""
-                        INSERT INTO tenant.business_entities
-                            (tenant_id, user_id, business_name, operator_name, account_type, region_id)
-                        VALUES (CAST(:tid AS uuid), CAST(:uid AS uuid), :bn, :op, :at, (SELECT region_id FROM shared.geo_regions WHERE region_id = :rid))
-                    """),
-                    {
-                        "tid": tenant_id, "uid": user_id,
-                        "bn": req.business_name.strip(),
-                        "op": (req.operator_name or "").strip() or None,
-                        "at": req.account_type,
-                        "rid": req.region_id,
-                    },
-                )
+                async with db.begin_nested():
+                    await db.execute(
+                        text("""
+                            INSERT INTO tenant.business_entities
+                                (tenant_id, user_id, business_name, operator_name, account_type, region_id)
+                            VALUES (CAST(:tid AS uuid), CAST(:uid AS uuid), :bn, :op, :at, (SELECT region_id FROM shared.geo_regions WHERE region_id = :rid))
+                        """),
+                        {
+                            "tid": tenant_id, "uid": user_id,
+                            "bn": req.business_name.strip(),
+                            "op": (req.operator_name or "").strip() or None,
+                            "at": req.account_type,
+                            "rid": req.region_id,
+                        },
+                    )
             except Exception as e:
                 logger.warning("business_entity insert failed during signup (ignored): %s", e)
 
         # Attribution: log SIGNUP and backfill prior LANDING_VIEW events for
         # this anonymous_id. Best-effort — do not block signup on failure.
         try:
-            await db.execute(
-                text("""
-                    INSERT INTO shared.attribution_events
-                        (event_type, user_id, anonymous_id, source, properties)
-                    VALUES
-                        ('SIGNUP', CAST(:user_id AS uuid), :anon, :source,
-                         CAST(:props AS jsonb))
-                """),
-                {
-                    "user_id": user_id,
-                    "anon": req.anonymous_id,
-                    "source": req.referral_source,
-                    "props": __import__("json").dumps(
-                        {"referral_code": req.referral_code} if req.referral_code else {}
-                    ),
-                },
-            )
-            if req.anonymous_id:
+            async with db.begin_nested():
                 await db.execute(
                     text("""
-                        UPDATE shared.attribution_events
-                           SET user_id = CAST(:user_id AS uuid)
-                         WHERE anonymous_id = :anon AND user_id IS NULL
+                        INSERT INTO shared.attribution_events
+                            (event_type, user_id, anonymous_id, source, properties)
+                        VALUES
+                            ('SIGNUP', CAST(:user_id AS uuid), :anon, :source,
+                             CAST(:props AS jsonb))
                     """),
-                    {"user_id": user_id, "anon": req.anonymous_id},
+                    {
+                        "user_id": user_id,
+                        "anon": req.anonymous_id,
+                        "source": req.referral_source,
+                        "props": __import__("json").dumps(
+                            {"referral_code": req.referral_code} if req.referral_code else {}
+                        ),
+                    },
                 )
+                if req.anonymous_id:
+                    await db.execute(
+                        text("""
+                            UPDATE shared.attribution_events
+                               SET user_id = CAST(:user_id AS uuid)
+                             WHERE anonymous_id = :anon AND user_id IS NULL
+                        """),
+                        {"user_id": user_id, "anon": req.anonymous_id},
+                    )
         except Exception as e:
             logger.warning("Attribution write failed during signup (ignored): %s", e)
 
-        await audit_log(
-            db, ip_address=ip_address, user_agent=user_agent,
-            email=email, phone_number=phone,
-            outcome="SUCCESS",
-            tenant_id=tenant_id, user_id=user_id,
-        )
+        # SAVEPOINT-isolated best-effort audit row — a failure must not poison the
+        # parent transaction holding the committed tenant + user.
+        try:
+            async with db.begin_nested():
+                await audit_log(
+                    db, ip_address=ip_address, user_agent=user_agent,
+                    email=email, phone_number=phone,
+                    outcome="SUCCESS",
+                    tenant_id=tenant_id, user_id=user_id,
+                )
+        except Exception as e:
+            logger.warning("Signup audit_log failed (ignored): %s", e)
         # Phase I1 — signup telemetry (best-effort, account_type only — no PII)
         try:
             from app.core.analytics import track
@@ -663,12 +696,12 @@ async def register(
             await db.commit()
         except Exception as audit_err:  # noqa: BLE001
             logger.warning("Audit write failed while handling signup error: %s", audit_err)
-        # Surface a short, controlled reason (NOT a stack trace) so the signup
-        # screen can show what actually failed — full detail is in
-        # shared.registration_audit_log.failure_detail.
+        # Plain farmer-voice message only — never leak exception types / SQL /
+        # table names to the UI. Full detail is logged above (exc_info) and
+        # persisted to shared.registration_audit_log.failure_detail.
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Couldn't create your account: {type(e).__name__} — {str(e)[:180]}",
+            detail="Something went wrong creating your account — please try again.",
         ) from e
 
     return {
