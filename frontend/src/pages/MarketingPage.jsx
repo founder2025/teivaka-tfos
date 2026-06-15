@@ -223,7 +223,7 @@ const PAGE_CONTENT = {
       },
       {
         heading: "Who benefits",
-        body: "The platform is being built first for two pilot farms — Save-A-Lot in Korovou and Viyasiyasi on Kadavu Island — to harden every workflow against real Pacific conditions. From there it opens to:",
+        body: "The platform is being built first on real, operating farms in Fiji to harden every workflow against real Pacific conditions. From there it opens to:",
         list: [
           "Phase 1: Fijian smallholders across all 14 provinces.",
           "Phase 2: Smallholders in Tonga, Samoa, Vanuatu, Solomon Islands, Papua New Guinea, Cook Islands, Kiribati, Tuvalu, Niue, Tokelau, Wallis and Futuna, Marshall Islands, FSM, and Palau.",
@@ -292,7 +292,7 @@ const PAGE_CONTENT = {
       },
       {
         heading: "Where we are",
-        body: "Headquarters in Fiji. Pilot operations at Save-A-Lot Farm (Korovou, Tailevu Province) and Viyasiyasi Farm (Kadavu Island).",
+        body: "Headquarters in Fiji. Pilot operations on two working farms in Fiji.",
       },
       {
         heading: "Response time",
@@ -389,16 +389,16 @@ const PAGE_CONTENT = {
     tagline: "Two working Fiji farms where TAE is being hardened against reality.",
     sections: [
       {
-        heading: "Save-A-Lot Farm",
-        body: "Approximately 83 acres in Korovou, Tailevu Province on Fiji's main island, Viti Levu. Held under iTaukei (NLTB) lease. Active production includes eggplant, cassava, pineapple, and kava. Apiculture operation of four beehives. Primary buyer relationship with the Nayans supermarket group. One permanent worker plus casuals as the cycles demand.",
+        heading: "Mainland pilot farm",
+        body: "A road-accessible, multi-enterprise working farm in Fiji where the platform is tested against high-frequency, real-revenue operations.",
       },
       {
-        heading: "Viyasiyasi Farm",
-        body: "Located on Kadavu Island, accessible only by ferry. Eight goats. Viyasiyasi is the reference user for offline-first design — if a TAE feature breaks on a flaky 3G connection on Kadavu, it is broken everywhere. Every architectural decision is tested against this constraint before it ships.",
+        heading: "Island pilot farm",
+        body: "A remote, offline-first working farm in Fiji where every workflow is hardened against intermittent connectivity before it ships.",
       },
       {
         heading: "Why two farms, not one",
-        body: "Save-A-Lot is the data-dense, road-accessible, multi-crop, multi-buyer farm. Viyasiyasi is the constrained, remote, single-vertical, intermittent-connectivity farm. Building the platform across both means TAE hardens against the full range of conditions a Pacific smallholder might operate under — not just the easy ones.",
+        body: "Building the platform across both a connected, high-frequency farm and a remote, offline-first farm means it hardens against the full range of conditions a Pacific smallholder might operate under — not just the easy ones.",
       },
       {
         heading: "Real, not theatre",
@@ -434,70 +434,15 @@ const PAGE_CONTENT = {
 // Aliases — the header "FARMS" button and footer "Our Farms" button hit the same page.
 PAGE_CONTENT.farms = PAGE_CONTENT["our-farms"];
 
-// ── Our Farms: bespoke card + modal page ──────────────────────────────────────
-// Renders for pageKey "our-farms" / "farms" in place of the default sections loop.
-// PAGE_CONTENT["our-farms"] above is left intact as the fallback content block.
-// All icons are inline flat SVG (1.5px stroke, currentColor) — no emoji, no deps.
+// ── Our Farms ─────────────────────────────────────────────────────────────────
+// Operational farm detail (locations, tenure, buyers, crop/livestock/vertical
+// lists) was removed from the public page to avoid disclosing a copyable
+// operational blueprint. The Our Farms page now renders a generic proof-level
+// statement only. FARMS is intentionally empty; FarmCard/FarmModal remain defined
+// but unused.
 
-const FARMS = {
-  "save-a-lot": {
-    name: "Save-A-Lot",
-    location: "Korovou, Tailevu — Viti Levu",
-    blurb: "Road-accessible, data-dense, multi-buyer. The mainland farm where TAE gets its high-frequency operational data.",
-    tags: [
-      { icon: "wheat", label: "Crops" },
-      { icon: "leaf", label: "Vegetables" },
-      { icon: "hive", label: "Apiculture" },
-    ],
-    whatsappPrefill: "Bula Cody, I want to know more about Save-A-Lot.",
-    facts: [
-      ["Location", "Korovou, Tailevu Province, Viti Levu (Fiji's main island)"],
-      ["Tenure", "iTaukei (NLTB) lease"],
-      ["Access", "Road, year-round"],
-      ["Buyers", "Nayans supermarket group + four other institutional buyers"],
-      ["Workers", "1 permanent + casuals as cycles demand"],
-      ["Role in TAE", "Data-dense reference for multi-buyer, multi-crop workflows"],
-    ],
-    verticals: [
-      { icon: "wheat", name: "Crops" },
-      { icon: "leaf", name: "Vegetables" },
-      { icon: "hive", name: "Apiculture" },
-    ],
-  },
-  "viyasiyasi": {
-    name: "Viyasiyasi",
-    location: "Kadavu Island — ferry only",
-    blurb: "Eleven verticals across one island. The constrained, offline-first farm that every TAE workflow gets tested against before it ships.",
-    tags: [
-      { icon: "livestock", label: "Livestock" },
-      { icon: "honey", label: "Honey" },
-      { icon: "sandalwood", label: "Sandalwood" },
-      { icon: "agarwood", label: "Agarwood" },
-      { icon: "leaf", label: "Kava" },
-      { icon: null, label: "+6 more" },
-    ],
-    whatsappPrefill: "Bula Cody, I want to know more about Viyasiyasi.",
-    facts: [
-      ["Location", "Kadavu Island, Fiji"],
-      ["Access", "Ferry only — no road shortcuts"],
-      ["Connectivity", "Intermittent 3G — every architectural decision is tested here first"],
-      ["Role in TAE", "Offline-first reference site. If a feature breaks on Kadavu, it's broken everywhere."],
-    ],
-    verticals: [
-      { icon: "goat", name: "Goats" },
-      { icon: "pig", name: "Pigs" },
-      { icon: "egg", name: "Layer birds" },
-      { icon: "duck", name: "Ducks" },
-      { icon: "leaf", name: "Kava" },
-      { icon: "sandalwood", name: "Sandalwood" },
-      { icon: "agarwood", name: "Agarwood" },
-      { icon: "pineapple", name: "Pineapple" },
-      { icon: "honey", name: "Honey" },
-      { icon: "wheat", name: "Crops" },
-      { icon: "leaf", name: "Vegetables" },
-    ],
-  },
-};
+const FARMS = {};
+
 
 // Inline flat SVG icon set. Each entry is the inner geometry; the <svg> wrapper
 // (viewBox, 1.5px stroke, round caps/joins, currentColor) is applied by <Icon>.
@@ -946,29 +891,24 @@ function OurFarmsPage({ navigate }) {
       <style>{OFP_CSS}</style>
 
       <section className="ofp-hero">
-        <p className="ofp-eyebrow">Where TAE is built</p>
-        <h1>Two farms. Two islands. One thesis.</h1>
+        <p className="ofp-eyebrow">Proof of execution</p>
+        <h1>Built on working farms.</h1>
         <p className="ofp-sub">
-          Save-A-Lot on Viti Levu's mainland. Viyasiyasi on Kadavu Island. Both operating today — both feeding TAE the data that makes Pacific smallholders bankable.
+          Teivaka is hardened on real, operating farms in Fiji before anything ships to other farmers — so every workflow survives real Pacific conditions, not a demo.
         </p>
       </section>
 
-      <section className="ofp-cards">
-        <FarmCard farmId="save-a-lot" onOpen={setActiveFarm} />
-        <FarmCard farmId="viyasiyasi" onOpen={setActiveFarm} />
-      </section>
-
       <section className="ofp-prose">
-        <h2>Why two farms, not one</h2>
+        <h2>Why it matters</h2>
         <p>
-          Save-A-Lot is the data-dense, road-accessible, multi-buyer farm. Viyasiyasi is the constrained, remote, offline-first farm. Building the platform across both means TAE hardens against the full range of conditions a Pacific smallholder might operate under — not just the easy ones.
+          The platform is built and tested against the daily reality of running working farms across the full range of conditions a Pacific smallholder operates under — road-accessible and remote, connected and offline. That is the only way to build a tool other farmers can trust.
         </p>
       </section>
 
       <section className="ofp-prose">
         <h2>Real, not theatre.</h2>
         <p>
-          These are operating farms, not demo installations. They earn real revenue, employ real people, and ship to real buyers. The data that flows into TAE is the data the farms are generating in their normal course of business. That is the only way to build a tool that other farms will trust.
+          These are operating farms, not demo installations. They earn real revenue and ship to real buyers. The data that flows into the platform is generated in the normal course of business.
         </p>
       </section>
 
@@ -1578,7 +1518,7 @@ function AboutPage({ navigate }) {
             <div className="tvm-team">
               <p className="tvm-tname">Uraia Koroi Kama (Cody)</p>
               <p className="tvm-trole">Founder</p>
-              <p>Founded Teivaka and operates both pilot farms — Save-A-Lot (crops, vegetables, apiculture) and Viyasiyasi on Kadavu Island (eleven verticals). Builds the platform against the daily reality of running them.</p>
+              <p>Founded Teivaka and operates the company's pilot farms in Fiji. Builds the platform against the daily reality of running them.</p>
             </div>
             <div className="tvm-team">
               <p className="tvm-tname">Kinisimere Wati</p>
@@ -2026,7 +1966,7 @@ function ContactPage({ navigate }) {
                 </div>
                 <div className="tvm-cline">
                   <span className="tvm-ck">Based in</span>
-                  <span className="tvm-cv">Fiji — Korovou &amp; Kadavu</span>
+                  <span className="tvm-cv">Fiji</span>
                 </div>
                 <div className="tvm-cline">
                   <span className="tvm-ck">Platform</span>
@@ -2167,10 +2107,10 @@ const TWK_PILLARS = [
     name: "Community",
     subtitle: "Pillar 1 — The social spine",
     items: [
-      ["LIVE", "Direct community of farmers Cody works with across Korovou and Kadavu"],
+      ["LIVE", "A direct community of farmers we work with"],
       ["PLANNED", "Farmer-to-farmer feed inside the platform"],
       ["PLANNED", "Buyer ratings and reviews"],
-      ["PLANNED", "Neighbour network within ferry-reach"],
+      ["PLANNED", "Neighbour network"],
     ],
   },
   {
@@ -2178,7 +2118,7 @@ const TWK_PILLARS = [
     subtitle: "Pillar 2 — Verified knowledge",
     items: [
       ["LIVE", "Working knowledge base grounding TIS responses"],
-      ["IN BUILD", "Per-crop curriculum drawn from Save-A-Lot and Viyasiyasi operations"],
+      ["IN BUILD", "Per-crop curriculum drawn from real farm operations"],
       ["IN BUILD", "Lesson-unlock tied to cycle progression"],
       ["NEXT", "Fijian-language lessons"],
       ["NEXT", "Hindi-language lessons"],
@@ -2188,22 +2128,22 @@ const TWK_PILLARS = [
     name: "Farm Management",
     subtitle: "Pillar 3 — The system of record",
     items: [
-      ["LIVE", "Production cycles tracked end-to-end on both farms"],
-      ["LIVE", "Cash ledger anchored to farm, block, crop, and operator on every entry"],
-      ["LIVE", "Chemical compliance enforcement (dual-layer — API check plus database trigger)"],
+      ["LIVE", "Production cycles tracked end-to-end"],
+      ["LIVE", "Cash ledger tied to every farm activity"],
+      ["LIVE", "Chemical compliance enforcement built in"],
       ["LIVE", "Worker check-in and labour tracking"],
       ["LIVE", "Harvest logging with weight and grade"],
-      ["IN BUILD", "In-app farmer surface for self-signup (currently Cody operates the system directly)"],
-      ["NEXT", "Solo mode (one task at a time, voice-first, for subsistence growers)"],
+      ["IN BUILD", "In-app farmer surface for self-signup"],
+      ["NEXT", "Simplified one-task-at-a-time mode for subsistence growers"],
       ["NEXT", "Multi-buyer dispatch tracking"],
-      ["PLANNED", "Full Analytics layer for Commercial mode"],
+      ["PLANNED", "Full analytics layer for commercial operations"],
     ],
   },
   {
     name: "TIS",
     subtitle: "Pillar 4 — Teivaka Intelligence System",
     items: [
-      ["LIVE", "TIS on WhatsApp for farmers Cody onboards directly"],
+      ["LIVE", "TIS on WhatsApp for onboarded farmers"],
       ["LIVE", "TIS-Public chatbot on teivaka.com"],
       ["LIVE", "Grounded responses (TIS will not guess prices, dates, or yields)"],
       ["LIVE", "Trilingual capability (Fijian, Hindi, English)"],
@@ -2215,34 +2155,33 @@ const TWK_PILLARS = [
 ];
 
 const TWK_MOAT = [
-  ["LIVE", "Every farm action emits one structured, time-stamped event"],
-  ["LIVE", "Audit events stored in a database table that cannot be edited or deleted"],
-  ["LIVE", "Hash-chain linking between events using SHA-256"],
-  ["LIVE", "Chain integrity check on every deploy"],
-  ["IN BUILD", "Public verification endpoint at /verify (the moment a banker can scan a QR code)"],
-  ["IN BUILD", "Monthly Bank Evidence PDF generation"],
-  ["NEXT", "WhatsApp dispatch of Bank Evidence PDFs to farmers"],
-  ["NEXT", "FICO-analog credit score computation"],
-  ["PLANNED", "Lender-facing portal at /lender"],
+  ["LIVE", "Every farm action is captured as a structured, time-stamped record"],
+  ["LIVE", "Records cannot be edited or deleted after the fact"],
+  ["LIVE", "Record integrity is checked continuously"],
+  ["IN BUILD", "Independent verification so a lender can confirm a farmer's record"],
+  ["IN BUILD", "Bank-ready evidence summaries"],
+  ["NEXT", "Delivery of evidence summaries to farmers"],
+  ["NEXT", "Creditworthiness scoring"],
+  ["PLANNED", "Lender-facing access"],
 ];
 
 const TWK_FARMS = [
   {
-    name: "Save-A-Lot",
-    location: "Korovou, Tailevu — Viti Levu",
+    name: "Mainland pilot farm",
+    location: "Fiji",
     points: [
       "Operating today, generating revenue",
-      "Three verticals: crops, vegetables, apiculture",
-      "TAE tracking: production cycles, cash ledger, labour, harvest, sales",
+      "Road-accessible, multi-enterprise",
+      "Where the platform is tested against high-frequency operations",
     ],
   },
   {
-    name: "Viyasiyasi",
-    location: "Kadavu Island",
+    name: "Island pilot farm",
+    location: "Fiji",
     points: [
       "Operating today, generating revenue",
-      "Eleven verticals across livestock, kava, sandalwood, pineapple, honey, crops, vegetables",
-      "TAE tracking: same as Save-A-Lot, tested against offline-first constraints",
+      "Remote and offline-first",
+      "Where every workflow is hardened against intermittent connectivity",
     ],
   },
 ];
@@ -2599,12 +2538,12 @@ export default function MarketingPage({ pageKey }) {
               <h2 className="tm-h2">Founder</h2>
               <p className="tm-name">Uraia Koroi Kama</p>
               <p className="tm-role">Founder, Teivaka PTE LTD</p>
-              <p className="tm-bio">Uraia Koroi Kama (Cody) founded Teivaka and operates both pilot farms — Save-A-Lot Farm (eggplant, cassava, pineapple, kava, four beehives) and Viyasiyasi Farm on Kadavu Island (goats). He builds the platform against the daily reality of running them: a workflow that does not survive a season on his own farms does not ship to anyone else's.</p>
+              <p className="tm-bio">Uraia Koroi Kama (Cody) founded Teivaka and operates the company's pilot farms in Fiji. He builds the platform against the daily reality of running them: a workflow that does not survive a season on his own farms does not ship to anyone else's.</p>
               <a href="#" className="tm-link" onClick={(e) => { e.preventDefault(); navigate("/about"); }}>Read the founder's story →</a>
             </section>
             <section className="tm-sec">
               <h2 className="tm-h2">On the farm</h2>
-              <p className="tm-bio">One permanent farm worker on Save-A-Lot — sole daily operator across all production blocks plus the apiculture work. Casual hands as cycles demand.</p>
+              <p className="tm-bio">A small on-farm team runs daily operations across the pilot farms, with casual hands as cycles demand.</p>
             </section>
             <section className="tm-sec">
               <h2 className="tm-h2">What's next</h2>
