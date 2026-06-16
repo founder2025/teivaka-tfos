@@ -185,6 +185,78 @@ that stays aligned with the mission of empowering every farmer to prosper.
 
 ---
 
+## PRE-SEED FUNDING PLAN — FJD $75,000 (Operator-locked 2026-06-16)
+
+**The Ask:** Teivaka is seeking **FJD $75,000 in pre-seed strategic funding** to transition
+from a founder-funded pilot platform into a commercially ready agricultural ecosystem —
+strengthening the product, expanding pilot-farm validation, onboarding 250 farmers,
+establishing 10 demonstration farms, completing legal/operational readiness, and launching
+publicly within 12 months. Expected to deliver 50 paying subscribers, 20 agribusiness
+customers, 150 monthly active users, and ~FJD $40,000 ARR — laying the foundation for
+national scale. (Pre-revenue with a completed product, pilot farms, and founder traction:
+$75k is aggressive enough to matter, conservative enough to defend.)
+
+### Allocation (totals to FJD $75,000)
+
+| # | Use of funds | FJD | % |
+|---|---|---|---|
+| 1 | Product Strengthening & Commercial Readiness (hardening, not features) | 22,500 | 30% |
+| 2 | Pilot Network & Data Validation (2 → 10 farms) | 15,000 | 20% |
+| 3 | Farmer Acquisition & Onboarding (250 active) | 18,750 | 25% |
+| 4 | Operations & Infrastructure (12-mo coverage) | 7,500 | 10% |
+| 5 | Legal, Compliance & Governance | 5,250 | 7% |
+| 6 | Launch Reserve (buffer) | 6,000 | 8% |
+| | **Total** | **75,000** | **100%** |
+
+- **1. Product hardening:** security, performance, mobile responsiveness, admin control
+  room, marketplace stability, payment integration, subscription management, sponsored-seat
+  infrastructure, audit logs, reporting engine, notifications, data validation, testing.
+- **2. Pilot network:** 10 farms across Kava / Vegetables / Cassava / Mixed — real records,
+  transactions, yields, reports → credible platform data.
+- **3. Farmer acquisition:** village visits, demonstrations, workshops, printed material,
+  video tutorials, community activation → *active users, not signups.*
+- **4. Ops & infra:** DigitalOcean, Claude, OpenAI, domains, monitoring, storage, backups,
+  security — 12 months.
+- **5. Legal, Compliance & Governance — FJD $5,250 (the line most founders forget):**
+  | Sub-item | FJD (approx) |
+  |---|---|
+  | Privacy Policy + Terms of Service (drafting + review) | 1,500 |
+  | Marketplace Terms + Vendor / Partnership / Sponsored-Seat agreements | 1,750 |
+  | Data protection / data-sharing agreements | 1,000 |
+  | Business compliance (registration, accounting & tax setup) | 1,000 |
+  | **Total** | **5,250** |
+- **6. Launch reserve:** unexpected costs, server/API spikes, travel — because something
+  always breaks.
+
+### Phased timeline (done → funded → forecast)
+
+**Phase 1 — Build & Prove · DONE · founder-funded (Year 0)**
+- Full ecosystem built: four pillars (Community, TFOS, Classroom, TIS) + AI + admin.
+- 2 working pilot farms returning ~$10–$12 per $1; they fund the build.
+- Pre-revenue software at ~FJD $850/mo burn — self-funded, no outside capital.
+- Public site live; signup/onboarding live; TIS live on WhatsApp.
+
+**Phase 2 — Strengthen & Launch · THE $75,000 PRE-SEED · 12 months (Year 1)**
+- Spend the allocation above → commercial-ready platform + public launch.
+- Targets: 250 registered · 150 monthly active · 50 paying · 20 agribusiness · 10 pilot
+  farms · legal/compliance complete.
+- Revenue target ~**FJD $40,000 ARR**:
+  | Source | FJD/yr |
+  |---|---|
+  | 50 farmers × $15/mo | 9,000 |
+  | 20 businesses × $49/mo | 11,760 |
+  | Advertising | ~5,000 |
+  | Marketplace | ~5,000 |
+  | Sponsored seats | ~10,000 |
+  | **≈ Total** | **~40,000** |
+
+**Phase 3 — Scale · FORECAST · post-pre-seed (Year 2+)**
+- Sponsored seats (NGO → Ministry → National packages) become a leading channel;
+  marketplace scales toward the largest source; Pacific expansion begins; revenue mix
+  matures toward the 8-channel target above. Sets up the next (seed) round.
+
+---
+
 ## BUILD ROADMAP (how this becomes real in the platform — not yet built)
 
 This doc is the spec. Wiring it into the product is sequenced, billing-provider-gated
