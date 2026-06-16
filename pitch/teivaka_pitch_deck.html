@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="color-scheme" content="light" />
+<title>Teivaka — Pitch Deck</title>
+<style>
+  :root{
+    --cream:#F8F3E9; --cream2:#EFE8D8; --paper:#FFFFFF;
+    --green:#6AA84F; --greenDk:#4F8A37; --soil:#5C4033; --soil2:#7A5C4E;
+    --amber:#BF9000; --red:#A32D2D; --line:#E2D8C3; --ink:#2A2118; --muted:#6A5C49;
+    --tint:#E8F0E0;
+    --serif:"Playfair Display",Georgia,"Times New Roman",serif;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{background:#1a1410;font-family:var(--sans);color:var(--soil);overflow:hidden}
+  .stage{position:fixed;inset:0;display:flex;align-items:center;justify-content:center}
+  .slide{
+    position:absolute;width:100vw;height:100vh;display:none;
+    flex-direction:column;justify-content:center;
+    padding:5.5vh 6.5vw;background:var(--cream);
+  }
+  .slide.active{display:flex;animation:fade .35s ease}
+  @keyframes fade{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+  .eyebrow{font-family:var(--sans);font-size:1.05vw;font-weight:700;letter-spacing:.18em;
+    text-transform:uppercase;color:var(--greenDk)}
+  h1{font-family:var(--serif);font-weight:800;color:var(--ink);line-height:1.05;letter-spacing:-.01em}
+  h2{font-family:var(--serif);font-weight:700;color:var(--ink);line-height:1.1}
+  .lede{color:var(--soil);line-height:1.5}
+  .num{display:inline-flex;align-items:center;justify-content:center;width:2.6vw;height:2.6vw;
+    min-width:38px;min-height:38px;background:var(--green);color:#fff;border-radius:8px;
+    font-family:var(--serif);font-weight:800;font-size:1.4vw}
+  .sec-head{display:flex;align-items:center;gap:1.1vw;margin-bottom:3vh}
+  .sec-head h1{font-size:3.6vw}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:1.6vw}
+  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:1.4vw}
+  .card{background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:2.4vh 1.8vw}
+  .card .big{font-family:var(--serif);font-weight:800;color:var(--greenDk);font-size:2.5vw;line-height:1}
+  .card .lbl{color:var(--soil);font-size:1.05vw;line-height:1.45;margin-top:.7vh}
+  .pill{display:inline-block;background:var(--tint);color:var(--greenDk);font-weight:700;
+    font-size:.95vw;padding:.5vh 1vw;border-radius:999px;letter-spacing:.03em}
+  .leak{display:flex;align-items:center;gap:1vw;padding:1.15vh 0;border-bottom:1px solid var(--line)}
+  .leak .lk{font-size:1.15vw;color:var(--soil);flex:1}
+  .leak .tag{font-weight:700;color:#fff;border-radius:999px;padding:.45vh 1.1vw;font-size:.95vw;white-space:nowrap}
+  .t-tfos{background:var(--soil)} .t-tis{background:var(--green)} .t-class{background:var(--amber)} .t-comm{background:#4F9D87}
+  .foot{position:absolute;left:6.5vw;right:6.5vw;bottom:3vh;display:flex;justify-content:space-between;
+    align-items:center;font-size:.85vw;color:var(--muted);border-top:1px solid var(--line);padding-top:1.5vh}
+  .src{font-size:.8vw;color:var(--muted);font-style:italic;margin-top:2.2vh}
+  .punch{background:var(--soil);color:var(--cream);border-radius:14px;padding:2.4vh 2vw;
+    font-family:var(--serif);font-size:1.6vw;line-height:1.35;margin-top:2.4vh}
+  .punch b{color:#fff}
+  ul.clean{list-style:none} ul.clean li{position:relative;padding-left:1.5vw;margin:1.1vh 0;font-size:1.15vw;line-height:1.45;color:var(--soil)}
+  ul.clean li::before{content:"";position:absolute;left:0;top:.6vh;width:.7vw;height:.7vw;background:var(--green);border-radius:50%}
+  .phases{display:grid;grid-template-columns:repeat(3,1fr);gap:1.4vw;margin-top:2vh}
+  .ph{border-radius:14px;padding:2.2vh 1.5vw;border:1px solid var(--line)}
+  .ph.done{background:var(--tint);border-color:var(--green)}
+  .ph.now{background:#FBF1D8;border-color:var(--amber)}
+  .ph.next{background:var(--paper)}
+  .ph .ptag{font-weight:800;font-size:.95vw;letter-spacing:.08em;text-transform:uppercase}
+  .ph.done .ptag{color:var(--greenDk)} .ph.now .ptag{color:var(--amber)} .ph.next .ptag{color:var(--muted)}
+  .ph h3{font-family:var(--serif);font-size:1.5vw;color:var(--ink);margin:.6vh 0 1vh}
+  .ph p{font-size:.98vw;color:var(--soil);line-height:1.45}
+  table.alloc{width:100%;border-collapse:collapse;margin-top:1.5vh}
+  table.alloc td{padding:1vh .6vw;border-bottom:1px solid var(--line);font-size:1.1vw;color:var(--soil)}
+  table.alloc td.amt{text-align:right;font-weight:700;color:var(--ink);font-family:var(--serif)}
+  table.alloc tr.tot td{border-top:2px solid var(--soil);border-bottom:none;font-weight:800;color:var(--ink);padding-top:1.3vh}
+  .askbig{font-family:var(--serif);font-weight:800;color:var(--greenDk);font-size:5vw;line-height:1}
+  .cover{background:linear-gradient(160deg,#2C1A0E 0%,#3d2817 100%);color:var(--cream)}
+  .cover .eyebrow{color:#9ED080}
+  .cover h1{color:#fff;font-size:5.2vw;margin:2vh 0}
+  .cover .lede{color:#E6DDCB;font-size:1.6vw;max-width:46vw;line-height:1.4}
+  .cover .vmg{display:flex;gap:2.5vw;margin-top:4vh}
+  .cover .vmg div span{display:block;color:#9ED080;font-size:.9vw;font-weight:700;letter-spacing:.12em;text-transform:uppercase}
+  .cover .vmg div b{font-family:var(--serif);color:#fff;font-size:1.3vw;font-weight:700}
+  .cover .foot{color:#C8BBA6;border-top-color:rgba(255,255,255,.15)}
+  .hud{position:fixed;bottom:2.2vh;right:2.2vw;z-index:20;display:flex;align-items:center;gap:1vw;
+    background:rgba(44,26,14,.82);color:#fff;border-radius:999px;padding:.8vh 1.4vw;font-size:.9vw}
+  .hud button{background:none;border:none;color:#fff;cursor:pointer;font-size:1.1vw;opacity:.8}
+  .hud button:hover{opacity:1}
+  .kicker{font-family:var(--serif);font-size:2vw;color:var(--soil2);font-style:italic;line-height:1.3;max-width:62vw}
+  @media print{
+    body{overflow:visible;background:#fff}
+    .slide{display:flex!important;position:relative;width:100%;height:100vh;page-break-after:always}
+    .hud{display:none}
+  }
+</style>
+</head>
+<body>
+<div class="stage" id="stage">
+
+  <!-- 1 — COVER / VISION -->
+  <section class="slide cover active">
+    <div class="eyebrow">Teivaka · Fiji · Pre-seed</div>
+    <h1>Transform idle land into wealth.</h1>
+    <p class="lede">Fiji's first <b>AI-powered agriculture operating system</b> — making smallholder farmers visible, bankable, and profitable.</p>
+    <div class="vmg">
+      <div><span>Vision</span><b>Idle land → wealth</b></div>
+      <div><span>Mission</span><b>Every farmer prospers</b></div>
+      <div><span>Goal</span><b>The future of Pacific agriculture</b></div>
+    </div>
+    <div class="foot"><span>Uraia Koroi Kama (Cody), Founder · founder@teivaka.com</span><span>The Ask: FJD&nbsp;$75,000</span></div>
+  </section>
+
+  <!-- 2 — THE PROBLEM -->
+  <section class="slide">
+    <div class="sec-head"><span class="num">1</span><h1>The problem</h1></div>
+    <p class="kicker">Fiji has the land, the demand, <i>and</i> the farmers — yet families stay trapped in subsistence.</p>
+    <div class="grid2" style="margin-top:3vh">
+      <div class="card"><div class="big">FJD&nbsp;1.3B</div><div class="lbl">imported in food every year — against only ~FJD&nbsp;150–250M in agri exports. <b>A ~6:1 gap</b> for food we can grow.</div></div>
+      <div class="card"><div class="big">195,000&nbsp;ha</div><div class="lbl">already in farm holdings — <b>under-producing, not unused.</b> The land isn't missing; its potential is.</div></div>
+      <div class="card"><div class="big">By feel</div><div class="lbl">farmers plant, feed, harvest &amp; sell on intuition → volatile yields and <b>~26–28% of harvest lost</b> (est.) before it reaches a buyer.</div></div>
+      <div class="card"><div class="big">No record</div><div class="lbl">informal &amp; undocumented — so banks, ministries &amp; NGOs <b>can't fund them.</b> Productive farmers stay financially invisible.</div></div>
+    </div>
+    <div class="src">Sources: Fiji Bureau of Statistics (trade); Fiji National Agricultural Census (~250–300k ha total agri land); Fiji Development Bank (smallholder credit). Post-harvest loss: sector estimate.</div>
+    <div class="foot"><span>Teivaka</span><span>The problem isn't land or market — it's the missing infrastructure to connect them.</span></div>
+  </section>
+
+  <!-- 3 — THE SOLUTION -->
+  <section class="slide">
+    <div class="sec-head"><span class="num">2</span><h1>The solution</h1></div>
+    <p class="kicker">One login. One farmer record. Four pillars — and every pillar closes a specific money leak.</p>
+    <div style="display:grid;grid-template-columns:1.1fr 1fr;gap:2.4vw;margin-top:2.6vh;align-items:start">
+      <div>
+        <div class="leak"><span class="lk">Low yields, thin margins — no field-tested system</span><span class="tag t-tis">TIS · AI</span></div>
+        <div class="leak"><span class="lk">Planting misses the import-price window</span><span class="tag t-class">Classroom</span></div>
+        <div class="leak"><span class="lk">~26–28% of harvest lost before sale</span><span class="tag t-tfos">TFOS</span></div>
+        <div class="leak"><span class="lk">Productive land idle — no record to unlock finance</span><span class="tag t-tfos">TFOS</span></div>
+        <div class="leak"><span class="lk">Farmers sell blind — no live price signal</span><span class="tag t-comm">Community</span></div>
+        <div class="leak" style="border-bottom:none"><span class="lk">Hotels import what grows on the next farm over</span><span class="tag t-comm">Community</span></div>
+      </div>
+      <div class="card" style="background:var(--soil);color:var(--cream)">
+        <div style="font-family:var(--serif);font-size:1.8vw;color:#fff;line-height:1.25">The Teivaka Agriculture Ecosystem</div>
+        <ul class="clean" style="margin-top:1.5vh">
+          <li style="color:var(--cream)"><b style="color:#fff">Community</b> — marketplace &amp; live prices</li>
+          <li style="color:var(--cream)"><b style="color:#fff">TFOS</b> — the record engine that makes farmers bankable</li>
+          <li style="color:var(--cream)"><b style="color:#fff">Classroom</b> — practical, local education</li>
+          <li style="color:var(--cream)"><b style="color:#fff">TIS</b> — 24/7 AI advisor on WhatsApp (EN · Fijian · Hindi)</li>
+        </ul>
+      </div>
+    </div>
+    <div class="foot"><span>Teivaka</span><span><b>No feature without a dollar behind it.</b></span></div>
+  </section>
+
+  <!-- 4 — MARKET -->
+  <section class="slide">
+    <div class="sec-head"><span class="num">3</span><h1>Market opportunity</h1></div>
+    <p class="kicker">The demand is already proven — by a FJD&nbsp;1.3B import bill.</p>
+    <div class="grid3" style="margin-top:3vh">
+      <div class="card"><div class="big">83,000+</div><div class="lbl">addressable smallholder farmers in Fiji — our beachhead.</div></div>
+      <div class="card"><div class="big">14</div><div class="lbl">Pacific nations next — then global smallholder agriculture.</div></div>
+      <div class="card"><div class="big">Farmers&nbsp;free</div><div class="lbl">the organisations that benefit pay. 8 revenue streams, no single dependency.</div></div>
+    </div>
+    <div style="margin-top:3vh">
+      <span class="pill">Marketplace 30%</span> <span class="pill">Sponsored seats 20%</span> <span class="pill">Farmer subs 15%</span>
+      <span class="pill">Agribusiness 10%</span> <span class="pill">Advertising 10%</span> <span class="pill">Education 5%</span>
+      <span class="pill">Financial 5%</span> <span class="pill">Data 5%</span>
+    </div>
+    <div class="foot"><span>Teivaka</span><span>We don't charge the farmer. We charge the value that flows around the farmer.</span></div>
+  </section>
+
+  <!-- 5 — HOW WE DELIVER & SCALE (PHASES) -->
+  <section class="slide">
+    <div class="sec-head"><span class="num">4</span><h1>How we deliver &amp; scale</h1></div>
+    <p class="kicker">Proven on our own farms first. Then scaled by software — at near-zero marginal cost.</p>
+    <div class="phases">
+      <div class="ph done"><div class="ptag">Phase 1 · Done</div><h3>Build &amp; prove</h3><p>Full ecosystem built. 2 working farms returning <b>$10–$12 per $1</b>. Pre-revenue, founder-funded. Public site + TIS live on WhatsApp.</p></div>
+      <div class="ph now"><div class="ptag">Phase 2 · The $75k · 12 mo</div><h3>Strengthen &amp; launch</h3><p>Harden the platform, 2→10 demo farms, onboard 250 farmers, complete legal, launch publicly. → <b>~FJD $40k ARR</b>.</p></div>
+      <div class="ph next"><div class="ptag">Phase 3 · Forecast</div><h3>Scale</h3><p>Sponsored seats (NGO→Ministry) + marketplace become the engine. Pacific expansion. Sets up the seed round.</p></div>
+    </div>
+    <div class="foot"><span>Teivaka</span><span>QA = cited knowledge base (no invented agronomy) + audit-anchored records.</span></div>
+  </section>
+
+  <!-- 6 — ECONOMICS -->
+  <section class="slide">
+    <div class="sec-head"><span class="num">5</span><h1>The economics</h1></div>
+    <p class="kicker">We've built all of this on almost nothing — funded by the farms, not investors.</p>
+    <div class="grid3" style="margin-top:3vh">
+      <div class="card"><div class="big">$850/mo</div><div class="lbl">total software burn — <b>funded by the pilot farms.</b> Zero outside capital.</div></div>
+      <div class="card"><div class="big">$10–$12</div><div class="lbl">returned for every <b>$1</b> spent on the farms. We know our numbers.</div></div>
+      <div class="card"><div class="big">~FJD&nbsp;40k</div><div class="lbl">target ARR in 12 months: 50 paying + 20 agribusiness + ads + marketplace + sponsored seats.</div></div>
+    </div>
+    <div class="punch">Breakeven is <b>one institutional deal away.</b> One NGO sponsoring 500 farmers (FJD&nbsp;$10k/yr) covers our <b>entire annual burn.</b> One Ministry package (FJD&nbsp;$75k/yr) covers it <b>seven times over.</b></div>
+    <div class="foot"><span>Teivaka</span><span>Pre-revenue — by design, not by accident.</span></div>
+  </section>
+
+  <!-- 7 — COMPETITIVE ADVANTAGE -->
+  <section class="slide">
+    <div class="sec-head"><span class="num">6</span><h1>Why a neighbour can't copy us tomorrow</h1></div>
+    <div class="grid2" style="margin-top:2.5vh">
+      <div class="card"><div class="big" style="font-size:1.6vw">The data moat compounds</div><div class="lbl">years of verified farm records can't be faked or rushed. The earlier we start, the bigger the lead.</div></div>
+      <div class="card"><div class="big" style="font-size:1.6vw">Cited, local AI</div><div class="lbl">a Fiji-specific knowledge base, in-language — generic AI tools can't match it, and it never invents agronomy.</div></div>
+      <div class="card"><div class="big" style="font-size:1.6vw">Ecosystem lock-in</div><div class="lbl">one login across market + records + learning + AI = real switching cost.</div></div>
+      <div class="card"><div class="big" style="font-size:1.6vw">Distribution + credibility</div><div class="lbl">WhatsApp-native, low-literacy accessible — and built by a farmer, on profitable farms.</div></div>
+    </div>
+    <div class="foot"><span>Teivaka</span><span>We give the software away — and that's exactly why it's defensible.</span></div>
+  </section>
+
+  <!-- 8 — TEAM -->
+  <section class="slide">
+    <div class="sec-head"><span class="num">7</span><h1>The team</h1></div>
+    <p class="kicker">A farmer built the software himself — on his own profitable farms — before asking anyone for a cent.</p>
+    <div class="grid2" style="margin-top:3vh">
+      <div class="card"><div class="big" style="font-size:1.7vw">Uraia Koroi Kama (Cody)</div><div class="lbl"><b>Founder.</b> Operates the pilot farms <i>and</i> builds the platform. Agronomy reality + tech execution. <i>"A workflow that doesn't survive a season on my own farm never ships to anyone else's."</i></div></div>
+      <div class="card"><div class="big" style="font-size:1.7vw">[FILL: key team / advisors]</div><div class="lbl">Add 1–2 names + roles (finance/ops) and any advisors (agronomy, banking, tech). Investors fund teams — even a strong advisor name adds weight.</div></div>
+    </div>
+    <div class="foot"><span>Teivaka</span><span>Founder-operator: the rarest, most fundable profile in agtech.</span></div>
+  </section>
+
+  <!-- 9 — THE ASK -->
+  <section class="slide">
+    <div class="sec-head"><span class="num">8</span><h1>The ask</h1></div>
+    <div style="display:grid;grid-template-columns:.85fr 1.15fr;gap:3vw;align-items:start;margin-top:1.5vh">
+      <div>
+        <div class="eyebrow">Pre-seed</div>
+        <div class="askbig">FJD&nbsp;$75,000</div>
+        <p class="lede" style="font-size:1.1vw;margin-top:2vh">To go from a founder-funded pilot to a <b>commercially ready ecosystem</b> — and launch publicly in 12 months.</p>
+        <div style="margin-top:2.2vh">
+          <div class="pill">250 registered</div> <div class="pill">150 active</div> <div class="pill">50 paying</div>
+          <div class="pill">20 agribusiness</div> <div class="pill">10 farms</div> <div class="pill">~FJD $40k ARR</div>
+        </div>
+      </div>
+      <table class="alloc">
+        <tr><td>Product strengthening &amp; commercial readiness</td><td class="amt">22,500</td></tr>
+        <tr><td>Pilot network &amp; data validation (2→10 farms)</td><td class="amt">15,000</td></tr>
+        <tr><td>Farmer acquisition &amp; onboarding (250)</td><td class="amt">18,750</td></tr>
+        <tr><td>Operations &amp; infrastructure (12 mo)</td><td class="amt">7,500</td></tr>
+        <tr><td>Legal, compliance &amp; governance</td><td class="amt">5,250</td></tr>
+        <tr><td>Launch reserve (buffer)</td><td class="amt">6,000</td></tr>
+        <tr class="tot"><td>Total</td><td class="amt">FJD 75,000</td></tr>
+      </table>
+    </div>
+    <div class="foot"><span>Teivaka</span><span>Aggressive enough to matter. Conservative enough to defend.</span></div>
+  </section>
+
+  <!-- 10 — IMPACT / CLOSE -->
+  <section class="slide cover">
+    <div class="eyebrow">The impact</div>
+    <h1 style="font-size:3.8vw">The land, the demand, and the farmers are already here.</h1>
+    <p class="lede" style="margin-top:2vh">Teivaka is the operating system that finally connects them — turning idle land into wealth, invisible farmers into bankable businesses, and a FJD&nbsp;1.3B import bill into local opportunity.</p>
+    <div class="vmg">
+      <div><span>Economic</span><b>Farmers become bankable</b></div>
+      <div><span>Social</span><b>Access in every language</b></div>
+      <div><span>Environmental</span><b>Less waste, better land use</b></div>
+    </div>
+    <div class="foot"><span>Uraia Koroi Kama (Cody) · founder@teivaka.com · teivaka.com</span><span>Teivaka — Build the future of Pacific agriculture.</span></div>
+  </section>
+
+</div>
+
+<div class="hud">
+  <button id="prev" aria-label="Previous">‹</button>
+  <span id="count">1 / 10</span>
+  <button id="next" aria-label="Next">›</button>
+</div>
+
+<script>
+  const slides=[...document.querySelectorAll('.slide')];
+  let i=0;
+  function show(n){
+    i=Math.max(0,Math.min(slides.length-1,n));
+    slides.forEach((s,k)=>s.classList.toggle('active',k===i));
+    document.getElementById('count').textContent=(i+1)+' / '+slides.length;
+  }
+  document.getElementById('next').onclick=()=>show(i+1);
+  document.getElementById('prev').onclick=()=>show(i-1);
+  document.addEventListener('keydown',e=>{
+    if(e.key==='ArrowRight'||e.key===' '||e.key==='PageDown'){e.preventDefault();show(i+1);}
+    if(e.key==='ArrowLeft'||e.key==='PageUp'){e.preventDefault();show(i-1);}
+    if(e.key==='Home'){show(0);} if(e.key==='End'){show(slides.length-1);}
+  });
+  document.getElementById('stage').addEventListener('click',e=>{
+    if(e.target.closest('.hud'))return;
+    const x=e.clientX/window.innerWidth; show(x>0.5?i+1:i-1);
+  });
+  show(0);
+</script>
+</body>
+</html>
