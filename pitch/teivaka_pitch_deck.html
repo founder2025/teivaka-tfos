@@ -68,6 +68,15 @@
   table.alloc td.amt{text-align:right;font-weight:700;color:var(--ink);font-family:var(--serif)}
   table.alloc tr.tot td{border-top:2px solid var(--soil);border-bottom:none;font-weight:800;color:var(--ink);padding-top:1.3vh}
   .askbig{font-family:var(--serif);font-weight:800;color:var(--greenDk);font-size:5vw;line-height:1}
+  .wordmark{font-family:var(--serif);font-weight:800;font-size:2.6vw;letter-spacing:.22em;color:#fff;text-transform:uppercase}
+  .grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:1.2vw}
+  .tcard{background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:2.6vh 1.2vw;text-align:center}
+  .avatar{width:4vw;height:4vw;min-width:54px;min-height:54px;border-radius:50%;background:var(--green);color:#fff;
+    font-family:var(--serif);font-weight:800;font-size:1.5vw;display:flex;align-items:center;justify-content:center;margin:0 auto 1.4vh}
+  .tname{font-family:var(--serif);font-weight:700;color:var(--ink);font-size:1.25vw;line-height:1.1}
+  .trole{color:var(--greenDk);font-weight:700;font-size:.82vw;letter-spacing:.08em;text-transform:uppercase;margin:.7vh 0 1.1vh}
+  .tbio{color:var(--soil);font-size:.92vw;line-height:1.45}
+  .tagfoot{text-align:center;margin-top:3.2vh;font-family:var(--serif);font-style:italic;color:var(--soil2);font-size:1.35vw}
   .cover{background:linear-gradient(160deg,#2C1A0E 0%,#3d2817 100%);color:var(--cream)}
   .cover .eyebrow{color:#9ED080}
   .cover h1{color:#fff;font-size:5.2vw;margin:2vh 0}
@@ -93,7 +102,8 @@
 
   <!-- 1 — COVER / VISION -->
   <section class="slide cover active">
-    <div class="eyebrow">Teivaka · Fiji · Pre-seed</div>
+    <div class="wordmark">Teivaka</div>
+    <div class="eyebrow" style="margin-top:1.2vh">Generate Wealth from Idle Lands · Fiji · Pre-seed</div>
     <h1>Transform idle land into wealth.</h1>
     <p class="lede">Fiji's first <b>AI-powered agriculture operating system</b> — making smallholder farmers visible, bankable, and profitable.</p>
     <div class="vmg">
@@ -201,12 +211,15 @@
   <!-- 8 — TEAM -->
   <section class="slide">
     <div class="sec-head"><span class="num">7</span><h1>The team</h1></div>
-    <p class="kicker">A farmer built the software himself — on his own profitable farms — before asking anyone for a cent.</p>
-    <div class="grid2" style="margin-top:3vh">
-      <div class="card"><div class="big" style="font-size:1.7vw">Uraia Koroi Kama (Cody)</div><div class="lbl"><b>Founder.</b> Operates the pilot farms <i>and</i> builds the platform. Agronomy reality + tech execution. <i>"A workflow that doesn't survive a season on my own farm never ships to anyone else's."</i></div></div>
-      <div class="card"><div class="big" style="font-size:1.7vw">[FILL: key team / advisors]</div><div class="lbl">Add 1–2 names + roles (finance/ops) and any advisors (agronomy, banking, tech). Investors fund teams — even a strong advisor name adds weight.</div></div>
+    <p class="kicker">Four Fijians. We run the farms. We build the platform. Same people.</p>
+    <div class="grid4" style="margin-top:3vh">
+      <div class="tcard"><div class="avatar">UK</div><div class="tname">Uraia Koroi Kama</div><div class="trole">Founder &amp; Director</div><div class="tbio">Strategy, partnerships, platform architecture. Left a Science Degree; seven years farming. Knows every pain point firsthand — and builds the platform.</div></div>
+      <div class="tcard"><div class="avatar">TK</div><div class="tname">Taniela Kama</div><div class="trole">Field Ops &amp; Nursery</div><div class="tbio">Nursery, land prep, farm layout. 20+ years of Fiji farming knowledge. Ready before planting.</div></div>
+      <div class="tcard"><div class="avatar">LW</div><div class="tname">Laisenia Waqa</div><div class="trole">Crop Production &amp; Harvest</div><div class="tbio">Full crop cycle — pest, weed, nutrient. Quality control. Market-grade yield.</div></div>
+      <div class="tcard"><div class="avatar">KW</div><div class="tname">Kinisimere Wati</div><div class="trole">Finance &amp; Operations</div><div class="tbio">Bookkeeping, payroll, revenue, invoices. Every figure tight and transparent.</div></div>
     </div>
-    <div class="foot"><span>Teivaka</span><span>Founder-operator: the rarest, most fundable profile in agtech.</span></div>
+    <div class="tagfoot">100% Fijian. 100% local ownership. Female finance lead by design.</div>
+    <div class="foot"><span>Teivaka</span><span>Founder-operators — we run what we build.</span></div>
   </section>
 
   <!-- 9 — THE ASK -->
@@ -235,17 +248,32 @@
     <div class="foot"><span>Teivaka</span><span>Aggressive enough to matter. Conservative enough to defend.</span></div>
   </section>
 
-  <!-- 10 — IMPACT / CLOSE -->
-  <section class="slide cover">
-    <div class="eyebrow">The impact</div>
-    <h1 style="font-size:3.8vw">The land, the demand, and the farmers are already here.</h1>
-    <p class="lede" style="margin-top:2vh">Teivaka is the operating system that finally connects them — turning idle land into wealth, invisible farmers into bankable businesses, and a FJD&nbsp;1.3B import bill into local opportunity.</p>
-    <div class="vmg">
-      <div><span>Economic</span><b>Farmers become bankable</b></div>
-      <div><span>Social</span><b>Access in every language</b></div>
-      <div><span>Environmental</span><b>Less waste, better land use</b></div>
+  <!-- 10 — IMPACT -->
+  <section class="slide">
+    <div class="sec-head"><span class="num">9</span><h1>The impact</h1></div>
+    <p class="kicker">When a farmer becomes visible, everything downstream changes.</p>
+    <div class="grid3" style="margin-top:2.8vh">
+      <div class="card"><div class="pill">Economic</div>
+        <ul class="clean" style="margin-top:1.2vh">
+          <li>Idle land activated into real income</li>
+          <li>Records make farmers <b>bankable</b> — credit starts to flow</li>
+          <li>Local supply chips away at the <b>$1.3B</b> import bill</li>
+        </ul></div>
+      <div class="card"><div class="pill">Social</div>
+        <ul class="clean" style="margin-top:1.2vh">
+          <li>Knowledge &amp; markets reach <b>every</b> farmer — in their language</li>
+          <li><b>100% Fijian</b>, 100% locally owned</li>
+          <li>Female finance lead by design</li>
+        </ul></div>
+      <div class="card"><div class="pill">Environmental</div>
+        <ul class="clean" style="margin-top:1.2vh">
+          <li>Less post-harvest waste (~26–28% today)</li>
+          <li>Better-timed inputs, healthier soil</li>
+          <li>Productive use of <b>existing</b> land — no new clearing</li>
+        </ul></div>
     </div>
-    <div class="foot"><span>Uraia Koroi Kama (Cody) · founder@teivaka.com · teivaka.com</span><span>Teivaka — Build the future of Pacific agriculture.</span></div>
+    <div class="punch">The land, the demand, and the farmers are already here. <b>Teivaka is the operating system that finally connects them.</b></div>
+    <div class="foot"><span>Uraia Koroi Kama (Cody) · founder@teivaka.com · teivaka.com</span><span>Build the future of Pacific agriculture.</span></div>
   </section>
 
 </div>
