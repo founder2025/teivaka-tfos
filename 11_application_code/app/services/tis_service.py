@@ -2,6 +2,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
 import anthropic
 import openai
+import httpx
 import redis.asyncio as aioredis
 import json
 import logging
@@ -464,6 +465,37 @@ async def assemble_farm_context(
     return "\n".join(context_parts)
 
 
+async def bridge_chat(message: str, user_id: str, farm_id: Optional[str]) -> str:
+    """Call the OpenClaw/Max bridge /chat (the fast 'public' TIS agent). Returns the
+    answer text. Raises on failure so the caller can surface a friendly message.
+    This is the free (Claude-Max) path — no metered Anthropic API."""
+    url = settings.tis_bridge_url.rstrip("/") + "/chat"
+    headers = {"Content-Type": "application/json"}
+    if settings.tis_bridge_token:
+        headers["Authorization"] = f"Bearer {settings.tis_bridge_token}"
+    async with httpx.AsyncClient(timeout=120.0) as client:
+        resp = await client.post(url, headers=headers, json={
+            "message": message[:3900],          # bridge hard-caps at 4000
+            "user_id": str(user_id),
+            "farm_id": str(farm_id or "none"),
+        })
+    if resp.status_code != 200:
+        raise RuntimeError(f"bridge HTTP {resp.status_code}: {resp.text[:200]}")
+    txt = (resp.json() or {}).get("text")
+    if not txt or not str(txt).strip():
+        raise RuntimeError("bridge returned no text")
+    return str(txt).strip()
+
+
+async def _default_farm_id(session: AsyncSession, tenant_id: str) -> Optional[str]:
+    """The farmer's farm, so TIS has real context even when the client sends none."""
+    row = (await session.execute(
+        text("SELECT farm_id FROM tenant.farms WHERE tenant_id = :tid ORDER BY farm_id LIMIT 1"),
+        {"tid": tenant_id},
+    )).first()
+    return str(row[0]) if row else None
+
+
 async def execute_tis_query(
     session: AsyncSession,
     redis_client: aioredis.Redis,
@@ -506,111 +538,54 @@ async def execute_tis_query(
     # the lookup_nutrition tool from ever firing.
     nutrition_question = is_nutrition_question(user_message)
 
-    # Assemble context
+    # Resolve the farmer's farm if the client didn't pass one, so TIS sees the farm.
+    if not farm_id:
+        farm_id = await _default_farm_id(session, tenant_id)
+
+    # Assemble this farmer's real farm state + any validated KB reference.
+    # Both are best-effort — a failure here must never break the chat.
     farm_context = ""
     kb_excerpts = ""
-
     if farm_id:
-        farm_context = await assemble_farm_context(session, farm_id, tenant_id)
-
-    if tis_module == MODULE_KNOWLEDGE_BROKER:
+        try:
+            farm_context = await assemble_farm_context(session, farm_id, tenant_id)
+        except Exception as e:  # noqa: BLE001
+            logger.warning("farm context assembly failed: %s", e)
+    try:
         kb_articles = await retrieve_kb_context(session, user_message, tenant_id)
         if kb_articles:
             kb_excerpts = "\n\n".join([
                 f"[{a['title']}] (confidence: {a['similarity']:.2f})\n{a['content_chunk']}"
                 for a in kb_articles
             ])
-        elif not nutrition_question:
-            # No validated KB content AND not a nutrition question -- hard not-found.
-            return {
-                "tis_module": MODULE_KNOWLEDGE_BROKER,
-                "response": KB_NOT_FOUND_MESSAGE,
-                "confidence": 0.0,
-                "kb_articles_used": 0,
-                "calls_today": rate["calls_today"],
-                "calls_remaining": rate["calls_remaining"],
-                "latency_ms": int((time.time() - start_time) * 1000),
-            }
-        # else: nutrition question with no KB hits -- fall through to Claude
-        # so it can call the lookup_nutrition tool.
+    except Exception as e:  # noqa: BLE001 — OpenAI embedding/KB optional
+        logger.warning("KB retrieval failed (continuing without it): %s", e)
 
-    # Resolve farmer country for the prompt + tool default.
-    country_iso = await resolve_farmer_country(session, tenant_id)
-
-    # Build system prompt
-    system_prompt = SYSTEM_PROMPT_TEMPLATE.format(
-        farm_context=farm_context or "No farm selected.",
-        country_iso=country_iso,
-        today=date.today().isoformat(),
-        kb_excerpts=kb_excerpts or "No KB articles loaded.",
+    # Build the message for the OpenClaw/Max bridge ("public" TIS agent already
+    # carries TIS's identity + grounding; we add this farm's real data + reference
+    # and instruct it to stay grounded — no hallucinated agronomy, Inviolable #1).
+    parts = []
+    if farm_context:
+        parts.append("THIS FARMER'S FARM (real data — answer for this farm):\n" + farm_context[:1400])
+    if kb_excerpts:
+        parts.append("VALIDATED REFERENCE (use these; cite them; don't go beyond them):\n" + kb_excerpts[:1500])
+    parts.append("FARMER'S QUESTION:\n" + user_message.strip()[:700])
+    parts.append(
+        "Answer for THIS farm, in plain language. If you used the reference above, say so. "
+        "If you don't have a verified figure (dosage, price, date, yield), say so honestly "
+        "and point to the extension officer — never invent agronomy."
     )
+    bridge_message = "\n\n".join(parts)[:3900]
 
-    # Build messages
-    messages = list(conversation_history[-10:])  # Last 10 for context window
-    messages.append({"role": "user", "content": user_message})
+    try:
+        assistant_message = await bridge_chat(bridge_message, str(user["user_id"]), farm_id)
+    except Exception as e:  # noqa: BLE001
+        logger.warning("TIS bridge call failed: %s", e)
+        assistant_message = "I couldn't reach the advisory service just now — please try again in a moment."
 
-    # Call Claude with the lookup_nutrition tool wired in. Loop until the
-    # model stops requesting tool calls (cap at 3 iterations to bound runtime).
-    total_input_tokens = 0
-    total_output_tokens = 0
-    assistant_message = None
-
-    for _ in range(3):
-        response = await anthropic_client.messages.create(
-            model=settings.anthropic_model,
-            max_tokens=settings.anthropic_max_tokens,
-            system=system_prompt,
-            tools=[NUTRITION_TOOL],
-            messages=messages,
-        )
-        total_input_tokens += response.usage.input_tokens
-        total_output_tokens += response.usage.output_tokens
-
-        if response.stop_reason != "tool_use":
-            text_chunks = [
-                b.text for b in response.content
-                if getattr(b, "type", None) == "text"
-            ]
-            assistant_message = "\n".join(text_chunks).strip()
-            break
-
-        # Execute every tool_use block in this assistant turn.
-        tool_results = []
-        for block in response.content:
-            if getattr(block, "type", None) != "tool_use":
-                continue
-            if block.name == "lookup_nutrition":
-                tool_input = block.input or {}
-                result_data = await execute_lookup_nutrition(
-                    session=session,
-                    crop_key=tool_input.get("crop_key", ""),
-                    stage=tool_input.get("stage", ""),
-                    country_iso=tool_input.get("country_iso", country_iso),
-                )
-            else:
-                result_data = {
-                    "_status": "error",
-                    "_message": f"Unknown tool: {block.name}",
-                }
-            tool_results.append({
-                "type": "tool_result",
-                "tool_use_id": block.id,
-                "content": json.dumps(result_data),
-            })
-
-        messages.append({"role": "assistant", "content": response.content})
-        messages.append({"role": "user", "content": tool_results})
-
-    if assistant_message is None:
-        assistant_message = (
-            "I had trouble completing that request. Please try rephrasing or "
-            "contact support."
-        )
-
-    tokens_used = total_input_tokens + total_output_tokens
     latency_ms = int((time.time() - start_time) * 1000)
 
-    # Log to ai_commands
+    # Log to ai_commands (powers Usage + History)
     await log_ai_command(
         session=session,
         user_id=user["user_id"],
@@ -619,14 +594,13 @@ async def execute_tis_query(
         tis_module=tis_module,
         user_message=user_message,
         response=assistant_message,
-        tokens_used=tokens_used,
+        tokens_used=0,
         latency_ms=latency_ms,
     )
 
     return {
         "tis_module": tis_module,
         "response": assistant_message,
-        "tokens_used": tokens_used,
         "calls_today": rate["calls_today"],
         "calls_remaining": rate["calls_remaining"],
         "latency_ms": latency_ms,

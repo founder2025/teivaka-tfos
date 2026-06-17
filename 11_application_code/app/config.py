@@ -109,6 +109,10 @@ class Settings(BaseSettings):
     # ── Launch waitlist ───────────────────────────────────────────────────────
     waitlist_notify_email: str = "founder@teivaka.com"
 
+    # ── TIS bridge (OpenClaw/Max — free in-app TIS path via /chat) ────────────
+    tis_bridge_url: str = "http://172.20.0.1:18790"
+    tis_bridge_token: str = ""   # read from env TIS_BRIDGE_TOKEN (already set on api)
+
     # ── SMTP / Transactional email ────────────────────────────────────────────
     smtp_host: str = ""
     smtp_port: int = 587
