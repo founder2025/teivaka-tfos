@@ -496,6 +496,60 @@ async def _default_farm_id(session: AsyncSession, tenant_id: str) -> Optional[st
     return str(row[0]) if row else None
 
 
+async def assemble_inbox_context(session: AsyncSession, user_id, tenant_id: str, farm_id: Optional[str]) -> str:
+    """Compact summary of THIS farmer's notifications, community engagement, direct
+    messages and active farm alerts — so TIS (in-app AND WhatsApp) answers about them
+    from real data, never invented. Each block is best-effort: one failing never blocks
+    the others. Returns '' when there's nothing to report."""
+    uid = str(user_id)
+    lines = []
+    # Notifications + community engagement (replies/reactions/mentions/follows on their content)
+    try:
+        unread = (await session.execute(text(
+            "SELECT count(*) FROM community.feed_notifications WHERE user_id = :u AND read_at IS NULL"
+        ), {"u": uid})).scalar() or 0
+        recent = (await session.execute(text(
+            "SELECT type, body FROM community.feed_notifications WHERE user_id = :u "
+            "ORDER BY created_at DESC LIMIT 3"
+        ), {"u": uid})).mappings().all()
+        if unread or recent:
+            tops = "; ".join(f"{(r['type'] or '').title()}: {(r['body'] or '').strip()[:60]}" for r in recent) or "—"
+            lines.append(f"Notifications & community: {unread} unread. Recent: {tops}")
+    except Exception as e:  # noqa: BLE001
+        logger.warning("inbox notifications fetch failed: %s", e)
+    # Direct messages
+    try:
+        row = (await session.execute(text(
+            """SELECT count(*) AS unread, count(DISTINCT cm.sender_user_id) AS senders
+               FROM community.chat_messages cm
+               JOIN community.chat_threads ct ON ct.thread_id = cm.thread_id
+               WHERE (ct.user_lo = :u OR ct.user_hi = :u)
+                 AND cm.sender_user_id <> :u AND cm.read_at IS NULL"""
+        ), {"u": uid})).mappings().first()
+        if row and row["unread"]:
+            who = "person" if row["senders"] == 1 else "people"
+            lines.append(f"Messages: {row['unread']} unread from {row['senders']} {who}")
+    except Exception as e:  # noqa: BLE001
+        logger.warning("inbox messages fetch failed: %s", e)
+    # Active farm alerts (critical/high first)
+    if farm_id:
+        try:
+            rows = (await session.execute(text(
+                """SELECT severity, count(*) AS n FROM tenant.alerts
+                   WHERE farm_id = :f AND alert_status = 'ACTIVE'
+                     AND severity IN ('CRITICAL','HIGH')
+                   GROUP BY severity ORDER BY severity"""
+            ), {"f": farm_id})).mappings().all()
+            if rows:
+                parts = ", ".join(f"{r['n']} {r['severity']}" for r in rows)
+                lines.append(f"Farm alerts: {parts} active — surface these if relevant")
+        except Exception as e:  # noqa: BLE001
+            logger.warning("inbox alerts fetch failed: %s", e)
+    if not lines:
+        return ""
+    return "INBOX & ALERTS (this farmer, right now):\n- " + "\n- ".join(lines)
+
+
 async def execute_tis_query(
     session: AsyncSession,
     redis_client: aioredis.Redis,
@@ -561,12 +615,21 @@ async def execute_tis_query(
     except Exception as e:  # noqa: BLE001 — OpenAI embedding/KB optional
         logger.warning("KB retrieval failed (continuing without it): %s", e)
 
+    # This farmer's live inbox + alerts (notifications, community, messages, farm alerts).
+    inbox_context = ""
+    try:
+        inbox_context = await assemble_inbox_context(session, user["user_id"], tenant_id, farm_id)
+    except Exception as e:  # noqa: BLE001
+        logger.warning("inbox context failed: %s", e)
+
     # Build the message for the OpenClaw/Max bridge ("public" TIS agent already
     # carries TIS's identity + grounding; we add this farm's real data + reference
     # and instruct it to stay grounded — no hallucinated agronomy, Inviolable #1).
     parts = []
     if farm_context:
         parts.append("THIS FARMER'S FARM (real data — answer for this farm):\n" + farm_context[:1400])
+    if inbox_context:
+        parts.append(inbox_context)
     if kb_excerpts:
         parts.append("VALIDATED REFERENCE (use these; cite them; don't go beyond them):\n" + kb_excerpts[:1500])
     parts.append("FARMER'S QUESTION:\n" + user_message.strip()[:700])
