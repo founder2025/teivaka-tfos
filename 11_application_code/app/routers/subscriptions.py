@@ -4,8 +4,10 @@ from app.db.session import get_rls_db, get_db_ctx
 from app.middleware.rls import get_current_user
 from pydantic import BaseModel
 from typing import Optional
+import logging
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 # Subscription tier definitions (aligned with TFOS pricing model)
 TIER_DEFINITIONS = {
@@ -126,7 +128,8 @@ async def request_upgrade(body: UpgradeRequest, user: dict = Depends(get_current
                 )
                 return {"data": {"checkout_url": session.url, "payment_method": "STRIPE"}}
             except Exception as e:
-                raise HTTPException(status_code=500, detail=f"Stripe error: {str(e)}")
+                logger.error("Stripe checkout session creation failed: %s", e)
+                raise HTTPException(status_code=502, detail="Payment provider error. Please try again.")
         else:
             # Log manual upgrade request
             import uuid

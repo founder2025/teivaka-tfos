@@ -22,7 +22,7 @@ async def health_db():
     except Exception as e:
         logger.error(f"DB health check failed: {e}")
         from fastapi import HTTPException
-        raise HTTPException(status_code=503, detail={"status": "unhealthy", "error": str(e)})
+        raise HTTPException(status_code=503, detail={"status": "unhealthy"})
 
 @router.get("/celery")
 async def health_celery():

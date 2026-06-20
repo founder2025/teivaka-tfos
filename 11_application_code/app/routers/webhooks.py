@@ -58,16 +58,20 @@ async def whatsapp_webhook(request: Request):
     """
     body = await request.body()
 
-    # Verify Meta signature (X-Hub-Signature-256: sha256=<hash>)
-    if settings.meta_whatsapp_token:
-        signature_header = request.headers.get("X-Hub-Signature-256", "")
-        expected_sig = "sha256=" + hmac.new(
-            settings.meta_whatsapp_token.encode(),
-            body,
-            hashlib.sha256,
-        ).hexdigest()
-        if not hmac.compare_digest(signature_header, expected_sig):
-            raise HTTPException(status_code=403, detail="Invalid Meta webhook signature")
+    # Verify Meta signature (X-Hub-Signature-256: sha256=<hash>). Fail CLOSED:
+    # an unconfigured verification secret rejects the request — an unsigned
+    # webhook is never trusted (N1, Inviolable #10).
+    if not settings.meta_whatsapp_token:
+        logger.error("WhatsApp webhook rejected: META_WHATSAPP_TOKEN not configured")
+        raise HTTPException(status_code=503, detail="Webhook verification not configured")
+    signature_header = request.headers.get("X-Hub-Signature-256", "")
+    expected_sig = "sha256=" + hmac.new(
+        settings.meta_whatsapp_token.encode(),
+        body,
+        hashlib.sha256,
+    ).hexdigest()
+    if not hmac.compare_digest(signature_header, expected_sig):
+        raise HTTPException(status_code=403, detail="Invalid Meta webhook signature")
 
     try:
         payload = await request.json()
@@ -166,16 +170,26 @@ async def stripe_webhook(request: Request):
     body = await request.body()
     sig_header = request.headers.get("stripe-signature")
 
-    if settings.stripe_webhook_secret and sig_header:
-        import stripe
-        stripe.api_key = settings.stripe_secret_key
-        try:
-            event = stripe.Webhook.construct_event(
-                body, sig_header, settings.stripe_webhook_secret
-            )
-        except Exception as e:
-            raise HTTPException(status_code=400, detail=str(e))
+    # Fail CLOSED: a Stripe webhook is processed ONLY when the signing secret is
+    # configured AND the signature verifies. An unconfigured secret or missing
+    # signature is rejected, never trusted (N1, Inviolable #10).
+    if not settings.stripe_webhook_secret:
+        logger.error("Stripe webhook rejected: STRIPE_WEBHOOK_SECRET not configured")
+        raise HTTPException(status_code=503, detail="Webhook verification not configured")
+    if not sig_header:
+        raise HTTPException(status_code=400, detail="Missing signature")
 
+    import stripe
+    stripe.api_key = settings.stripe_secret_key
+    try:
+        event = stripe.Webhook.construct_event(
+            body, sig_header, settings.stripe_webhook_secret
+        )
+    except Exception as e:
+        logger.warning(f"Stripe webhook signature verification failed: {e}")
+        raise HTTPException(status_code=400, detail="Invalid signature")
+
+    if event:
         event_type = event["type"]
         logger.info(f"Stripe event: {event_type}")
 

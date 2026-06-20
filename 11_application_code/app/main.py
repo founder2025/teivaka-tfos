@@ -115,6 +115,22 @@ async def lifespan(app: FastAPI):
         f"[{settings.environment}] TZ=Pacific/Fiji"
     )
 
+    # Production secrets guard (N2) — refuse to boot with insecure defaults so a
+    # missed env var can never silently ship forgeable JWTs. Dev/test keep the
+    # default key; only production is gated.
+    if settings.is_production:
+        _DEFAULT_SECRET = "change-me-in-production-use-32-chars-min"
+        insecure = []
+        if not settings.secret_key or settings.secret_key == _DEFAULT_SECRET or len(settings.secret_key) < 32:
+            insecure.append("SECRET_KEY")
+        if insecure:
+            logger.critical("Refusing to start: insecure/default secrets in production: %s", ", ".join(insecure))
+            raise RuntimeError(
+                "Insecure or default secrets in production: "
+                + ", ".join(insecure)
+                + ". Set strong values (>=32 chars) in the environment."
+            )
+
     # Initialise Sentry in production
     if settings.sentry_dsn and settings.is_production:
         sentry_sdk.init(

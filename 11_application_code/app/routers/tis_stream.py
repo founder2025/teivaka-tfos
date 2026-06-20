@@ -65,6 +65,22 @@ async def _open_rls_session(tenant_id: str):
     return session
 
 
+async def _close_rls_session(session) -> None:
+    """Clear the session-scoped tenant GUC, then close (N3).
+
+    `_open_rls_session` sets `app.tenant_id` with is_local=false (session scope)
+    because the SSE stream polls across many transactions. A session-scoped GUC
+    survives pool checkin, so we must wipe it before the connection returns to
+    the pool — otherwise a recycled connection could carry this tenant's context
+    into another request. Best-effort: a failed reset must not mask the response.
+    """
+    try:
+        await session.execute(text("SELECT set_config('app.tenant_id', '', false)"))
+    except Exception:  # noqa: BLE001
+        pass
+    await session.close()
+
+
 async def _fetch_unread_advisories(session, user_id: str, after_iso: str | None):
     """Return advisories for a user with read_at IS NULL.
 
@@ -130,7 +146,7 @@ async def tis_stream(
                     }
                     last_seen_iso = r.created_at.isoformat()
             finally:
-                await session.close()
+                await _close_rls_session(session)
 
             # Keep-alive ping every 25s even if no new advisories.
             now = datetime.now(timezone.utc)
@@ -227,4 +243,4 @@ async def mark_advisory_read(
         await session.rollback()
         raise
     finally:
-        await session.close()
+        await _close_rls_session(session)
