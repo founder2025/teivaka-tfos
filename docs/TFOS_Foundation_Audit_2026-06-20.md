@@ -137,3 +137,39 @@ Everything in §2 tagged BLOCKS-SCALE is explicitly **not** on this list.
 - **Assumptions needing a live check:** #19 (are equipment update keys ever user-controlled?), #20 (does `has_role` enforce hierarchy + do admin queries actually leak under RLS?), #22 (conflict-resolution behavior under real concurrent offline edits).
 - **Not assessed this pass:** live load test, actual prod `.env` contents, TIS bridge internals (`/opt/tis-bridge/server.js` is outside the repo), real cache hit-rates.
 - **Calibration applied:** the backend agent's "critical RLS leak" on the standard path was downgraded (fail-closed); several "SQL injection" hits were parameterized with hardcoded table lists (downgraded to the narrow column-name case #19); the `secret_key` finding was reframed from "tokens forged" to "no enforcement"; infra HA gaps were reframed from failures to correctly-sequenced Phase-2-4 work.
+
+---
+
+## 9. Remediation log — pre-alpha fixes (2026-06-20, all deployed to prod)
+
+Verified live on teivaka.com unless noted. Runtime role confirmed `teivaka_app`
+(non-owner, non-bypass) → RLS genuinely enforced; `tenant.users` isolation policy
+is permissive on a NULL/'' context (serves the pre-context auth lookup).
+
+| ID | Fix | Status |
+|---|---|---|
+| N1 | Stripe + WhatsApp webhooks fail **closed** (reject on unset secret / bad sig) | ✅ live |
+| N2 | Production boot guard refuses default/short `SECRET_KEY` | ✅ live (API booted → key is set) |
+| N3 | `app.tenant_id` GUC reset to NULL on `tis_stream` close + `get_db`/`get_db_ctx` acquisition | ✅ live (image `3c438a6c`) |
+| N4 | FORCE ROW LEVEL SECURITY on all 32 enabled-but-unforced `tenant.*` tables | ✅ applied (forced 62/0); recorded as migration `150_force_rls_all_tenant`, stamped on prod |
+| N5 | Removed `str(e)` leakage (`/health/db`, Stripe checkout, Stripe webhook) | ✅ live (`cycles.py` left — controlled domain message) |
+| N6 | `emit_audit_event` stamps server-receipt `_recorded_at` into the hashed payload | ✅ live (technical half); lender copy + per-event authz pending **decision #2** |
+| N7 | `upload_offhost` wired to S3-compatible storage (env-gated, fail-soft+loud); monthly restore-drill systemd unit added | ✅ code live; **inactive until `BACKUP_S3_BUCKET` set** (decision #4) — PR.1 caveat still applies until then |
+| N8 | `farm_dashboard` reads signals only from precomputed `decision_signal_snapshots`; legacy sections fail soft | ✅ live |
+
+**Additional fix discovered during remediation — broken alembic chain (DR risk).**
+`149.down_revision` pointed at a phantom `148_grant_attribution_update` (authored,
+applied-as-owner on prod, file never committed) — a clean `alembic upgrade head`
+would have failed at 148. The data-layer audit reported the chain as linear/
+healthy; that was wrong. Repaired: `148` reconstructed faithfully from prod grant
+state (`teivaka_app` INSERT/SELECT/UPDATE on `shared.attribution_events`), `150`
+records the FORCE; chain now walks `147→148→149→150` and executes as owner per
+`deploy.sh`. Note: future `deploy.sh` runs must pass `150_force_rls_all_tenant`
+as EXPECTED_HEAD.
+
+**Still open (operator decisions):**
+- **#2 Bank Evidence posture** → N6 lender copy + per-event authorization.
+- **#4 Backup off-host destination** (S3 provider + bucket) → activates N7, closes PR.1.
+
+All BLOCKS-SCALE items in §2 remain correctly sequenced for Phases 2–4 (pgbouncer,
+HA/orchestration/observability, i18n/multi-currency wiring, payment gateways).
