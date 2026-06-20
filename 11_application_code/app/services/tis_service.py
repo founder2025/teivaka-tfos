@@ -648,18 +648,24 @@ async def execute_tis_query(
 
     latency_ms = int((time.time() - start_time) * 1000)
 
-    # Log to ai_commands (powers Usage + History)
-    await log_ai_command(
-        session=session,
-        user_id=user["user_id"],
-        farm_id=farm_id,
-        tenant_id=tenant_id,
-        tis_module=tis_module,
-        user_message=user_message,
-        response=assistant_message,
-        tokens_used=0,
-        latency_ms=latency_ms,
-    )
+    # Log to ai_commands (powers Usage + History). SAVEPOINT-isolated so a logging
+    # failure rolls back ONLY this insert and can never abort the chat's transaction
+    # (get_rls_db wraps everything in begin(); same rule as analytics.track).
+    try:
+        async with session.begin_nested():
+            await log_ai_command(
+                session=session,
+                user_id=user["user_id"],
+                farm_id=farm_id,
+                tenant_id=tenant_id,
+                tis_module=tis_module,
+                user_message=user_message,
+                response=assistant_message,
+                tokens_used=0,
+                latency_ms=latency_ms,
+            )
+    except Exception as e:  # noqa: BLE001
+        logger.warning("ai_commands log failed (ignored): %s", e)
 
     return {
         "tis_module": tis_module,
