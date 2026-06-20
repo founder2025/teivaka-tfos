@@ -75,7 +75,7 @@ async def _close_rls_session(session) -> None:
     into another request. Best-effort: a failed reset must not mask the response.
     """
     try:
-        await session.execute(text("SELECT set_config('app.tenant_id', '', false)"))
+        await session.execute(text("SELECT set_config('app.tenant_id', NULL, false)"))
     except Exception:  # noqa: BLE001
         pass
     await session.close()

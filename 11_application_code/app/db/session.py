@@ -38,6 +38,14 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
     For all tenant-scoped data, use get_rls_db() instead.
     """
     async with AsyncSessionLocal() as session:
+        # Clear any tenant context inherited from a recycled pooled connection
+        # (N3): a session-scoped app.tenant_id GUC survives checkin, so a stale
+        # value from a prior request could mis-scope this one (e.g. silently
+        # restrict the pre-context tenant.users auth lookup to the wrong tenant).
+        # Reset to NULL: RLS fails closed unless the caller sets its own context,
+        # the permissive tenant.users policy (NULL => allow) still serves auth,
+        # and NULL avoids ::uuid cast errors that '' would cause in strict policies.
+        await session.execute(text("SELECT set_config('app.tenant_id', NULL, false)"))
         try:
             yield session
         except Exception:
@@ -55,6 +63,8 @@ async def get_db_ctx() -> AsyncGenerator[AsyncSession, None]:
     use this when you need an explicit session block. Caller manages commit().
     """
     async with AsyncSessionLocal() as session:
+        # Same recycled-connection tenant-context reset as get_db (N3).
+        await session.execute(text("SELECT set_config('app.tenant_id', NULL, false)"))
         try:
             yield session
         except Exception:
