@@ -51,6 +51,19 @@ RETENTION_MONTHLY=6
 
 MIN_BACKUP_SIZE_BYTES=102400   # 100 KiB sanity floor (custom-format + gzip is dense)
 
+# Load .env globally so the off-host upload step sees BACKUP_S3_* and the AWS
+# credentials (N7). `set -a` exports sourced vars so the `aws` CLI child process
+# inherits them (plain `source` would set shell vars only); `set +u` guards
+# against unset-var errors while sourcing under `set -u`. send_alert re-sources
+# later — harmless/idempotent. Sourced after CONFIG so .env never silently
+# overrides the script's own internal vars above.
+if [ -f "$ENV_FILE" ]; then
+  set +u; set -a
+  # shellcheck disable=SC1090
+  source "$ENV_FILE"
+  set +a; set -u
+fi
+
 # ======================================================================
 # LOGGING HELPERS
 # ======================================================================
