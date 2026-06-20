@@ -186,9 +186,39 @@ upload_offhost() {
   local local_filepath="$1"
   local remote_filename="$2"
 
-  log "OFF-HOST DESTINATION NOT YET CONFIGURED — see backlog B93/Strike #122b"
-  log "  would have uploaded: $local_filepath → <remote>/$remote_filename"
-  log "  on-host backup is intact; off-host bolt-on pending vendor credential decision"
+  # Off-host replication (Foundation Audit N7 / Inviolable PR.1). S3-compatible.
+  # Configure via environment (works with AWS S3, DigitalOcean Spaces, Hetzner
+  # Object Storage, Supabase S3, etc.):
+  #   BACKUP_S3_BUCKET    s3://teivaka-backups        (REQUIRED to enable)
+  #   BACKUP_S3_ENDPOINT  https://sgp1.digitaloceanspaces.com  (optional)
+  #   AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY / AWS_DEFAULT_REGION  (standard)
+  #
+  # Non-fatal by design: the on-host backup is already written, so an unset or
+  # failed off-host upload is logged LOUD (PR.1: verified-loud beats assumed-
+  # quiet) but never aborts the run. Until off-host upload succeeds, the PR.1
+  # Bank-Evidence integrity caveat applies.
+  if [ -z "${BACKUP_S3_BUCKET:-}" ]; then
+    log "OFF-HOST DESTINATION NOT CONFIGURED — set BACKUP_S3_BUCKET to enable (PR.1 caveat active)"
+    log "  on-host backup intact: $local_filepath"
+    return 0
+  fi
+  if ! command -v aws >/dev/null 2>&1; then
+    log "ERROR: BACKUP_S3_BUCKET set but the 'aws' CLI is not installed — off-host upload SKIPPED (PR.1 caveat active)"
+    return 0
+  fi
+
+  local endpoint_arg=""
+  if [ -n "${BACKUP_S3_ENDPOINT:-}" ]; then
+    endpoint_arg="--endpoint-url ${BACKUP_S3_ENDPOINT}"
+  fi
+  local dest="${BACKUP_S3_BUCKET%/}/$remote_filename"
+
+  log "Off-host upload → $dest"
+  if aws s3 cp $endpoint_arg "$local_filepath" "$dest" >/dev/null 2>&1; then
+    log "Off-host upload OK: $dest"
+  else
+    log "ERROR: off-host upload FAILED for $dest — on-host backup intact; investigate (PR.1 caveat active)"
+  fi
   return 0
 }
 

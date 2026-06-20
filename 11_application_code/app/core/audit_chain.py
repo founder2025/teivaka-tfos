@@ -148,6 +148,17 @@ async def emit_audit_event(
     if occurred_at is None:
         occurred_at = datetime.now(timezone.utc)
 
+    # Honest provenance (Foundation Audit N6). occurred_at is the caller-claimed
+    # time of the event and is legitimately backdated for offline-first entries
+    # (logged offline, synced days later). To stop that same mechanism from being
+    # used to fabricate past production for Bank Evidence, stamp the SERVER-receipt
+    # time into the immutable, hashed payload. A verifier can then always see the
+    # gap between when an event is *claimed* to have happened and when it was
+    # actually *recorded* — it cannot be hidden. Additive + idempotent; never
+    # overwrites a value the caller already supplied.
+    if "_recorded_at" not in payload:
+        payload = {**payload, "_recorded_at": datetime.now(timezone.utc).isoformat()}
+
     # 1. Resolve previous_hash for this tenant — the TRUE insertion tip.
     #    Migration 132: order by chain_seq (strictly monotonic, server-assigned),
     #    NOT occurred_at (user-supplied + backdatable). occurred_at ordering let

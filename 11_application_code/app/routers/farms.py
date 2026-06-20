@@ -244,12 +244,12 @@ async def farm_dashboard(
     """
     Returns a consolidated farm dashboard view.
 
-    NOTE: only the tenant.farms existence check below has been aligned to the
-    deployed schema. The signals / active_cycles / open_alerts / recent_harvests
-    queries further down still reference tables and columns outside tenant.farms
-    scope (tenant.harvests, tenant.cycle_cost_summary, pu.production_unit_id,
-    pc.cycle_code/planted_date/..., h.quantity_kg/is_compliant, etc.) and will
-    500 when the endpoint is hit. Tracked separately.
+    Decision signals are read ONLY from the precomputed engine output
+    (tenant.decision_signal_snapshots) — never computed on demand (Inviolable #3).
+    The legacy active_cycles/open_alerts/recent_harvests queries were written
+    against a pre-deployment schema; each runs in its own guard and fails soft to
+    an empty list rather than 500-ing the whole dashboard (honest-empty, never
+    fake). Rewriting those three against the deployed schema is tracked separately.
     """
     farm_check = await db.execute(
         text("SELECT farm_id, farm_name FROM tenant.farms WHERE farm_id = :fid"),
@@ -259,101 +259,131 @@ async def farm_dashboard(
     if not farm:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Farm not found")
 
-    # Decision signals from materialised view
-    signals_result = await db.execute(
-        text("""
-            SELECT
-                zone_id, zone_code, production_unit_id, crop_name,
-                signal_type, severity, signal_message,
-                suggested_action, days_since_event, computed_at
-            FROM tenant.mv_decision_signals_current
-            WHERE farm_id = :fid
-            ORDER BY
-                CASE severity WHEN 'CRITICAL' THEN 0 WHEN 'HIGH' THEN 1 WHEN 'MEDIUM' THEN 2 ELSE 3 END,
-                days_since_event DESC
-            LIMIT 20
-        """),
-        {"fid": farm_id},
-    )
-    signals = [dict(r) for r in signals_result.mappings().all()]
+    # Decision signals — precomputed snapshots only (Inviolable #3). Mirrors the
+    # /decision-engine/{farm}/signals read; AMBER/RED only (GREEN = healthy).
+    signals = []
+    try:
+        signals_result = await db.execute(
+            text("""
+                SELECT latest.signal_type, latest.severity, latest.signal_message,
+                       latest.suggested_action, latest.metric_value, latest.computed_at
+                FROM (
+                    SELECT DISTINCT ON (dss.signal_id)
+                        dsc.signal_name AS signal_type,
+                        CASE dss.signal_status WHEN 'RED' THEN 'CRITICAL'
+                                               WHEN 'AMBER' THEN 'HIGH'
+                                               ELSE 'LOW' END AS severity,
+                        COALESCE(dss.notes, dsc.signal_name) AS signal_message,
+                        dss.notes AS suggested_action,
+                        dss.computed_value AS metric_value,
+                        dss.snapshot_date AS computed_at,
+                        dss.signal_status
+                    FROM tenant.decision_signal_snapshots dss
+                    JOIN tenant.decision_signal_config dsc
+                      ON dsc.signal_id = dss.signal_id AND dsc.tenant_id = dss.tenant_id
+                    WHERE dss.farm_id = :fid AND dss.tenant_id = :tid AND dsc.is_active = true
+                    ORDER BY dss.signal_id, dss.snapshot_date DESC
+                ) latest
+                WHERE latest.signal_status IN ('RED','AMBER')
+                ORDER BY CASE latest.severity WHEN 'CRITICAL' THEN 0 WHEN 'HIGH' THEN 1 ELSE 3 END,
+                         latest.computed_at DESC
+                LIMIT 20
+            """),
+            {"fid": farm_id, "tid": str(user["tenant_id"])},
+        )
+        signals = [dict(r) for r in signals_result.mappings().all()]
+    except Exception as e:  # noqa: BLE001
+        logger.warning("farm_dashboard signals read failed: %s", e)
 
-    # Active cycles with basic financials
-    cycles_result = await db.execute(
-        text("""
-            SELECT
-                pc.cycle_id,
-                pc.cycle_code,
-                z.zone_code,
-                pu.crop_name,
-                pc.cycle_status,
-                pc.planted_date,
-                pc.expected_harvest_date,
-                pc.actual_harvest_date,
-                COALESCE(h_agg.total_qty_kg, 0) AS harvested_kg,
-                COALESCE(cost_agg.total_cost, 0) AS total_cost,
-                CASE
-                    WHEN COALESCE(h_agg.total_qty_kg, 0) > 0
-                    THEN ROUND(COALESCE(cost_agg.total_cost, 0) / h_agg.total_qty_kg, 4)
-                    ELSE NULL
-                END AS cokg
-            FROM tenant.production_cycles pc
-            JOIN tenant.zones z ON z.zone_id = pc.zone_id
-            JOIN tenant.production_units pu ON pu.production_unit_id = pc.production_unit_id
-            LEFT JOIN (
-                SELECT cycle_id, SUM(quantity_kg) AS total_qty_kg
-                FROM tenant.harvests
-                WHERE is_compliant = true
-                GROUP BY cycle_id
-            ) h_agg ON h_agg.cycle_id = pc.cycle_id
-            LEFT JOIN (
-                SELECT cycle_id,
-                    SUM(labor_cost) + SUM(input_cost) + SUM(other_cost) AS total_cost
-                FROM tenant.cycle_cost_summary
-                GROUP BY cycle_id
-            ) cost_agg ON cost_agg.cycle_id = pc.cycle_id
-            WHERE pc.farm_id = :fid AND pc.cycle_status = 'ACTIVE'
-            ORDER BY pc.planted_date DESC
-        """),
-        {"fid": farm_id},
-    )
-    active_cycles = [dict(r) for r in cycles_result.mappings().all()]
+    # Active cycles with basic financials (legacy schema — fail soft to []).
+    active_cycles = []
+    try:
+        cycles_result = await db.execute(
+            text("""
+                SELECT
+                    pc.cycle_id,
+                    pc.cycle_code,
+                    z.zone_code,
+                    pu.crop_name,
+                    pc.cycle_status,
+                    pc.planted_date,
+                    pc.expected_harvest_date,
+                    pc.actual_harvest_date,
+                    COALESCE(h_agg.total_qty_kg, 0) AS harvested_kg,
+                    COALESCE(cost_agg.total_cost, 0) AS total_cost,
+                    CASE
+                        WHEN COALESCE(h_agg.total_qty_kg, 0) > 0
+                        THEN ROUND(COALESCE(cost_agg.total_cost, 0) / h_agg.total_qty_kg, 4)
+                        ELSE NULL
+                    END AS cokg
+                FROM tenant.production_cycles pc
+                JOIN tenant.zones z ON z.zone_id = pc.zone_id
+                JOIN tenant.production_units pu ON pu.production_unit_id = pc.production_unit_id
+                LEFT JOIN (
+                    SELECT cycle_id, SUM(quantity_kg) AS total_qty_kg
+                    FROM tenant.harvests
+                    WHERE is_compliant = true
+                    GROUP BY cycle_id
+                ) h_agg ON h_agg.cycle_id = pc.cycle_id
+                LEFT JOIN (
+                    SELECT cycle_id,
+                        SUM(labor_cost) + SUM(input_cost) + SUM(other_cost) AS total_cost
+                    FROM tenant.cycle_cost_summary
+                    GROUP BY cycle_id
+                ) cost_agg ON cost_agg.cycle_id = pc.cycle_id
+                WHERE pc.farm_id = :fid AND pc.cycle_status = 'ACTIVE'
+                ORDER BY pc.planted_date DESC
+            """),
+            {"fid": farm_id},
+        )
+        active_cycles = [dict(r) for r in cycles_result.mappings().all()]
+    except Exception as e:  # noqa: BLE001
+        logger.warning("farm_dashboard active_cycles read failed: %s", e)
 
-    # Open alerts by severity
-    alerts_result = await db.execute(
-        text("""
-            SELECT
-                alert_id, alert_type, severity, title, message,
-                zone_id, production_unit_id, created_at, due_date
-            FROM tenant.alerts
-            WHERE farm_id = :fid AND alert_status = 'OPEN'
-            ORDER BY
-                CASE severity WHEN 'CRITICAL' THEN 0 WHEN 'HIGH' THEN 1 WHEN 'MEDIUM' THEN 2 ELSE 3 END,
-                created_at DESC
-            LIMIT 20
-        """),
-        {"fid": farm_id},
-    )
-    open_alerts = [dict(r) for r in alerts_result.mappings().all()]
+    # Open alerts by severity (legacy schema — fail soft to []).
+    open_alerts = []
+    try:
+        alerts_result = await db.execute(
+            text("""
+                SELECT
+                    alert_id, alert_type, severity, title, message,
+                    zone_id, production_unit_id, created_at, due_date
+                FROM tenant.alerts
+                WHERE farm_id = :fid AND alert_status = 'OPEN'
+                ORDER BY
+                    CASE severity WHEN 'CRITICAL' THEN 0 WHEN 'HIGH' THEN 1 WHEN 'MEDIUM' THEN 2 ELSE 3 END,
+                    created_at DESC
+                LIMIT 20
+            """),
+            {"fid": farm_id},
+        )
+        open_alerts = [dict(r) for r in alerts_result.mappings().all()]
+    except Exception as e:  # noqa: BLE001
+        logger.warning("farm_dashboard open_alerts read failed: %s", e)
 
-    # Recent harvests
-    harvests_result = await db.execute(
-        text("""
-            SELECT
-                h.harvest_id, h.harvest_date,
-                z.zone_code, pu.crop_name,
-                h.quantity_kg, h.grade, h.is_compliant,
-                h.sold_to_customer_id, h.sale_price_per_kg
-            FROM tenant.harvests h
-            JOIN tenant.production_cycles pc ON pc.cycle_id = h.cycle_id
-            JOIN tenant.zones z ON z.zone_id = pc.zone_id
-            JOIN tenant.production_units pu ON pu.production_unit_id = pc.production_unit_id
-            WHERE pc.farm_id = :fid
-            ORDER BY h.harvest_date DESC
-            LIMIT 10
-        """),
-        {"fid": farm_id},
-    )
-    recent_harvests = [dict(r) for r in harvests_result.mappings().all()]
+    # Recent harvests (legacy schema — fail soft to []).
+    recent_harvests = []
+    try:
+        harvests_result = await db.execute(
+            text("""
+                SELECT
+                    h.harvest_id, h.harvest_date,
+                    z.zone_code, pu.crop_name,
+                    h.quantity_kg, h.grade, h.is_compliant,
+                    h.sold_to_customer_id, h.sale_price_per_kg
+                FROM tenant.harvests h
+                JOIN tenant.production_cycles pc ON pc.cycle_id = h.cycle_id
+                JOIN tenant.zones z ON z.zone_id = pc.zone_id
+                JOIN tenant.production_units pu ON pu.production_unit_id = pc.production_unit_id
+                WHERE pc.farm_id = :fid
+                ORDER BY h.harvest_date DESC
+                LIMIT 10
+            """),
+            {"fid": farm_id},
+        )
+        recent_harvests = [dict(r) for r in harvests_result.mappings().all()]
+    except Exception as e:  # noqa: BLE001
+        logger.warning("farm_dashboard recent_harvests read failed: %s", e)
 
     return {
         "farm": dict(farm),

@@ -1,0 +1,18 @@
+[Unit]
+Description=TFOS restore drill on the 1st of each month, 15:30 UTC (Inviolable PR.1)
+Documentation=https://github.com/founder2025/teivaka-tfos
+Requires=teivaka-backup-restore-drill.service
+
+[Timer]
+# PR.1: restore-drill on the first business day of every calendar month. The 1st
+# at 15:30 UTC runs after the 14:00 UTC daily backup has completed. Persistent so
+# a missed run (host down) fires on next boot. The drill log is committed to the
+# strike archive per PR.1.
+OnCalendar=*-*-01 15:30:00
+Persistent=true
+AccuracySec=5min
+Unit=teivaka-backup-restore-drill.service
+RandomizedDelaySec=0
+
+[Install]
+WantedBy=timers.target

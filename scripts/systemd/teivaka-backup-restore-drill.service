@@ -1,0 +1,21 @@
+[Unit]
+Description=TFOS monthly backup restore drill (Inviolable PR.1)
+Documentation=https://github.com/founder2025/teivaka-tfos
+Wants=teivaka-backup-restore-drill.timer
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+User=tfos
+Group=tfos
+ExecStart=/opt/teivaka/scripts/teivaka_backup_restore_drill.sh
+StandardOutput=append:/opt/teivaka/logs/restore-drill.log
+StandardError=append:/opt/teivaka/logs/restore-drill.log
+TimeoutStartSec=3600
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+
+[Install]
+WantedBy=multi-user.target
