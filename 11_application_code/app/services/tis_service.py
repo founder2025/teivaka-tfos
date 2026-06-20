@@ -505,13 +505,14 @@ async def assemble_inbox_context(session: AsyncSession, user_id, tenant_id: str,
     lines = []
     # Notifications + community engagement (replies/reactions/mentions/follows on their content)
     try:
-        unread = (await session.execute(text(
-            "SELECT count(*) FROM community.feed_notifications WHERE user_id = :u AND read_at IS NULL"
-        ), {"u": uid})).scalar() or 0
-        recent = (await session.execute(text(
-            "SELECT type, body FROM community.feed_notifications WHERE user_id = :u "
-            "ORDER BY created_at DESC LIMIT 3"
-        ), {"u": uid})).mappings().all()
+        async with session.begin_nested():
+            unread = (await session.execute(text(
+                "SELECT count(*) FROM community.feed_notifications WHERE user_id = :u AND read_at IS NULL"
+            ), {"u": uid})).scalar() or 0
+            recent = (await session.execute(text(
+                "SELECT type, body FROM community.feed_notifications WHERE user_id = :u "
+                "ORDER BY created_at DESC LIMIT 3"
+            ), {"u": uid})).mappings().all()
         if unread or recent:
             tops = "; ".join(f"{(r['type'] or '').title()}: {(r['body'] or '').strip()[:60]}" for r in recent) or "—"
             lines.append(f"Notifications & community: {unread} unread. Recent: {tops}")
@@ -519,13 +520,14 @@ async def assemble_inbox_context(session: AsyncSession, user_id, tenant_id: str,
         logger.warning("inbox notifications fetch failed: %s", e)
     # Direct messages
     try:
-        row = (await session.execute(text(
-            """SELECT count(*) AS unread, count(DISTINCT cm.sender_user_id) AS senders
-               FROM community.chat_messages cm
-               JOIN community.chat_threads ct ON ct.thread_id = cm.thread_id
-               WHERE (ct.user_lo = :u OR ct.user_hi = :u)
-                 AND cm.sender_user_id <> :u AND cm.read_at IS NULL"""
-        ), {"u": uid})).mappings().first()
+        async with session.begin_nested():
+            row = (await session.execute(text(
+                """SELECT count(*) AS unread, count(DISTINCT cm.sender_user_id) AS senders
+                   FROM community.chat_messages cm
+                   JOIN community.chat_threads ct ON ct.thread_id = cm.thread_id
+                   WHERE (ct.user_lo = :u OR ct.user_hi = :u)
+                     AND cm.sender_user_id <> :u AND cm.read_at IS NULL"""
+            ), {"u": uid})).mappings().first()
         if row and row["unread"]:
             who = "person" if row["senders"] == 1 else "people"
             lines.append(f"Messages: {row['unread']} unread from {row['senders']} {who}")
@@ -534,12 +536,13 @@ async def assemble_inbox_context(session: AsyncSession, user_id, tenant_id: str,
     # Active farm alerts (critical/high first)
     if farm_id:
         try:
-            rows = (await session.execute(text(
-                """SELECT severity, count(*) AS n FROM tenant.alerts
-                   WHERE farm_id = :f AND alert_status = 'ACTIVE'
-                     AND severity IN ('CRITICAL','HIGH')
-                   GROUP BY severity ORDER BY severity"""
-            ), {"f": farm_id})).mappings().all()
+            async with session.begin_nested():
+                rows = (await session.execute(text(
+                    """SELECT severity, count(*) AS n FROM tenant.alerts
+                       WHERE farm_id = :f AND alert_status = 'ACTIVE'
+                         AND severity IN ('CRITICAL','HIGH')
+                       GROUP BY severity ORDER BY severity"""
+                ), {"f": farm_id})).mappings().all()
             if rows:
                 parts = ", ".join(f"{r['n']} {r['severity']}" for r in rows)
                 lines.append(f"Farm alerts: {parts} active — surface these if relevant")
@@ -602,11 +605,14 @@ async def execute_tis_query(
     kb_excerpts = ""
     if farm_id:
         try:
-            farm_context = await assemble_farm_context(session, farm_id, tenant_id)
+            async with session.begin_nested():
+                farm_context = await assemble_farm_context(session, farm_id, tenant_id)
         except Exception as e:  # noqa: BLE001
             logger.warning("farm context assembly failed: %s", e)
+            farm_context = ""
     try:
-        kb_articles = await retrieve_kb_context(session, user_message, tenant_id)
+        async with session.begin_nested():
+            kb_articles = await retrieve_kb_context(session, user_message, tenant_id)
         if kb_articles:
             kb_excerpts = "\n\n".join([
                 f"[{a['title']}] (confidence: {a['similarity']:.2f})\n{a['content_chunk']}"
