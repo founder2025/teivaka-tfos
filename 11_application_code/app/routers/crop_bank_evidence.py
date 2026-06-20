@@ -335,9 +335,15 @@ async def crop_bank_evidence(
     elements.append(ft)
     elements.append(Spacer(1, 0.3 * cm))
     elements.append(Paragraph(
-        "This statement is generated from immutable, hash-chained audit events. The chain "
-        "has been verified end-to-end at the time of generation. Lenders and auditors may "
-        "verify integrity in real time by scanning the QR code or visiting the URL above.",
+        "What this verifies: these records are hash-chained and tamper-evident — the "
+        "sequence cannot be altered or backdated without detection, and integrity can "
+        "be re-checked in real time via the QR code or URL above. What it does not "
+        "assert: that the underlying figures are independently audited. Entries are "
+        "farmer-reported (corroborated by photos, GPS, and buyer confirmations where "
+        "available), and each carries both the date it is reported to have occurred and "
+        "the date it was recorded. Lenders and auditors should weigh this as a "
+        "tamper-evident record of farmer-reported activity, not as an externally "
+        "certified account.",
         footer_style,
     ))
 

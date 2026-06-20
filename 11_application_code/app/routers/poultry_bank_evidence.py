@@ -607,11 +607,16 @@ async def poultry_bank_evidence(
 
     elements.append(Spacer(1, 0.3 * cm))
     elements.append(Paragraph(
-        "This statement is generated from immutable, hash-chained audit events. "
-        "Each event row includes farm, block, crop, and operator metadata, and a "
-        "SHA256 chain link to its predecessor. The chain has been verified end-to-end "
-        "at the time of this statement's generation. Lenders, buyers, and auditors "
-        "may verify chain integrity in real time by scanning the QR code or visiting the URL above.",
+        "Each event row includes farm, block, crop, and operator metadata and a SHA256 "
+        "chain link to its predecessor. What this verifies: the records are tamper-evident "
+        "— the sequence cannot be altered or backdated without detection, and integrity "
+        "can be re-checked in real time via the QR code or URL above. What it does not "
+        "assert: that the underlying figures are independently audited. Entries are "
+        "farmer-reported (corroborated by photos, GPS, and buyer confirmations where "
+        "available), and each carries both the date it is reported to have occurred and "
+        "the date it was recorded. Lenders, buyers, and auditors should weigh this as a "
+        "tamper-evident record of farmer-reported activity, not as an externally "
+        "certified account.",
         footer_style,
     ))
 
