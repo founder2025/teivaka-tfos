@@ -113,7 +113,10 @@ async def whatsapp_webhook(request: Request):
                        t.subscription_tier
                 FROM tenant.users u
                 JOIN tenant.tenants t ON t.tenant_id = u.tenant_id
-                WHERE u.phone_whatsapp = :number AND u.is_active = true
+                WHERE u.whatsapp_number IS NOT NULL
+                  AND regexp_replace(u.whatsapp_number, '[^0-9]', '', 'g')
+                      = regexp_replace(:number, '[^0-9]', '', 'g')
+                  AND u.is_active = true
                 LIMIT 1
             """),
             {"number": from_number}
