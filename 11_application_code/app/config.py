@@ -89,6 +89,11 @@ class Settings(BaseSettings):
     kb_embedding_model: str = "text-embedding-3-small"
     kb_similarity_threshold: float = 0.70
     kb_max_results: int = 5
+    # Hard ceiling on the OpenAI query-embedding call used for KB retrieval. The
+    # SDK's default exponential-backoff retries can add 10-20s to EVERY TIS query
+    # when the OpenAI key is unfunded/slow — this bounds it and we skip KB entirely
+    # for non-knowledge questions (see tis_service.execute_tis_query).
+    tis_kb_timeout_seconds: float = 3.0
 
     # ── Vonage (SMS OTP verification) ─────────────────────────────────────────
     vonage_api_key: str = ""

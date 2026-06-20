@@ -181,6 +181,36 @@ def is_nutrition_question(msg: str) -> bool:
     return any(kw in msg_lower for kw in NUTRITION_INTENT_KEYWORDS)
 
 
+# Pure "what's in my inbox" questions — notifications, direct messages, farm
+# alerts. These are answerable instantly and exactly from the DB (the data is
+# already assembled in assemble_inbox_context), so they NEVER need the model
+# bridge. Answering them deterministically takes the perceived latency from
+# ~20-40s to near-instant (Operator default: data questions instant).
+INBOX_INTENT_KEYWORDS = (
+    "notification", "notifications",
+    "my messages", "any messages", "unread message", "new message",
+    "my inbox", "my alerts", "any alerts", "active alert", "active alerts",
+    "anything new", "what's new", "whats new", "any news", "any updates",
+    "am i caught up", "what did i miss",
+)
+
+
+def is_inbox_question(msg: str) -> bool:
+    msg_lower = msg.lower()
+    return any(kw in msg_lower for kw in INBOX_INTENT_KEYWORDS)
+
+
+def _format_inbox_reply(inbox_context: str) -> str:
+    """Turn the compact inbox/alerts context into a friendly direct answer.
+    Returns an all-clear message when there's nothing to report."""
+    if not inbox_context:
+        return ("You're all caught up — no unread notifications, no new messages, "
+                "and no active critical or high alerts on your farm right now.")
+    # Strip the internal header line; keep the bullet lines.
+    body = inbox_context.split("\n", 1)[1] if "\n" in inbox_context else inbox_context
+    return "Here's what's waiting for you right now:\n" + body
+
+
 async def execute_lookup_nutrition(
     session: AsyncSession,
     crop_key: str,
@@ -347,8 +377,14 @@ async def retrieve_kb_context(
     Only searches rag_status = 'VALIDATED' articles.
     Returns articles with similarity scores.
     """
-    # Generate query embedding
-    openai_client = openai.AsyncOpenAI(api_key=settings.openai_api_key)
+    # Generate query embedding. Hard-bound the network call and disable the SDK's
+    # default retry/backoff — an unfunded or slow OpenAI key must never stall the
+    # whole TIS pipeline (this used to add 10-20s to every question).
+    openai_client = openai.AsyncOpenAI(
+        api_key=settings.openai_api_key,
+        timeout=settings.tis_kb_timeout_seconds,
+        max_retries=0,
+    )
     embed_response = await openai_client.embeddings.create(
         model="text-embedding-3-small",
         input=user_message,
@@ -564,16 +600,26 @@ async def execute_tis_query(
 ) -> dict:
     """
     Main TIS entrypoint. Routes to correct module, calls Claude, returns response.
+
+    Per-stage timing is logged once per call as `TIS_TIMING {...}` (ms per stage)
+    so latency regressions are measurable from the api logs without a profiler:
+        docker logs teivaka_api 2>&1 | grep TIS_TIMING | tail -20
     """
     start_time = time.time()
+    timings: dict[str, int] = {}
+
+    def _mark(stage: str, t0: float) -> None:
+        timings[stage] = int((time.perf_counter() - t0) * 1000)
 
     # Rate limiting
+    _t = time.perf_counter()
     rate = await check_tis_rate_limit(
         redis_client,
         tenant_id,
         user["subscription_tier"],
         user["tis_daily_limit"],
     )
+    _mark("rate_limit", _t)
     if not rate["allowed"]:
         from fastapi import HTTPException
         raise HTTPException(
@@ -595,38 +641,100 @@ async def execute_tis_query(
     # the lookup_nutrition tool from ever firing.
     nutrition_question = is_nutrition_question(user_message)
 
+    # Pure inbox/alerts question → answer instantly from the DB, no model bridge.
+    inbox_question = is_inbox_question(user_message) and not nutrition_question
+
     # Resolve the farmer's farm if the client didn't pass one, so TIS sees the farm.
+    _t = time.perf_counter()
     if not farm_id:
         farm_id = await _default_farm_id(session, tenant_id)
+    _mark("resolve_farm_id", _t)
 
+    # ── FAST PATH: notifications / messages / alerts ───────────────────────────
+    # The data is already in the DB; format it directly. Skips farm aggregate, KB
+    # (OpenAI), and the ~20s bridge call entirely → near-instant perceived latency.
+    if inbox_question:
+        _t = time.perf_counter()
+        inbox_context = ""
+        try:
+            inbox_context = await assemble_inbox_context(
+                session, user["user_id"], tenant_id, farm_id
+            )
+        except Exception as e:  # noqa: BLE001
+            logger.warning("inbox context failed: %s", e)
+        _mark("inbox", _t)
+
+        assistant_message = _format_inbox_reply(inbox_context)
+        latency_ms = int((time.time() - start_time) * 1000)
+        timings["total"] = latency_ms
+        timings["path"] = "inbox_fast"  # type: ignore[assignment]
+        logger.info("TIS_TIMING %s", timings)
+
+        try:
+            async with session.begin_nested():
+                await log_ai_command(
+                    session=session,
+                    user_id=user["user_id"],
+                    farm_id=farm_id,
+                    tenant_id=tenant_id,
+                    tis_module=MODULE_OPERATIONAL,
+                    user_message=user_message,
+                    response=assistant_message,
+                    tokens_used=0,
+                    latency_ms=latency_ms,
+                )
+        except Exception as e:  # noqa: BLE001
+            logger.warning("ai_commands log failed (ignored): %s", e)
+
+        return {
+            "tis_module": MODULE_OPERATIONAL,
+            "response": assistant_message,
+            "calls_today": rate["calls_today"],
+            "calls_remaining": rate["calls_remaining"],
+            "latency_ms": latency_ms,
+        }
+
+    # ── ADVISORY PATH ──────────────────────────────────────────────────────────
     # Assemble this farmer's real farm state + any validated KB reference.
     # Both are best-effort — a failure here must never break the chat.
     farm_context = ""
     kb_excerpts = ""
     if farm_id:
+        _t = time.perf_counter()
         try:
             async with session.begin_nested():
                 farm_context = await assemble_farm_context(session, farm_id, tenant_id)
         except Exception as e:  # noqa: BLE001
             logger.warning("farm context assembly failed: %s", e)
             farm_context = ""
-    try:
-        async with session.begin_nested():
-            kb_articles = await retrieve_kb_context(session, user_message, tenant_id)
-        if kb_articles:
-            kb_excerpts = "\n\n".join([
-                f"[{a['title']}] (confidence: {a['similarity']:.2f})\n{a['content_chunk']}"
-                for a in kb_articles
-            ])
-    except Exception as e:  # noqa: BLE001 — OpenAI embedding/KB optional
-        logger.warning("KB retrieval failed (continuing without it): %s", e)
+        _mark("farm_context", _t)
+
+    # KB retrieval makes a network call to OpenAI for the query embedding. Only run
+    # it for knowledge/agronomy questions and only when a key is configured — it's
+    # useless for operational/command questions and was silently taxing every call.
+    want_kb = (tis_module == MODULE_KNOWLEDGE_BROKER) or nutrition_question
+    if want_kb and settings.openai_api_key:
+        _t = time.perf_counter()
+        try:
+            async with session.begin_nested():
+                kb_articles = await retrieve_kb_context(session, user_message, tenant_id)
+            if kb_articles:
+                kb_excerpts = "\n\n".join([
+                    f"[{a['title']}] (confidence: {a['similarity']:.2f})\n{a['content_chunk']}"
+                    for a in kb_articles
+                ])
+        except Exception as e:  # noqa: BLE001 — OpenAI embedding/KB optional
+            logger.warning("KB retrieval failed (continuing without it): %s", e)
+        _mark("kb", _t)
 
     # This farmer's live inbox + alerts (notifications, community, messages, farm alerts).
+    _t = time.perf_counter()
     inbox_context = ""
     try:
         inbox_context = await assemble_inbox_context(session, user["user_id"], tenant_id, farm_id)
     except Exception as e:  # noqa: BLE001
         logger.warning("inbox context failed: %s", e)
+    _mark("inbox", _t)
 
     # Build the message for the OpenClaw/Max bridge ("public" TIS agent already
     # carries TIS's identity + grounding; we add this farm's real data + reference
@@ -646,13 +754,18 @@ async def execute_tis_query(
     )
     bridge_message = "\n\n".join(parts)[:3900]
 
+    _t = time.perf_counter()
     try:
         assistant_message = await bridge_chat(bridge_message, str(user["user_id"]), farm_id)
     except Exception as e:  # noqa: BLE001
         logger.warning("TIS bridge call failed: %s", e)
         assistant_message = "I couldn't reach the advisory service just now — please try again in a moment."
+    _mark("bridge", _t)
 
     latency_ms = int((time.time() - start_time) * 1000)
+    timings["total"] = latency_ms
+    timings["path"] = "advisory"  # type: ignore[assignment]
+    logger.info("TIS_TIMING %s", timings)
 
     # Log to ai_commands (powers Usage + History). SAVEPOINT-isolated so a logging
     # failure rolls back ONLY this insert and can never abort the chat's transaction
