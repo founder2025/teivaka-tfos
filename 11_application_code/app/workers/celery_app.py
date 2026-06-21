@@ -104,12 +104,19 @@ app.conf.update(
             "schedule": crontab(hour=19, minute=30),
             "options": {"queue": "notifications"},
         },
-        # AI insights weekly: Sunday 06:00 Fiji = Saturday 18:00 UTC
-        "ai-insights-weekly": {
-            "task": "app.workers.ai_worker.generate_weekly_insights",
-            "schedule": crontab(hour=18, minute=0, day_of_week=6),
-            "options": {"queue": "ai"},
-        },
+        # AI insights weekly: DISABLED 2026-06-21 (Cluster 1 / debt sweep).
+        # generate_weekly_insights crash-looped at the RLS boundary every run
+        # (queried tenant.farms as non-bypass teivaka_app with no app.tenant_id)
+        # and never reached the model call, and even on success only logged its
+        # output — it was never persisted. Re-enable ONLY after a two-stage tenant
+        # scan (Strike #95 pattern) + real persistence + a UI surface are built.
+        # The task body itself is now doctrine-clean (routes via the OpenClaw
+        # bridge, no direct Anthropic call). See backlog B-insights.
+        # "ai-insights-weekly": {
+        #     "task": "app.workers.ai_worker.generate_weekly_insights",
+        #     "schedule": crontab(hour=18, minute=0, day_of_week=6),
+        #     "options": {"queue": "ai"},
+        # },
         # Live weather fetch (Open-Meteo) — every 3 h
         "fetch-weather-3h": {
             "task": "app.workers.weather_worker.fetch_all_weather",
