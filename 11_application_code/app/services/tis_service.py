@@ -1,6 +1,5 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
-import anthropic
 import openai
 import httpx
 import redis.asyncio as aioredis
@@ -14,8 +13,9 @@ from app.config import settings
 
 logger = logging.getLogger(__name__)
 
-# Anthropic async client
-anthropic_client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key, timeout=30.0)
+# NOTE: TIS generation goes exclusively through the OpenClaw bridge (bridge_chat,
+# the free Claude-Max path). No direct Anthropic client is constructed here —
+# billing doctrine: no metered Anthropic API credits, ever.
 
 # TIS Module constants
 MODULE_KNOWLEDGE_BROKER = "KNOWLEDGE_BROKER"

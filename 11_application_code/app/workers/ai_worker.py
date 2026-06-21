@@ -120,9 +120,9 @@ def generate_weekly_insights(self):
     Uses Claude to summarize the week's performance and flag key issues.
     Runs Saturday 18:00 UTC (Sunday 06:00 Fiji).
     """
-    import anthropic
+    import asyncio
+    from app.services.tis_service import bridge_chat
     conn = get_sync_db()
-    client = anthropic.Anthropic(api_key=settings.anthropic_api_key, timeout=30.0)
 
     try:
         cur = conn.cursor()
@@ -173,12 +173,14 @@ Weekly farm summary for {farm['farm_name']} (farm {farm_id}):
 Provide a 3-sentence farm performance summary and 2 actionable recommendations for next week.
 Keep it practical, specific to Fiji farming conditions. Be direct.
 """
-            response = client.messages.create(
-                model=settings.anthropic_model,
-                max_tokens=300,
-                messages=[{"role": "user", "content": prompt}],
+            # Route through the OpenClaw bridge (free Claude-Max path) — NEVER the
+            # metered Anthropic API (billing doctrine: no Anthropic credits, ever).
+            # bridge_chat is async and this Celery task is sync, so run it on a
+            # fresh loop per farm. user_id carries the tenant as the system-job
+            # identity; the bridge treats both ids as opaque strings.
+            insight_text = asyncio.run(
+                bridge_chat(prompt, user_id=tenant_id, farm_id=farm_id)
             )
-            insight_text = response.content[0].text
 
             # Store as a community post / KB note
             logger.info(f"[AI INSIGHTS] {farm_id}: {insight_text[:100]}...")
