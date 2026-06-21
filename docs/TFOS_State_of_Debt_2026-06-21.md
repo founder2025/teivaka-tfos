@@ -198,6 +198,26 @@ docker ps --format 'table {{.Names}}\t{{.Status}}'
 - **B69** resolved clean.
 - **+ NEW 🟡 — 23 tenant tables missing tenant_id index** (scale); **NEW 🟡 — swap exhausted / disk 80%** (infra).
 
+## 5c. Phase B resolution log (2026-06-21)
+
+Clusters executed this session, each verified on prod with its own rollback, nothing batched:
+
+| Cluster | Items | Status |
+|---|---|---|
+| 1 — Billing | C1 direct Anthropic call → bridge; dead client deleted; crash-loop beat disabled (B83) | ✅ done (spend was ~$0 — latent, not active) |
+| 2a — Migration heads | C2 two heads → merge `152`; `upgrade head` works | ✅ done (prod stamped 152) |
+| 2b — Greenfield 074 | H1 demo inputs removed from seed | ✅ done (repo; no prod action) |
+| 3.1 — audit grant | C5 `REVOKE UPDATE/DELETE` on audit.events (`153`) | ✅ done (prod) |
+| 3.2 — users policy drift | tenant.users permissive policy codified (`154`) | ✅ done (prod stamp-only) |
+| 5 — Dead code | H7 20 orphans deleted; M6 dead verify_chain removed; H9 tis-widget.js 404 fixed | ✅ done (prod) |
+| 3.x remainder | me.py/GUC defense-in-depth (NOT a leak) | ⬜ B84 (deferred) |
+| 5.3 / M10 | stale requirements.txt (ambiguous); duplicated prototype HTML | ⬜ B85 (deferred) |
+
+**Migration chain:** single head, prod stamped **154**. **Not yet executed:** Cluster 4
+(data anchors — `poultry_event_log.created_by` FK + `production_cycles.layer` NOT NULL,
+needs a backfill first), Cluster 6 (frontend HTTP consolidation + money seam), Cluster 7
+(doc reconciliation + per-user TZ).
+
 ## 6. STOP
 
 Phase A complete. Nothing changed. Awaiting Boss: **which cluster, and "go."** Recommended first move:
