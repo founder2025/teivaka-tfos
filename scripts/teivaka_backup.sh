@@ -37,6 +37,15 @@ DB_CONTAINER="teivaka_db"
 DB_USER="teivaka"
 DB_NAME="teivaka_db"
 
+# Farmer-uploaded media (community photos/videos, avatars). Bind-mounted into the
+# api container at /app/uploads (docker-compose: ../uploads:/app/uploads). These
+# files are NOT in the pg_dump — they live only on the droplet disk unless we
+# replicate them. Losing them breaks the platform's durability promise (a photo
+# posted today must still resolve years from now). Replicated to the same off-host
+# bucket under a media/ prefix via `aws s3 sync` (incremental — only new/changed
+# objects transfer). Override the source dir via TFOS_MEDIA_HOST_DIR if relocated.
+UPLOADS_DIR="${TFOS_MEDIA_HOST_DIR:-$TEIVAKA_ROOT/uploads}"
+
 TIMESTAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 BACKUP_FILE="teivaka_db_${TIMESTAMP}.dump.gz"
 
@@ -236,6 +245,47 @@ upload_offhost() {
 }
 
 # ======================================================================
+# OFF-HOST MEDIA REPLICATION (farmer photos/videos)
+# ======================================================================
+# Incremental sync of the uploads/ directory to the same off-host bucket under a
+# media/ prefix. `aws s3 sync` only transfers new/changed objects, so steady-state
+# cost is just the day's new photos. Fail-soft (PR.1: loud-but-non-aborting) —
+# the DB backup has already succeeded; a media sync failure is logged, not fatal.
+# Note: this replicates ADDED/CHANGED files. It deliberately does NOT pass
+# --delete, so a file removed on the droplet is retained off-host (durability >
+# mirror-fidelity for a trust layer; pruning is a deliberate, separate action).
+replicate_media() {
+  if [ -z "${BACKUP_S3_BUCKET:-}" ]; then
+    log "MEDIA OFF-HOST NOT CONFIGURED — set BACKUP_S3_BUCKET to enable photo replication"
+    return 0
+  fi
+  if ! command -v aws >/dev/null 2>&1; then
+    log "ERROR: BACKUP_S3_BUCKET set but 'aws' CLI not installed — media sync SKIPPED"
+    return 0
+  fi
+  if [ ! -d "$UPLOADS_DIR" ]; then
+    log "MEDIA SOURCE MISSING: $UPLOADS_DIR does not exist — media sync SKIPPED (nothing to replicate yet)"
+    return 0
+  fi
+
+  local endpoint_arg=""
+  if [ -n "${BACKUP_S3_ENDPOINT:-}" ]; then
+    endpoint_arg="--endpoint-url ${BACKUP_S3_ENDPOINT}"
+  fi
+  local media_dest="${BACKUP_S3_BUCKET%/}/media/"
+
+  local file_count
+  file_count="$(find "$UPLOADS_DIR" -type f 2>/dev/null | wc -l)"
+  log "Media replication → $media_dest ($file_count local files; incremental sync)"
+  if aws s3 sync $endpoint_arg "$UPLOADS_DIR/" "$media_dest" >>"$LOG_FILE" 2>&1; then
+    log "Media replication OK: $media_dest"
+  else
+    log "ERROR: media replication FAILED for $media_dest — DB backup intact; investigate"
+  fi
+  return 0
+}
+
+# ======================================================================
 # MAIN
 # ======================================================================
 log "═══════════════════════════════════════════════════════════════"
@@ -291,6 +341,11 @@ fi
 # Off-host upload (stub for Strike #122; #122b populates body)
 # ----------------------------------------------------------------------
 upload_offhost "$DAILY_PATH" "$BACKUP_FILE"
+
+# ----------------------------------------------------------------------
+# Off-host media replication (farmer photos/videos — not in the pg_dump)
+# ----------------------------------------------------------------------
+replicate_media
 
 # ----------------------------------------------------------------------
 # Retention rotation per tier
