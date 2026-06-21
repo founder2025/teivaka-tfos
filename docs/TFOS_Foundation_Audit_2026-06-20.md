@@ -154,7 +154,7 @@ is permissive on a NULL/'' context (serves the pre-context auth lookup).
 | N4 | FORCE ROW LEVEL SECURITY on all 32 enabled-but-unforced `tenant.*` tables | ✅ applied (forced 62/0); recorded as migration `150_force_rls_all_tenant`, stamped on prod |
 | N5 | Removed `str(e)` leakage (`/health/db`, Stripe checkout, Stripe webhook) | ✅ live (`cycles.py` left — controlled domain message) |
 | N6 | `emit_audit_event` stamps server-receipt `_recorded_at` into the hashed payload | ✅ live (technical half); lender copy + per-event authz pending **decision #2** |
-| N7 | `upload_offhost` wired to S3-compatible storage (env-gated, fail-soft+loud); monthly restore-drill systemd unit added | ✅ code live; **inactive until `BACKUP_S3_BUCKET` set** (decision #4) — PR.1 caveat still applies until then |
+| N7 | `upload_offhost` wired to S3-compatible storage (env-gated, fail-soft+loud); monthly restore-drill systemd unit added | ✅ **LIVE** — off-host replication to DigitalOcean Spaces (sgp1, `teivaka-backups`) verified 2026-06-21; restore drill **PASS** (pg_restore clean, `audit.events` 370/370 matched). PR.1 satisfied; Bank-Evidence caveat lifted. |
 | N8 | `farm_dashboard` reads signals only from precomputed `decision_signal_snapshots`; legacy sections fail soft | ✅ live |
 
 **Additional fix discovered during remediation — broken alembic chain (DR risk).**
@@ -167,9 +167,17 @@ records the FORCE; chain now walks `147→148→149→150` and executes as owner
 `deploy.sh`. Note: future `deploy.sh` runs must pass `150_force_rls_all_tenant`
 as EXPECTED_HEAD.
 
-**Still open (operator decisions):**
-- **#2 Bank Evidence posture** → N6 lender copy + per-event authorization.
-- **#4 Backup off-host destination** (S3 provider + bucket) → activates N7, closes PR.1.
+**Alpha-readiness bar: ✅ GREEN (2026-06-21).** All BLOCKS-ALPHA gates closed —
+IDOR fixed, refresh-token revocation, auth middleware returns clean 401s (no more
+500-flood), FORCE RLS, off-host backups live + restore drill passing, `/privacy`
++ `/terms` present, Sentry/kill-switch/outbox/timeouts verified.
+
+**Resolved operator decisions:**
+- **#2 Bank Evidence posture** → honest "tamper-evident, farmer-reported,
+  corroborated" copy shipped (N6). Per-event role authorization remains a
+  launch-grade follow-up.
+- **#4 Backup off-host destination** → DigitalOcean Spaces (sgp1). N7 LIVE, PR.1 satisfied.
 
 All BLOCKS-SCALE items in §2 remain correctly sequenced for Phases 2–4 (pgbouncer,
-HA/orchestration/observability, i18n/multi-currency wiring, payment gateways).
+HA/orchestration/observability, i18n/multi-currency wiring, payment gateways) —
+these are the road to PUBLIC launch, not alpha.
