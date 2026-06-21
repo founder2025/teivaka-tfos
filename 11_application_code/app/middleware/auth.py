@@ -1,4 +1,5 @@
 from fastapi import Request, HTTPException, status
+from fastapi.responses import JSONResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import jwt, JWTError
 from sqlalchemy import text
@@ -8,6 +9,20 @@ from app.db.session import AsyncSessionLocal
 
 logger = logging.getLogger(__name__)
 security = HTTPBearer(auto_error=False)
+
+
+def _auth_deny(status_code: int, detail: str) -> JSONResponse:
+    """Return a clean JSON error from the auth middleware.
+
+    A `raise HTTPException` inside Starlette middleware is NOT caught by FastAPI's
+    exception handlers — it surfaces as an unhandled ExceptionGroup → HTTP 500 plus
+    a full stack trace per request (which also buries real errors in the logs).
+    Returning a JSONResponse sends the intended status cleanly: the client gets a
+    real 401/403 (so the frontend's on-401 token refresh actually fires) and the
+    logs stay quiet. Success path is unchanged.
+    """
+    headers = {"WWW-Authenticate": "Bearer"} if status_code == status.HTTP_401_UNAUTHORIZED else None
+    return JSONResponse(status_code=status_code, content={"detail": detail}, headers=headers)
 
 
 class AuthMiddleware:
@@ -88,10 +103,9 @@ class AuthMiddleware:
             token = (request.query_params.get("access_token") or "").strip() or None
 
         if not token:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Missing or malformed authorization header. Expected: Bearer <token>",
-                headers={"WWW-Authenticate": "Bearer"},
+            return _auth_deny(
+                status.HTTP_401_UNAUTHORIZED,
+                "Missing or malformed authorization header. Expected: Bearer <token>",
             )
 
         # Verify JWT — signed with settings.secret_key (HS256), issued by /api/v1/auth/login
@@ -103,18 +117,11 @@ class AuthMiddleware:
             )
         except JWTError as e:
             logger.warning(f"JWT verification failed for path={path}: {e}")
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid or expired token",
-                headers={"WWW-Authenticate": "Bearer"},
-            )
+            return _auth_deny(status.HTTP_401_UNAUTHORIZED, "Invalid or expired token")
 
         user_id = payload.get("sub")
         if not user_id:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid token: missing sub claim",
-            )
+            return _auth_deny(status.HTTP_401_UNAUTHORIZED, "Invalid token: missing sub claim")
 
         # Fetch user + tenant from DB
         # Uses AsyncSessionLocal (no RLS context) since this is a bootstrap lookup
@@ -163,17 +170,11 @@ class AuthMiddleware:
 
         if not row:
             logger.warning(f"Auth failed: no active user for user_id={user_id}")
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="User account not found or deactivated",
-            )
+            return _auth_deny(status.HTTP_401_UNAUTHORIZED, "User account not found or deactivated")
 
         if row["subscription_status"] == "SUSPENDED":
             logger.warning(f"Suspended account access attempt: tenant_id={row['tenant_id']}")
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Account suspended. Please contact support.",
-            )
+            return _auth_deny(status.HTTP_403_FORBIDDEN, "Account suspended. Please contact support.")
 
         # Attach user to request state for downstream access
         udict = dict(row)
