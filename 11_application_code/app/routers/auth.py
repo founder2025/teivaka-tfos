@@ -44,22 +44,52 @@ from app.utils.fraud_guard import (
 
 logger = logging.getLogger("teivaka.auth")
 
-# In-memory per-email rate limit for resend-verification.
-# Deliberately light: a short cooldown to stop accidental double-clicks, plus a
-# high hourly ceiling that only a genuine abuser would reach. A real user who
-# didn't get the email must never be wall-blocked. Process-local; resets on
-# restart — swap for Redis later.
+# Distributed rate limiting (Redis-backed) for unauthenticated, abuse-prone
+# endpoints: resend-verification, forgot-password, phone-OTP. Previously in-memory
+# dicts — process-local across the 4 uvicorn workers (≈4x looser than intended)
+# and wiped on every restart. Redis makes the limits global + durable. Every
+# check fails OPEN on a Redis error: a real user must never be wall-blocked by an
+# infra blip (transient abuse during a Redis outage is the lesser risk).
 _RESEND_LIMIT_PER_HOUR = 20
 _RESEND_MIN_INTERVAL_SECONDS = 15
-_resend_history: dict[str, list[datetime]] = {}
-
-# Same pattern for forgot-password — 3 reset requests per email per hour.
 _RESET_LIMIT_PER_HOUR = 3
-_reset_history: dict[str, list[datetime]] = {}
-
-# Phone OTP send rate limit — 1 send per 60 seconds per phone.
 _OTP_MIN_INTERVAL_SECONDS = 60
-_otp_last_sent: dict[str, datetime] = {}
+
+
+async def _rl_cooldown(key: str, interval_seconds: int) -> int:
+    """Min-interval cooldown. Returns 0 if allowed (and arms the cooldown), else
+    the seconds remaining. Fail-open (returns 0) on any Redis error."""
+    try:
+        import redis.asyncio as aioredis
+        r = aioredis.from_url(settings.redis_url)
+        try:
+            armed = await r.set(key, "1", ex=interval_seconds, nx=True)
+            if armed:
+                return 0
+            ttl = await r.ttl(key)
+            return ttl if (ttl and ttl > 0) else 0
+        finally:
+            await r.aclose()
+    except Exception as e:  # noqa: BLE001
+        logger.warning("rate-limit cooldown check failed (allowing): %s", e)
+        return 0
+
+
+async def _rl_hourly(key: str, limit: int) -> bool:
+    """Sliding 1-hour INCR counter. Returns True if within limit. Fail-open (True)."""
+    try:
+        import redis.asyncio as aioredis
+        r = aioredis.from_url(settings.redis_url)
+        try:
+            n = await r.incr(key)
+            if n == 1:
+                await r.expire(key, 3600)
+            return n <= limit
+        finally:
+            await r.aclose()
+    except Exception as e:  # noqa: BLE001
+        logger.warning("rate-limit hourly check failed (allowing): %s", e)
+        return True
 
 router = APIRouter()
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -846,28 +876,20 @@ async def resend_verification(
     """
     email = req.email.lower().strip()
     now = datetime.now(timezone.utc)
-    cutoff = now - timedelta(hours=1)
-    history = [t for t in _resend_history.get(email, []) if t > cutoff]
-    # Short cooldown between sends (anti-double-click / anti-spam).
-    if history:
-        elapsed = (now - max(history)).total_seconds()
-        if elapsed < _RESEND_MIN_INTERVAL_SECONDS:
-            wait = int(_RESEND_MIN_INTERVAL_SECONDS - elapsed) + 1
-            raise HTTPException(
-                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail=f"Please wait {wait}s before requesting another email.",
-                headers={"Retry-After": str(wait)},
-            )
-    # Generous hourly cap.
-    if len(history) >= _RESEND_LIMIT_PER_HOUR:
-        wait = int((min(history) + timedelta(hours=1) - now).total_seconds()) + 1
+    # Distributed cooldown + generous hourly cap (Redis, fail-open).
+    wait = await _rl_cooldown(f"rl:resend:cd:{email}", _RESEND_MIN_INTERVAL_SECONDS)
+    if wait:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"Please wait {wait}s before requesting another email.",
+            headers={"Retry-After": str(wait)},
+        )
+    if not await _rl_hourly(f"rl:resend:hr:{email}", _RESEND_LIMIT_PER_HOUR):
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail="You've requested several emails recently. Please wait a little while and try again.",
-            headers={"Retry-After": str(max(wait, 1))},
+            headers={"Retry-After": "300"},
         )
-    history.append(now)
-    _resend_history[email] = history
 
     result = await db.execute(
         text("""
@@ -1037,13 +1059,10 @@ async def forgot_password(
         "message": "If that email is registered, a password reset link has been sent.",
     }
 
-    # Rate limit per email (silently — don't leak limit hits to attackers)
-    cutoff = now - timedelta(hours=1)
-    history = [t for t in _reset_history.get(email, []) if t > cutoff]
-    if len(history) >= _RESET_LIMIT_PER_HOUR:
+    # Rate limit per email (silently — don't leak limit hits to attackers).
+    # Redis-backed, fail-open.
+    if not await _rl_hourly(f"rl:reset:hr:{email}", _RESET_LIMIT_PER_HOUR):
         return generic_response
-    history.append(now)
-    _reset_history[email] = history
 
     result = await db.execute(
         text("""
@@ -1177,9 +1196,9 @@ async def send_phone_otp(
     if not phone or len(phone) < 8:
         return generic
 
-    # 60s rate limit per phone
-    last = _otp_last_sent.get(phone)
-    if last and (now - last).total_seconds() < _OTP_MIN_INTERVAL_SECONDS:
+    # 60s rate limit per phone (Redis, fail-open). Arms on attempt — also blunts
+    # using this endpoint to enumerate which numbers are registered.
+    if await _rl_cooldown(f"rl:otp:cd:{phone}", _OTP_MIN_INTERVAL_SECONDS):
         return generic
 
     result = await db.execute(
@@ -1215,7 +1234,6 @@ async def send_phone_otp(
     )
     await db.commit()
 
-    _otp_last_sent[phone] = now
     send_otp_sms(phone, otp_code)
     logger.info("Phone OTP issued for user %s", row["user_id"])
     return generic
