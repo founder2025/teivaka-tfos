@@ -32,6 +32,7 @@ import "../../styles/feed.css";
 
 // Shared wrapper: token auto-refresh on 401 + truthful errors.
 import { getJSON } from "../../utils/api";
+import { formatMoney } from "../../utils/money";
 function timeAgo(iso) {
   if (!iso) return "";
   const s = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);
@@ -39,7 +40,7 @@ function timeAgo(iso) {
   if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
   return `${Math.floor(s / 86400)}d ago`;
 }
-function fjd(v) { const n = Number(v); return isNaN(n) ? null : `FJD ${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`; }
+function fjd(v) { return formatMoney(v); }
 
 const PILLARS = [
   { id: "home", label: "Home", Icon: Home, to: "/home" },

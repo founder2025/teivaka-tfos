@@ -21,8 +21,9 @@ function authHeaders() {
   return t ? { "Content-Type": "application/json", Authorization: `Bearer ${t}` } : { "Content-Type": "application/json" };
 }
 import { getJSON, send } from "../../utils/api";
+import { formatMoney } from "../../utils/money";
 const postJSON = (u, body) => send("POST", u, body);
-const fjd = (v) => (v == null || isNaN(Number(v)) ? "—" : `FJD ${Number(v).toFixed(2)}`);
+const fjd = (v) => formatMoney(v, { fallback: "—" });
 const confClass = (c) => ({ VERY_HIGH: "high", HIGH: "high", MEDIUM: "medium", LOW: "low" }[c] || "low");
 
 function TrendIcon({ t }) {

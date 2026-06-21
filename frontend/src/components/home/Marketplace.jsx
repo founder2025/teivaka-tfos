@@ -14,6 +14,7 @@ import { getJSON, send } from "../../utils/api";
 import { uploadMedia } from "../../utils/imageCompress";
 import { useChat } from "../../context/ChatContext";
 import Avatar from "../ui/Avatar";
+import { formatMoney } from "../../utils/money";
 
 const API = "/api/v1/community";
 const toast = (m, t) => { try { window.dispatchEvent(new CustomEvent("tfos:toast", { detail: { message: m, type: t } })); } catch { /* noop */ } };
@@ -44,7 +45,7 @@ const priceLine = (l) => {
 };
 // Profession-aware default category (just a default — freely changeable).
 const PROF_DEFAULT_CAT = { commercial_buyer: "WANTED", agri_input_supplier: "INPUTS", logistics_operator: "SERVICES", trade_importer: "WANTED", commodity_exporter: "WANTED" };
-const fjd = (v) => { const n = Number(v); return isNaN(n) || v == null ? null : `FJD ${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`; };
+const fjd = (v) => formatMoney(v);
 const inp = { width: "100%", padding: "9px 11px", border: "1px solid var(--line)", borderRadius: 8, fontSize: 14, background: "var(--paper)", boxSizing: "border-box" };
 
 /* ---------------- new listing ---------------- */
