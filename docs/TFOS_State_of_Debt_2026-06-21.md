@@ -175,6 +175,29 @@ docker ps --format 'table {{.Names}}\t{{.Status}}'
 
 ---
 
+## 5b. LIVE VERIFICATION ADDENDUM (2026-06-21, run on prod droplet as `teivaka` owner)
+
+| Q | Result | Effect on report |
+|---|---|---|
+| Migration stamp | `151_user_sessions_valid_after` | matches disk head |
+| **`alembic heads`** | **TWO heads: `105_fix_feed_audience_check` + `151...`** | **C2 CONFIRMED LIVE** — `105_fix_feed_audience_check` never applied; next `upgrade head` errors |
+| `tenant.users` policy | **permissive-on-NULL** (`current_setting IS NULL OR '' OR match`) | C3 sub-finding resolved: live policy is permissive (auth works), but **source/migrations would deploy STRICT** → fresh-deploy/DR breaks login (untracked drift). Permissive policy = GUC-leak is a real cross-tenant exposure. |
+| **audit.events grants → teivaka_app** | **INSERT, SELECT, UPDATE, DELETE** | **NEW 🔴 — UPDATE/DELETE must not be granted.** Immutability triggers (`023:169-192`) currently hold the line; defense-in-depth broken. Fix: `REVOKE UPDATE, DELETE ON audit.events FROM teivaka_app` (Cluster 3). |
+| `tenant.inputs` rows | **1** | H1 refined: seed never ran on prod → prod fine; 074 break is greenfield/DR-rebuild-only. pg_restore DR unaffected. |
+| `production_cycles.layer` NULL | **1 of 3** | H5 confirmed, small (only 3 cycles platform-wide) |
+| tenants | **22** | "3 real / 67 phantom" memory is STALE — needs real-vs-test triage |
+| multi-genesis chains | **0 rows** | B69 resolved: chain is per-tenant, one genesis each, clean |
+| tenant tables w/o tenant_id index | **23** (alerts, income_log, labor_attendance, orders, decision_signal_snapshots, …) | NEW 🟡 scale finding — seq-scans under RLS at 10x-100x farms |
+| infra | RAM 3.8Gi (1.5 avail), **swap 100% full (272 KiB free)**, disk **80%**, 8/8 containers healthy | NEW 🟡 — memory pressure at pilot size; disk climbing |
+
+**Net changes to the ranked list:**
+- **+ NEW 🔴 C5 — `audit.events` grants UPDATE/DELETE to runtime role** (triggers currently protect; REVOKE in Cluster 3).
+- **C2 upgraded theoretical→CONFIRMED-LIVE** (2 heads on prod).
+- **C3** policy half resolved (live=permissive); GUC-leak exposure confirmed real; + source-drift sub-finding (DR would deploy strict policy).
+- **H1** downgraded for prod (1 input row; greenfield-only break); pg_restore DR safe.
+- **B69** resolved clean.
+- **+ NEW 🟡 — 23 tenant tables missing tenant_id index** (scale); **NEW 🟡 — swap exhausted / disk 80%** (infra).
+
 ## 6. STOP
 
 Phase A complete. Nothing changed. Awaiting Boss: **which cluster, and "go."** Recommended first move:
