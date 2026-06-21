@@ -182,10 +182,12 @@ async def create_listing(body: ListingCreate, user: dict = Depends(community_wri
 @router.patch("/listings/{listing_id}/close")
 async def close_listing(listing_id: str, user: dict = Depends(get_current_user)):
     async with get_rls_db(str(user["tenant_id"])) as db:
-        await db.execute(
-            text("UPDATE community.listings SET listing_status = 'CLOSED', updated_at = now() WHERE listing_id = :listing_id AND tenant_id = :tid"),
-            {"listing_id": listing_id, "tid": str(user["tenant_id"])}
+        res = await db.execute(
+            text("UPDATE community.listings SET listing_status = 'CLOSED', updated_at = now() WHERE listing_id = :lid AND created_by = cast(:uid AS uuid)"),
+            {"lid": listing_id, "uid": str(user["user_id"])}
         )
+        if res.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Listing not found or not yours")
     return {"data": {"listing_id": listing_id, "listing_status": "CLOSED"}}
 
 @router.patch("/listings/{listing_id}/sold")

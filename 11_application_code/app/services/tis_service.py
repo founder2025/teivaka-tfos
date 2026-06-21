@@ -15,7 +15,7 @@ from app.config import settings
 logger = logging.getLogger(__name__)
 
 # Anthropic async client
-anthropic_client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
+anthropic_client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key, timeout=30.0)
 
 # TIS Module constants
 MODULE_KNOWLEDGE_BROKER = "KNOWLEDGE_BROKER"

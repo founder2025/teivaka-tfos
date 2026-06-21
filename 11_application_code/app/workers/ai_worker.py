@@ -122,7 +122,7 @@ def generate_weekly_insights(self):
     """
     import anthropic
     conn = get_sync_db()
-    client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+    client = anthropic.Anthropic(api_key=settings.anthropic_api_key, timeout=30.0)
 
     try:
         cur = conn.cursor()
