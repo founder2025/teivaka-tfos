@@ -180,7 +180,7 @@ docker ps --format 'table {{.Names}}\t{{.Status}}'
 | Q | Result | Effect on report |
 |---|---|---|
 | Migration stamp | `151_user_sessions_valid_after` | matches disk head |
-| **`alembic heads`** | **TWO heads: `105_fix_feed_audience_check` + `151...`** | **C2 CONFIRMED LIVE** — `105_fix_feed_audience_check` never applied; next `upgrade head` errors |
+| **`alembic heads`** | **TWO heads: `105_fix_feed_audience_check` + `151...`** | **C2 CONFIRMED LIVE** — `105_fix_feed_audience_check` never applied; next `upgrade head` errors → ✅ **RESOLVED 2026-06-21 (Cluster 2a):** merge rev `152_merge_feed_audience` stamped on prod (151→152); `alembic heads`=1, `alembic upgrade head` clean no-op; feed_posts constraint intact. |
 | `tenant.users` policy | **permissive-on-NULL** (`current_setting IS NULL OR '' OR match`) | C3 sub-finding resolved: live policy is permissive (auth works), but **source/migrations would deploy STRICT** → fresh-deploy/DR breaks login (untracked drift). Permissive policy = GUC-leak is a real cross-tenant exposure. |
 | **audit.events grants → teivaka_app** | **INSERT, SELECT, UPDATE, DELETE** | **NEW 🔴 — UPDATE/DELETE must not be granted.** Immutability triggers (`023:169-192`) currently hold the line; defense-in-depth broken. Fix: `REVOKE UPDATE, DELETE ON audit.events FROM teivaka_app` (Cluster 3). |
 | `tenant.inputs` rows | **1** | H1 refined: seed never ran on prod → prod fine; 074 break is greenfield/DR-rebuild-only. pg_restore DR unaffected. |
