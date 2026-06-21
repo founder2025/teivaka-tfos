@@ -7,6 +7,7 @@
 import { useEffect, useState } from "react";
 import { CloudOff, RefreshCw } from "lucide-react";
 import { initOutbox, pendingCount, flushOutbox } from "../utils/outbox";
+import { t, plural } from "../utils/i18n";
 
 export default function OfflineBanner() {
   const [online, setOnline] = useState(typeof navigator === "undefined" ? true : navigator.onLine);
@@ -32,9 +33,12 @@ export default function OfflineBanner() {
 
   const offline = !online;
   const bg = offline ? "var(--soil)" : "var(--green-dk)";
+  const entries = plural(pending, "entry", "entries");
   const text = offline
-    ? (pending > 0 ? `You're offline — ${pending} entr${pending === 1 ? "y" : "ies"} saved, will sync` : "You're offline — your entries are saved and will sync")
-    : `Syncing ${pending} saved entr${pending === 1 ? "y" : "ies"}…`;
+    ? (pending > 0
+        ? t("offline.savedCount", "You're offline — {count} {entries} saved, will sync", { count: pending, entries })
+        : t("offline.saved", "You're offline — your entries are saved and will sync"))
+    : t("offline.syncing", "Syncing {count} saved {entries}…", { count: pending, entries });
 
   return (
     <div style={{
