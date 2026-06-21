@@ -6,9 +6,11 @@
   "type": "module",
   "scripts": {
     "dev": "vite --port 3000",
+    "prebuild": "npm run check:i18n",
     "build": "vite build",
     "preview": "vite preview",
-    "lint": "eslint src --ext .js,.jsx"
+    "lint": "eslint src --ext .js,.jsx",
+    "check:i18n": "bash ../scripts/check_i18n_debt.sh"
   },
   "dependencies": {
     "@geoman-io/leaflet-geoman-free": "^2.19.3",
