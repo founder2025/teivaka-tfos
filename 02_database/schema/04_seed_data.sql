@@ -266,43 +266,17 @@ INSERT INTO tenant.equipment (
 ON CONFLICT (equipment_id) DO NOTHING;
 
 -- =============================================================================
--- 10. INPUTS (26 items)
--- input_category: FERTILIZER, PESTICIDE, HERBICIDE, FUNGICIDE, SEED, SEEDLING, TOOL, PACKAGING, FUEL, OTHER
+-- 10. INPUTS — intentionally NOT seeded (Cluster 2b, 2026-06-21).
+-- The 26 demo INP-* rows (F001/F002 input catalog) were removed: this seed runs
+-- at migration 006, BEFORE migration 074 adds tenant.inputs.farm_id as NOT NULL
+-- with no backfill. Seeding inputs here made a fresh `alembic upgrade head` fail
+-- at 074 (column contains nulls) — i.e. greenfield/DR-rebuild-from-migrations was
+-- broken. Prod was unaffected (it reached 074 with inputs empty). No migration or
+-- app code referenced these ids (verified). Real operators add inputs via the app;
+-- pre-loading one farm's inventory into the base seed was neither needed nor correct.
+-- If a demo input catalog is ever wanted on greenfield, add it in a migration that
+-- runs AFTER 074 (so it can set farm_id) and is guarded against populated prod.
 -- =============================================================================
-INSERT INTO tenant.inputs (
-    input_id, tenant_id, input_name, input_category, unit_of_measure,
-    current_stock_qty, reorder_point_qty, reorder_qty,
-    unit_cost_fjd, preferred_supplier_id,
-    is_chemical, chemical_id,
-    is_active, created_at, updated_at
-) VALUES
-('INP-SEED-EGG', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11','Eggplant Seed (Long Purple)',  'SEED',      'kg',    0.5, 0.2, 0.5, 350.00,'SUP-001',false,NULL,      true,NOW(),NOW()),
-('INP-SEED-TOM', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11','Tomato Seed (Mongal F1)',       'SEED',      'kg',    0.3, 0.1, 0.3, 420.00,'SUP-001',false,NULL,      true,NOW(),NOW()),
-('INP-SEED-CAS', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11','Cassava Cuttings',              'SEED',      'bundle',50,  20,  30,  2.50,  'SUP-001',false,NULL,      true,NOW(),NOW()),
-('INP-SEED-SPT', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11','Sweet Potato Vine Cuttings',    'SEED',      'bundle',30,  15,  20,  1.80,  'SUP-001',false,NULL,      true,NOW(),NOW()),
-('INP-SEED-KAV', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11','Kava Planting Material (Waka)', 'SEED',      'kg',    5,   2,   5,   45.00, 'SUP-010',false,NULL,      true,NOW(),NOW()),
-('INP-FERT-NPK', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11','NPK Fertilizer 12-12-17',       'FERTILIZER','kg',    80,  30,  50,  3.20,  'SUP-001',false,NULL,      true,NOW(),NOW()),
-('INP-FERT-URE', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11','Urea 46%',                      'FERTILIZER','kg',    60,  25,  50,  2.80,  'SUP-001',false,NULL,      true,NOW(),NOW()),
-('INP-FERT-DAP', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11','DAP 18-46-0',                   'FERTILIZER','kg',    40,  20,  30,  4.50,  'SUP-001',false,NULL,      true,NOW(),NOW()),
-('INP-FERT-ORG', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11','Organic Compost',               'FERTILIZER','kg',    200, 50,  100, 0.80,  'SUP-003',false,NULL,      true,NOW(),NOW()),
-('INP-FERT-ORG2','a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11','Organic Compost (Kava)',        'FERTILIZER','kg',    150, 50,  100, 0.80,  'SUP-003',false,NULL,      true,NOW(),NOW()),
-('INP-CHEM-DIM', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11','Dimethoate 40% EC',             'PESTICIDE', 'L',     2,   0.5, 2,   85.00, 'SUP-002',true, 'CHEM-001',true,NOW(),NOW()),
-('INP-CHEM-MAN', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11','Mancozeb 80% WP',               'FUNGICIDE', 'kg',    3,   1,   3,   42.00, 'SUP-002',true, 'CHEM-002',true,NOW(),NOW()),
-('INP-CHEM-CYP', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11','Cypermethrin 10% EC',           'PESTICIDE', 'L',     2,   0.5, 2,   65.00, 'SUP-002',true, 'CHEM-003',true,NOW(),NOW()),
-('INP-CHEM-COP', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11','Copper Oxychloride 85% WP',     'FUNGICIDE', 'kg',    2,   0.5, 2,   38.00, 'SUP-002',true, 'CHEM-004',true,NOW(),NOW()),
-('INP-CHEM-GLY', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11','Glyphosate 480 SL',             'HERBICIDE', 'L',     5,   1,   5,   22.00, 'SUP-002',true, 'CHEM-005',true,NOW(),NOW()),
-('INP-CHEM-IMI', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11','Imidacloprid 70% WG',           'PESTICIDE', 'kg',    0.5, 0.1, 0.5, 180.00,'SUP-002',true, 'CHEM-006',true,NOW(),NOW()),
-('INP-TOOL-GLV', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11','Garden Gloves (pairs)',          'TOOL',      'pairs', 20,  5,   10,  8.50,  'SUP-011',false,NULL,      true,NOW(),NOW()),
-('INP-TOOL-TWN', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11','Tomato Twine (rolls)',           'TOOL',      'rolls', 10,  2,   5,   12.00, 'SUP-011',false,NULL,      true,NOW(),NOW()),
-('INP-PACK-BAG', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11','Harvest Bags 25kg (bales)',      'PACKAGING', 'bale',  5,   2,   5,   45.00, 'SUP-001',false,NULL,      true,NOW(),NOW()),
-('INP-PACK-BOX', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11','Cardboard Boxes (bales)',        'PACKAGING', 'bale',  8,   3,   5,   38.00, 'SUP-001',false,NULL,      true,NOW(),NOW()),
-('INP-FUEL-DSL', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11','Diesel Fuel',                   'FUEL',      'L',     80,  20,  60,  2.95,  'SUP-013',false,NULL,      true,NOW(),NOW()),
-('INP-F2-FERT',  'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11','NPK Fertilizer F002',           'FERTILIZER','kg',    40,  20,  50,  3.20,  'SUP-001',false,NULL,      true,NOW(),NOW()),
-('INP-F2-GLYPH', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11','Glyphosate F002',               'HERBICIDE', 'L',     3,   1,   5,   22.00, 'SUP-002',true, 'CHEM-005',true,NOW(),NOW()),
-('INP-F2-KBAG',  'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11','Kava Export Bags',              'PACKAGING', 'bale',  10,  3,   10,  55.00, 'SUP-011',false,NULL,      true,NOW(),NOW()),
-('INP-F2-ROPE',  'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11','Rope/Ties (rolls)',             'TOOL',      'rolls', 8,   2,   5,   6.50,  'SUP-011',false,NULL,      true,NOW(),NOW()),
-('INP-F2-GFEED', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11','Goat Feed Mix',                 'OTHER',     'kg',    50,  15,  50,  1.80,  'SUP-001',false,NULL,      true,NOW(),NOW())
-ON CONFLICT (input_id) DO NOTHING;
 
 COMMIT;
 
