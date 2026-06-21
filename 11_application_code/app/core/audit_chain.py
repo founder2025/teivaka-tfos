@@ -227,38 +227,7 @@ async def emit_audit_event(
 
 
 # -- 4. Chain verification -------------------------------------------------
-
-async def verify_chain(db: AsyncSession, tenant_id: UUID) -> tuple[bool, int, str | None]:
-    """Walk the chain for a tenant and verify every link.
-
-    Returns: (is_valid, events_checked, first_broken_event_id_or_None)
-
-    Use for:
-      - Monthly Bank PDF generation (must verify chain intact before signing)
-      - Ad-hoc integrity audits
-      - Pre-lender export
-    """
-    rows = (
-        await db.execute(
-            text(
-                """
-                SELECT event_id, occurred_at, payload_sha256, previous_hash, this_hash
-                FROM audit.events
-                WHERE tenant_id = :tid
-                ORDER BY occurred_at ASC, event_id ASC
-                """
-            ),
-            {"tid": str(tenant_id)},
-        )
-    ).fetchall()
-
-    expected_previous: str | None = None
-    for i, (event_id, occurred_at, payload_sha, previous_hash, this_hash) in enumerate(rows):
-        if previous_hash != expected_previous:
-            return (False, i, str(event_id))
-        recomputed = compute_hash(tenant_id, previous_hash, payload_sha, occurred_at)
-        if recomputed != this_hash:
-            return (False, i, str(event_id))
-        expected_previous = this_hash
-
-    return (True, len(rows), None)
+# The canonical chain verifier is the SQL function audit.verify_chain_for_tenant
+# (migration 132), which walks by chain_seq. A former Python verify_chain() here
+# walked by occurred_at ASC — the exact pre-132 ordering bug — and had zero callers;
+# removed 2026-06-21 (Cluster 5) to prevent it ever being wired to Bank Evidence.
