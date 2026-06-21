@@ -38,9 +38,17 @@ TABLES_LIVE_TOLERANCE=(
   "tenant.harvest_log"
   "tenant.production_cycles"
   "tenant.users"
-  "tenant.decision_signal_snapshots"
 )
 LIVE_TOLERANCE=5
+# High-churn append-only tables (telemetry / TimescaleDB hypertables): their
+# absolute counts grow continuously, so a stale-but-valid backup drifts vs live
+# and false-fails the ±5 check (e.g. the decision engine appends snapshots all
+# day). Use a PERCENTAGE tolerance — absorbs time-drift, still catches a real
+# loss (e.g. a half-empty restore). audit.events stays zero-tolerance.
+TABLES_PCT_TOLERANCE=(
+  "tenant.decision_signal_snapshots"
+)
+PCT_TOLERANCE=15
 
 mkdir -p "$(dirname "$LOG_FILE")"
 
@@ -187,7 +195,7 @@ count_table() {
 }
 
 declare -A PROD_COUNT TEST_COUNT
-ALL_TABLES=("${TABLES_ZERO_TOLERANCE[@]}" "${TABLES_LIVE_TOLERANCE[@]}")
+ALL_TABLES=("${TABLES_ZERO_TOLERANCE[@]}" "${TABLES_LIVE_TOLERANCE[@]}" "${TABLES_PCT_TOLERANCE[@]}")
 
 log "Capturing row counts on production + test..."
 for t in "${ALL_TABLES[@]}"; do
@@ -229,8 +237,31 @@ verify_table() {
     | tee -a "$LOG_FILE"
 }
 
+verify_table_pct() {
+  local table="$1" pct="$2"
+  local prod="${PROD_COUNT[$table]}" test="${TEST_COUNT[$table]}"
+  if [ "$prod" = "ERR" ] || [ "$test" = "ERR" ]; then
+    printf '  %-40s %10s %10s %10s %s\n' "$table" "$prod" "$test" "?" "FAIL (query error)" | tee -a "$LOG_FILE"
+    PASS=false
+    return
+  fi
+  local delta=$((prod - test))
+  local abs_delta=${delta#-}
+  local result
+  if [ "$prod" -eq 0 ] && [ "$test" -eq 0 ]; then
+    result="OK (both empty)"
+  elif [ "$prod" -gt 0 ] && [ "$test" -gt 0 ] && [ $(( abs_delta * 100 / prod )) -le "$pct" ]; then
+    result="OK (≤${pct}% drift)"
+  else
+    result="FAIL (>${pct}% drift)"
+    PASS=false
+  fi
+  printf '  %-40s %10d %10d %10d %s\n' "$table" "$prod" "$test" "$delta" "$result" | tee -a "$LOG_FILE"
+}
+
 for t in "${TABLES_ZERO_TOLERANCE[@]}"; do verify_table "$t" 0; done
 for t in "${TABLES_LIVE_TOLERANCE[@]}"; do verify_table "$t" "$LIVE_TOLERANCE"; done
+for t in "${TABLES_PCT_TOLERANCE[@]}"; do verify_table_pct "$t" "$PCT_TOLERANCE"; done
 
 log "─────────────────────────────────────────────────"
 if [ "$PASS" = "true" ]; then
