@@ -112,11 +112,12 @@ def _make_access_token(user_id: str, tenant_id: str, role: str, tier: str) -> st
 
 
 def _make_refresh_token(user_id: str, tenant_id: str) -> str:
-    exp = datetime.now(timezone.utc) + timedelta(
+    now = datetime.now(timezone.utc)
+    exp = now + timedelta(
         days=settings.jwt_refresh_token_expire_days
     )
     return jwt.encode(
-        {"sub": user_id, "tenant_id": tenant_id, "exp": exp, "type": "refresh"},
+        {"sub": user_id, "tenant_id": tenant_id, "iat": now, "exp": exp, "type": "refresh"},
         settings.secret_key,
         algorithm=settings.jwt_algorithm,
     )
@@ -1154,6 +1155,7 @@ async def reset_password(
                    password_reset_token_hash = NULL,
                    password_reset_expires = NULL,
                    password_reset_requested_at = NULL,
+                   sessions_valid_after = NOW(),
                    updated_at = NOW()
              WHERE user_id = :uid
         """),
@@ -1389,7 +1391,7 @@ async def refresh_token(
 
     result = await db.execute(
         text("""
-            SELECT u.role, t.subscription_tier, t.tis_daily_limit
+            SELECT u.role, u.sessions_valid_after, t.subscription_tier, t.tis_daily_limit
             FROM tenant.users u
             JOIN tenant.tenants t ON t.tenant_id = u.tenant_id
             WHERE u.user_id = :uid AND u.is_active = true
@@ -1401,6 +1403,18 @@ async def refresh_token(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="User not found or deactivated",
+        )
+
+    # Refresh-token revocation: reject tokens issued before the user's cutoff
+    # (set on password reset). Legacy tokens without `iat` are grandfathered in
+    # until they expire (backward-compatible — no forced logout on deploy).
+    svc_after = user["sessions_valid_after"]
+    iat = payload.get("iat")
+    if svc_after is not None and iat is not None and \
+            datetime.fromtimestamp(int(iat), tz=timezone.utc) < svc_after:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Session expired — please log in again.",
         )
 
     return {
