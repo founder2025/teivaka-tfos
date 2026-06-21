@@ -18,14 +18,15 @@ import { Plus, Search, X, Pencil, Tractor, Droplets, Wrench, Truck, Factory, War
 import TfpShell from "../../components/farm/TfpShell";
 import { CurrentFarmProvider, useCurrentFarm } from "../../context/CurrentFarmContext";
 import FarmSelector from "../../components/farm/FarmSelector";
+import { formatMoney } from "../../utils/money";
 
 function authHeaders() { const t = localStorage.getItem("tfos_access_token"); return t ? { "Content-Type": "application/json", Authorization: `Bearer ${t}` } : { "Content-Type": "application/json" }; }
 function emitToast(m) { window.dispatchEvent(new CustomEvent("tfos:toast", { detail: { message: m } })); }
 function todayISO() { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; }
 function plusDaysISO(n) { const d = new Date(Date.now() + n * 864e5); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; }
 function num(v) { return Number(v ?? 0); }
-function fjd0(v) { const n = Number(v ?? 0); return `FJD ${Math.round(n).toLocaleString("en-FJ")}`; }
-function fjd2(v) { const n = Number(v ?? 0); return `FJD ${n.toLocaleString("en-FJ", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`; }
+function fjd0(v) { return formatMoney(v ?? 0, { decimals: 0 }); }
+function fjd2(v) { return formatMoney(v ?? 0, { decimals: 2 }); }
 
 const TYPE_LABEL = { TRACTOR: "Tractor", IRRIGATION: "Irrigation", VEHICLE: "Vehicle", PROCESSING: "Processing", STORAGE: "Storage", TOOL: "Tool", OTHER: "Other" };
 const TYPE_OPTIONS = Object.entries(TYPE_LABEL).map(([value, label]) => ({ value, label }));

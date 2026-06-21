@@ -17,6 +17,7 @@ import TfpShell from "../../components/farm/TfpShell";
 import { CurrentFarmProvider, useCurrentFarm } from "../../context/CurrentFarmContext";
 import FarmSelector from "../../components/farm/FarmSelector";
 import NurseryRegister from "../../components/farm/NurseryRegister";
+import { formatMoney } from "../../utils/money";
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 0, refetchOnWindowFocus: false, staleTime: 60_000 } } });
 
@@ -26,7 +27,7 @@ function emitToast(m) { window.dispatchEvent(new CustomEvent("tfos:toast", { det
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 function fdate(iso) { if (!iso) return ""; const d = new Date(iso); return isNaN(d) ? String(iso) : `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]}`; }
 function kg(n) { return Math.round(Number(n) || 0).toLocaleString("en-US"); }
-function fjd(n) { return `FJD ${Math.round(Number(n) || 0).toLocaleString("en-FJ")}`; }
+function fjd(n) { return formatMoney(Number(n) || 0, { decimals: 0 }); }
 const ACTIVE_SET = new Set(["PLANNED", "ACTIVE", "HARVESTING", "CLOSING"]);
 
 function progress(planted, expHarvest, status) {

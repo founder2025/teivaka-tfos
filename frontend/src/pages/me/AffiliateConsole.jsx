@@ -5,6 +5,7 @@
 import { useEffect, useState } from "react";
 import { Shield, Search } from "lucide-react";
 import { C, getJSON, card, MeShell } from "./_meCommon";
+import { formatMoney } from "../../utils/money";
 
 const API = "/api/v1/affiliate";
 const toast = (m, t) => { try { window.dispatchEvent(new CustomEvent("tfos:toast", { detail: { message: m, type: t } })); } catch { /* noop */ } };
@@ -59,7 +60,7 @@ export default function AffiliateConsole() {
   const t = data.totals || {};
   const roster = (data.roster || []).filter((a) => !q.trim() || `${a.full_name} ${a.code}`.toLowerCase().includes(q.trim().toLowerCase()));
   const s = data.settings || {};
-  const fjd = (n) => `FJD ${Number(n || 0).toFixed(2)}`;
+  const fjd = (n) => formatMoney(n ?? 0, { decimals: 2 });
 
   return (
     <MeShell title="Affiliate console" subtitle="Founder only — the whole program at a glance.">
