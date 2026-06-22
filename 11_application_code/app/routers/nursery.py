@@ -3,6 +3,7 @@ from sqlalchemy import text
 from app.db.session import get_rls_db
 from app.middleware.rls import get_current_user
 from app.core.task_engine import emit_task
+from app.core.audit_chain import emit_audit_event
 from app.utils.schema_probe import productions_category
 from pydantic import BaseModel
 from decimal import Decimal
@@ -106,6 +107,32 @@ async def log_nursery_batch(body: NurseryBatchCreate, user: dict = Depends(get_c
             "notes": body.notes,
             "created_by": str(user["user_id"]),
         })
+        # B91: audit-chain the (+) action — one (+) action -> one audit.events row
+        # (Universal Event Form Contract). Same txn as the register INSERT so the batch
+        # and its audit spine commit together. NURSERY_BATCH_CREATED is in
+        # shared.event_type_catalog, so it passes audit.events' catalog-derived CHECK (mig 129).
+        await emit_audit_event(
+            db=db,
+            tenant_id=uuid.UUID(str(user["tenant_id"])),
+            actor_user_id=uuid.UUID(str(user["user_id"])),
+            event_type="NURSERY_BATCH_CREATED",
+            entity_type="nursery_batch",
+            entity_id=batch_id,
+            occurred_at=body.sowing_date,
+            payload={
+                "batch_id": batch_id,
+                "batch_code": batch_code,
+                "farm_id": body.farm_id,
+                "production_id": body.production_id,
+                "variety": body.variety,
+                "seed_source": body.seed_source,
+                "total_seeds_sown": body.total_seeds_sown,
+                "tray_count": body.tray_count,
+                "germination_medium": body.germination_medium,
+                "sowing_date": body.sowing_date.isoformat() if body.sowing_date else None,
+                "seed_cost_fjd": float(body.seed_cost_fjd) if body.seed_cost_fjd is not None else None,
+            },
+        )
     return {"data": {"batch_id": batch_id, "batch_code": batch_code}}
 
 
