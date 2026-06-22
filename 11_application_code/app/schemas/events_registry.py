@@ -717,6 +717,11 @@ EVENT_TYPE_REGISTRY: dict = {
     # Post-harvest loss (code-only unlock — audit CHECK already lists POST_HARVEST_LOSS;
     # reuses the existing LOSS field verb, so no migration).
     "POST_HARVEST_LOSS":       (CropActivityPayload,  "tenant.field_events", 1),
+    # Post-harvest/sales pack (migration 158 adds the GRADE/DELIVERY_* field verbs;
+    # audit CHECK already lists these catalog names).
+    "GRADING":                 (CropActivityPayload,  "tenant.field_events", 1),
+    "DELIVERY_DISPATCHED":     (CropActivityPayload,  "tenant.field_events", 1),
+    "DELIVERY_CONFIRMED":      (CropActivityPayload,  "tenant.field_events", 1),
     "EGGS_COLLECTED":         (EggsCollectedPayload,         "tenant.poultry_event_log", 1),
     "MORTALITY_LOGGED":       (MortalityLoggedPayload,       "tenant.poultry_event_log", 1),
     "VACCINATION_GIVEN":      (VaccinationGivenPayload,      "tenant.poultry_event_log", 1),

@@ -134,6 +134,16 @@ export const cropsConfig = {
         { choiceLabel: "Some spoiled / lost", event_type: "POST_HARVEST_LOSS", capture: [
           { name: "qty_kg", ask: "How much lost (kg)", input: "number", tier: "quick" },
           { name: "reason", ask: "Why?", input: "choice", tier: "quick", options: opts({value:"SPOILAGE",label:"Spoiled"},{value:"PEST",label:"Pest/disease"},{value:"REJECTED",label:"Buyer rejected"},{value:"TRANSPORT",label:"Transport damage"},{value:"OTHER",label:"Other"}) } ] },
+        { choiceLabel: "Sorted by grade", event_type: "GRADING", capture: [
+          { name: "grade", ask: "Grade", input: "choice", tier: "quick", options: opts({value:"A",label:"A — Best"},{value:"B",label:"B — Good"},{value:"C",label:"C — Local"}) },
+          { name: "qty_kg", ask: "Quantity (kg)", input: "number", tier: "detail" } ] },
+        { choiceLabel: "Sent to buyer", event_type: "DELIVERY_DISPATCHED", capture: [
+          { name: "buyer", ask: "Buyer", input: "text", tier: "quick" },
+          { name: "qty_kg", ask: "Quantity (kg)", input: "number", tier: "quick" },
+          { name: "transport", ask: "How sent", input: "choice", tier: "detail", options: opts({value:"OWN",label:"Own vehicle"},{value:"CARRIER",label:"Carrier"},{value:"FERRY",label:"Ferry"}) } ] },
+        { choiceLabel: "Buyer received it", event_type: "DELIVERY_CONFIRMED", capture: [
+          { name: "qty_accepted", ask: "Accepted (kg)", input: "number", tier: "quick" },
+          { name: "qty_rejected", ask: "Rejected (kg)", input: "number", tier: "detail" } ] },
       ] } },
     },
   ],
