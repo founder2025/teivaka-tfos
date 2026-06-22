@@ -714,6 +714,9 @@ EVENT_TYPE_REGISTRY: dict = {
     "CYCLE_ABANDONED":         (CropActivityPayload,  "tenant.field_events", 1),
     "CROP_SOLD":               (CropSalePayload,      "tenant.field_events", 1),
     "CROP_GIVEN":              (CropGivenPayload,     "tenant.field_events", 1),
+    # Post-harvest loss (code-only unlock — audit CHECK already lists POST_HARVEST_LOSS;
+    # reuses the existing LOSS field verb, so no migration).
+    "POST_HARVEST_LOSS":       (CropActivityPayload,  "tenant.field_events", 1),
     "EGGS_COLLECTED":         (EggsCollectedPayload,         "tenant.poultry_event_log", 1),
     "MORTALITY_LOGGED":       (MortalityLoggedPayload,       "tenant.poultry_event_log", 1),
     "VACCINATION_GIVEN":      (VaccinationGivenPayload,      "tenant.poultry_event_log", 1),

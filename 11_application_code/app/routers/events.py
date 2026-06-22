@@ -1060,6 +1060,7 @@ async def submit_event(
             "CYCLE_ABANDONED":            "CYCLE_ABANDON",
             "CROP_SOLD":                  "CROP_SALE",
             "CROP_GIVEN":                 "CROP_GIVEN",
+            "POST_HARVEST_LOSS":          "LOSS",
         }
         field_event_type = CATALOG_TO_FIELD_VERB[submission.event_type]
         is_chemical = submission.event_type == "CHEMICAL_APPLIED"

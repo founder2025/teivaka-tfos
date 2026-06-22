@@ -122,7 +122,7 @@ export const cropsConfig = {
       ] } },
     },
     {
-      id: "sales", label: "Sales & Disposal", descriptor: "sold or gave away produce", icon: "Coins",
+      id: "sales", label: "Sales & Disposal", descriptor: "sold, gave away, or lost produce", icon: "Coins",
       resolve: { branch: { prompt: "What happened?", options: [
         { choiceLabel: "Sold for money", event_type: "CROP_SOLD", capture: [
           { name: "qty_kg", ask: "How much (kg)", input: "number", tier: "quick" },
@@ -131,6 +131,9 @@ export const cropsConfig = {
         { choiceLabel: "Gave away / home use", event_type: "CROP_GIVEN", capture: [
           { name: "qty_kg", ask: "How much (kg)", input: "number", tier: "quick" },
           { name: "recipient", ask: "Given to", input: "text", tier: "detail" } ] },
+        { choiceLabel: "Some spoiled / lost", event_type: "POST_HARVEST_LOSS", capture: [
+          { name: "qty_kg", ask: "How much lost (kg)", input: "number", tier: "quick" },
+          { name: "reason", ask: "Why?", input: "choice", tier: "quick", options: opts({value:"SPOILAGE",label:"Spoiled"},{value:"PEST",label:"Pest/disease"},{value:"REJECTED",label:"Buyer rejected"},{value:"TRANSPORT",label:"Transport damage"},{value:"OTHER",label:"Other"}) } ] },
       ] } },
     },
   ],
