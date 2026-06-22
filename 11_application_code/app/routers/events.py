@@ -94,12 +94,27 @@ class EventAnchors(BaseModel):
     )
 
 
+class EventEvidence(BaseModel):
+    """Cross-cutting evidence (Evidence Architecture v2) — applies to EVERY event type,
+    so it lives at the envelope level, NOT inside the per-event payload (strict payload
+    schemas would silently drop unknown keys on model_dump). Photo + voice are content-
+    fingerprinted (SHA-256) server-side; GPS + witness are stored. Each layer lifts the
+    record's verification level for banks/insurers."""
+    photo_url: Optional[str] = Field(default=None)
+    gps_lat: Optional[float] = Field(default=None)
+    gps_lng: Optional[float] = Field(default=None)
+    voice_url: Optional[str] = Field(default=None)
+    witness_name: Optional[str] = Field(default=None, max_length=120)
+    witness_contact: Optional[str] = Field(default=None, max_length=120)
+
+
 class EventSubmission(BaseModel):
     """Request envelope for POST /api/v1/events."""
     event_type: str = Field(..., description="Event type (must be registered in EVENT_TYPE_REGISTRY)")
     occurred_at: Optional[datetime] = Field(default=None, description="Event time. Defaults to now() if omitted.")
     anchors: EventAnchors
     payload: dict = Field(default_factory=dict, description="Event-type-specific payload.")
+    evidence: Optional[EventEvidence] = Field(default=None, description="Cross-cutting evidence (photo/gps/voice/witness).")
     idempotency_key: Optional[str] = Field(default=None, description="Client key; replays/double-taps return the original result instead of duplicating.")
 
 
@@ -969,9 +984,22 @@ async def submit_event(
     payload_dict = validated_payload.model_dump(exclude_none=True)
     payload_json = json.dumps(payload_dict, default=str)
 
-    # Content-bind any attached photo: hash the stored bytes and fold the digest into
-    # the audit payload so the hash chain covers the image itself (tamper-evident).
-    photo_sha256_val, photo_byte_size_val = _hash_local_photo(payload_dict.get("photo_url"))
+    # Resolve cross-cutting evidence (Evidence Architecture v2). Prefer the top-level
+    # `evidence` block; fall back to payload for photo/gps (back-compat with callers
+    # like FieldEventNew that still pass photo_url in payload — strict payload schemas
+    # drop these keys, so the envelope block is the canonical source going forward).
+    ev = submission.evidence or EventEvidence()
+    photo_url_val = ev.photo_url or payload_dict.get("photo_url")
+    gps_lat_val = ev.gps_lat if ev.gps_lat is not None else payload_dict.get("gps_lat")
+    gps_lng_val = ev.gps_lng if ev.gps_lng is not None else payload_dict.get("gps_lng")
+    voice_url_val = ev.voice_url
+    witness_name_val = ev.witness_name
+    witness_contact_val = ev.witness_contact
+
+    # Content-bind attached media: hash the stored bytes and fold the digests into the
+    # audit payload so the hash chain covers the image/audio itself (tamper-evident).
+    photo_sha256_val, photo_byte_size_val = _hash_local_photo(photo_url_val)
+    voice_sha256_val, voice_byte_size_val = _hash_local_photo(voice_url_val)
 
     # 4. Emit audit event FIRST (gets audit_event_id back for FK linkage)
     audit_payload = {
@@ -987,6 +1015,10 @@ async def submit_event(
     }
     if photo_sha256_val:
         audit_payload["photo_sha256"] = photo_sha256_val
+    if voice_sha256_val:
+        audit_payload["voice_sha256"] = voice_sha256_val
+    if witness_name_val:
+        audit_payload["witness_name"] = witness_name_val
 
     # 4b. Pre-generate field_event_id for CROPS branch (Strike #96 Path A — D1: FE-{12-hex})
     field_event_id_text: Optional[str] = None
@@ -1076,6 +1108,7 @@ async def submit_event(
                     input_id, input_qty_used, input_cost_fjd,
                     labor_hours, labor_cost_fjd,
                     observation_text, photo_url, photo_sha256, photo_byte_size, gps_lat, gps_lng,
+                    voice_url, voice_sha256, voice_byte_size, witness_name, witness_contact,
                     chemical_application, chemical_id,
                     chemical_dose_per_liter, tank_volume_liters,
                     created_by, audit_hash, payload_jsonb
@@ -1086,6 +1119,7 @@ async def submit_event(
                     :input_id, :input_qty_used, :input_cost_fjd,
                     :labor_hours, :labor_cost_fjd,
                     :observation_text, :photo_url, :photo_sha256, :photo_byte_size, :gps_lat, :gps_lng,
+                    :voice_url, :voice_sha256, :voice_byte_size, :witness_name, :witness_contact,
                     :chemical_application, :chemical_id,
                     :chemical_dose_per_liter, :tank_volume_liters,
                     :created_by, :audit_hash, CAST(:payload_jsonb AS jsonb)
@@ -1105,12 +1139,17 @@ async def submit_event(
                 "labor_hours": payload_dict.get("labor_hours"),
                 "labor_cost_fjd": payload_dict.get("labor_cost_fjd"),
                 "observation_text": payload_dict.get("notes"),
-                "photo_url": payload_dict.get("photo_url"),
+                "photo_url": photo_url_val,
                 "photo_sha256": photo_sha256_val,
                 "photo_byte_size": photo_byte_size_val,
                 "audit_hash": audit_hash,
-                "gps_lat": payload_dict.get("gps_lat"),
-                "gps_lng": payload_dict.get("gps_lng"),
+                "gps_lat": gps_lat_val,
+                "gps_lng": gps_lng_val,
+                "voice_url": voice_url_val,
+                "voice_sha256": voice_sha256_val,
+                "voice_byte_size": voice_byte_size_val,
+                "witness_name": witness_name_val,
+                "witness_contact": witness_contact_val,
                 "chemical_application": is_chemical,
                 "chemical_id": payload_dict.get("chemical_id") if is_chemical else None,
                 "chemical_dose_per_liter": payload_dict.get("application_rate") if is_chemical else None,

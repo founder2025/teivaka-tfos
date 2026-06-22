@@ -11,12 +11,12 @@
  * Bounded by construction: verb -> (branch pick, only if present) -> capture.
  * Max 2-3 screens; inference auto-attaches the active cycle.
  */
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Eye, Droplet, Scissors, ShieldCheck, Sprout, Warehouse, Coins,
   Leaf, CalendarPlus, CalendarCheck,
-  Camera, MapPin, User,
+  Camera, MapPin, User, Mic, Square, Users, X,
   ChevronLeft, Check, Loader2, Plus,
 } from "lucide-react";
 import cropsConfig from "./config/crops";
@@ -71,6 +71,16 @@ export default function CaptureEngine({ config = cropsConfig, onDone }) {
   const [photoUploading, setPhotoUploading] = useState(false);
   const [gps, setGps] = useState(null);            // {lat,lng}
   const [gpsStatus, setGpsStatus] = useState("");  // locating|captured|denied|unavailable
+  const [voiceUrl, setVoiceUrl] = useState(null);
+  const [voiceUploading, setVoiceUploading] = useState(false);
+  const [recording, setRecording] = useState(false);
+  const [recSecs, setRecSecs] = useState(0);
+  const [showWitness, setShowWitness] = useState(false);
+  const [witnessName, setWitnessName] = useState("");
+  const [witnessContact, setWitnessContact] = useState("");
+  const mediaRef = useRef(null);
+  const chunksRef = useRef([]);
+  const timerRef = useRef(null);
 
   useEffect(() => {
     let off = false;
@@ -132,6 +142,11 @@ export default function CaptureEngine({ config = cropsConfig, onDone }) {
   function clearEntry() {
     setValues({}); setShowDetail(false); setError("");
     setPhotoUrl(null); setPhotoUploading(false); setGps(null); setGpsStatus("");
+    setVoiceUrl(null); setVoiceUploading(false); setShowWitness(false);
+    setWitnessName(""); setWitnessContact("");
+    if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+    if (mediaRef.current && recording) { try { mediaRef.current.stop(); } catch { /* noop */ } }
+    setRecording(false); setRecSecs(0);
     setOccurredDate(nowDateStr()); setOccurredTime(nowTimeStr()); setChemQuery("");
   }
   function pickVerb(v) {
@@ -170,6 +185,46 @@ export default function CaptureEngine({ config = cropsConfig, onDone }) {
       { enableHighAccuracy: true, timeout: 10000 },
     );
   }
+  async function uploadVoice(blob, mime) {
+    setVoiceUploading(true);
+    try {
+      const ext = mime && mime.includes("mp4") ? "mp4" : mime && mime.includes("ogg") ? "ogg" : "webm";
+      const fd = new FormData(); fd.append("file", blob, `voice.${ext}`);
+      const tok = localStorage.getItem("tfos_access_token");
+      const res = await fetch("/api/v1/community/uploads", {
+        method: "POST", headers: tok ? { Authorization: `Bearer ${tok}` } : {}, body: fd,
+      });
+      const body = await res.json().catch(() => null);
+      const url = body?.data?.url || body?.url;
+      if (url) setVoiceUrl(url); else setError("Voice upload failed — record still saves without it.");
+    } catch (e) { setError(`Voice upload error: ${e.message}`); }
+    finally { setVoiceUploading(false); }
+  }
+  async function startRec() {
+    if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
+      setError("Voice recording not supported on this device."); return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      chunksRef.current = [];
+      const mr = new MediaRecorder(stream);
+      mr.ondataavailable = (e) => { if (e.data?.size) chunksRef.current.push(e.data); };
+      mr.onstop = async () => {
+        stream.getTracks().forEach((t) => t.stop());
+        const blob = new Blob(chunksRef.current, { type: mr.mimeType || "audio/webm" });
+        if (blob.size) await uploadVoice(blob, mr.mimeType);
+      };
+      mediaRef.current = mr; mr.start();
+      setRecording(true); setRecSecs(0); setError("");
+      timerRef.current = setInterval(() => setRecSecs((s) => s + 1), 1000);
+    } catch { setError("Microphone permission denied or unavailable."); }
+  }
+  function stopRec() {
+    if (mediaRef.current && recording) { try { mediaRef.current.stop(); } catch { /* noop */ } }
+    setRecording(false);
+    if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+  }
+  const mmss = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 
   async function submit() {
     if (!spec || !selectedCycle) return;
@@ -183,16 +238,21 @@ export default function CaptureEngine({ config = cropsConfig, onDone }) {
     // Inference: every CROPS payload requires production_id — inject the cycle's
     // crop so the farmer never types it (safe: schemas require it or allow extras).
     if (selectedCycle.production_id) payload.production_id = selectedCycle.production_id;
-    // Universal: notes + evidence (photo is SHA-256 hashed server-side; GPS persisted —
-    // both lift the record's verification level for banks/insurers).
     if (values.notes) payload.notes = values.notes;
-    if (photoUrl) payload.photo_url = photoUrl;
-    if (gps) { payload.gps_lat = gps.lat; payload.gps_lng = gps.lng; }
+    // Evidence is cross-cutting envelope metadata (NOT payload) — photo + voice are
+    // SHA-256 hashed server-side, GPS + witness stored; each lifts verification level.
+    const evidence = {};
+    if (photoUrl) evidence.photo_url = photoUrl;
+    if (gps) { evidence.gps_lat = gps.lat; evidence.gps_lng = gps.lng; }
+    if (voiceUrl) evidence.voice_url = voiceUrl;
+    if (witnessName.trim()) evidence.witness_name = witnessName.trim();
+    if (witnessContact.trim()) evidence.witness_contact = witnessContact.trim();
     const envelope = {
       event_type: spec.event_type,
       occurred_at: `${occurredDate}T${occurredTime || "12:00"}:00+12:00`,
       anchors: { farm_id: selectedCycle.farm_id, pu_id: selectedCycle.pu_id, cycle_id: selectedCycle.cycle_id },
       payload,
+      ...(Object.keys(evidence).length ? { evidence } : {}),
     };
     try {
       const res = await fetch("/api/v1/events", { method: "POST", headers: authHeaders(), body: JSON.stringify(envelope) });
@@ -372,24 +432,44 @@ export default function CaptureEngine({ config = cropsConfig, onDone }) {
             </div>
           </div>
 
-          {/* Evidence — only the layers that actually persist + lift verification */}
+          {/* Evidence — the four layers that actually persist + lift verification */}
           <div style={card}>
             <div style={cardHead}>Evidence · lifts verification</div>
             <div style={{ display: "flex", gap: 8 }}>
               <label style={evBtn(!!photoUrl)}>
                 <Camera size={20} style={{ color: photoUrl ? "#2e7d32" : "#9a917c" }} />
-                <span style={{ fontWeight: 600 }}>{photoUploading ? "Uploading…" : photoUrl ? "Photo ✓" : "Photo"}</span>
+                <span style={{ fontWeight: 600 }}>{photoUploading ? "…" : photoUrl ? "Photo ✓" : "Photo"}</span>
                 <input type="file" accept="image/*" capture="environment" style={{ display: "none" }} onChange={(e) => uploadPhoto(e.target.files?.[0])} />
               </label>
               <button type="button" onClick={captureGps} style={evBtn(!!gps)}>
                 <MapPin size={20} style={{ color: gps ? "#2e7d32" : "#9a917c" }} />
-                <span style={{ fontWeight: 600 }}>{gps ? "GPS ✓" : gpsStatus === "locating" ? "Locating…" : "GPS"}</span>
+                <span style={{ fontWeight: 600 }}>{gps ? "GPS ✓" : gpsStatus === "locating" ? "…" : "GPS"}</span>
+              </button>
+              <button type="button" onClick={recording ? stopRec : startRec} style={evBtn(!!voiceUrl || recording)}>
+                {recording ? <Square size={20} style={{ color: "#9a3b3b" }} /> : <Mic size={20} style={{ color: voiceUrl ? "#2e7d32" : "#9a917c" }} />}
+                <span style={{ fontWeight: 600 }}>{recording ? `Stop ${mmss(recSecs)}` : voiceUploading ? "…" : voiceUrl ? "Voice ✓" : "Voice"}</span>
+              </button>
+              <button type="button" onClick={() => setShowWitness((s) => !s)} style={evBtn(!!witnessName.trim())}>
+                <Users size={20} style={{ color: witnessName.trim() ? "#2e7d32" : "#9a917c" }} />
+                <span style={{ fontWeight: 600 }}>{witnessName.trim() ? "Witness ✓" : "Witness"}</span>
               </button>
             </div>
+            {voiceUrl && !recording && (
+              <div style={{ marginTop: 8, display: "flex", alignItems: "center", gap: 8 }}>
+                <audio src={voiceUrl} controls style={{ height: 32, flex: 1 }} />
+                <button type="button" onClick={() => setVoiceUrl(null)} style={{ background: "none", border: "none", cursor: "pointer", color: "#9a3b3b" }}><X size={16} /></button>
+              </div>
+            )}
+            {showWitness && (
+              <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 8 }}>
+                <input value={witnessName} maxLength={120} placeholder="Witness name" onChange={(e) => setWitnessName(e.target.value)} style={inputBox} />
+                <input value={witnessContact} maxLength={120} placeholder="Witness phone / contact (optional)" onChange={(e) => setWitnessContact(e.target.value)} style={inputBox} />
+              </div>
+            )}
             {gpsStatus === "denied" && <p style={{ fontSize: 11.5, color: "#9a3b3b", marginTop: 8 }}>Location permission denied.</p>}
             {gpsStatus === "unavailable" && <p style={{ fontSize: 11.5, color: "#9a3b3b", marginTop: 8 }}>Location not available on this device.</p>}
             <p style={{ fontSize: 11, color: "#9a917c", marginTop: 8, fontStyle: "italic" }}>
-              Photos are fingerprinted (SHA-256) and GPS is stored — banks and insurers see this when they verify the record.</p>
+              Photo &amp; voice are fingerprinted (SHA-256); GPS &amp; witness are stored — banks and insurers see this when they verify the record.</p>
           </div>
 
           {/* Event-specific fields */}
@@ -410,13 +490,18 @@ export default function CaptureEngine({ config = cropsConfig, onDone }) {
           <div style={{ border: "1px solid #cfe0cf", background: "#f0f6f0", borderRadius: 12, padding: "10px 12px", marginBottom: 14, fontSize: 12.5, color: "#3c5a3c" }}>
             <div style={{ fontWeight: 700, marginBottom: 4, display: "flex", alignItems: "center", gap: 6 }}><ShieldCheck size={14} /> About to record</div>
             {spec.event_type} · {selectedCycle?.production_name || selectedCycle?.cycle_id || "—"} · {prettyDate(occurredDate)} {occurredTime} · {operator || "You"}
-            {(photoUrl || gps) ? ` · +${[photoUrl ? "photo" : null, gps ? "GPS" : null].filter(Boolean).join(" +")}` : ""}
+            {(() => { const e = [photoUrl && "photo", gps && "GPS", voiceUrl && "voice", witnessName.trim() && "witness"].filter(Boolean); return e.length ? ` · +${e.join(" +")}` : ""; })()}
           </div>
 
           {error && <p style={{ color: "#9a3b3b", fontSize: 13, marginBottom: 12 }}>{error}</p>}
-          <button onClick={submit} disabled={submitting || !selectedCycle || photoUploading}
+          {(photoUploading || voiceUploading || recording) && (
+            <p style={{ fontSize: 12, color: "#9a917c", marginBottom: 8, textAlign: "center" }}>
+              {recording ? "Stop the recording to save." : "Finishing upload…"}</p>
+          )}
+          <button onClick={submit} disabled={submitting || !selectedCycle || photoUploading || voiceUploading || recording}
             style={{ width: "100%", padding: 16, borderRadius: 14, border: "none", fontSize: 16, fontWeight: 700, color: "#fff",
-              background: (!selectedCycle || photoUploading) ? "#b8b8b8" : "#2e7d32", cursor: submitting || !selectedCycle ? "default" : "pointer",
+              background: (!selectedCycle || photoUploading || voiceUploading || recording) ? "#b8b8b8" : "#2e7d32",
+              cursor: submitting || !selectedCycle ? "default" : "pointer",
               display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
             {submitting ? <Loader2 size={18} /> : <Check size={18} />}{submitting ? "Saving…" : "Save"}</button>
         </>)}
