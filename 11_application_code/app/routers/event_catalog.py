@@ -46,14 +46,9 @@ CATALOG_ROLE_RANK: dict[str, int] = {
     "FOUNDER":          4,
 }
 
-# Mode translation: tenants.mode (varchar) -> numeric tier rank.
-# NULL -> SOLO per Phase 5 Q3 decision.
-MODE_RANK: dict[str, int] = {
-    "SOLO":       0,
-    "GROWTH":     1,
-    "COMMERCIAL": 2,
-    "ENTERPRISE": 3,   # vestigial; CHECK on tenants.mode doesn't allow this today
-}
+# Mode gating REMOVED 2026-06-22 (mode purge): the Solo/Growth/Commercial tier no
+# longer hides catalog rows. Every farmer sees the full (+) catalog; differentiation
+# is now subscription tier + role, not the dead `mode`.
 
 VALID_GROUPS = {
     "CROPS", "PERENNIALS", "LIVESTOCK", "POULTRY", "APICULTURE",
@@ -90,14 +85,8 @@ async def list_event_catalog(
         # silently downgrade — non-founders never see SYSTEM
         include_system = False
 
-    # ---- 3. Fetch tenant mode (NULL -> SOLO) ----
+    # ---- 3. Tenant id (mode gating removed — every farmer sees the full catalog) ----
     tid = str(user["tenant_id"])
-    mode_row = (await db.execute(
-        text("SELECT mode FROM tenant.tenants WHERE tenant_id = :tid"),
-        {"tid": tid},
-    )).first()
-    tenant_mode = (mode_row[0] if mode_row and mode_row[0] else "SOLO").upper()
-    tenant_mode_rank = MODE_RANK.get(tenant_mode, 0)
 
     # ---- 4. Compute has_livestock from configured farm_active_groups (Strike #92 fix) ----
     # Old logic derived has_livestock from audit.events history (LIVESTOCK_% prefix lookup).
@@ -214,10 +203,7 @@ async def list_event_catalog(
         min_role_rank = CATALOG_ROLE_RANK.get(d["min_role"], 99)
         if user_role_rank < min_role_rank:
             continue
-        # Mode filter
-        min_mode_rank = MODE_RANK.get(d["min_mode"], 99)
-        if tenant_mode_rank < min_mode_rank:
-            continue
+        # (mode filter removed 2026-06-22 — no tier-gating of the catalog)
         # Convert compound_emits from PG array (already a list in mappings()) to plain list
         if d.get("compound_emits") is not None and not isinstance(d["compound_emits"], list):
             d["compound_emits"] = list(d["compound_emits"])
@@ -272,7 +258,6 @@ async def list_event_catalog(
             "count": len(filtered),
             "user_role": user_role,
             "user_role_rank": user_role_rank,
-            "tenant_mode": tenant_mode,
             "has_livestock": has_livestock,
             "include_system": include_system,
             "active_groups": active_groups,
