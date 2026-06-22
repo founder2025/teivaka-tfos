@@ -70,7 +70,7 @@ Read before any group-related sprint planning or build work:
 **Production:** healthy. teivaka.com HTTPS live.
 - 8 containers running, all healthy (per `docker ps` 2026-06-21): `teivaka_api`, `teivaka_db`, `teivaka_redis`, `teivaka_caddy`, `teivaka_beat`, `teivaka_worker_ai`, `teivaka_worker_automation`, `teivaka_worker_notifications`. (`teivaka_diag` is a manual diagnostic container, NOT in docker-compose — closes B68.)
 - Infra note (2026-06-21): disk reclaimed 80%→31% via `docker builder prune` (40GB build cache); swap was ~100% full + kernel `*** restart required ***` pending — schedule a reboot in a quiet window to clear swap + apply updates.
-- Last migration: `157_drop_tenant_mode` (single head; debt-sweep chain `151`→`152_merge_feed_audience`→`153_revoke_audit_mutations`→`154_users_rls_permissive`→`155_poultry_created_by_fk`→`156_cycle_layer_not_null`→`157_drop_tenant_mode`, all applied-as-owner per Strike #123).
+- Last migration: `158_field_events_grade_deliv` (single head; adds GRADE/DELIVERY_DISPATCH/DELIVERY_CONFIRM verbs to `tenant.field_events` CHECK for the Capture-Engine GRADING/DELIVERY pack; down_revision `157_drop_tenant_mode`; applied-as-owner per Strike #123 on 2026-06-22). Prior debt-sweep chain `151`→`152_merge_feed_audience`→`153_revoke_audit_mutations`→`154_users_rls_permissive`→`155_poultry_created_by_fk`→`156_cycle_layer_not_null`→`157_drop_tenant_mode`.
 - **Mode purged (2026-06-22):** Solo/Growth/Commercial fully removed (catalog gate, onboarding mode-write, dead tasks mode-chain, frontend LauncherContext, `tenant.tenants.mode` column). The (+) catalog no longer tier-gates — every farmer sees the full set. **Differentiation axis is now subscription_tier + role**, enforced server-side. Residue (cosmetic, B90): retired `ModeDropdown.jsx` no-op stub still imported by ~4 pages; `App.jsx`/`Login.jsx` `/solo` references left (DO-NOT-TOUCH).
 - Branch: `claude/beautiful-fermi-F0dLX` (deployed to prod 2026-06-21; prod tracks this branch; `main` fast-forwarded alongside). See `git log` for exact commit SHAs (not pinned here — they drift per Strike #88).
 
@@ -521,7 +521,7 @@ These are shipped, tested, and revenue/UX-critical. Editing them risks regressio
 - `04_environment/Caddyfile.production`
 - `/opt/tis-bridge/server.js` and the `tis-bridge` systemd service
 - The `tis` systemd service (OpenClaw)
-- Alembic migrations 001 through current head `157_drop_tenant_mode` (single head as of 2026-06-22). Never edit a stamped migration — write a new one. Verify head with `docker exec teivaka_api alembic current`.
+- Alembic migrations 001 through current head `158_field_events_grade_deliv` (single head as of 2026-06-22). Never edit a stamped migration — write a new one. Verify head with `docker exec teivaka_api alembic current`.
 
 Both the floating TISWidget and the `/tis` page are live; they share `POST /tis/chat`.
 
