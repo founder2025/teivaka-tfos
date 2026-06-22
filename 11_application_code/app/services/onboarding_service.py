@@ -21,33 +21,8 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
-Mode = Literal["SOLO", "GROWTH", "COMMERCIAL"]
-
-
-# ----------------------------------------------------------------------
-# Mode derivation
-# ----------------------------------------------------------------------
-
-def derive_initial_mode(
-    area_acres: float | None,
-    crop_count: int,
-    animal_count: int,
-) -> Mode:
-    """Returns 'SOLO' or 'GROWTH'. COMMERCIAL is admin-assigned only.
-
-    Thresholds per onboarding_wizard_spec.md §Mode Derivation:
-      area_acres >= 1.0  → GROWTH
-      crop_count > 2     → GROWTH
-      animal_count > 10  → GROWTH
-      otherwise          → SOLO
-    """
-    if area_acres is not None and area_acres >= 1.0:
-        return "GROWTH"
-    if crop_count > 2:
-        return "GROWTH"
-    if animal_count > 10:
-        return "GROWTH"
-    return "SOLO"
+# Mode derivation (derive_initial_mode) REMOVED 2026-06-22 (mode purge) — onboarding
+# no longer assigns Solo/Growth/Commercial; differentiation is subscription tier + role.
 
 
 # ----------------------------------------------------------------------

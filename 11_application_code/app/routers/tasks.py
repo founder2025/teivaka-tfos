@@ -32,13 +32,10 @@ from app.middleware.rls import get_current_user
 from app.core.audit_chain import emit_audit_event
 from app.db.session import get_db
 from app.deps.tasks import (
-    derive_mode,
-    get_current_mode,
     load_open_task,
     set_tenant_context,
 )
 from app.schemas.tasks import (
-    FarmerMode,
     KBArticleRef,
     RANK_BAND_RANGES,
     RankBand,

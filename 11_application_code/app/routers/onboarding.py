@@ -34,7 +34,6 @@ from app.middleware.rls import get_current_user
 from app.services.farm_active_groups_defaults import insert_default_active_groups
 from app.services.onboarding_service import (
     default_farmer_label,
-    derive_initial_mode,
     next_farm_id,
     next_hive_id,
     next_livestock_id,
@@ -193,7 +192,7 @@ async def onboarding_status(user: dict = Depends(get_current_user)):
             await session.execute(
                 text(
                     """
-                    SELECT onboarded_at, section_term, mode
+                    SELECT onboarded_at, section_term
                     FROM tenant.tenants
                     WHERE tenant_id = :tid
                     """
@@ -245,11 +244,8 @@ async def onboarding_status(user: dict = Depends(get_current_user)):
                 {
                     "onboarding_complete": True,
                     "farm_id": farm.farm_id if farm else None,
-                    "mode": tenant.mode if tenant else None,
                     "section_term": tenant.section_term if tenant else None,
-                    "next_route": "/solo/task"
-                    if (tenant and tenant.mode == "SOLO")
-                    else "/farm",
+                    "next_route": "/farm",
                 }
             )
 
@@ -862,19 +858,16 @@ async def complete(
             if farm.land_area_ha is not None
             else None
         )
-        mode = derive_initial_mode(area_acres, pu_count, animal_count)
-
         await session.execute(
             text(
                 """
                 UPDATE tenant.tenants
                 SET onboarded_at = NOW(),
-                    mode = :mode,
                     updated_at = NOW()
                 WHERE tenant_id = :tid
                 """
             ),
-            {"mode": mode, "tid": tenant_id},
+            {"tid": tenant_id},
         )
 
         await emit_audit_event(
@@ -886,7 +879,6 @@ async def complete(
             entity_id=tenant_id,
             payload={
                 "farm_id": farm.farm_id,
-                "mode": mode,
                 "pu_count": pu_count,
                 "animal_count": animal_count,
                 "area_acres": area_acres,
@@ -895,7 +887,7 @@ async def complete(
 
         await session.commit()
 
-        next_route = "/solo/task" if mode == "SOLO" else "/farm"
+        next_route = "/farm"
         return _envelope(
             {
                 "mode": mode,

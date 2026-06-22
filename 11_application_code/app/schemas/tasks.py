@@ -174,27 +174,8 @@ class TaskSkipIn(BaseModel):
     offline_id: str | None = Field(default=None, max_length=64)
 
 
-# --- Mode derivation -------------------------------------------------
-
-class FarmerMode(str, Enum):
-    SOLO = "SOLO"
-    GROWTH = "GROWTH"
-    COMMERCIAL = "COMMERCIAL"
-
-
-class ModeOut(BaseModel):
-    mode: FarmerMode
-    derivation: ModeDerivation
-
-
-class ModeDerivation(BaseModel):
-    """Explainable mode derivation — surfaced to UI for debug panel."""
-    total_area_ha: float
-    active_cycles: int
-    user_tenure_days: int
-    subscription_tier: str
-    reason: str  # Human-readable: "SOLO: <5ha, <3 cycles, <90 day tenure"
-
+# Mode derivation (FarmerMode / ModeOut / ModeDerivation) REMOVED 2026-06-22
+# (mode purge) — they were only consumed by the dead deps/tasks mode-chain.
 
 # Rebuild forward refs
 TaskHelpOut.model_rebuild()
