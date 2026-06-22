@@ -57,6 +57,8 @@ import {
 } from "lucide-react";
 import Modal from "../ui/Modal";
 import GroupCatalogSection from "../settings/GroupCatalogSection";
+import CaptureEngine from "../../capture/CaptureEngine";
+import cropsConfig from "../../capture/config/crops";
 
 /**
  * LogSheet — two-level (+) catalog modal per Catalog Redesign Doctrine 2026-04-30.
@@ -599,13 +601,18 @@ export default function LogSheet({ isOpen, onClose }) {
         </div>
       )}
 
-      {!isManage && !isLoading && !error && isLevel2 && groupEvents.length === 0 && (
+      {/* CROPS drills into the Universal Capture Engine (verb-first) instead of the tile wall. */}
+      {!isManage && !isLoading && !error && isLevel2 && selectedGroup === "CROPS" && (
+        <CaptureEngine config={cropsConfig} onDone={onClose} />
+      )}
+
+      {!isManage && !isLoading && !error && isLevel2 && selectedGroup !== "CROPS" && groupEvents.length === 0 && (
         <div className="text-center py-8 text-gray-500">
           No events here yet.
         </div>
       )}
 
-      {!isManage && !isLoading && !error && isLevel2 && groupEvents.length > 0 && (
+      {!isManage && !isLoading && !error && isLevel2 && selectedGroup !== "CROPS" && groupEvents.length > 0 && (
         <div className="grid grid-cols-3 md:grid-cols-4 gap-3">
           {groupEvents.map((evt) => (
             <EventTile

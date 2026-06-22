@@ -30,7 +30,7 @@ function todayOccurredAt() {
   return `${ymd}T12:00:00+12:00`;
 }
 
-export default function CaptureEngine({ config = cropsConfig }) {
+export default function CaptureEngine({ config = cropsConfig, onDone }) {
   const [cycles, setCycles] = useState([]);
   const [loadingCycles, setLoadingCycles] = useState(true);
   const [verb, setVerb] = useState(null);
@@ -115,6 +115,11 @@ export default function CaptureEngine({ config = cropsConfig }) {
       <p style={{ color: "#6b6b6b", fontSize: 13, marginTop: 6 }}>
         Recorded {result.event_id}{result.audit_hash ? ` · ${result.audit_hash.slice(0, 12)}…` : ""}</p>
       <button onClick={reset} style={{ ...tile, justifyContent: "center", marginTop: 24 }}><Plus size={18} /> Log something else</button>
+      {onDone && (
+        <button onClick={onDone} style={{ ...tile, justifyContent: "center", marginTop: 0, background: "#2e7d32", color: "#fff", border: "none" }}>
+          <Check size={18} /> Done
+        </button>
+      )}
     </div></div>
   );
 
