@@ -172,3 +172,25 @@ The Crops config's verbs collectively `resolve` to ALL 39 CROPS event types (Gat
 
 **Next chunk:** backend gap work (CHEMICAL picker / Harvest→/events / locked-event
 registry) → full coverage → non-regressive (+) cutover.
+
+---
+
+## Backend gap — unlock map (2026-06-22, de-risked)
+
+**KEY FINDING:** `audit.events.events_event_type_check` ALREADY lists all 12 locked
+event types (verified live). **No audit-table migration is ever needed** — the gap is
+only the registry + field verb. The classification:
+
+- **Code-only (field verb already in `field_events` CHECK — no migration):**
+  - `POST_HARVEST_LOSS` → `LOSS` ✅ DONE (registry + CATALOG_TO_FIELD_VERB + config; verified FE-d656e9629e59).
+- **One hypertable-safe `field_events` CHECK migration (135-style; add new verbs), then code-only:**
+  - `GRADING` → new `GRADE` verb · `DELIVERY_DISPATCHED` → `DELIVERY_DISPATCH` · `DELIVERY_CONFIRMED` → `DELIVERY_CONFIRM`. (post-harvest/sales pack — high Bank-Evidence value)
+- **Other backing table / special path (more involved):**
+  - `NURSERY_BATCH_CREATED` / `GERMINATION_LOGGED` / `NURSERY_READY` → nursery lifecycle (nursery_log; `/farm/nursery` exists).
+  - `CYCLE_CLOSED` / `STAGE_TRANSITION` → `tenant.production_cycles` lifecycle (PATCH-style, not a field_event).
+  - `INPUT_PURCHASED` / `INPUT_RECEIVED` / `PAYMENT_RECEIVED` → MONEY/inventory (likely the MONEY pillar, not CROPS field_events).
+- **Separately:** `CHEMICAL_APPLIED` (already in registry) needs an engine **fetched-options picker** (chemical_id from shared.chemical_library) + WHD display — frontend, not backend. `HARVEST_LOGGED` needs B75 (legacy /harvests → /events + audit, since harvests are NOT currently chained).
+
+**Recommended next slice:** the GRADING/DELIVERY pack — one `field_events` CHECK
+migration (no audit touch) + 3 registry/verb-map entries + config. Then nursery/cycle/
+money + CHEMICAL picker + B75 → full coverage → non-regressive (+) cutover.
