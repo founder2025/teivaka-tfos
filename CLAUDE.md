@@ -70,7 +70,8 @@ Read before any group-related sprint planning or build work:
 **Production:** healthy. teivaka.com HTTPS live.
 - 8 containers running, all healthy (per `docker ps` 2026-06-21): `teivaka_api`, `teivaka_db`, `teivaka_redis`, `teivaka_caddy`, `teivaka_beat`, `teivaka_worker_ai`, `teivaka_worker_automation`, `teivaka_worker_notifications`. (`teivaka_diag` is a manual diagnostic container, NOT in docker-compose — closes B68.)
 - Infra note (2026-06-21): disk reclaimed 80%→31% via `docker builder prune` (40GB build cache); swap was ~100% full + kernel `*** restart required ***` pending — schedule a reboot in a quiet window to clear swap + apply updates.
-- Last migration: `155_poultry_created_by_fk` (single head; debt-sweep chain `151` → `152_merge_feed_audience` → `153_revoke_audit_mutations` → `154_users_rls_permissive` → `155_poultry_created_by_fk`, all applied-as-owner per Strike #123).
+- Last migration: `157_drop_tenant_mode` (single head; debt-sweep chain `151`→`152_merge_feed_audience`→`153_revoke_audit_mutations`→`154_users_rls_permissive`→`155_poultry_created_by_fk`→`156_cycle_layer_not_null`→`157_drop_tenant_mode`, all applied-as-owner per Strike #123).
+- **Mode purged (2026-06-22):** Solo/Growth/Commercial fully removed (catalog gate, onboarding mode-write, dead tasks mode-chain, frontend LauncherContext, `tenant.tenants.mode` column). The (+) catalog no longer tier-gates — every farmer sees the full set. **Differentiation axis is now subscription_tier + role**, enforced server-side. Residue (cosmetic, B90): retired `ModeDropdown.jsx` no-op stub still imported by ~4 pages; `App.jsx`/`Login.jsx` `/solo` references left (DO-NOT-TOUCH).
 - Branch: `claude/beautiful-fermi-F0dLX` (deployed to prod 2026-06-21; prod tracks this branch; `main` fast-forwarded alongside). See `git log` for exact commit SHAs (not pinned here — they drift per Strike #88).
 
 **Phase status (Sprint 6 closed; Sprint 7 in-flight, foundation marathon underway):**
@@ -214,6 +215,7 @@ Recent strikes (added in Sprint 7):
 - B87: Money seam completion (deferred from debt sweep 2026-06-21, "ride alongside feature work"). ~10 frontend files use local `fjd()` helpers instead of the canonical `frontend/src/utils/money.js` `formatMoney()` (Analytics, Reports, DecisionCenter, FarmHistory, CashLedger, Partnerships, FarmDashboard, Enterprises, InventoryList, Buyers). Convert SURGICALLY — only true currency sites; most `toLocaleString()` calls are kg/dates/counts and must NOT be FJD-prefixed (mis-conversion = visible bug). No active bug; pure multi-currency readiness. Best done when each file is already open for feature work.
 - B88: HTTP-client consolidation (deferred from debt sweep 2026-06-21). Three coexisting frontend access patterns: `utils/api.js` (27 files, has token auto-refresh + honest errors), `utils/apiClient.js` (31 files, no refresh), raw `fetch` (~105 files). Only the api.js callers get token refresh + farmer-readable errors. Converge on ONE client (api.js). ~136 call sites — must be done in SAFE BATCHES with per-page verification, never one blind sweep (per-page regression risk). No active bug. (Was B31.)
 - B89: Per-user timezone (deferred from debt sweep 2026-06-21; this is a scale FEATURE, not debt). Tenant-wide hardcoded Fiji TZ (`cycle_service.py` `_FIJI_OFFSET`, `attendance.py` `AT TIME ZONE 'Pacific/Fiji'`); the `tenants.timezone`/`farms.timezone` columns exist but date math reads the constant. A non-Fiji tenant mis-times day-boundary calcs. Do when onboarding a non-Fiji geography.
+- B90: Cosmetic mode-purge residue (after the 2026-06-22 Solo/Growth/Commercial purge A–D, which is functionally complete). (1) `frontend/src/components/farm/ModeDropdown.jsx` is a retired no-op stub still imported + rendered by ~4 pages (WeatherPage, LocationsPage, Reports, DecisionCenter) — remove the imports/usages + delete the file. (2) `App.jsx:209` `/solo/*`→`/home` redirect + `Login.jsx:8` docstring still reference Solo (both DO-NOT-TOUCH — needs override; redirect is a harmless catch for old links). (3) stale docstring lines: `onboarding_service.py:4`, `deps/tasks.py:4`, `event_catalog.py:11-12` still mention mode. All zero-functional-impact.
 
 **Open blockers:**
 - Q14 TTS provider — RESOLVED via Web Speech API in Phase 8-1 scope; SoloTaskCard.jsx already uses it
@@ -519,7 +521,7 @@ These are shipped, tested, and revenue/UX-critical. Editing them risks regressio
 - `04_environment/Caddyfile.production`
 - `/opt/tis-bridge/server.js` and the `tis-bridge` systemd service
 - The `tis` systemd service (OpenClaw)
-- Alembic migrations 001 through current head `155_poultry_created_by_fk` (single head as of 2026-06-21). Never edit a stamped migration — write a new one. Verify head with `docker exec teivaka_api alembic current`.
+- Alembic migrations 001 through current head `157_drop_tenant_mode` (single head as of 2026-06-22). Never edit a stamped migration — write a new one. Verify head with `docker exec teivaka_api alembic current`.
 
 Both the floating TISWidget and the `/tis` page are live; they share `POST /tis/chat`.
 
