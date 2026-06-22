@@ -86,30 +86,6 @@ const C = {
   soil:  "var(--soil, var(--soil))",
 };
 
-// Phase 5.10d: 11-group taxonomy per Catalog Redesign Doctrine Amendment v2.
-// Order matches MeSettings/GroupCatalogSection: production groups first, then
-// universal (MONEY/NOTES/OTHER). VOICE is appended in JSX as a Phase 4.6
-// placeholder, not in this list.
-const GROUP_ORDER = [
-  "CROPS", "PERENNIALS", "LIVESTOCK", "POULTRY",
-  "APICULTURE", "AQUACULTURE", "FORESTRY", "SPECIALTY",
-  "MONEY", "NOTES", "OTHER",
-];
-
-const GROUP_ICONS = {
-  CROPS:       Sprout,
-  PERENNIALS:  TreeDeciduous,
-  LIVESTOCK:   PawPrint,
-  POULTRY:     Bird,
-  APICULTURE:  Hexagon,
-  AQUACULTURE: Fish,
-  FORESTRY:    Trees,
-  SPECIALTY:   Sparkles,
-  MONEY:       Banknote,
-  NOTES:       BookOpen,
-  OTHER:       Boxes,
-};
-
 const EVENT_ROUTES = {
   HARVEST_LOGGED:    "/farm/harvest/new",
   CHEMICAL_APPLIED:  "/farm/field-events?new=1",
@@ -234,61 +210,28 @@ const EVENT_ICONS = {
   CYCLE_CLOSED:          CalendarCheck,
 };
 
-function GroupTile({ groupKey, label, count, onClick, disabled }) {
-  const Icon = GROUP_ICONS[groupKey] || Boxes;
-  return (
-    <button
-      type="button"
-      disabled={disabled}
-      onClick={() => !disabled && onClick(groupKey)}
-      className={`
-        flex flex-col items-center justify-center
-        p-5 h-32 rounded-xl border transition-all
-        ${
-          disabled
-            ? "bg-gray-50 border-gray-100 cursor-not-allowed opacity-60"
-            : "bg-white border-gray-200 hover:border-[var(--green,var(--green))] hover:shadow-md active:scale-95"
-        }
-      `}
-    >
-      <Icon
-        className="w-8 h-8 mb-2"
-        style={{ color: disabled ? "#9CA3AF" : C.green }}
-        strokeWidth={1.75}
-      />
-      <span
-        className={`text-base font-medium ${
-          disabled ? "text-gray-500" : "text-gray-900"
-        }`}
-      >
-        {label}
-      </span>
-      {count !== undefined && (
-        <span className="text-xs text-gray-500 mt-0.5">
-          {count} {count === 1 ? "thing" : "things"}
-        </span>
-      )}
-    </button>
-  );
-}
+// Two-vertical model (Operator-ratified 2026-06-22): the farm has exactly two
+// production verticals — plant-based and animal-based — plus whole-farm records.
+// This replaces the 11-pillar tile wall at level-1 (the (+) bloat). Each vertical
+// maps to its member catalog_groups; level-2 only surfaces events that reach a
+// working route (no dead/padlocked tiles). PLANT drills into the Capture Engine.
+const VERTICALS = [
+  { key: "PLANT",  label: "Plant-based",  sub: "Crops · trees · nursery",        Icon: Sprout,   groups: ["CROPS", "PERENNIALS", "FORESTRY", "SPECIALTY"] },
+  { key: "ANIMAL", label: "Animal-based", sub: "Poultry · livestock · bees · fish", Icon: PawPrint, groups: ["LIVESTOCK", "POULTRY", "APICULTURE", "AQUACULTURE"] },
+  { key: "WHOLE",  label: "Whole-farm",   sub: "Money · notes · records",        Icon: Banknote, groups: ["MONEY", "NOTES", "OTHER"] },
+];
 
-function VoiceTile() {
+function VerticalTile({ vertical, count, onClick }) {
+  const { Icon, label, sub, key } = vertical;
   return (
     <button
       type="button"
-      disabled
-      className="
-        flex flex-col items-center justify-center
-        p-5 h-32 rounded-xl border bg-gray-50 border-gray-100
-        cursor-not-allowed opacity-60 relative
-      "
+      onClick={() => onClick(key)}
+      className="flex flex-col items-center justify-center p-5 h-32 rounded-xl border transition-all bg-white border-gray-200 hover:border-[var(--green,var(--green))] hover:shadow-md active:scale-95"
     >
-      <span className="absolute top-2 right-2">
-        <Lock className="w-3.5 h-3.5 text-gray-400" />
-      </span>
-      <Mic className="w-8 h-8 mb-2 text-gray-400" strokeWidth={1.75} />
-      <span className="text-base font-medium text-gray-500">Voice</span>
-      <span className="text-xs text-gray-500 mt-0.5">Coming soon</span>
+      <Icon className="w-8 h-8 mb-2" style={{ color: C.green }} strokeWidth={1.75} />
+      <span className="text-base font-medium text-gray-900">{label}</span>
+      <span className="text-xs text-gray-500 mt-0.5">{sub}</span>
     </button>
   );
 }
@@ -373,7 +316,7 @@ export default function LogSheet({ isOpen, onClose }) {
   const [data, setData] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [selectedGroup, setSelectedGroup] = useState(null);
+  const [selectedVertical, setSelectedVertical] = useState(null);
   // Phase 5.10c: Level 3 manage-panel state.
   // viewMode: 'grid' (Level 1+2) or 'manage' (Level 3 inline toggle panel)
   // activeFarmId: lifted from fetch closure so the manage panel can use it
@@ -385,7 +328,7 @@ export default function LogSheet({ isOpen, onClose }) {
 
   useEffect(() => {
     if (!isOpen) {
-      setSelectedGroup(null);
+      setSelectedVertical(null);
       setViewMode("grid");
       setLocalActiveGroups(null);
       return;
@@ -458,42 +401,26 @@ export default function LogSheet({ isOpen, onClose }) {
   const shouldShowManageLink =
     Array.isArray(activeGroups) && activeGroups.length < 11;
 
-  const groupCounts = events.reduce((acc, e) => {
-    acc[e.catalog_group] = (acc[e.catalog_group] || 0) + 1;
-    return acc;
-  }, {});
+  // Only events that reach a real working route are surfaced — no dead/padlocked
+  // tiles (the (+) cleanup). PLANT drills into the Capture Engine instead of tiles.
+  const routedEventsFor = (groups) =>
+    events
+      .filter((e) => groups.includes(e.catalog_group) && EVENT_ROUTES[e.event_type])
+      .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
 
-  // Phase 5.10e: active_groups is the source of truth when present.
-  // - If activeGroups is an array (farm has per-farm config from API meta or
-  //   optimistic local override), tile visible iff group is in activeGroups.
-  //   This honors BOTH doctrines: empty active groups still render (5.10d
-  //   "no farmer left behind"), AND non-empty inactive groups now hide
-  //   (5.10e "user controls their own (+)"). 5.10d shipped OR which made
-  //   every populated group permanently visible regardless of toggle —
-  //   defeating the user-controlled groups feature for livestock-only
-  //   farmers wanting to hide Crops, etc.
-  // - If activeGroups is null (no farm_id, fetch failed, older response
-  //   shape), fall back to event-count check.
-  // - VOICE special-cased: it's a Phase 4.1-redux-v4 placeholder, not a
-  //   real catalog group, so always visible.
-  const visibleGroups = GROUP_ORDER.filter((g) => {
-    if (g === "VOICE") return true;
-    if (Array.isArray(activeGroups)) return activeGroups.includes(g);
-    return groupCounts[g] > 0;
-  });
+  const verticalCount = (v) =>
+    v.key === "PLANT" ? cropsConfig.verbs.length : routedEventsFor(v.groups).length;
 
-  const groupEvents = selectedGroup
-    ? events
-        .filter((e) => e.catalog_group === selectedGroup)
-        .sort((a, b) => a.sort_order - b.sort_order)
-    : [];
+  const activeVertical = VERTICALS.find((v) => v.key === selectedVertical) || null;
+  const verticalEvents =
+    activeVertical && selectedVertical !== "PLANT" ? routedEventsFor(activeVertical.groups) : [];
 
-  const isLevel2 = selectedGroup !== null;
+  const isLevel2 = selectedVertical !== null;
   const isManage = viewMode === "manage";
   const headerTitle = isManage
     ? "Manage groups"
     : isLevel2
-      ? groupLabels[selectedGroup] || selectedGroup
+      ? activeVertical?.label || selectedVertical
       : "What do you want to log?";
 
   const handleEventClick = (event) => {
@@ -548,7 +475,7 @@ export default function LogSheet({ isOpen, onClose }) {
         <div className="mb-3">
           <button
             type="button"
-            onClick={() => setSelectedGroup(null)}
+            onClick={() => setSelectedVertical(null)}
             aria-label="Back"
             className="inline-flex items-center gap-1 text-sm text-gray-600 hover:text-gray-900 transition"
           >
@@ -575,46 +502,34 @@ export default function LogSheet({ isOpen, onClose }) {
         </div>
       )}
 
-      {!isManage && !isLoading && !error && !isLevel2 && visibleGroups.length === 0 && (
-        <div className="text-center py-8 text-gray-500">
-          No events available right now.
-        </div>
-      )}
-
       {/* Slice F — universal actions, always at level-1 for every enterprise */}
       {!isManage && !isLoading && !error && !isLevel2 && (
         <UniversalSection navigate={navigate} onClose={onClose} />
       )}
 
-      {!isManage && !isLoading && !error && !isLevel2 && visibleGroups.length > 0 && (
+      {/* Level 1 — two production verticals + whole-farm (replaces the 11-pillar tile wall). */}
+      {!isManage && !isLoading && !error && !isLevel2 && (
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-          {visibleGroups.map((groupKey) => (
-            <GroupTile
-              key={groupKey}
-              groupKey={groupKey}
-              label={groupLabels[groupKey] || groupKey}
-              count={groupCounts[groupKey]}
-              onClick={setSelectedGroup}
-            />
+          {VERTICALS.map((v) => (
+            <VerticalTile key={v.key} vertical={v} count={verticalCount(v)} onClick={setSelectedVertical} />
           ))}
-          <VoiceTile />
         </div>
       )}
 
-      {/* CROPS drills into the Universal Capture Engine (verb-first) instead of the tile wall. */}
-      {!isManage && !isLoading && !error && isLevel2 && selectedGroup === "CROPS" && (
+      {/* PLANT drills into the Universal Capture Engine (verb-first) instead of the tile wall. */}
+      {!isManage && !isLoading && !error && isLevel2 && selectedVertical === "PLANT" && (
         <CaptureEngine config={cropsConfig} onDone={onClose} />
       )}
 
-      {!isManage && !isLoading && !error && isLevel2 && selectedGroup !== "CROPS" && groupEvents.length === 0 && (
+      {!isManage && !isLoading && !error && isLevel2 && selectedVertical !== "PLANT" && verticalEvents.length === 0 && (
         <div className="text-center py-8 text-gray-500">
-          No events here yet.
+          Nothing to log here yet.
         </div>
       )}
 
-      {!isManage && !isLoading && !error && isLevel2 && selectedGroup !== "CROPS" && groupEvents.length > 0 && (
+      {!isManage && !isLoading && !error && isLevel2 && selectedVertical !== "PLANT" && verticalEvents.length > 0 && (
         <div className="grid grid-cols-3 md:grid-cols-4 gap-3">
-          {groupEvents.map((evt) => (
+          {verticalEvents.map((evt) => (
             <EventTile
               key={evt.event_type}
               event={evt}
