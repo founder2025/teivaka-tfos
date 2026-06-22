@@ -16,6 +16,7 @@ import { useNavigate } from "react-router-dom";
 import {
   Eye, Droplet, Scissors, ShieldCheck, Sprout, Warehouse, Coins,
   Leaf, CalendarPlus, CalendarCheck,
+  Camera, MapPin, User,
   ChevronLeft, Check, Loader2, Plus,
 } from "lucide-react";
 import cropsConfig from "./config/crops";
@@ -26,17 +27,25 @@ function authHeaders() {
   const tok = localStorage.getItem("tfos_access_token");
   return { "Content-Type": "application/json", ...(tok ? { Authorization: `Bearer ${tok}` } : {}) };
 }
-function todayOccurredAt() {
-  const d = new Date();
-  const ymd = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-  return `${ymd}T12:00:00+12:00`;
-}
 const ALLOWED_UNITS = ["ML_PER_L", "G_PER_L", "L_PER_HA", "KG_PER_HA"];
 function whdClearDate(days) {
   if (days == null) return "?";
   const d = new Date();
   d.setDate(d.getDate() + Number(days));
   return d.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+}
+function nowDateStr() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+function nowTimeStr() {
+  const d = new Date();
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+function prettyDate(ymd) {
+  if (!ymd) return "";
+  const [y, m, d] = ymd.split("-").map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
 }
 
 export default function CaptureEngine({ config = cropsConfig, onDone }) {
@@ -54,6 +63,27 @@ export default function CaptureEngine({ config = cropsConfig, onDone }) {
   const [chemicals, setChemicals] = useState([]);
   const [loadingChems, setLoadingChems] = useState(false);
   const [chemQuery, setChemQuery] = useState("");
+  // Universal Event Form: when + who + evidence (the bankability layer).
+  const [operator, setOperator] = useState("");
+  const [occurredDate, setOccurredDate] = useState(nowDateStr());
+  const [occurredTime, setOccurredTime] = useState(nowTimeStr());
+  const [photoUrl, setPhotoUrl] = useState(null);
+  const [photoUploading, setPhotoUploading] = useState(false);
+  const [gps, setGps] = useState(null);            // {lat,lng}
+  const [gpsStatus, setGpsStatus] = useState("");  // locating|captured|denied|unavailable
+
+  useEffect(() => {
+    let off = false;
+    (async () => {
+      try {
+        const body = await (await fetch("/api/v1/auth/me", { headers: authHeaders() })).json().catch(() => null);
+        const d = body?.data ?? body ?? {};
+        const name = d.full_name || d.name || d.display_name || d.username || d.email || "";
+        if (!off && name) setOperator(name);
+      } catch { /* operator label is cosmetic; never block capture */ }
+    })();
+    return () => { off = true; };
+  }, []);
 
   useEffect(() => {
     let off = false;
@@ -98,16 +128,47 @@ export default function CaptureEngine({ config = cropsConfig, onDone }) {
     return () => { off = true; };
   }, [needsChem, selectedCycle?.production_id]);
 
+  // Clear the per-entry fields (values, evidence, notes, when) — keeps cycle + operator.
+  function clearEntry() {
+    setValues({}); setShowDetail(false); setError("");
+    setPhotoUrl(null); setPhotoUploading(false); setGps(null); setGpsStatus("");
+    setOccurredDate(nowDateStr()); setOccurredTime(nowTimeStr()); setChemQuery("");
+  }
   function pickVerb(v) {
     // "link" verbs hand off to an existing rich page (cycle/nursery/harvest)
     // instead of capturing inline — reuses proven, audit-emitting backends.
     if (v.route) { if (onDone) onDone(); navigate(v.route); return; }
-    setVerb(v); setValues({}); setShowDetail(false); setError("");
+    setVerb(v); clearEntry();
     if (v.resolve.primary) setSpec(v.resolve.primary);   // straight to capture
     else setSpec(null);                                   // branch: show choices
   }
   function reset() {
-    setVerb(null); setSpec(null); setValues({}); setShowDetail(false); setResult(null); setError("");
+    setVerb(null); setSpec(null); setResult(null); clearEntry();
+  }
+
+  async function uploadPhoto(file) {
+    if (!file) return;
+    setPhotoUploading(true); setError("");
+    try {
+      const fd = new FormData(); fd.append("file", file);
+      const tok = localStorage.getItem("tfos_access_token");
+      const res = await fetch("/api/v1/community/uploads", {
+        method: "POST", headers: tok ? { Authorization: `Bearer ${tok}` } : {}, body: fd,
+      });
+      const body = await res.json().catch(() => null);
+      const url = body?.data?.url || body?.url;
+      if (url) setPhotoUrl(url); else setError("Photo upload failed — record still saves without it.");
+    } catch (e) { setError(`Photo upload error: ${e.message}`); }
+    finally { setPhotoUploading(false); }
+  }
+  function captureGps() {
+    if (!navigator.geolocation) { setGpsStatus("unavailable"); return; }
+    setGpsStatus("locating");
+    navigator.geolocation.getCurrentPosition(
+      (pos) => { setGps({ lat: pos.coords.latitude, lng: pos.coords.longitude }); setGpsStatus("captured"); },
+      () => setGpsStatus("denied"),
+      { enableHighAccuracy: true, timeout: 10000 },
+    );
   }
 
   async function submit() {
@@ -115,14 +176,21 @@ export default function CaptureEngine({ config = cropsConfig, onDone }) {
     setSubmitting(true); setError("");
     const payload = {};
     for (const f of spec.capture) {
+      if (f.name === "notes") continue;       // notes captured by the universal section below
       const v = values[f.name];
       if (v !== undefined && v !== "" && v !== null) payload[f.name] = v;
     }
     // Inference: every CROPS payload requires production_id — inject the cycle's
     // crop so the farmer never types it (safe: schemas require it or allow extras).
     if (selectedCycle.production_id) payload.production_id = selectedCycle.production_id;
+    // Universal: notes + evidence (photo is SHA-256 hashed server-side; GPS persisted —
+    // both lift the record's verification level for banks/insurers).
+    if (values.notes) payload.notes = values.notes;
+    if (photoUrl) payload.photo_url = photoUrl;
+    if (gps) { payload.gps_lat = gps.lat; payload.gps_lng = gps.lng; }
     const envelope = {
-      event_type: spec.event_type, occurred_at: todayOccurredAt(),
+      event_type: spec.event_type,
+      occurred_at: `${occurredDate}T${occurredTime || "12:00"}:00+12:00`,
       anchors: { farm_id: selectedCycle.farm_id, pu_id: selectedCycle.pu_id, cycle_id: selectedCycle.cycle_id },
       payload,
     };
@@ -144,6 +212,13 @@ export default function CaptureEngine({ config = cropsConfig, onDone }) {
     borderRadius: 16, border: "1px solid #e5e1d8", background: "#fff", cursor: "pointer", textAlign: "left", marginBottom: 12 };
   const iconBox = { width: 44, height: 44, borderRadius: 12, background: "#f1efe8", display: "grid", placeItems: "center", flexShrink: 0 };
   const backBtn = { display: "flex", alignItems: "center", gap: 4, background: "none", border: "none", color: "#6b6b6b", cursor: "pointer", marginBottom: 12 };
+  const card = { border: "1px solid #e6ded0", borderRadius: 14, padding: 14, marginBottom: 16, background: "#faf8f3" };
+  const cardHead = { fontSize: 11, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase", color: "#9a917c", marginBottom: 10 };
+  const fieldLabel = { display: "block", fontSize: 13, fontWeight: 600, marginBottom: 6, color: "#5a5a4a" };
+  const inputBox = { width: "100%", padding: 11, borderRadius: 10, border: "1px solid #d8d4c8", fontSize: 14 };
+  const evBtn = (active) => ({ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4,
+    padding: "12px 6px", borderRadius: 12, border: active ? "2px solid #2e7d32" : "1px dashed #cfc7b5",
+    background: active ? "#eaf3ea" : "#fff", cursor: "pointer", fontSize: 12 });
 
   // --- success ---
   if (result) return (
@@ -181,16 +256,16 @@ export default function CaptureEngine({ config = cropsConfig, onDone }) {
       <button onClick={reset} style={backBtn}><ChevronLeft size={18} /> Back</button>
       <h1 style={{ fontSize: 20, fontWeight: 800, marginBottom: 12 }}>{verb.resolve.branch?.prompt || verb.label}</h1>
       {(verb.resolve.branch?.options || []).map((o) => (
-        <button key={o.event_type} style={tile} onClick={() => { setSpec(o); setValues({}); setShowDetail(false); }}>
+        <button key={o.event_type} style={tile} onClick={() => { clearEntry(); setSpec(o); }}>
           <span style={{ fontWeight: 700, fontSize: 16 }}>{o.choiceLabel}</span>
         </button>
       ))}
     </div>
   );
 
-  // --- capture ---
-  const quick = spec.capture.filter((f) => f.tier === "quick");
-  const detail = spec.capture.filter((f) => f.tier === "detail");
+  // --- capture ---  (notes handled by the universal Notes section, not as a config field)
+  const quick = spec.capture.filter((f) => f.tier === "quick" && f.name !== "notes");
+  const detail = spec.capture.filter((f) => f.tier === "detail" && f.name !== "notes");
   function setVal(n, v) { setValues((s) => ({ ...s, [n]: v })); }
   function pickChemical(name, c) {
     setValues((s) => {
@@ -263,25 +338,85 @@ export default function CaptureEngine({ config = cropsConfig, onDone }) {
   return (
     <div style={wrap}>
       <button onClick={reset} style={backBtn}><ChevronLeft size={18} /> Back</button>
-      <h1 style={{ fontSize: 20, fontWeight: 800, marginBottom: 12 }}>{spec.choiceLabel || verb.label}</h1>
+      <h1 style={{ fontSize: 20, fontWeight: 800, marginBottom: 14 }}>{spec.choiceLabel || verb.label}</h1>
       {loadingCycles ? <p style={{ color: "#6b6b6b" }}>Loading your crops…</p>
         : cycles.length === 0 ? <p style={{ color: "#9a3b3b" }}>No active crop cycle yet — start a crop first.</p>
         : (<>
-          {cycles.length === 1
-            ? <p style={{ fontSize: 14, marginBottom: 16 }}>For <strong>{selectedCycle?.production_name || selectedCycle?.cycle_id}</strong></p>
-            : <select value={cycleId} onChange={(e) => setCycleId(e.target.value)} style={{ width: "100%", padding: 12, borderRadius: 12, border: "1px solid #d8d4c8", marginBottom: 16 }}>
-                <option value="">Which crop?</option>
-                {cycles.map((c) => <option key={c.cycle_id} value={c.cycle_id}>{c.production_name || c.cycle_id}{c.pu_farmer_label ? ` · ${c.pu_farmer_label}` : ""}</option>)}
-              </select>}
+          {/* Anchors — Farm · Crop · Operator (the 4-anchor identity on every record) */}
+          <div style={card}>
+            <div style={cardHead}>Anchors · farm · crop · operator</div>
+            <div style={{ display: "grid", gridTemplateColumns: "64px 1fr", rowGap: 10, alignItems: "center", fontSize: 14 }}>
+              <span style={{ color: "#9a917c" }}>Farm</span>
+              <span style={{ fontWeight: 600 }}>{selectedCycle?.farm_id || "—"}</span>
+              <span style={{ color: "#9a917c" }}>Crop</span>
+              {cycles.length === 1
+                ? <span style={{ fontWeight: 600 }}>{selectedCycle?.production_name || selectedCycle?.cycle_id}{selectedCycle?.pu_farmer_label ? ` · ${selectedCycle.pu_farmer_label}` : ""}</span>
+                : <select value={cycleId} onChange={(e) => setCycleId(e.target.value)} style={inputBox}>
+                    <option value="">Select crop…</option>
+                    {cycles.map((c) => <option key={c.cycle_id} value={c.cycle_id}>{c.production_name || c.cycle_id}{c.pu_farmer_label ? ` · ${c.pu_farmer_label}` : ""}</option>)}
+                  </select>}
+              <span style={{ color: "#9a917c" }}>Operator</span>
+              <span style={{ fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}><User size={14} />{operator || "You"}</span>
+            </div>
+          </div>
+
+          {/* When */}
+          <div style={{ display: "flex", gap: 10, marginBottom: 16 }}>
+            <div style={{ flex: 1 }}>
+              <label style={fieldLabel}>Date</label>
+              <input type="date" value={occurredDate} max={nowDateStr()} onChange={(e) => setOccurredDate(e.target.value)} style={inputBox} />
+            </div>
+            <div style={{ flex: 1 }}>
+              <label style={fieldLabel}>Time</label>
+              <input type="time" value={occurredTime} onChange={(e) => setOccurredTime(e.target.value)} style={inputBox} />
+            </div>
+          </div>
+
+          {/* Evidence — only the layers that actually persist + lift verification */}
+          <div style={card}>
+            <div style={cardHead}>Evidence · lifts verification</div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <label style={evBtn(!!photoUrl)}>
+                <Camera size={20} style={{ color: photoUrl ? "#2e7d32" : "#9a917c" }} />
+                <span style={{ fontWeight: 600 }}>{photoUploading ? "Uploading…" : photoUrl ? "Photo ✓" : "Photo"}</span>
+                <input type="file" accept="image/*" capture="environment" style={{ display: "none" }} onChange={(e) => uploadPhoto(e.target.files?.[0])} />
+              </label>
+              <button type="button" onClick={captureGps} style={evBtn(!!gps)}>
+                <MapPin size={20} style={{ color: gps ? "#2e7d32" : "#9a917c" }} />
+                <span style={{ fontWeight: 600 }}>{gps ? "GPS ✓" : gpsStatus === "locating" ? "Locating…" : "GPS"}</span>
+              </button>
+            </div>
+            {gpsStatus === "denied" && <p style={{ fontSize: 11.5, color: "#9a3b3b", marginTop: 8 }}>Location permission denied.</p>}
+            {gpsStatus === "unavailable" && <p style={{ fontSize: 11.5, color: "#9a3b3b", marginTop: 8 }}>Location not available on this device.</p>}
+            <p style={{ fontSize: 11, color: "#9a917c", marginTop: 8, fontStyle: "italic" }}>
+              Photos are fingerprinted (SHA-256) and GPS is stored — banks and insurers see this when they verify the record.</p>
+          </div>
+
+          {/* Event-specific fields */}
           {quick.map((f) => <div key={f.name} style={{ marginBottom: 18 }}>
-            <label style={{ display: "block", fontSize: 14, fontWeight: 600, marginBottom: 8 }}>{f.ask}</label>{fieldInput(f)}</div>)}
+            <label style={fieldLabel}>{f.ask}</label>{fieldInput(f)}</div>)}
           {detail.length > 0 && !showDetail && <button onClick={() => setShowDetail(true)} style={{ background: "none", border: "none", color: "#3c5a3c", fontWeight: 600, cursor: "pointer", marginBottom: 16 }}>+ Add detail</button>}
           {showDetail && detail.map((f) => <div key={f.name} style={{ marginBottom: 18 }}>
-            <label style={{ display: "block", fontSize: 14, fontWeight: 600, marginBottom: 8 }}>{f.ask}</label>{fieldInput(f)}</div>)}
+            <label style={fieldLabel}>{f.ask}</label>{fieldInput(f)}</div>)}
+
+          {/* Notes */}
+          <div style={{ marginBottom: 16 }}>
+            <label style={fieldLabel}>Notes (optional)</label>
+            <textarea value={values.notes || ""} maxLength={500} rows={3} placeholder="Add any context…"
+              onChange={(e) => setVal("notes", e.target.value)} style={{ ...inputBox, resize: "vertical" }} />
+          </div>
+
+          {/* About to record — the audit preview */}
+          <div style={{ border: "1px solid #cfe0cf", background: "#f0f6f0", borderRadius: 12, padding: "10px 12px", marginBottom: 14, fontSize: 12.5, color: "#3c5a3c" }}>
+            <div style={{ fontWeight: 700, marginBottom: 4, display: "flex", alignItems: "center", gap: 6 }}><ShieldCheck size={14} /> About to record</div>
+            {spec.event_type} · {selectedCycle?.production_name || selectedCycle?.cycle_id || "—"} · {prettyDate(occurredDate)} {occurredTime} · {operator || "You"}
+            {(photoUrl || gps) ? ` · +${[photoUrl ? "photo" : null, gps ? "GPS" : null].filter(Boolean).join(" +")}` : ""}
+          </div>
+
           {error && <p style={{ color: "#9a3b3b", fontSize: 13, marginBottom: 12 }}>{error}</p>}
-          <button onClick={submit} disabled={submitting || !selectedCycle}
+          <button onClick={submit} disabled={submitting || !selectedCycle || photoUploading}
             style={{ width: "100%", padding: 16, borderRadius: 14, border: "none", fontSize: 16, fontWeight: 700, color: "#fff",
-              background: !selectedCycle ? "#b8b8b8" : "#2e7d32", cursor: submitting || !selectedCycle ? "default" : "pointer",
+              background: (!selectedCycle || photoUploading) ? "#b8b8b8" : "#2e7d32", cursor: submitting || !selectedCycle ? "default" : "pointer",
               display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
             {submitting ? <Loader2 size={18} /> : <Check size={18} />}{submitting ? "Saving…" : "Save"}</button>
         </>)}
