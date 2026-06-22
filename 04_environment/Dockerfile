@@ -69,7 +69,8 @@ ENV PATH="/opt/venv/bin:$PATH"
 RUN pip install --upgrade pip wheel setuptools
 
 # Copy requirements file first (Docker cache layer optimization)
-# If requirements.txt doesn't change, this layer is reused
+# If requirements-api.txt doesn't change, this layer is reused.
+# requirements-api.txt is the SINGLE source of truth for the deployed image.
 COPY requirements-api.txt /tmp/requirements-api.txt
 
 # Install all Python dependencies into the virtual environment

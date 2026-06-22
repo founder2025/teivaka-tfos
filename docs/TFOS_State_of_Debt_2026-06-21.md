@@ -211,7 +211,7 @@ Clusters executed this session, each verified on prod with its own rollback, not
 | 3.2 — users policy drift | tenant.users permissive policy codified (`154`) | ✅ done (prod stamp-only) |
 | 5 — Dead code | H7 20 orphans deleted; M6 dead verify_chain removed; H9 tis-widget.js 404 fixed | ✅ done (prod) |
 | 3.x remainder | me.py/GUC defense-in-depth (NOT a leak) | ⬜ B84 (deferred) |
-| 5.3 / M10 | stale requirements.txt (ambiguous); duplicated prototype HTML | ⬜ B85 (deferred) |
+| 5.3 / M10 | stale requirements.txt (ambiguous); duplicated prototype HTML | ✅ B85 done: deleted both dead bare requirements.txt (11_app + 04_env); `requirements-api.txt` is the sole build truth; prototype HTML dup left intentional (served copy + sacred ref) |
 | 4.1 — poultry FK | H4 `poultry_event_log.created_by` FK → tenant.users (`155`) | ✅ done (prod; 48 events, 0 orphans) |
 | 4.2 — layer NOT NULL | H5 `production_cycles.layer` NOT NULL | ⬜ B86 (deferred — both creation paths default layer NULL; must enforce-at-creation first) |
 | 7 — Doc reconciliation | L2 CLAUDE.md Current-state (head/branch/containers) + 2 stale known-issues; L3 schema-baseline label | ✅ done (doc-only) |
