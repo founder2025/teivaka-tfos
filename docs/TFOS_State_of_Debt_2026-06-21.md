@@ -213,7 +213,7 @@ Clusters executed this session, each verified on prod with its own rollback, not
 | 3.x remainder | me.py/GUC defense-in-depth (NOT a leak) | ⬜ B84 (deferred) |
 | 5.3 / M10 | stale requirements.txt (ambiguous); duplicated prototype HTML | ✅ B85 done: deleted both dead bare requirements.txt (11_app + 04_env); `requirements-api.txt` is the sole build truth; prototype HTML dup left intentional (served copy + sacred ref) |
 | 4.1 — poultry FK | H4 `poultry_event_log.created_by` FK → tenant.users (`155`) | ✅ done (prod; 48 events, 0 orphans) |
-| 4.2 — layer NOT NULL | H5 `production_cycles.layer` NOT NULL | ⬜ B86 (deferred — both creation paths default layer NULL; must enforce-at-creation first) |
+| 4.2 — layer NOT NULL | H5 `production_cycles.layer` NOT NULL | ✅ done (prod): cycle_service.resolve_layer() enforces layer at both creation paths (suggested_layer fallback, borderline→4xx); mig `156` backfilled + SET NOT NULL; is_nullable=NO, 0 NULL rows |
 | 7 — Doc reconciliation | L2 CLAUDE.md Current-state (head/branch/containers) + 2 stale known-issues; L3 schema-baseline label | ✅ done (doc-only) |
 
 **Migration chain:** single head, prod stamped **154**. **Not yet executed:** Cluster 4
