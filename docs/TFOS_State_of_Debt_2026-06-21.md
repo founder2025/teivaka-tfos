@@ -214,6 +214,7 @@ Clusters executed this session, each verified on prod with its own rollback, not
 | 5.3 / M10 | stale requirements.txt (ambiguous); duplicated prototype HTML | ⬜ B85 (deferred) |
 | 4.1 — poultry FK | H4 `poultry_event_log.created_by` FK → tenant.users (`155`) | ✅ done (prod; 48 events, 0 orphans) |
 | 4.2 — layer NOT NULL | H5 `production_cycles.layer` NOT NULL | ⬜ B86 (deferred — both creation paths default layer NULL; must enforce-at-creation first) |
+| 7 — Doc reconciliation | L2 CLAUDE.md Current-state (head/branch/containers) + 2 stale known-issues; L3 schema-baseline label | ✅ done (doc-only) |
 
 **Migration chain:** single head, prod stamped **154**. **Not yet executed:** Cluster 4
 (data anchors — `poultry_event_log.created_by` FK + `production_cycles.layer` NOT NULL,
