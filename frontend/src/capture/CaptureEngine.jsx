@@ -12,13 +12,15 @@
  * Max 2-3 screens; inference auto-attaches the active cycle.
  */
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Eye, Droplet, Scissors, ShieldCheck, Sprout, Warehouse, Coins,
+  Leaf, CalendarPlus, CalendarCheck,
   ChevronLeft, Check, Loader2, Plus,
 } from "lucide-react";
 import cropsConfig from "./config/crops";
 
-const ICONS = { Eye, Droplet, Scissors, ShieldCheck, Sprout, Warehouse, Coins };
+const ICONS = { Eye, Droplet, Scissors, ShieldCheck, Sprout, Warehouse, Coins, Leaf, CalendarPlus, CalendarCheck };
 
 function authHeaders() {
   const tok = localStorage.getItem("tfos_access_token");
@@ -38,6 +40,7 @@ function whdClearDate(days) {
 }
 
 export default function CaptureEngine({ config = cropsConfig, onDone }) {
+  const navigate = useNavigate();
   const [cycles, setCycles] = useState([]);
   const [loadingCycles, setLoadingCycles] = useState(true);
   const [verb, setVerb] = useState(null);
@@ -96,6 +99,9 @@ export default function CaptureEngine({ config = cropsConfig, onDone }) {
   }, [needsChem, selectedCycle?.production_id]);
 
   function pickVerb(v) {
+    // "link" verbs hand off to an existing rich page (cycle/nursery/harvest)
+    // instead of capturing inline — reuses proven, audit-emitting backends.
+    if (v.route) { if (onDone) onDone(); navigate(v.route); return; }
     setVerb(v); setValues({}); setShowDetail(false); setError("");
     if (v.resolve.primary) setSpec(v.resolve.primary);   // straight to capture
     else setSpec(null);                                   // branch: show choices

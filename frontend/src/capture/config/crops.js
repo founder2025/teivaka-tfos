@@ -6,13 +6,15 @@
  * events_registry.py stays the truth. Field `name`s are EXACT backend payload keys.
  * The engine auto-injects production_id from the active cycle (inference).
  *
- * COVERAGE: 7 verbs, 30 wired /events-native crop events — every one writes a real
- * typed field_events + audit.events row. CHEMICAL_APPLIED uses the `chemical` input
- * (picker sourced from GET /api/v1/chemicals + WHD harvest-block read-back — Inviolable #2).
- * STILL SEQUENCED (need backend, NOT faked here): HARVEST_LOGGED (legacy /harvests — B75),
- * CYCLE_CREATED (production_cycles create-path), CYCLE_CLOSED, nursery pack
- * (GERMINATION_LOGGED/NURSERY_BATCH_CREATED/NURSERY_READY), INPUT_PURCHASED/INPUT_RECEIVED
- * (Money pillar). Each = a config edit once ready.
+ * COVERAGE: 7 activity verbs (30 wired /events-native crop events — every one writes a
+ * real typed field_events + audit.events row) + 4 lifecycle "link" verbs that hand off
+ * to existing rich, audit-emitting pages (Start a crop → CycleNew, Nursery → NurseryNew,
+ * Harvest → HarvestNew, Close a crop → CycleList/Detail). CHEMICAL_APPLIED uses the
+ * `chemical` input (picker from GET /api/v1/chemicals + WHD read-back — Inviolable #2).
+ * KNOWN GAP (honest): the nursery page (POST /api/v1/nursery) persists nursery_batches
+ * but does NOT yet emit an audit.events row (legacy register, pre-dates the (+) contract)
+ * — filed for backend audit-emit follow-up. CYCLE_CREATED/CLOSED + HARVEST already audit.
+ * STILL SEQUENCED: INPUT_PURCHASED/INPUT_RECEIVED (Money pillar), ORDER_RECEIVED.
  */
 const opts = (...vs) => vs.map((v) => (typeof v === "string" ? { value: v, label: v } : v));
 
@@ -121,6 +123,10 @@ export const cropsConfig = {
           { name: "qty_kg", ask: "Quantity (kg)", input: "number", tier: "detail" } ] },
       ] } },
     },
+    // Lifecycle verbs hand off to existing rich, audit-emitting pages (route handoff).
+    { id: "cycle_new", label: "Start a new crop", descriptor: "open a new production cycle", icon: "CalendarPlus", route: "/farm/cycles/new" },
+    { id: "nursery",   label: "Nursery & seedlings", descriptor: "sow a tray · track germination", icon: "Sprout", route: "/farm/nursery/new" },
+    { id: "harvest",   label: "Harvest", descriptor: "pick & record yield", icon: "Leaf", route: "/farm/harvest/new" },
     {
       id: "storage", label: "Storage & Stock", descriptor: "storing produce, stock checks", icon: "Warehouse",
       resolve: { branch: { prompt: "What did you do?", options: [
@@ -162,6 +168,7 @@ export const cropsConfig = {
           { name: "qty_rejected", ask: "Rejected (kg)", input: "number", tier: "detail" } ] },
       ] } },
     },
+    { id: "cycle_close", label: "Close a crop", descriptor: "end a finished cycle", icon: "CalendarCheck", route: "/farm/cycles" },
   ],
 };
 
