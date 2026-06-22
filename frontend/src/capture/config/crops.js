@@ -6,12 +6,12 @@
  * events_registry.py stays the truth. Field `name`s are EXACT backend payload keys.
  * The engine auto-injects production_id from the active cycle (inference).
  *
- * COVERAGE: 7 verbs, 23 wired /events-native crop events — every one writes a real
+ * COVERAGE: 7 verbs, 29 wired /events-native crop events — every one writes a real
  * typed field_events + audit.events row.
  * STILL SEQUENCED (need backend, NOT faked here): CHEMICAL_APPLIED (chemical picker
  * + WHD UX), HARVEST_LOGGED (legacy /harvests — B75), CYCLE_CREATED (production_cycles
- * create-path), PEST_CONFIRMED/DISEASE_CONFIRMED (redundant with scouting severity),
- * + the 12 padlocked events (no registry yet). Each = a config edit once ready.
+ * create-path), CYCLE_CLOSED, nursery pack (GERMINATION_LOGGED/NURSERY_BATCH_CREATED/
+ * NURSERY_READY), INPUT_PURCHASED/INPUT_RECEIVED (Money pillar). Each = a config edit once ready.
  */
 const opts = (...vs) => vs.map((v) => (typeof v === "string" ? { value: v, label: v } : v));
 
@@ -28,9 +28,17 @@ export const cropsConfig = {
           { name: "pest_type", ask: "Which pest?", input: "choice", tier: "quick", options: opts("Whitefly","Aphid","Cutworm","Fruit fly","Caterpillar","Other") },
           { name: "density", ask: "How many?", input: "choice", tier: "quick", options: opts({value:"low",label:"A few"},{value:"med",label:"Some"},{value:"high",label:"A lot"}) },
           { name: "affected_area", ask: "Where / how much", input: "text", tier: "detail" } ] },
+        { choiceLabel: "Confirmed a pest", event_type: "PEST_CONFIRMED", capture: [
+          { name: "pest_type", ask: "Which pest?", input: "choice", tier: "quick", options: opts("Whitefly","Aphid","Cutworm","Fruit fly","Caterpillar","Other") },
+          { name: "severity", ask: "How bad?", input: "choice", tier: "quick", options: opts({value:"low",label:"Mild"},{value:"med",label:"Moderate"},{value:"high",label:"Severe"}) },
+          { name: "affected_area", ask: "Where / how much", input: "text", tier: "detail" } ] },
         { choiceLabel: "Disease", event_type: "DISEASE_SCOUTING", capture: [
           { name: "disease_type", ask: "Which disease?", input: "choice", tier: "quick", options: opts("Early blight","Late blight","Powdery mildew","Bacterial wilt","Mosaic virus","Other") },
           { name: "severity", ask: "How bad?", input: "choice", tier: "quick", options: opts({value:"low",label:"Mild"},{value:"med",label:"Moderate"},{value:"high",label:"Bad"}) },
+          { name: "affected_plants", ask: "Plants affected", input: "number", tier: "detail" } ] },
+        { choiceLabel: "Confirmed a disease", event_type: "DISEASE_CONFIRMED", capture: [
+          { name: "disease_type", ask: "Which disease?", input: "choice", tier: "quick", options: opts("Early blight","Late blight","Powdery mildew","Bacterial wilt","Mosaic virus","Other") },
+          { name: "severity", ask: "How bad?", input: "choice", tier: "quick", options: opts({value:"low",label:"Mild"},{value:"med",label:"Moderate"},{value:"high",label:"Severe"}) },
           { name: "affected_plants", ask: "Plants affected", input: "number", tier: "detail" } ] },
         { choiceLabel: "General note", event_type: "FIELD_OBSERVATION", capture: [
           { name: "observation_type", ask: "About what?", input: "choice", tier: "quick", options: opts({value:"GROWTH_NOTE",label:"Growth"},{value:"SOIL_CONDITION",label:"Soil"},{value:"EQUIPMENT_ISSUE",label:"Equipment"},{value:"GENERAL",label:"General"}) },
