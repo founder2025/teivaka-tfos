@@ -79,6 +79,9 @@ export default function CaptureEngine({ config = cropsConfig }) {
       const v = values[f.name];
       if (v !== undefined && v !== "" && v !== null) payload[f.name] = v;
     }
+    // Inference: every CROPS payload requires production_id — inject the cycle's
+    // crop so the farmer never types it (safe: schemas require it or allow extras).
+    if (selectedCycle.production_id) payload.production_id = selectedCycle.production_id;
     const envelope = {
       event_type: spec.event_type, occurred_at: todayOccurredAt(),
       anchors: { farm_id: selectedCycle.farm_id, pu_id: selectedCycle.pu_id, cycle_id: selectedCycle.cycle_id },
