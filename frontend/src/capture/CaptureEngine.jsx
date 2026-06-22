@@ -16,7 +16,7 @@ import { useNavigate } from "react-router-dom";
 import {
   Eye, Droplet, Scissors, ShieldCheck, Sprout, Warehouse, Coins,
   Leaf, CalendarPlus, CalendarCheck,
-  Egg, Bird, Stethoscope, Scale, Home, AlertTriangle, PlusCircle,
+  Egg, Bird, Stethoscope, Scale, Home, AlertTriangle, PlusCircle, Wheat,
   Camera, MapPin, User, Mic, Square, Users, X,
   ChevronLeft, Check, Loader2, Plus,
 } from "lucide-react";
@@ -24,7 +24,7 @@ import cropsConfig from "./config/crops";
 
 const ICONS = {
   Eye, Droplet, Scissors, ShieldCheck, Sprout, Warehouse, Coins, Leaf, CalendarPlus, CalendarCheck,
-  Egg, Bird, Stethoscope, Scale, Home, AlertTriangle, PlusCircle,
+  Egg, Bird, Stethoscope, Scale, Home, AlertTriangle, PlusCircle, Wheat,
 };
 
 function authHeaders() {
@@ -85,6 +85,10 @@ export default function CaptureEngine({ config = cropsConfig, onDone }) {
   const [chemicals, setChemicals] = useState([]);
   const [loadingChems, setLoadingChems] = useState(false);
   const [chemQuery, setChemQuery] = useState("");
+  // Generic farm_libraries picker (feed/vaccine/etc → a required UUID FK).
+  const [libraries, setLibraries] = useState({});   // { library_type: items[] }
+  const [loadingLibs, setLoadingLibs] = useState(false);
+  const [libQuery, setLibQuery] = useState("");
   // Universal Event Form: when + who + evidence (the bankability layer).
   const [operator, setOperator] = useState("");
   const [occurredDate, setOccurredDate] = useState(nowDateStr());
@@ -160,6 +164,31 @@ export default function CaptureEngine({ config = cropsConfig, onDone }) {
     return () => { off = true; };
   }, [needsChem, selectedItem?.production_id]);
 
+  // Generic library picker: load each farm_libraries type a spec needs (feed/vaccine FKs).
+  const libTypes = useMemo(() => {
+    const s = new Set();
+    (spec?.capture || []).forEach((f) => { if (f.input === "library" && f.libraryType) s.add(f.libraryType); });
+    return [...s];
+  }, [spec]);
+  useEffect(() => {
+    if (!libTypes.length) { setLibraries({}); return; }
+    let off = false;
+    (async () => {
+      setLoadingLibs(true);
+      try {
+        const out = {};
+        for (const lt of libTypes) {
+          const body = await (await fetch(`/api/v1/farm-libraries?library_type=${encodeURIComponent(lt)}`, { headers: authHeaders() })).json().catch(() => null);
+          let list = body?.data ?? body ?? [];
+          if (list && !Array.isArray(list)) list = list.items || [];
+          out[lt] = list || [];
+        }
+        if (!off) setLibraries(out);
+      } finally { if (!off) setLoadingLibs(false); }
+    })();
+    return () => { off = true; };
+  }, [libTypes.join(",")]);
+
   // Clear the per-entry fields (values, evidence, notes, when) — keeps cycle + operator.
   function clearEntry() {
     setValues({}); setShowDetail(false); setError("");
@@ -169,7 +198,7 @@ export default function CaptureEngine({ config = cropsConfig, onDone }) {
     if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
     if (mediaRef.current && recording) { try { mediaRef.current.stop(); } catch { /* noop */ } }
     setRecording(false); setRecSecs(0);
-    setOccurredDate(nowDateStr()); setOccurredTime(nowTimeStr()); setChemQuery("");
+    setOccurredDate(nowDateStr()); setOccurredTime(nowTimeStr()); setChemQuery(""); setLibQuery("");
   }
   function pickVerb(v) {
     // "link" verbs hand off to an existing rich page (cycle/nursery/harvest)
@@ -250,6 +279,7 @@ export default function CaptureEngine({ config = cropsConfig, onDone }) {
 
   async function submit() {
     if (!spec || !selectedItem) return;
+    if (spec.validate) { const msg = spec.validate(values); if (msg) { setError(msg); return; } }
     setSubmitting(true); setError("");
     const payload = {};
     for (const f of spec.capture) {
@@ -376,6 +406,32 @@ export default function CaptureEngine({ config = cropsConfig, onDone }) {
                 border: arr.includes(o.value) ? "2px solid #2e7d32" : "1px solid #d8d4c8",
                 background: arr.includes(o.value) ? "#eaf3ea" : "#fff", cursor: "pointer" }}>{o.label}</button>
           ))}
+        </div>
+      );
+    }
+    if (f.input === "library") {
+      const list = libraries[f.libraryType] || [];
+      const filtered = libQuery ? list.filter((x) => (x.name || "").toLowerCase().includes(libQuery.toLowerCase())) : list;
+      return (
+        <div>
+          {loadingLibs ? <p style={{ color: "#6b6b6b", fontSize: 13 }}>Loading…</p>
+            : list.length === 0 ? <p style={{ color: "#9a3b3b", fontSize: 13 }}>None in your library yet — add one in Library settings first.</p>
+            : (<>
+              {list.length > 6 && (
+                <input placeholder="Search…" value={libQuery} onChange={(e) => setLibQuery(e.target.value)}
+                  style={{ width: "100%", padding: 10, borderRadius: 10, border: "1px solid #d8d4c8", fontSize: 14, marginBottom: 8 }} />
+              )}
+              <div style={{ maxHeight: 220, overflowY: "auto", display: "flex", flexDirection: "column", gap: 6 }}>
+                {filtered.map((x) => (
+                  <button key={x.library_id} onClick={() => setVal(f.name, x.library_id)}
+                    style={{ textAlign: "left", padding: "10px 12px", borderRadius: 10,
+                      border: v === x.library_id ? "2px solid #2e7d32" : "1px solid #d8d4c8",
+                      background: v === x.library_id ? "#eaf3ea" : "#fff", cursor: "pointer", fontWeight: 600, fontSize: 14 }}>
+                    {x.name}{x.is_global ? <span style={{ fontSize: 11, color: "#8a8a8a", fontWeight: 400 }}> · standard</span> : null}
+                  </button>
+                ))}
+              </div>
+            </>)}
         </div>
       );
     }

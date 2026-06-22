@@ -5,12 +5,12 @@
  * on flock_id and write to tenant.poultry_event_log via POST /events. Field `name`s are
  * EXACT backend payload keys (verified against events_registry.py poultry payloads).
  *
- * COVERAGE (3a): 14 FK-free poultry events across 6 verbs + 1 lifecycle link. Every one
- * writes a real poultry_event_log + audit.events row. autofillDate maps the chosen date
- * into required *_date payload keys so the farmer enters it once.
- * DEFERRED to 3b (need a farm_libraries picker UUID, like the chemical picker):
- *   FEED_RECEIVED / FEED_USED (feed_type_id), VACCINATION_GIVEN (vaccine_id), EGGS_GRADED
- *   (sum==total validator). FLOCK_PLACED stays a link verb (dedicated /flocks create-route).
+ * COVERAGE (3b): 18 poultry events across 7 verbs + 1 lifecycle link. Every one writes a
+ * real poultry_event_log + audit.events row. autofillDate maps the chosen date into
+ * required *_date payload keys; `input:"library"` fields resolve a farm_libraries UUID
+ * (feed/vaccine); spec.validate runs a client check before submit (EGGS_GRADED sum==total).
+ * FLOCK_PLACED stays a link verb (dedicated /flocks create-route with breed picker).
+ * DEFERRED: optional FK pickers (buyer/supplier/disinfectant) — all optional, omitted for now.
  */
 const opts = (...vs) => vs.map((v) => (typeof v === "string" ? { value: v, label: v } : v));
 
@@ -40,6 +40,26 @@ export const poultryConfig = {
           { name: "qty_eggs", ask: "How many eggs?", input: "number", tier: "quick" },
           { name: "total_revenue_fjd", ask: "Money received (FJD)", input: "number", tier: "quick" },
           { name: "disposition", ask: "Sold or given?", input: "choice", tier: "detail", options: opts({value:"SOLD",label:"Sold"},{value:"GIVEN",label:"Given"}) } ] },
+        { choiceLabel: "Graded eggs", event_type: "EGGS_GRADED",
+          validate: (v) => { const t=+v.total_qty||0, s=(+v.grade_a_qty||0)+(+v.grade_b_qty||0)+(+v.cracked_qty||0)+(+v.dirty_qty||0); return t && s!==t ? `Grades must add up to the total (${s} ≠ ${t}).` : ""; },
+          capture: [
+          { name: "total_qty", ask: "Total eggs graded", input: "number", tier: "quick" },
+          { name: "grade_a_qty", ask: "Grade A", input: "number", tier: "quick" },
+          { name: "grade_b_qty", ask: "Grade B", input: "number", tier: "quick" },
+          { name: "cracked_qty", ask: "Cracked", input: "number", tier: "quick" },
+          { name: "dirty_qty", ask: "Dirty", input: "number", tier: "quick" } ] },
+      ] } },
+    },
+    {
+      id: "feed", label: "Feed", descriptor: "feed received or used", icon: "Wheat",
+      resolve: { branch: { prompt: "Feed in or used?", options: [
+        { choiceLabel: "Feed received", event_type: "FEED_RECEIVED", autofillDate: ["delivery_date"], capture: [
+          { name: "feed_type_id", ask: "Which feed?", input: "library", libraryType: "POULTRY_FEED", tier: "quick" },
+          { name: "qty_kg", ask: "How much (kg)?", input: "number", tier: "quick" },
+          { name: "cost_fjd", ask: "Cost (FJD)", input: "number", tier: "detail" } ] },
+        { choiceLabel: "Feed used", event_type: "FEED_USED", autofillDate: ["used_date"], capture: [
+          { name: "feed_type_id", ask: "Which feed?", input: "library", libraryType: "POULTRY_FEED", tier: "quick" },
+          { name: "qty_kg", ask: "How much (kg)?", input: "number", tier: "quick" } ] },
       ] } },
     },
     {
@@ -64,6 +84,10 @@ export const poultryConfig = {
           { name: "severity", ask: "How bad?", input: "choice", tier: "quick", options: opts({value:"MILD",label:"Mild"},{value:"MODERATE",label:"Moderate"},{value:"SEVERE",label:"Severe"},{value:"CLEARED",label:"Cleared / recovered"}) },
           { name: "qty_affected", ask: "Birds affected", input: "number", tier: "quick" },
           { name: "symptoms", ask: "Symptoms", input: "multichoice", tier: "quick", options: opts({value:"COUGHING",label:"Coughing"},{value:"SNEEZING",label:"Sneezing"},{value:"DIARRHEA",label:"Diarrhea"},{value:"LETHARGY",label:"Lethargy"},{value:"REDUCED_APPETITE",label:"Off feed"},{value:"REDUCED_PRODUCTION",label:"Fewer eggs"},{value:"SWELLING",label:"Swelling"},{value:"NASAL_DISCHARGE",label:"Runny nose"},{value:"EYE_DISCHARGE",label:"Runny eyes"},{value:"FEATHER_LOSS",label:"Feather loss"},{value:"LIMPING",label:"Limping"},{value:"OTHER",label:"Other"}) } ] },
+        { choiceLabel: "Vaccinated", event_type: "VACCINATION_GIVEN", capture: [
+          { name: "vaccine_id", ask: "Which vaccine?", input: "library", libraryType: "POULTRY_VACCINE", tier: "quick" },
+          { name: "route", ask: "How given?", input: "choice", tier: "quick", options: opts({value:"DRINKING_WATER",label:"In water"},{value:"INJECTION",label:"Injection"},{value:"EYE_DROP",label:"Eye drop"},{value:"SPRAY",label:"Spray"},{value:"OTHER",label:"Other"}) },
+          { name: "qty_doses", ask: "Doses", input: "number", tier: "detail" } ] },
         { choiceLabel: "Gave medication", event_type: "MEDICATION_GIVEN", autofillDate: ["given_date"], capture: [
           { name: "medication_name", ask: "Medicine name", input: "text", tier: "quick" },
           { name: "route", ask: "How given?", input: "choice", tier: "detail", options: opts({value:"DRINKING_WATER",label:"In water"},{value:"INJECTION",label:"Injection"},{value:"ORAL",label:"Oral"},{value:"SPRAY",label:"Spray"},{value:"FEED",label:"In feed"},{value:"OTHER",label:"Other"}) },
