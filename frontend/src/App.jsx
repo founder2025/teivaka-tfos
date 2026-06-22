@@ -109,6 +109,7 @@ const PoultryBankEvidence   = lazy(() => import("./pages/farmer/poultry/PoultryB
 const LibrarySettings       = lazy(() => import("./pages/farmer/LibrarySettings"));
 const HarvestList   = lazy(() => import("./pages/farmer/HarvestList"));
 const CycleList     = lazy(() => import("./pages/farmer/CycleList"));
+const CaptureEngine = lazy(() => import("./capture/CaptureEngine"));  // Universal Capture Engine (skeleton)
 const CycleDetail   = lazy(() => import("./pages/farmer/CycleDetail"));
 const NurseryNew    = lazy(() => import("./pages/farmer/NurseryNew"));
 const FarmLibrary   = lazy(() => import("./pages/farmer/Library"));
@@ -357,6 +358,7 @@ export default function App() {
             <Route path="/farm/cycles/:cycleId" element={<CycleDetail />} />
             <Route path="/farm/harvests"     element={<HarvestList />} />
             <Route path="/farm/field-events" element={<FieldEventNew />} />
+            <Route path="/farm/capture"      element={<CaptureEngine />} />
             <Route path="/farm/inventory"    element={<InventoryList />} />
             <Route path="/farm/library"      element={<FarmLibrary />} />
             <Route path="/farm/labor"        element={<Labor />} />
