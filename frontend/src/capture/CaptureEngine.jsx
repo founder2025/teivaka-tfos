@@ -17,6 +17,7 @@ import {
   Eye, Droplet, Scissors, ShieldCheck, Sprout, Warehouse, Coins,
   Leaf, CalendarPlus, CalendarCheck,
   Egg, Bird, Stethoscope, Scale, Home, AlertTriangle, PlusCircle, Wheat,
+  Skull, HandCoins, Syringe, Milk, Repeat,
   Camera, MapPin, User, Mic, Square, Users, X,
   ChevronLeft, Check, Loader2, Plus,
 } from "lucide-react";
@@ -25,6 +26,7 @@ import cropsConfig from "./config/crops";
 const ICONS = {
   Eye, Droplet, Scissors, ShieldCheck, Sprout, Warehouse, Coins, Leaf, CalendarPlus, CalendarCheck,
   Egg, Bird, Stethoscope, Scale, Home, AlertTriangle, PlusCircle, Wheat,
+  Skull, HandCoins, Syringe, Milk, Repeat,
 };
 
 function authHeaders() {

@@ -60,6 +60,7 @@ import GroupCatalogSection from "../settings/GroupCatalogSection";
 import CaptureEngine from "../../capture/CaptureEngine";
 import cropsConfig from "../../capture/config/crops";
 import poultryConfig from "../../capture/config/animal-poultry";
+import livestockConfig from "../../capture/config/animal-livestock";
 
 /**
  * LogSheet — two-level (+) catalog modal per Catalog Redesign Doctrine 2026-04-30.
@@ -417,12 +418,8 @@ export default function LogSheet({ isOpen, onClose }) {
     v.key === "PLANT" ? cropsConfig.verbs.length : routedEventsFor(v.groups).length;
 
   const activeVertical = VERTICALS.find((v) => v.key === selectedVertical) || null;
-  // ANIMAL tile fallback (livestock sub) uses only the non-poultry animal groups.
-  const LIVESTOCK_GROUPS = ["LIVESTOCK", "APICULTURE", "AQUACULTURE"];
-  const verticalEvents =
-    selectedVertical === "WHOLE" ? routedEventsFor(activeVertical.groups)
-    : selectedVertical === "ANIMAL" && animalSub === "LIVESTOCK" ? routedEventsFor(LIVESTOCK_GROUPS)
-    : [];
+  // Tiles are only used for WHOLE-farm now; PLANT/POULTRY/LIVESTOCK all use the engine.
+  const verticalEvents = selectedVertical === "WHOLE" ? routedEventsFor(activeVertical.groups) : [];
 
   const isLevel2 = selectedVertical !== null;
   const isManage = viewMode === "manage";
@@ -550,13 +547,16 @@ export default function LogSheet({ isOpen, onClose }) {
         </div>
       )}
 
-      {/* POULTRY drills into the Capture Engine (flock-anchored). */}
+      {/* POULTRY + LIVESTOCK each drill into the Capture Engine (different anchor models). */}
       {!isManage && !isLoading && !error && isLevel2 && selectedVertical === "ANIMAL" && animalSub === "POULTRY" && (
         <CaptureEngine config={poultryConfig} onDone={onClose} />
       )}
+      {!isManage && !isLoading && !error && isLevel2 && selectedVertical === "ANIMAL" && animalSub === "LIVESTOCK" && (
+        <CaptureEngine config={livestockConfig} onDone={onClose} />
+      )}
 
-      {/* Tile view: WHOLE-farm, and ANIMAL→Other livestock (existing working forms). */}
-      {!isManage && !isLoading && !error && isLevel2 && (selectedVertical === "WHOLE" || (selectedVertical === "ANIMAL" && animalSub === "LIVESTOCK")) && (
+      {/* Tile view: WHOLE-farm only (Money/Notes/records). */}
+      {!isManage && !isLoading && !error && isLevel2 && selectedVertical === "WHOLE" && (
         verticalEvents.length === 0 ? (
           <div className="text-center py-8 text-gray-500">Nothing to log here yet.</div>
         ) : (
