@@ -366,8 +366,7 @@ function EventTile({ event, onClick }) {
   );
 }
 
-export default function LogSheet({ isOpen, onClose, mode }) {
-  void mode;
+export default function LogSheet({ isOpen, onClose }) {
   const navigate = useNavigate();
   const [data, setData] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
