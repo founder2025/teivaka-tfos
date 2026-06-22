@@ -1,7 +1,9 @@
+import uuid
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import text
 from app.db.session import get_rls_db
 from app.middleware.rls import get_current_user
+from app.core.audit_chain import emit_audit_event
 from pydantic import BaseModel
 from decimal import Decimal
 from datetime import datetime
@@ -80,6 +82,21 @@ async def create_equipment(body: EquipmentCreate, user: dict = Depends(get_curre
             "notes": body.notes,
             "created_by": str(user["user_id"]),
         })
+        # One add -> one audit row (Universal Event Form Contract). Same txn as the INSERT.
+        await emit_audit_event(
+            db=db,
+            tenant_id=uuid.UUID(str(user["tenant_id"])),
+            actor_user_id=uuid.UUID(str(user["user_id"])),
+            event_type="EQUIPMENT_ADDED",
+            entity_type="equipment",
+            entity_id=equipment_id,
+            payload={
+                "equipment_id": equipment_id,
+                "farm_id": body.farm_id,
+                "equipment_name": body.equipment_name,
+                "equipment_type": body.equipment_type,
+            },
+        )
     return {"data": {"equipment_id": equipment_id}}
 
 

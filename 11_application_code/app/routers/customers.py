@@ -91,6 +91,21 @@ async def create_customer(body: CustomerCreate, user: dict = Depends(get_current
             "payment_terms_days": body.payment_terms_days,
             "notes": body.notes,
         })
+        # One add -> one audit row (Universal Event Form Contract). Same txn as the INSERT.
+        await emit_audit_event(
+            db=db,
+            tenant_id=uuid.UUID(str(user["tenant_id"])),
+            actor_user_id=uuid.UUID(str(user["user_id"])),
+            event_type="BUYER_ADDED",
+            entity_type="customer",
+            entity_id=customer_id,
+            payload={
+                "customer_id": customer_id,
+                "customer_name": body.customer_name.strip(),
+                "customer_type": body.customer_type,
+                "phone": body.phone,
+            },
+        )
     return {"data": {"customer_id": customer_id, "customer_name": body.customer_name.strip()}}
 
 

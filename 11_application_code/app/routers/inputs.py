@@ -6,6 +6,7 @@ from decimal import Decimal
 import uuid
 from app.db.session import get_rls_db
 from app.middleware.rls import get_current_user
+from app.core.audit_chain import emit_audit_event
 
 router = APIRouter()
 
@@ -49,6 +50,21 @@ async def create_input(body: InputCreate, user: dict = Depends(get_current_user)
             "cost": body.unit_cost_fjd, "sup": body.preferred_supplier_id or None,
             "loc": body.storage_location, "notes": body.notes,
         })
+        # One add -> one audit row (Universal Event Form Contract). Same txn as the INSERT.
+        await emit_audit_event(
+            db=db,
+            tenant_id=uuid.UUID(str(user["tenant_id"])),
+            actor_user_id=uuid.UUID(str(user["user_id"])),
+            event_type="INPUT_ADDED",
+            entity_type="input",
+            entity_id=input_id,
+            payload={
+                "input_id": input_id,
+                "farm_id": body.farm_id,
+                "input_name": body.input_name.strip(),
+                "input_category": body.input_category,
+            },
+        )
     return {"data": {"input_id": input_id, "input_name": body.input_name.strip()}}
 
 
