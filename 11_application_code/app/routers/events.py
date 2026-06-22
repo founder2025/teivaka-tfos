@@ -1126,6 +1126,14 @@ async def submit_event(
         if zone_row is None:
             raise HTTPException(404, error_envelope("pu_not_found", f"Production unit {submission.anchors.pu_id} not found."))
 
+        # Every cycle carries a 3-Layer classification (Strike #101/#103). Resolve
+        # from suggested_layer when not supplied; borderline crops must specify one.
+        from app.services.cycle_service import resolve_layer
+        try:
+            resolved_layer = await resolve_layer(db, payload_dict["production_id"], payload_dict.get("layer"))
+        except ValueError as e:
+            raise HTTPException(422, error_envelope("layer_required", str(e)))
+
         await db.execute(
             text("""
                 INSERT INTO tenant.production_cycles (
@@ -1152,7 +1160,7 @@ async def submit_event(
                 "expected_harvest_date": payload_dict.get("expected_harvest_date"),
                 "planned_area_sqm": payload_dict.get("planned_area_sqm"),
                 "planned_yield_kg": payload_dict.get("planned_yield_kg"),
-                "layer": payload_dict.get("layer"),
+                "layer": resolved_layer,
                 "farmer_label": payload_dict.get("farmer_label"),
                 "cycle_notes": payload_dict.get("cycle_notes"),
                 "created_by": actor_uuid,

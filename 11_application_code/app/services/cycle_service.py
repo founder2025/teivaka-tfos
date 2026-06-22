@@ -180,6 +180,33 @@ async def generate_initial_tasks(
     return task_ids
 
 
+async def resolve_layer(session: AsyncSession, production_id: str, layer: Optional[str]) -> str:
+    """Every production cycle must carry a 3-Layer classification (Strike #101/#103).
+
+    If the caller supplies a layer, use it. Otherwise fall back to the production's
+    seeded `shared.productions.suggested_layer` (operator-reviewed per Strike #103).
+    The handful of borderline productions have NO suggestion and MUST be classified
+    explicitly by the caller (Strike #98 Rule 4) — we raise ValueError so the caller
+    surfaces a 4xx rather than writing a NULL layer.
+
+    This is what makes `production_cycles.layer NOT NULL` (migration 156) safe: no
+    creation path can produce a NULL layer.
+    """
+    if layer:
+        return layer
+    row = await session.execute(
+        text("SELECT suggested_layer FROM shared.productions WHERE production_id = :pid"),
+        {"pid": production_id},
+    )
+    resolved = row.scalar_one_or_none()
+    if not resolved:
+        raise ValueError(
+            "LAYER_REQUIRED: this crop has no default layer (borderline) — caller must "
+            "specify layer (CASH_FLOW / FOOD_SECURITY / LONG_TERM_ASSET)."
+        )
+    return resolved
+
+
 async def create_cycle(
     session: AsyncSession,
     pu_id: str,
@@ -241,6 +268,10 @@ async def create_cycle(
 
     # 4. Generate cycle_id
     cycle_id = generate_cycle_id(farm_id, pu_id, planting_date.year, seq)
+
+    # 4b. Every cycle carries a 3-Layer classification (Strike #101/#103); resolve
+    #     from suggested_layer when the caller didn't specify (raises on borderline).
+    layer = await resolve_layer(session, production_id, layer)
 
     final_status = "ACTIVE"
 
