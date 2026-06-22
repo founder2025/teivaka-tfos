@@ -16,12 +16,16 @@ import { useNavigate } from "react-router-dom";
 import {
   Eye, Droplet, Scissors, ShieldCheck, Sprout, Warehouse, Coins,
   Leaf, CalendarPlus, CalendarCheck,
+  Egg, Bird, Stethoscope, Scale, Home, AlertTriangle, PlusCircle,
   Camera, MapPin, User, Mic, Square, Users, X,
   ChevronLeft, Check, Loader2, Plus,
 } from "lucide-react";
 import cropsConfig from "./config/crops";
 
-const ICONS = { Eye, Droplet, Scissors, ShieldCheck, Sprout, Warehouse, Coins, Leaf, CalendarPlus, CalendarCheck };
+const ICONS = {
+  Eye, Droplet, Scissors, ShieldCheck, Sprout, Warehouse, Coins, Leaf, CalendarPlus, CalendarCheck,
+  Egg, Bird, Stethoscope, Scale, Home, AlertTriangle, PlusCircle,
+};
 
 function authHeaders() {
   const tok = localStorage.getItem("tfos_access_token");
@@ -48,13 +52,31 @@ function prettyDate(ymd) {
   return new Date(y, m - 1, d).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
 }
 
+// Context spec = the "what am I logging against" source. Crops log against an active
+// production CYCLE; poultry log against a FLOCK. A config supplies its own context
+// (see animal-poultry.js); CROPS uses this default so crops.js needs no changes.
+const DEFAULT_CONTEXT = {
+  loader: "/api/v1/cycles?cycle_status=ACTIVE",
+  extract: (body) => { let l = body?.data ?? body; if (l && !Array.isArray(l)) l = l.cycles || l.items || []; return l || []; },
+  idKey: "cycle_id",
+  optionLabel: (c) => `${c.production_name || c.cycle_id}${c.pu_farmer_label ? ` · ${c.pu_farmer_label}` : ""}`,
+  shortLabel: (c) => c.production_name || c.cycle_id,
+  contextLabel: "Crop",
+  loadingMsg: "Loading your crops…",
+  emptyMsg: "No active crop cycle yet — start a crop first.",
+  pickPrompt: "Select crop…",
+  buildAnchors: (c) => ({ farm_id: c.farm_id, pu_id: c.pu_id, cycle_id: c.cycle_id }),
+  injectPayload: (c) => (c.production_id ? { production_id: c.production_id } : {}),
+};
+
 export default function CaptureEngine({ config = cropsConfig, onDone }) {
   const navigate = useNavigate();
-  const [cycles, setCycles] = useState([]);
-  const [loadingCycles, setLoadingCycles] = useState(true);
+  const ctx = config.context || DEFAULT_CONTEXT;
+  const [items, setItems] = useState([]);
+  const [loadingItems, setLoadingItems] = useState(true);
   const [verb, setVerb] = useState(null);
   const [spec, setSpec] = useState(null);          // chosen EventSpec (primary or a branch option)
-  const [cycleId, setCycleId] = useState("");
+  const [itemId, setItemId] = useState("");
   const [values, setValues] = useState({});
   const [showDetail, setShowDetail] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -97,35 +119,35 @@ export default function CaptureEngine({ config = cropsConfig, onDone }) {
 
   useEffect(() => {
     let off = false;
+    setLoadingItems(true);
     (async () => {
       try {
-        const res = await fetch("/api/v1/cycles?cycle_status=ACTIVE", { headers: authHeaders() });
+        const res = await fetch(ctx.loader, { headers: authHeaders() });
         const body = await res.json().catch(() => null);
-        let list = body?.data ?? body;
-        if (list && !Array.isArray(list)) list = list.cycles || list.items || [];
+        const list = ctx.extract(body) || [];
         if (!off) {
-          setCycles(list || []);
-          if ((list || []).length === 1) setCycleId(list[0].cycle_id);
+          setItems(list);
+          if (list.length === 1) setItemId(list[0][ctx.idKey]);
         }
-      } finally { if (!off) setLoadingCycles(false); }
+      } finally { if (!off) setLoadingItems(false); }
     })();
     return () => { off = true; };
-  }, []);
+  }, [ctx.loader]);
 
-  const selectedCycle = useMemo(
-    () => cycles.find((c) => c.cycle_id === cycleId) || null, [cycles, cycleId],
+  const selectedItem = useMemo(
+    () => items.find((c) => c[ctx.idKey] === itemId) || null, [items, itemId, ctx.idKey],
   );
 
   // Chemical picker: load shared.chemical_library only when a spec needs it (Inviolable #2 —
   // chemical_id is the WHD trigger anchor; the farmer must pick a real catalog row, never free-text).
   const needsChem = useMemo(() => !!spec?.capture?.some((f) => f.input === "chemical"), [spec]);
   useEffect(() => {
-    if (!needsChem || !selectedCycle?.production_id) { setChemicals([]); return; }
+    if (!needsChem || !selectedItem?.production_id) { setChemicals([]); return; }
     let off = false;
     (async () => {
       setLoadingChems(true);
       try {
-        const pid = encodeURIComponent(selectedCycle.production_id);
+        const pid = encodeURIComponent(selectedItem.production_id);
         let body = await (await fetch(`/api/v1/chemicals?registered_for=${pid}`, { headers: authHeaders() })).json().catch(() => null);
         let list = body?.data ?? [];
         if (!Array.isArray(list) || list.length === 0) {           // fallback: no crop-registered rows -> full catalog
@@ -136,7 +158,7 @@ export default function CaptureEngine({ config = cropsConfig, onDone }) {
       } finally { if (!off) setLoadingChems(false); }
     })();
     return () => { off = true; };
-  }, [needsChem, selectedCycle?.production_id]);
+  }, [needsChem, selectedItem?.production_id]);
 
   // Clear the per-entry fields (values, evidence, notes, when) — keeps cycle + operator.
   function clearEntry() {
@@ -227,7 +249,7 @@ export default function CaptureEngine({ config = cropsConfig, onDone }) {
   const mmss = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 
   async function submit() {
-    if (!spec || !selectedCycle) return;
+    if (!spec || !selectedItem) return;
     setSubmitting(true); setError("");
     const payload = {};
     for (const f of spec.capture) {
@@ -235,9 +257,12 @@ export default function CaptureEngine({ config = cropsConfig, onDone }) {
       const v = values[f.name];
       if (v !== undefined && v !== "" && v !== null) payload[f.name] = v;
     }
-    // Inference: every CROPS payload requires production_id — inject the cycle's
-    // crop so the farmer never types it (safe: schemas require it or allow extras).
-    if (selectedCycle.production_id) payload.production_id = selectedCycle.production_id;
+    // Context inference: inject anchor-derived payload keys (e.g. crop production_id)
+    // so the farmer never re-types them (safe: schemas require them or allow extras).
+    Object.assign(payload, ctx.injectPayload ? ctx.injectPayload(selectedItem) : {});
+    // Auto-fill required date fields from the chosen date (e.g. sale_date, given_date)
+    // so the farmer enters the date once.
+    if (spec.autofillDate) for (const k of spec.autofillDate) if (payload[k] === undefined) payload[k] = occurredDate;
     if (values.notes) payload.notes = values.notes;
     // Evidence is cross-cutting envelope metadata (NOT payload) — photo + voice are
     // SHA-256 hashed server-side, GPS + witness stored; each lifts verification level.
@@ -250,7 +275,7 @@ export default function CaptureEngine({ config = cropsConfig, onDone }) {
     const envelope = {
       event_type: spec.event_type,
       occurred_at: `${occurredDate}T${occurredTime || "12:00"}:00+12:00`,
-      anchors: { farm_id: selectedCycle.farm_id, pu_id: selectedCycle.pu_id, cycle_id: selectedCycle.cycle_id },
+      anchors: ctx.buildAnchors(selectedItem),
       payload,
       ...(Object.keys(evidence).length ? { evidence } : {}),
     };
@@ -340,6 +365,20 @@ export default function CaptureEngine({ config = cropsConfig, onDone }) {
 
   function fieldInput(f) {
     const v = values[f.name] ?? "";
+    if (f.input === "multichoice") {
+      const arr = Array.isArray(values[f.name]) ? values[f.name] : [];
+      const toggle = (val) => setVal(f.name, arr.includes(val) ? arr.filter((x) => x !== val) : [...arr, val]);
+      return (
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          {f.options.map((o) => (
+            <button key={o.value} onClick={() => toggle(o.value)}
+              style={{ padding: "10px 14px", borderRadius: 12, fontSize: 14, fontWeight: 600,
+                border: arr.includes(o.value) ? "2px solid #2e7d32" : "1px solid #d8d4c8",
+                background: arr.includes(o.value) ? "#eaf3ea" : "#fff", cursor: "pointer" }}>{o.label}</button>
+          ))}
+        </div>
+      );
+    }
     if (f.input === "chemical") {
       const selected = chemicals.find((c) => c.chemical_id === v) || null;
       const filtered = chemQuery
@@ -399,21 +438,21 @@ export default function CaptureEngine({ config = cropsConfig, onDone }) {
     <div style={wrap}>
       <button onClick={reset} style={backBtn}><ChevronLeft size={18} /> Back</button>
       <h1 style={{ fontSize: 20, fontWeight: 800, marginBottom: 14 }}>{spec.choiceLabel || verb.label}</h1>
-      {loadingCycles ? <p style={{ color: "#6b6b6b" }}>Loading your crops…</p>
-        : cycles.length === 0 ? <p style={{ color: "#9a3b3b" }}>No active crop cycle yet — start a crop first.</p>
+      {loadingItems ? <p style={{ color: "#6b6b6b" }}>{ctx.loadingMsg}</p>
+        : items.length === 0 ? <p style={{ color: "#9a3b3b" }}>{ctx.emptyMsg}</p>
         : (<>
-          {/* Anchors — Farm · Crop · Operator (the 4-anchor identity on every record) */}
+          {/* Anchors — Farm · <context> · Operator (the 4-anchor identity on every record) */}
           <div style={card}>
-            <div style={cardHead}>Anchors · farm · crop · operator</div>
+            <div style={cardHead}>Anchors · farm · {ctx.contextLabel.toLowerCase()} · operator</div>
             <div style={{ display: "grid", gridTemplateColumns: "64px 1fr", rowGap: 10, alignItems: "center", fontSize: 14 }}>
               <span style={{ color: "#9a917c" }}>Farm</span>
-              <span style={{ fontWeight: 600 }}>{selectedCycle?.farm_id || "—"}</span>
-              <span style={{ color: "#9a917c" }}>Crop</span>
-              {cycles.length === 1
-                ? <span style={{ fontWeight: 600 }}>{selectedCycle?.production_name || selectedCycle?.cycle_id}{selectedCycle?.pu_farmer_label ? ` · ${selectedCycle.pu_farmer_label}` : ""}</span>
-                : <select value={cycleId} onChange={(e) => setCycleId(e.target.value)} style={inputBox}>
-                    <option value="">Select crop…</option>
-                    {cycles.map((c) => <option key={c.cycle_id} value={c.cycle_id}>{c.production_name || c.cycle_id}{c.pu_farmer_label ? ` · ${c.pu_farmer_label}` : ""}</option>)}
+              <span style={{ fontWeight: 600 }}>{selectedItem?.farm_id || "—"}</span>
+              <span style={{ color: "#9a917c" }}>{ctx.contextLabel}</span>
+              {items.length === 1
+                ? <span style={{ fontWeight: 600 }}>{ctx.optionLabel(selectedItem)}</span>
+                : <select value={itemId} onChange={(e) => setItemId(e.target.value)} style={inputBox}>
+                    <option value="">{ctx.pickPrompt}</option>
+                    {items.map((c) => <option key={c[ctx.idKey]} value={c[ctx.idKey]}>{ctx.optionLabel(c)}</option>)}
                   </select>}
               <span style={{ color: "#9a917c" }}>Operator</span>
               <span style={{ fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}><User size={14} />{operator || "You"}</span>
@@ -489,7 +528,7 @@ export default function CaptureEngine({ config = cropsConfig, onDone }) {
           {/* About to record — the audit preview */}
           <div style={{ border: "1px solid #cfe0cf", background: "#f0f6f0", borderRadius: 12, padding: "10px 12px", marginBottom: 14, fontSize: 12.5, color: "#3c5a3c" }}>
             <div style={{ fontWeight: 700, marginBottom: 4, display: "flex", alignItems: "center", gap: 6 }}><ShieldCheck size={14} /> About to record</div>
-            {spec.event_type} · {selectedCycle?.production_name || selectedCycle?.cycle_id || "—"} · {prettyDate(occurredDate)} {occurredTime} · {operator || "You"}
+            {spec.event_type} · {selectedItem ? ctx.shortLabel(selectedItem) : "—"} · {prettyDate(occurredDate)} {occurredTime} · {operator || "You"}
             {(() => { const e = [photoUrl && "photo", gps && "GPS", voiceUrl && "voice", witnessName.trim() && "witness"].filter(Boolean); return e.length ? ` · +${e.join(" +")}` : ""; })()}
           </div>
 
@@ -498,10 +537,10 @@ export default function CaptureEngine({ config = cropsConfig, onDone }) {
             <p style={{ fontSize: 12, color: "#9a917c", marginBottom: 8, textAlign: "center" }}>
               {recording ? "Stop the recording to save." : "Finishing upload…"}</p>
           )}
-          <button onClick={submit} disabled={submitting || !selectedCycle || photoUploading || voiceUploading || recording}
+          <button onClick={submit} disabled={submitting || !selectedItem || photoUploading || voiceUploading || recording}
             style={{ width: "100%", padding: 16, borderRadius: 14, border: "none", fontSize: 16, fontWeight: 700, color: "#fff",
-              background: (!selectedCycle || photoUploading || voiceUploading || recording) ? "#b8b8b8" : "#2e7d32",
-              cursor: submitting || !selectedCycle ? "default" : "pointer",
+              background: (!selectedItem || photoUploading || voiceUploading || recording) ? "#b8b8b8" : "#2e7d32",
+              cursor: submitting || !selectedItem ? "default" : "pointer",
               display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
             {submitting ? <Loader2 size={18} /> : <Check size={18} />}{submitting ? "Saving…" : "Save"}</button>
         </>)}

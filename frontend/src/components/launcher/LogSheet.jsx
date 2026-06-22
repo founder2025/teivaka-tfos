@@ -59,6 +59,7 @@ import Modal from "../ui/Modal";
 import GroupCatalogSection from "../settings/GroupCatalogSection";
 import CaptureEngine from "../../capture/CaptureEngine";
 import cropsConfig from "../../capture/config/crops";
+import poultryConfig from "../../capture/config/animal-poultry";
 
 /**
  * LogSheet — two-level (+) catalog modal per Catalog Redesign Doctrine 2026-04-30.
@@ -325,10 +326,14 @@ export default function LogSheet({ isOpen, onClose }) {
   const [viewMode, setViewMode] = useState("grid");
   const [activeFarmId, setActiveFarmId] = useState(null);
   const [localActiveGroups, setLocalActiveGroups] = useState(null);
+  // Animal vertical splits into two sub-flows (different anchor models): POULTRY
+  // (flock-anchored, verb engine) and LIVESTOCK (species/paddock, existing tiles).
+  const [animalSub, setAnimalSub] = useState(null);
 
   useEffect(() => {
     if (!isOpen) {
       setSelectedVertical(null);
+      setAnimalSub(null);
       setViewMode("grid");
       setLocalActiveGroups(null);
       return;
@@ -412,15 +417,21 @@ export default function LogSheet({ isOpen, onClose }) {
     v.key === "PLANT" ? cropsConfig.verbs.length : routedEventsFor(v.groups).length;
 
   const activeVertical = VERTICALS.find((v) => v.key === selectedVertical) || null;
+  // ANIMAL tile fallback (livestock sub) uses only the non-poultry animal groups.
+  const LIVESTOCK_GROUPS = ["LIVESTOCK", "APICULTURE", "AQUACULTURE"];
   const verticalEvents =
-    activeVertical && selectedVertical !== "PLANT" ? routedEventsFor(activeVertical.groups) : [];
+    selectedVertical === "WHOLE" ? routedEventsFor(activeVertical.groups)
+    : selectedVertical === "ANIMAL" && animalSub === "LIVESTOCK" ? routedEventsFor(LIVESTOCK_GROUPS)
+    : [];
 
   const isLevel2 = selectedVertical !== null;
   const isManage = viewMode === "manage";
   const headerTitle = isManage
     ? "Manage groups"
     : isLevel2
-      ? activeVertical?.label || selectedVertical
+      ? (selectedVertical === "ANIMAL" && animalSub === "POULTRY" ? "Poultry"
+        : selectedVertical === "ANIMAL" && animalSub === "LIVESTOCK" ? "Other livestock"
+        : activeVertical?.label || selectedVertical)
       : "What do you want to log?";
 
   const handleEventClick = (event) => {
@@ -475,7 +486,7 @@ export default function LogSheet({ isOpen, onClose }) {
         <div className="mb-3">
           <button
             type="button"
-            onClick={() => setSelectedVertical(null)}
+            onClick={() => { if (selectedVertical === "ANIMAL" && animalSub) { setAnimalSub(null); } else { setSelectedVertical(null); } }}
             aria-label="Back"
             className="inline-flex items-center gap-1 text-sm text-gray-600 hover:text-gray-900 transition"
           >
@@ -516,27 +527,45 @@ export default function LogSheet({ isOpen, onClose }) {
         </div>
       )}
 
-      {/* PLANT drills into the Universal Capture Engine (verb-first) instead of the tile wall. */}
+      {/* PLANT drills into the Universal Capture Engine (verb-first). */}
       {!isManage && !isLoading && !error && isLevel2 && selectedVertical === "PLANT" && (
         <CaptureEngine config={cropsConfig} onDone={onClose} />
       )}
 
-      {!isManage && !isLoading && !error && isLevel2 && selectedVertical !== "PLANT" && verticalEvents.length === 0 && (
-        <div className="text-center py-8 text-gray-500">
-          Nothing to log here yet.
+      {/* ANIMAL splits: pick the sub-flow (different anchor models). */}
+      {!isManage && !isLoading && !error && isLevel2 && selectedVertical === "ANIMAL" && !animalSub && (
+        <div className="grid grid-cols-2 gap-3">
+          <button type="button" onClick={() => setAnimalSub("POULTRY")}
+            className="flex flex-col items-center justify-center p-5 h-32 rounded-xl border bg-white border-gray-200 hover:border-[var(--green,var(--green))] hover:shadow-md active:scale-95 transition-all">
+            <Bird className="w-8 h-8 mb-2" style={{ color: C.green }} strokeWidth={1.75} />
+            <span className="text-base font-medium text-gray-900">Poultry</span>
+            <span className="text-xs text-gray-500 mt-0.5">Chickens · ducks · eggs</span>
+          </button>
+          <button type="button" onClick={() => setAnimalSub("LIVESTOCK")}
+            className="flex flex-col items-center justify-center p-5 h-32 rounded-xl border bg-white border-gray-200 hover:border-[var(--green,var(--green))] hover:shadow-md active:scale-95 transition-all">
+            <PawPrint className="w-8 h-8 mb-2" style={{ color: C.green }} strokeWidth={1.75} />
+            <span className="text-base font-medium text-gray-900">Other livestock</span>
+            <span className="text-xs text-gray-500 mt-0.5">Cattle · goats · pigs · bees</span>
+          </button>
         </div>
       )}
 
-      {!isManage && !isLoading && !error && isLevel2 && selectedVertical !== "PLANT" && verticalEvents.length > 0 && (
-        <div className="grid grid-cols-3 md:grid-cols-4 gap-3">
-          {verticalEvents.map((evt) => (
-            <EventTile
-              key={evt.event_type}
-              event={evt}
-              onClick={handleEventClick}
-            />
-          ))}
-        </div>
+      {/* POULTRY drills into the Capture Engine (flock-anchored). */}
+      {!isManage && !isLoading && !error && isLevel2 && selectedVertical === "ANIMAL" && animalSub === "POULTRY" && (
+        <CaptureEngine config={poultryConfig} onDone={onClose} />
+      )}
+
+      {/* Tile view: WHOLE-farm, and ANIMAL→Other livestock (existing working forms). */}
+      {!isManage && !isLoading && !error && isLevel2 && (selectedVertical === "WHOLE" || (selectedVertical === "ANIMAL" && animalSub === "LIVESTOCK")) && (
+        verticalEvents.length === 0 ? (
+          <div className="text-center py-8 text-gray-500">Nothing to log here yet.</div>
+        ) : (
+          <div className="grid grid-cols-3 md:grid-cols-4 gap-3">
+            {verticalEvents.map((evt) => (
+              <EventTile key={evt.event_type} event={evt} onClick={handleEventClick} />
+            ))}
+          </div>
+        )
       )}
 
       {!isManage && !isLevel2 && shouldShowManageLink && (
