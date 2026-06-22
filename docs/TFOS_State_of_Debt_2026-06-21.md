@@ -216,10 +216,21 @@ Clusters executed this session, each verified on prod with its own rollback, not
 | 4.2 — layer NOT NULL | H5 `production_cycles.layer` NOT NULL | ✅ done (prod): cycle_service.resolve_layer() enforces layer at both creation paths (suggested_layer fallback, borderline→4xx); mig `156` backfilled + SET NOT NULL; is_nullable=NO, 0 NULL rows |
 | 7 — Doc reconciliation | L2 CLAUDE.md Current-state (head/branch/containers) + 2 stale known-issues; L3 schema-baseline label | ✅ done (doc-only) |
 
-**Migration chain:** single head, prod stamped **154**. **Not yet executed:** Cluster 4
-(data anchors — `poultry_event_log.created_by` FK + `production_cycles.layer` NOT NULL,
-needs a backfill first), Cluster 6 (frontend HTTP consolidation + money seam), Cluster 7
-(doc reconciliation + per-user TZ).
+**Migration chain:** single head, prod stamped **156**.
+
+**DEBT SWEEP COMPLETE (2026-06-21).** Every cluster that removed a real landmine or
+enforced a real invariant is shipped + verified on prod: billing path, migration-chain
+merge, greenfield-seed fix, audit-grant revoke, users-policy codify, poultry created_by
+FK, layer NOT NULL, dead-code cleanup, doc reconciliation, dead-requirements cleanup.
+Foundation is at the "clean enough to build safely" finish line.
+
+**Deferred as tracked backlog (no active bug — "ride alongside feature work"):**
+- B84 — RLS defense-in-depth (me.py/GUC/worker) — WHERE-scoped today, not a leak.
+- B87 — money seam completion (surgical, currency sites only).
+- B88 — HTTP-client consolidation (~136 files, batched).
+- B89 — per-user timezone (a scale feature, not debt).
+
+Next: pivot to the Prime Directive — building prototype surfaces into prod for farmers.
 
 ## 6. STOP
 
