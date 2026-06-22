@@ -29,6 +29,13 @@ function todayOccurredAt() {
   const ymd = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   return `${ymd}T12:00:00+12:00`;
 }
+const ALLOWED_UNITS = ["ML_PER_L", "G_PER_L", "L_PER_HA", "KG_PER_HA"];
+function whdClearDate(days) {
+  if (days == null) return "?";
+  const d = new Date();
+  d.setDate(d.getDate() + Number(days));
+  return d.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+}
 
 export default function CaptureEngine({ config = cropsConfig, onDone }) {
   const [cycles, setCycles] = useState([]);
@@ -41,6 +48,9 @@ export default function CaptureEngine({ config = cropsConfig, onDone }) {
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState("");
+  const [chemicals, setChemicals] = useState([]);
+  const [loadingChems, setLoadingChems] = useState(false);
+  const [chemQuery, setChemQuery] = useState("");
 
   useEffect(() => {
     let off = false;
@@ -62,6 +72,28 @@ export default function CaptureEngine({ config = cropsConfig, onDone }) {
   const selectedCycle = useMemo(
     () => cycles.find((c) => c.cycle_id === cycleId) || null, [cycles, cycleId],
   );
+
+  // Chemical picker: load shared.chemical_library only when a spec needs it (Inviolable #2 —
+  // chemical_id is the WHD trigger anchor; the farmer must pick a real catalog row, never free-text).
+  const needsChem = useMemo(() => !!spec?.capture?.some((f) => f.input === "chemical"), [spec]);
+  useEffect(() => {
+    if (!needsChem || !selectedCycle?.production_id) { setChemicals([]); return; }
+    let off = false;
+    (async () => {
+      setLoadingChems(true);
+      try {
+        const pid = encodeURIComponent(selectedCycle.production_id);
+        let body = await (await fetch(`/api/v1/chemicals?registered_for=${pid}`, { headers: authHeaders() })).json().catch(() => null);
+        let list = body?.data ?? [];
+        if (!Array.isArray(list) || list.length === 0) {           // fallback: no crop-registered rows -> full catalog
+          body = await (await fetch(`/api/v1/chemicals`, { headers: authHeaders() })).json().catch(() => null);
+          list = body?.data ?? [];
+        }
+        if (!off) setChemicals(Array.isArray(list) ? list : []);
+      } finally { if (!off) setLoadingChems(false); }
+    })();
+    return () => { off = true; };
+  }, [needsChem, selectedCycle?.production_id]);
 
   function pickVerb(v) {
     setVerb(v); setValues({}); setShowDetail(false); setError("");
@@ -154,9 +186,52 @@ export default function CaptureEngine({ config = cropsConfig, onDone }) {
   const quick = spec.capture.filter((f) => f.tier === "quick");
   const detail = spec.capture.filter((f) => f.tier === "detail");
   function setVal(n, v) { setValues((s) => ({ ...s, [n]: v })); }
+  function pickChemical(name, c) {
+    setValues((s) => {
+      const next = { ...s, [name]: c.chemical_id };
+      // Auto-fill the rate unit from the catalog default, but only if it's a valid enum value.
+      if (c.default_unit && ALLOWED_UNITS.includes(c.default_unit) && spec.capture.some((f) => f.name === "unit")) {
+        next.unit = c.default_unit;
+      }
+      return next;
+    });
+  }
 
   function fieldInput(f) {
     const v = values[f.name] ?? "";
+    if (f.input === "chemical") {
+      const selected = chemicals.find((c) => c.chemical_id === v) || null;
+      const filtered = chemQuery
+        ? chemicals.filter((c) => (c.chem_name || "").toLowerCase().includes(chemQuery.toLowerCase()))
+        : chemicals;
+      return (
+        <div>
+          {loadingChems ? <p style={{ color: "#6b6b6b", fontSize: 13 }}>Loading chemicals…</p>
+            : chemicals.length === 0 ? <p style={{ color: "#9a3b3b", fontSize: 13 }}>No chemicals in the library yet.</p>
+            : (<>
+              <input placeholder="Search chemical…" value={chemQuery} onChange={(e) => setChemQuery(e.target.value)}
+                style={{ width: "100%", padding: 10, borderRadius: 10, border: "1px solid #d8d4c8", fontSize: 14, marginBottom: 8 }} />
+              <div style={{ maxHeight: 240, overflowY: "auto", display: "flex", flexDirection: "column", gap: 6 }}>
+                {filtered.map((c) => (
+                  <button key={c.chemical_id} onClick={() => pickChemical(f.name, c)}
+                    style={{ textAlign: "left", padding: "10px 12px", borderRadius: 10,
+                      border: v === c.chemical_id ? "2px solid #2e7d32" : "1px solid #d8d4c8",
+                      background: v === c.chemical_id ? "#eaf3ea" : "#fff", cursor: "pointer" }}>
+                    <span style={{ fontWeight: 600, fontSize: 14, display: "block" }}>{c.chem_name}</span>
+                    <span style={{ fontSize: 12, color: "#8a8a8a" }}>
+                      {c.active_ingredient ? `${c.active_ingredient} · ` : ""}WHD {c.withholding_period_days ?? "?"}d</span>
+                  </button>
+                ))}
+              </div>
+            </>)}
+          {selected && (
+            <div style={{ marginTop: 10, padding: "10px 12px", borderRadius: 10, background: "#fff7e6", border: "1px solid #f0d9a0", fontSize: 13, color: "#7a5b14" }}>
+              ⚠ Harvest blocked {selected.withholding_period_days ?? "?"} days — clears {whdClearDate(selected.withholding_period_days)}
+            </div>
+          )}
+        </div>
+      );
+    }
     if (f.input === "choice") return (
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
         {f.options.map((o) => (

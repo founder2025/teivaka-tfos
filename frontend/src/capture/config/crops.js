@@ -6,12 +6,13 @@
  * events_registry.py stays the truth. Field `name`s are EXACT backend payload keys.
  * The engine auto-injects production_id from the active cycle (inference).
  *
- * COVERAGE: 7 verbs, 29 wired /events-native crop events — every one writes a real
- * typed field_events + audit.events row.
- * STILL SEQUENCED (need backend, NOT faked here): CHEMICAL_APPLIED (chemical picker
- * + WHD UX), HARVEST_LOGGED (legacy /harvests — B75), CYCLE_CREATED (production_cycles
- * create-path), CYCLE_CLOSED, nursery pack (GERMINATION_LOGGED/NURSERY_BATCH_CREATED/
- * NURSERY_READY), INPUT_PURCHASED/INPUT_RECEIVED (Money pillar). Each = a config edit once ready.
+ * COVERAGE: 7 verbs, 30 wired /events-native crop events — every one writes a real
+ * typed field_events + audit.events row. CHEMICAL_APPLIED uses the `chemical` input
+ * (picker sourced from GET /api/v1/chemicals + WHD harvest-block read-back — Inviolable #2).
+ * STILL SEQUENCED (need backend, NOT faked here): HARVEST_LOGGED (legacy /harvests — B75),
+ * CYCLE_CREATED (production_cycles create-path), CYCLE_CLOSED, nursery pack
+ * (GERMINATION_LOGGED/NURSERY_BATCH_CREATED/NURSERY_READY), INPUT_PURCHASED/INPUT_RECEIVED
+ * (Money pillar). Each = a config edit once ready.
  */
 const opts = (...vs) => vs.map((v) => (typeof v === "string" ? { value: v, label: v } : v));
 
@@ -79,8 +80,15 @@ export const cropsConfig = {
       ] } },
     },
     {
-      id: "protection", label: "Crop Protection", descriptor: "weed & natural pest control", icon: "ShieldCheck",
+      id: "protection", label: "Crop Protection", descriptor: "spraying, weeding, pest control", icon: "ShieldCheck",
       resolve: { branch: { prompt: "What did you do?", options: [
+        { choiceLabel: "Sprayed chemical", event_type: "CHEMICAL_APPLIED", capture: [
+          { name: "chemical_id", ask: "Which chemical?", input: "chemical", tier: "quick" },
+          { name: "target_pest_or_disease", ask: "Target pest / disease", input: "text", tier: "quick" },
+          { name: "tank_volume_liters", ask: "Tank volume (L)", input: "number", tier: "detail" },
+          { name: "application_rate", ask: "Rate", input: "number", tier: "detail" },
+          { name: "unit", ask: "Rate unit", input: "choice", tier: "detail", options: opts({value:"ML_PER_L",label:"ml/L"},{value:"G_PER_L",label:"g/L"},{value:"L_PER_HA",label:"L/ha"},{value:"KG_PER_HA",label:"kg/ha"}) },
+          { name: "notes", ask: "Notes", input: "text", tier: "detail" } ] },
         { choiceLabel: "Weeded", event_type: "WEED_MANAGEMENT", capture: [
           { name: "method", ask: "How?", input: "choice", tier: "quick", options: opts({value:"MANUAL",label:"By hand"},{value:"MECHANICAL",label:"Machine"},{value:"MULCH",label:"Mulch"},{value:"COVER_CROP",label:"Cover crop"}) },
           { name: "area_treated_ha", ask: "Area (ha)", input: "number", tier: "detail" },
