@@ -326,7 +326,7 @@ function AddWorkerModal({ farmId, onClose, onSaved }) {
             <div><label>Daily rate (FJD)</label><input type="number" min="0" step="0.50" value={f.daily_rate_fjd} onChange={set("daily_rate_fjd")} placeholder="30.00" /></div>
           </div>
           <Field label="Phone (optional)"><input value={f.contact_number} onChange={set("contact_number")} placeholder="9XX XXXX" /></Field>
-          <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 4 }}>Fiji minimum wage is FJD 4.00/hr. Adding a worker writes an audit record.</div>
+          <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 4 }}>Fiji minimum wage is FJD 4.00/hr.</div>
         </div>
         <div className="overlay-foot"><button className="btn btn-secondary" onClick={onClose}>Cancel</button><button className="btn btn-primary" onClick={submit} disabled={busy}>{busy ? "Adding…" : "Add worker"}</button></div>
       </div>

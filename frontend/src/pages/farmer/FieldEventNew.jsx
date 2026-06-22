@@ -866,7 +866,16 @@ function FieldEventForm() {
   const qc = useQueryClient();
 
   const cc = useCropAndCycle();
-  const [eventType, setEventType]       = useState("");
+  const [searchParams] = useSearchParams();
+  // Preselect the activity from ?type= so Compliance "Log chemical" (type=CHEMICAL_APPLIED)
+  // and any legacy-valued deep link don't drop the farmer into a blank dropdown.
+  const _initialType = (() => {
+    const t = searchParams.get("type");
+    if (!t) return "";
+    if (EVENT_TYPES.some((o) => o.value === t)) return t;       // already a legacy value
+    return ({ CHEMICAL_APPLIED: "SPRAY" })[t] || "";            // catalog → legacy
+  })();
+  const [eventType, setEventType]       = useState(_initialType);
   const [eventDate, setEventDate]       = useState(todayISO());
   const [chemName, setChemName]         = useState("");
   const [quantity, setQuantity]         = useState("");
