@@ -61,6 +61,7 @@ import CaptureEngine from "../../capture/CaptureEngine";
 import cropsConfig from "../../capture/config/crops";
 import poultryConfig from "../../capture/config/animal-poultry";
 import livestockConfig from "../../capture/config/animal-livestock";
+import moneyConfig from "../../capture/config/whole-money";
 
 /**
  * LogSheet — two-level (+) catalog modal per Catalog Redesign Doctrine 2026-04-30.
@@ -88,129 +89,6 @@ const C = {
   soil:  "var(--soil, var(--soil))",
 };
 
-const EVENT_ROUTES = {
-  HARVEST_LOGGED:    "/farm/harvest/new",
-  CHEMICAL_APPLIED:  "/farm/field-events?new=1",
-  // Strike #97 — CROPS B2 polymorphic forms (Strike #96 backend)
-  PLANTING:           "/farm/field-events?type=PLANTING",
-  IRRIGATION:         "/farm/field-events?type=IRRIGATION",
-  FERTILIZER_APPLIED: "/farm/field-events?type=FERTILIZER_APPLIED",
-  WEED_MANAGEMENT:    "/farm/field-events?type=WEED_MANAGEMENT",
-  PRUNING_TRAINING:   "/farm/field-events?type=PRUNING_TRAINING",
-  TRANSPLANT_LOGGED:  "/farm/field-events?type=TRANSPLANT_LOGGED",
-  LAND_PREP:          "/farm/field-events?type=LAND_PREP",
-  // Phase I5 — scouting / observations (unlock padlocked catalog tiles)
-  PEST_SCOUTING:      "/farm/field-events?type=PEST_SCOUTING",
-  DISEASE_SCOUTING:   "/farm/field-events?type=DISEASE_SCOUTING",
-  FIELD_OBSERVATION:  "/farm/field-events?type=FIELD_OBSERVATION",
-  // CROPS G3 (134) — the 15 unlocked crop forms
-  MULCHING:                   "/farm/field-events?type=MULCHING",
-  THINNING:                   "/farm/field-events?type=THINNING",
-  COVER_CROP_PLANTED:         "/farm/field-events?type=COVER_CROP_PLANTED",
-  SEED_SAVED:                 "/farm/field-events?type=SEED_SAVED",
-  BIOLOGICAL_CONTROL_APPLIED: "/farm/field-events?type=BIOLOGICAL_CONTROL_APPLIED",
-  CROP_HEALTH_OBSERVATION:    "/farm/field-events?type=CROP_HEALTH_OBSERVATION",
-  PEST_CONFIRMED:             "/farm/field-events?type=PEST_CONFIRMED",
-  DISEASE_CONFIRMED:          "/farm/field-events?type=DISEASE_CONFIRMED",
-  STORAGE_CHECK:              "/farm/field-events?type=STORAGE_CHECK",
-  STORAGE_LOGGED:             "/farm/field-events?type=STORAGE_LOGGED",
-  INPUT_INVENTORY_CHECK:      "/farm/field-events?type=INPUT_INVENTORY_CHECK",
-  NURSERY_LOSS:               "/farm/field-events?type=NURSERY_LOSS",
-  CYCLE_ABANDONED:            "/farm/field-events?type=CYCLE_ABANDONED",
-  CROP_SOLD:                  "/farm/field-events?type=CROP_SOLD",
-  CROP_GIVEN:                 "/farm/field-events?type=CROP_GIVEN",
-  CASH_OUT:          "/farm/cash",
-  CASH_IN:           "/farm/cash",
-  WORKER_CHECKIN:    "/farm/labor",
-  CYCLE_CREATED:     "/farm/cycles/new",
-  EGGS_COLLECTED:     "/farm/poultry/eggs/new",
-  FLOCK_PLACED:       "/farm/poultry/flocks/new",
-  MORTALITY_LOGGED:   "/farm/poultry/mortality/new",
-  VACCINATION_GIVEN:  "/farm/poultry/vaccination/new",
-  FEED_RECEIVED:      "/farm/poultry/feed/new",
-  WEIGHT_CHECK:       "/farm/poultry/weight/new",
-  BIRD_REPLACEMENT:   "/farm/poultry/birds/add",
-  EGGS_SOLD:          "/farm/poultry/eggs/sell",
-  BIRDS_SOLD:         "/farm/poultry/birds/sell",
-  HEALTH_OBSERVATION: "/farm/poultry/health/new",
-  FEED_USED:          "/farm/poultry/feed/used",
-  LITTER_CHANGED:     "/farm/poultry/litter/changed",
-  COOP_CLEANED:       "/farm/poultry/coop/cleaned",
-  FEED_PURCHASED:     "/farm/poultry/feed/purchased",
-  WATER_CONSUMED:     "/farm/poultry/water/consumed",
-  MORTALITY_INVESTIGATED: "/farm/poultry/mortality/investigated",
-  CULL_LOGGED:        "/farm/poultry/cull/logged",
-  VISITOR_LOGGED:        "/farm/poultry/visitor/logged",
-  PEST_CONTROL_APPLIED:  "/farm/poultry/pest-control/applied",
-  TEMPERATURE_RECORDED:  "/farm/poultry/temperature/recorded",
-  EGGS_GRADED:           "/farm/poultry/eggs/graded",
-  FLOCK_MOVED:           "/farm/poultry/flock/moved",
-  EQUIPMENT_MAINTAINED:  "/farm/poultry/equipment/maintained",
-  INCIDENT_REPORTED:     "/farm/poultry/incident/reported",
-  SUPPLIES_RECEIVED:     "/farm/poultry/supplies/received",
-  // 129 catalog forensic — medication + livestock pack (Operator-ratified)
-  MEDICATION_GIVEN:      "/farm/poultry/medication/new",
-  LIVESTOCK_BIRTH:       "/farm/livestock/log?type=LIVESTOCK_BIRTH",
-  LIVESTOCK_MORTALITY:   "/farm/livestock/log?type=LIVESTOCK_MORTALITY",
-  LIVESTOCK_ACQUIRED:    "/farm/livestock/log?type=LIVESTOCK_ACQUIRED",
-  LIVESTOCK_SALE:        "/farm/livestock/log?type=LIVESTOCK_SALE",
-  VACCINATION:           "/farm/livestock/log?type=VACCINATION",
-  MILK_COLLECTED:        "/farm/livestock/log?type=MILK_COLLECTED",
-  ANIMAL_MOVED:          "/farm/livestock/log?type=ANIMAL_MOVED",
-  BREEDING_LOGGED:       "/farm/livestock/log?type=BREEDING_LOGGED",
-};
-
-const EVENT_ICONS = {
-  // CROPS
-  PLANTING:              Sprout,
-  HARVEST_LOGGED:        Leaf,
-  IRRIGATION:            Droplets,
-  CHEMICAL_APPLIED:      SprayCan,
-  FERTILIZER_APPLIED:    Sparkles,
-  WEED_MANAGEMENT:       Scissors,
-  PRUNING_TRAINING:      TreeDeciduous,
-  TRANSPLANT_LOGGED:     Replace,
-  LAND_PREP:             Shovel,
-  // ANIMALS
-  LIVESTOCK_BIRTH:       Baby,
-  LIVESTOCK_MORTALITY:   HeartCrack,
-  VACCINATION:           Syringe,
-  WEIGHT_CHECK:          Scale,
-  HIVE_INSPECTION:       Hexagon,
-  LIVESTOCK_ACQUIRED:    PlusCircle,
-  LIVESTOCK_SALE:        HandCoins,
-  MEDICATION_GIVEN:      Syringe,
-  MILK_COLLECTED:        Droplets,
-  ANIMAL_MOVED:          Replace,
-  BREEDING_LOGGED:       Baby,
-  // MONEY
-  SELL_CROPS:            HandCoins,
-  CASH_OUT:              Wallet,
-  CASH_IN:               HandCoins,
-  BUY_SUPPLIES:          ShoppingCart,
-  HIRE_MACHINE:          Tractor,
-  INPUT_RECEIVED:        PackageOpen,
-  WAGES_PAID:            Users,
-  DELIVERY_DISPATCHED:   Send,
-  DELIVERY_CONFIRMED:    PackageCheck,
-  // NOTES
-  PEST_SCOUTING:         Bug,
-  DISEASE_SCOUTING:      Stethoscope,
-  WEATHER_OBSERVED:      CloudSun,
-  WEATHER_IMPACT:        CloudLightning,
-  FIELD_OBSERVATION:     Eye,
-  INCIDENT_REPORT:       AlertTriangle,
-  // OTHER
-  NURSERY_BATCH_CREATED: Sprout,
-  NURSERY_READY:         Sprout,
-  GERMINATION_LOGGED:    Sparkles,
-  WORKER_CHECKIN:        UserCheck,
-  INPUT_USED_ADJUSTMENT: PencilLine,
-  POST_HARVEST_LOSS:     PackageX,
-  GRADING:               ListChecks,
-  CYCLE_CREATED:         CalendarPlus,
-  CYCLE_CLOSED:          CalendarCheck,
-};
 
 // Two-vertical model (Operator-ratified 2026-06-22): the farm has exactly two
 // production verticals — plant-based and animal-based — plus whole-farm records.
@@ -269,47 +147,6 @@ function UniversalSection({ navigate, onClose }) {
         ))}
       </div>
     </div>
-  );
-}
-
-function EventTile({ event, onClick }) {
-  const evtType = event.event_type;
-  const label = event.translated?.label || evtType;
-  const isLive = !!EVENT_ROUTES[evtType];
-  const Icon = EVENT_ICONS[evtType] || Sparkles;
-
-  return (
-    <button
-      type="button"
-      onClick={() => onClick(event)}
-      className={`
-        relative flex flex-col items-center justify-center
-        p-4 h-24 rounded-xl border transition-all
-        ${
-          isLive
-            ? "bg-white border-gray-200 hover:border-[var(--green,var(--green))] hover:shadow-md active:scale-95 cursor-pointer"
-            : "bg-gray-50 border-gray-100 cursor-default opacity-60"
-        }
-      `}
-    >
-      {!isLive && (
-        <span className="absolute top-2 right-2">
-          <Lock className="w-3 h-3 text-gray-400" />
-        </span>
-      )}
-      <Icon
-        className="w-6 h-6 mb-1"
-        style={{ color: isLive ? C.green : "#9CA3AF" }}
-        strokeWidth={1.75}
-      />
-      <span
-        className={`text-sm text-center ${
-          isLive ? "text-gray-900 font-medium" : "text-gray-500"
-        }`}
-      >
-        {label}
-      </span>
-    </button>
   );
 }
 
@@ -407,19 +244,9 @@ export default function LogSheet({ isOpen, onClose }) {
   const shouldShowManageLink =
     Array.isArray(activeGroups) && activeGroups.length < 11;
 
-  // Only events that reach a real working route are surfaced — no dead/padlocked
-  // tiles (the (+) cleanup). PLANT drills into the Capture Engine instead of tiles.
-  const routedEventsFor = (groups) =>
-    events
-      .filter((e) => groups.includes(e.catalog_group) && EVENT_ROUTES[e.event_type])
-      .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
-
-  const verticalCount = (v) =>
-    v.key === "PLANT" ? cropsConfig.verbs.length : routedEventsFor(v.groups).length;
-
+  // Every vertical now drills into the config-driven Capture Engine — there is no
+  // tile wall left (the (+) de-bloat is complete).
   const activeVertical = VERTICALS.find((v) => v.key === selectedVertical) || null;
-  // Tiles are only used for WHOLE-farm now; PLANT/POULTRY/LIVESTOCK all use the engine.
-  const verticalEvents = selectedVertical === "WHOLE" ? routedEventsFor(activeVertical.groups) : [];
 
   const isLevel2 = selectedVertical !== null;
   const isManage = viewMode === "manage";
@@ -430,28 +257,6 @@ export default function LogSheet({ isOpen, onClose }) {
         : selectedVertical === "ANIMAL" && animalSub === "LIVESTOCK" ? "Other livestock"
         : activeVertical?.label || selectedVertical)
       : "What do you want to log?";
-
-  const handleEventClick = (event) => {
-    const evtType = event.event_type;
-    const label = event.translated?.label || evtType;
-    const route = EVENT_ROUTES[evtType];
-
-    if (!route) {
-      window.dispatchEvent(
-        new CustomEvent("tfos:toast", {
-          detail: { message: `Coming soon — ${label}` },
-        })
-      );
-      return;
-    }
-
-    onClose();
-    if (typeof route === "string") {
-      navigate(route);
-    } else if (route.route) {
-      navigate(route.route);
-    }
-  };
 
   return (
     <Modal
@@ -519,7 +324,7 @@ export default function LogSheet({ isOpen, onClose }) {
       {!isManage && !isLoading && !error && !isLevel2 && (
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
           {VERTICALS.map((v) => (
-            <VerticalTile key={v.key} vertical={v} count={verticalCount(v)} onClick={setSelectedVertical} />
+            <VerticalTile key={v.key} vertical={v} onClick={setSelectedVertical} />
           ))}
         </div>
       )}
@@ -555,17 +360,9 @@ export default function LogSheet({ isOpen, onClose }) {
         <CaptureEngine config={livestockConfig} onDone={onClose} />
       )}
 
-      {/* Tile view: WHOLE-farm only (Money/Notes/records). */}
+      {/* WHOLE-farm drills into the Money engine (cash-ledger) — no tile wall. */}
       {!isManage && !isLoading && !error && isLevel2 && selectedVertical === "WHOLE" && (
-        verticalEvents.length === 0 ? (
-          <div className="text-center py-8 text-gray-500">Nothing to log here yet.</div>
-        ) : (
-          <div className="grid grid-cols-3 md:grid-cols-4 gap-3">
-            {verticalEvents.map((evt) => (
-              <EventTile key={evt.event_type} event={evt} onClick={handleEventClick} />
-            ))}
-          </div>
-        )
+        <CaptureEngine config={moneyConfig} onDone={onClose} />
       )}
 
       {!isManage && !isLevel2 && shouldShowManageLink && (

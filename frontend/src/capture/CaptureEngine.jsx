@@ -17,7 +17,7 @@ import {
   Eye, Droplet, Scissors, ShieldCheck, Sprout, Warehouse, Coins,
   Leaf, CalendarPlus, CalendarCheck,
   Egg, Bird, Stethoscope, Scale, Home, AlertTriangle, PlusCircle, Wheat,
-  Skull, HandCoins, Syringe, Milk, Repeat,
+  Skull, HandCoins, Syringe, Milk, Repeat, Wallet, Banknote, UserCheck,
   Camera, MapPin, User, Mic, Square, Users, X,
   ChevronLeft, Check, Loader2, Plus,
 } from "lucide-react";
@@ -26,7 +26,7 @@ import cropsConfig from "./config/crops";
 const ICONS = {
   Eye, Droplet, Scissors, ShieldCheck, Sprout, Warehouse, Coins, Leaf, CalendarPlus, CalendarCheck,
   Egg, Bird, Stethoscope, Scale, Home, AlertTriangle, PlusCircle, Wheat,
-  Skull, HandCoins, Syringe, Milk, Repeat,
+  Skull, HandCoins, Syringe, Milk, Repeat, Wallet, Banknote, UserCheck,
 };
 
 function authHeaders() {
@@ -283,6 +283,23 @@ export default function CaptureEngine({ config = cropsConfig, onDone }) {
     if (!spec || !selectedItem) return;
     if (spec.validate) { const msg = spec.validate(values); if (msg) { setError(msg); return; } }
     setSubmitting(true); setError("");
+    // Submit adapter: some configs post to a different audit-emitting endpoint with a
+    // different body shape (e.g. Money -> /cash-ledger). Default path = /events envelope.
+    if (config.submit) {
+      try {
+        const body = config.submit.buildBody({ values, spec, item: selectedItem, occurredDate, occurredTime });
+        const res = await fetch(config.submit.endpoint, { method: config.submit.method || "POST", headers: authHeaders(), body: JSON.stringify(body) });
+        const parsed = await res.json().catch(() => null);
+        if ((res.status === 201 || res.ok) && parsed?.status !== "error") {
+          setResult(config.submit.extractResult ? config.submit.extractResult(parsed) : { event_id: "", audit_hash: "" });
+        } else {
+          setError(parsed?.detail?.message || (typeof parsed?.detail === "string" ? parsed.detail : parsed?.error?.message)
+            || `${res.status} ${res.statusText}`);
+        }
+      } catch (e) { setError(`Network error: ${e.message}`); }
+      finally { setSubmitting(false); }
+      return;
+    }
     const payload = {};
     for (const f of spec.capture) {
       if (f.name === "notes") continue;       // notes captured by the universal section below
@@ -529,7 +546,9 @@ export default function CaptureEngine({ config = cropsConfig, onDone }) {
             </div>
           </div>
 
-          {/* Evidence — the four layers that actually persist + lift verification */}
+          {/* Evidence — the four layers that actually persist + lift verification.
+              Hidden when the config's backing table can't store it (e.g. cash-ledger). */}
+          {config.evidence !== false && (
           <div style={card}>
             <div style={cardHead}>Evidence · lifts verification</div>
             <div style={{ display: "flex", gap: 8 }}>
@@ -568,6 +587,7 @@ export default function CaptureEngine({ config = cropsConfig, onDone }) {
             <p style={{ fontSize: 11, color: "#9a917c", marginTop: 8, fontStyle: "italic" }}>
               Photo &amp; voice are fingerprinted (SHA-256); GPS &amp; witness are stored — banks and insurers see this when they verify the record.</p>
           </div>
+          )}
 
           {/* Event-specific fields */}
           {quick.map((f) => <div key={f.name} style={{ marginBottom: 18 }}>
