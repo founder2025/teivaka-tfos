@@ -150,3 +150,25 @@ The Crops config's verbs collectively `resolve` to ALL 39 CROPS event types (Gat
 
 ---
 **Next (Gate 2–5):** the full Crops 39→verb coverage table (done in prior turn — fold in), the complete verb taxonomy with icons/strings, per-verb flow specs + tap counts (harvest ≤3), success metrics. Then the build paste-pack.
+
+---
+
+## Build status (2026-06-22) — engine LIVE, Crops config at 23 events
+
+- **Engine** (`frontend/src/capture/CaptureEngine.jsx`): config-driven, full Resolution
+  (primary | branch), number stepper, choice/text inputs, active-cycle inference,
+  auto-injects `production_id`. Reachable at route `/farm/capture`.
+- **Crops config** (`frontend/src/capture/config/crops.js`): 7 verbs / 23 wired
+  `/events`-native events — Monitoring, Watered & Fed, Crop Maintenance, Crop
+  Protection, Planting & Establishment, Storage & Stock, Sales & Disposal. All
+  verified writing typed `field_events` + `audit.events` on prod (CROP_HEALTH,
+  WEED_MANAGEMENT, PLANTING, CROP_SOLD confirmed).
+- **Not yet covered (need BACKEND, not config):** `CHEMICAL_APPLIED` (chemical
+  picker + WHD UX), `HARVEST_LOGGED` (legacy `/harvests` → migrate to `/events`, B75),
+  `CYCLE_CREATED` (production_cycles create-path), the 12 padlocked events (no registry).
+- **(+) cutover:** still gated — the live (+) (`LogSheet`) reaches ~27 crop events;
+  the engine covers 23. Flip only after full coverage OR a hybrid (engine verbs +
+  legacy fallback for uncovered events), else it regresses access.
+
+**Next chunk:** backend gap work (CHEMICAL picker / Harvest→/events / locked-event
+registry) → full coverage → non-regressive (+) cutover.
