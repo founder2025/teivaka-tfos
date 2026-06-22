@@ -39,7 +39,8 @@ export const poultryConfig = {
         { choiceLabel: "Sold / gave eggs", event_type: "EGGS_SOLD", autofillDate: ["sale_date"], capture: [
           { name: "qty_eggs", ask: "How many eggs?", input: "number", tier: "quick" },
           { name: "total_revenue_fjd", ask: "Money received (FJD)", input: "number", tier: "quick" },
-          { name: "disposition", ask: "Sold or given?", input: "choice", tier: "detail", options: opts({value:"SOLD",label:"Sold"},{value:"GIVEN",label:"Given"}) } ] },
+          { name: "disposition", ask: "Sold or given?", input: "choice", tier: "detail", options: opts({value:"SOLD",label:"Sold"},{value:"GIVEN",label:"Given"}) },
+          { name: "buyer_id", ask: "Buyer", input: "library", libraryType: "POULTRY_BUYER", tier: "detail" } ] },
         { choiceLabel: "Graded eggs", event_type: "EGGS_GRADED",
           validate: (v) => { const t=+v.total_qty||0, s=(+v.grade_a_qty||0)+(+v.grade_b_qty||0)+(+v.cracked_qty||0)+(+v.dirty_qty||0); return t && s!==t ? `Grades must add up to the total (${s} ≠ ${t}).` : ""; },
           capture: [
@@ -56,7 +57,8 @@ export const poultryConfig = {
         { choiceLabel: "Feed received", event_type: "FEED_RECEIVED", autofillDate: ["delivery_date"], capture: [
           { name: "feed_type_id", ask: "Which feed?", input: "library", libraryType: "POULTRY_FEED", tier: "quick" },
           { name: "qty_kg", ask: "How much (kg)?", input: "number", tier: "quick" },
-          { name: "cost_fjd", ask: "Cost (FJD)", input: "number", tier: "detail" } ] },
+          { name: "cost_fjd", ask: "Cost (FJD)", input: "number", tier: "detail" },
+          { name: "supplier_id", ask: "Supplier", input: "library", libraryType: "POULTRY_SUPPLIER", tier: "detail" } ] },
         { choiceLabel: "Feed used", event_type: "FEED_USED", autofillDate: ["used_date"], capture: [
           { name: "feed_type_id", ask: "Which feed?", input: "library", libraryType: "POULTRY_FEED", tier: "quick" },
           { name: "qty_kg", ask: "How much (kg)?", input: "number", tier: "quick" } ] },
@@ -67,11 +69,14 @@ export const poultryConfig = {
       resolve: { branch: { prompt: "What happened with the birds?", options: [
         { choiceLabel: "Added birds", event_type: "BIRD_REPLACEMENT", capture: [
           { name: "qty_added", ask: "How many added?", input: "number", tier: "quick" },
-          { name: "reason", ask: "Why?", input: "choice", tier: "quick", options: opts({value:"REPLACEMENT",label:"Replacement"},{value:"EXPANSION",label:"Expansion"},{value:"RECOVERY",label:"Recovery"}) } ] },
+          { name: "reason", ask: "Why?", input: "choice", tier: "quick", options: opts({value:"REPLACEMENT",label:"Replacement"},{value:"EXPANSION",label:"Expansion"},{value:"RECOVERY",label:"Recovery"}) },
+          { name: "supplier_id", ask: "Supplier", input: "library", libraryType: "POULTRY_SUPPLIER", tier: "detail" },
+          { name: "cost_fjd", ask: "Cost (FJD)", input: "number", tier: "detail" } ] },
         { choiceLabel: "Sold birds", event_type: "BIRDS_SOLD", autofillDate: ["sale_date"], capture: [
           { name: "qty_sold", ask: "How many sold?", input: "number", tier: "quick" },
           { name: "sale_type", ask: "Sold as?", input: "choice", tier: "quick", options: opts({value:"LIVE_BIRD",label:"Live bird"},{value:"DRESSED",label:"Dressed"},{value:"EGGS_LAYER_END",label:"Spent layer"}) },
-          { name: "total_revenue_fjd", ask: "Money received (FJD)", input: "number", tier: "quick" } ] },
+          { name: "total_revenue_fjd", ask: "Money received (FJD)", input: "number", tier: "quick" },
+          { name: "buyer_id", ask: "Buyer", input: "library", libraryType: "POULTRY_BUYER", tier: "detail" } ] },
       ] } },
     },
     {

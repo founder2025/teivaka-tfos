@@ -287,7 +287,13 @@ export default function CaptureEngine({ config = cropsConfig, onDone }) {
     // different body shape (e.g. Money -> /cash-ledger). Default path = /events envelope.
     if (config.submit) {
       try {
-        const body = config.submit.buildBody({ values, spec, item: selectedItem, occurredDate, occurredTime });
+        const ev = {};
+        if (photoUrl) ev.photo_url = photoUrl;
+        if (gps) { ev.gps_lat = gps.lat; ev.gps_lng = gps.lng; }
+        if (voiceUrl) ev.voice_url = voiceUrl;
+        if (witnessName.trim()) ev.witness_name = witnessName.trim();
+        if (witnessContact.trim()) ev.witness_contact = witnessContact.trim();
+        const body = config.submit.buildBody({ values, spec, item: selectedItem, occurredDate, occurredTime, evidence: ev });
         const res = await fetch(config.submit.endpoint, { method: config.submit.method || "POST", headers: authHeaders(), body: JSON.stringify(body) });
         const parsed = await res.json().catch(() => null);
         if ((res.status === 201 || res.ok) && parsed?.status !== "error") {

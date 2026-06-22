@@ -36,6 +36,7 @@ from sqlalchemy import text
 from app.core.audit_chain import emit_audit_event
 from app.db.session import get_rls_db
 from app.middleware.rls import get_current_user
+from app.routers.events import _hash_local_photo   # content-fingerprint receipt photo/voice (single source of truth)
 
 
 router = APIRouter()
@@ -104,6 +105,14 @@ class CashLedgerCreate(BaseModel):
     # allocation) genuinely don't tie to a single block.
     pu_id: Optional[str] = Field(None, max_length=64)
     production_id: Optional[str] = Field(None, max_length=64)
+    # B92: cross-cutting evidence (receipt photo, voice, witness, GPS). Photo + voice are
+    # SHA-256 hashed server-side into the CASH_LOGGED audit payload (tamper-evident).
+    photo_url: Optional[str] = Field(None, max_length=512)
+    voice_url: Optional[str] = Field(None, max_length=512)
+    witness_name: Optional[str] = Field(None, max_length=120)
+    witness_contact: Optional[str] = Field(None, max_length=120)
+    gps_lat: Optional[float] = None
+    gps_lng: Optional[float] = None
 
 
 class CashLedgerUpdate(BaseModel):
@@ -166,18 +175,28 @@ async def log_cash(
             if not pu_check.first():
                 raise HTTPException(status_code=404, detail="pu_id not found on farm")
 
+        # B92: content-bind receipt evidence (hash photo + voice; fail-soft).
+        photo_sha256, photo_byte_size = _hash_local_photo(body.photo_url)
+        voice_sha256, voice_byte_size = _hash_local_photo(body.voice_url)
+
         await db.execute(
             text("""
                 INSERT INTO tenant.cash_ledger (
                     ledger_id, tenant_id, farm_id, transaction_date,
                     transaction_type, category, description, amount_fjd,
                     payment_method, reference_id, reference_type, bank_account,
-                    created_by, pu_id, production_id
+                    created_by, pu_id, production_id,
+                    photo_url, photo_sha256, photo_byte_size,
+                    voice_url, voice_sha256, voice_byte_size,
+                    witness_name, witness_contact, gps_lat, gps_lng
                 ) VALUES (
                     :ledger_id, :tenant_id, :farm_id, :transaction_date,
                     :transaction_type, :category, :description, :amount_fjd,
                     :payment_method, :reference_id, :reference_type, :bank_account,
-                    :created_by, :pu_id, :production_id
+                    :created_by, :pu_id, :production_id,
+                    :photo_url, :photo_sha256, :photo_byte_size,
+                    :voice_url, :voice_sha256, :voice_byte_size,
+                    :witness_name, :witness_contact, :gps_lat, :gps_lng
                 )
             """),
             {
@@ -196,8 +215,36 @@ async def log_cash(
                 "created_by": str(user["user_id"]),
                 "pu_id": body.pu_id,
                 "production_id": body.production_id,
+                "photo_url": body.photo_url,
+                "photo_sha256": photo_sha256,
+                "photo_byte_size": photo_byte_size,
+                "voice_url": body.voice_url,
+                "voice_sha256": voice_sha256,
+                "voice_byte_size": voice_byte_size,
+                "witness_name": body.witness_name,
+                "witness_contact": body.witness_contact,
+                "gps_lat": body.gps_lat,
+                "gps_lng": body.gps_lng,
             },
         )
+
+        audit_payload = {
+            "ledger_id": ledger_id,
+            "farm_id": body.farm_id,
+            "pu_id": body.pu_id,
+            "production_id": body.production_id,
+            "transaction_date": body.transaction_date.isoformat(),
+            "transaction_type": body.transaction_type,
+            "category": body.category,
+            "amount_fjd": str(body.amount_fjd),
+            "payment_method": body.payment_method,
+        }
+        if photo_sha256:
+            audit_payload["photo_sha256"] = photo_sha256
+        if voice_sha256:
+            audit_payload["voice_sha256"] = voice_sha256
+        if body.witness_name:
+            audit_payload["witness_name"] = body.witness_name
 
         event_id, this_hash = await emit_audit_event(
             db=db,
@@ -206,17 +253,7 @@ async def log_cash(
             event_type="CASH_LOGGED",
             entity_type="CASH_LEDGER",
             entity_id=ledger_id,
-            payload={
-                "ledger_id": ledger_id,
-                "farm_id": body.farm_id,
-                "pu_id": body.pu_id,
-                "production_id": body.production_id,
-                "transaction_date": body.transaction_date.isoformat(),
-                "transaction_type": body.transaction_type,
-                "category": body.category,
-                "amount_fjd": str(body.amount_fjd),
-                "payment_method": body.payment_method,
-            },
+            payload=audit_payload,
         )
 
         row = (

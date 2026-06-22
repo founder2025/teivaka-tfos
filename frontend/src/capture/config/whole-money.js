@@ -8,7 +8,8 @@
  * yet (honest — receipt-photo evidence on money is filed as a follow-up, B-item, not faked).
  *
  * COVERAGE: all 6 cash_ledger transaction types across 3 verbs + a labour link verb.
- * Every entry is one real cash_ledger row + one CASH_LOGGED audit row.
+ * Every entry is one real cash_ledger row + one CASH_LOGGED audit row. evidence:true
+ * (B92, migration 160) — receipt photo/voice are SHA-256 hashed into the audit payload.
  */
 const opts = (...vs) => vs.map((v) => (typeof v === "string" ? { value: v, label: v } : v));
 const RAIL = opts(
@@ -20,7 +21,7 @@ const NOTE = { name: "description", ask: "Note", input: "text", tier: "detail" }
 
 export const moneyConfig = {
   vertical: "MONEY",
-  evidence: false,
+  evidence: true,   // B92: cash_ledger now stores photo/voice/witness/GPS (receipt evidence)
   context: {
     loader: "/api/v1/farms",
     extract: (body) => { let l = body?.data?.farms ?? body?.data ?? body?.farms ?? body; if (l && !Array.isArray(l)) l = l.farms || l.items || []; return l || []; },
@@ -36,7 +37,7 @@ export const moneyConfig = {
   },
   submit: {
     endpoint: "/api/v1/cash-ledger",
-    buildBody: ({ values, spec, item, occurredDate }) => ({
+    buildBody: ({ values, spec, item, occurredDate, evidence }) => ({
       farm_id: item.farm_id,
       transaction_date: occurredDate,
       transaction_type: spec.transactionType,
@@ -44,6 +45,7 @@ export const moneyConfig = {
       description: values.description || values.category || spec.choiceLabel || spec.event_type || "Cash entry",
       amount_fjd: Number(values.amount_fjd) || 0,
       ...(values.payment_method ? { payment_method: values.payment_method } : {}),
+      ...(evidence || {}),   // B92: receipt photo / voice / witness / GPS
     }),
     extractResult: (p) => ({ event_id: p?.data?.ledger_id || "", audit_hash: p?.meta?.audit_this_hash || "" }),
   },
