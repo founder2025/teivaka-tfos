@@ -13,11 +13,12 @@
  */
 import { useEffect, useMemo, useState } from "react";
 import {
-  Eye, Droplet, Scissors, ShieldCheck, ChevronLeft, Check, Loader2, Plus,
+  Eye, Droplet, Scissors, ShieldCheck, Sprout, Warehouse, Coins,
+  ChevronLeft, Check, Loader2, Plus,
 } from "lucide-react";
 import cropsConfig from "./config/crops";
 
-const ICONS = { Eye, Droplet, Scissors, ShieldCheck };
+const ICONS = { Eye, Droplet, Scissors, ShieldCheck, Sprout, Warehouse, Coins };
 
 function authHeaders() {
   const tok = localStorage.getItem("tfos_access_token");
