@@ -65,22 +65,13 @@ Read before any group-related sprint planning or build work:
 
 ## Current state (refreshed every session — this section is mutable)
 
-**Last verified:** 2026-06-08 (parity branch deployed to prod — Locations L1–L3, multi-farm + switcher, the Tasks pillar P1–P5, P3b external task alerts (shipped disabled per PR.2), Tasks-page reorg, and the `feat/tasks-surface` Labor/Buyers/Equipment all merged and live. Migrations 081–086 applied. Full route↔nav + frontend↔backend endpoint audit passed; 3 dead links fixed.)
+**Last verified:** 2026-06-21 (debt-forensics sweep — Phase A State-of-the-Debt audit + Phase B fixes shipped to prod: Cluster 1 billing/Anthropic path removed, Cluster 2a migration-chain merge, 2b greenfield-seed fix, 3.1 audit.events UPDATE/DELETE revoke, 3.2 tenant.users RLS-policy drift codified, 4.1 poultry_event_log.created_by FK, Cluster 5 dead-code cleanup. Full ranked report + resolution log: `docs/TFOS_State_of_Debt_2026-06-21.md`. Deferred + filed: B84 RLS defense-in-depth, B85 dead files, B86 layer NOT NULL.)
 
 **Production:** healthy. teivaka.com HTTPS live.
-- 9 containers running (all healthy as of Strike #122 V7-redux seal commit 0556139):
-  - `teivaka_api` — healthy
-  - `teivaka_db` — healthy
-  - `teivaka_redis` — healthy
-  - `teivaka_caddy` — healthy (was unhealthy pre-8-2b; healthcheck URL fixed)
-  - `teivaka_worker_ai` — healthy (was unhealthy pre-8-2b; YAML list-form fix + hostname stability)
-  - `teivaka_worker_automation` — healthy (added post-8-2b)
-  - `teivaka_worker_notifications` — healthy (added post-8-2b)
-  - `teivaka_beat` — healthy (was unhealthy pre-8-2b; mtime healthcheck added)
-  - `teivaka_diag` — running (no healthcheck; diagnostic container)
-- Last commit: `785126e` (fix(nav): repair 3 dead links — FarmerLayout /profile→/me, /settings→/me/settings; Register /dashboard→/home. Preceded by merge `13cae11` unifying feat/tasks-surface into parity.)
-- Last migration: `086_task_notifications` (Tasks P3b — tenant.task_notifications external-alert delivery log w/ receipt_confirmed_at + FORCE RLS; applied-as-owner per Strike #123. Chain 081→086 applied. 085_crop_growth_plan = 47 cited SEED_UNVERIFIED stage rows across 10 crops.)
-- Branch: `claude/parity-farm-surfaces` (deployed to prod 2026-06-08; server checked out here; prior dirty working tree preserved in local `server-snapshot-deploy` branch)
+- 8 containers running, all healthy (per `docker ps` 2026-06-21): `teivaka_api`, `teivaka_db`, `teivaka_redis`, `teivaka_caddy`, `teivaka_beat`, `teivaka_worker_ai`, `teivaka_worker_automation`, `teivaka_worker_notifications`. (`teivaka_diag` is a manual diagnostic container, NOT in docker-compose — closes B68.)
+- Infra note (2026-06-21): disk reclaimed 80%→31% via `docker builder prune` (40GB build cache); swap was ~100% full + kernel `*** restart required ***` pending — schedule a reboot in a quiet window to clear swap + apply updates.
+- Last migration: `155_poultry_created_by_fk` (single head; debt-sweep chain `151` → `152_merge_feed_audience` → `153_revoke_audit_mutations` → `154_users_rls_permissive` → `155_poultry_created_by_fk`, all applied-as-owner per Strike #123).
+- Branch: `claude/beautiful-fermi-F0dLX` (deployed to prod 2026-06-21; prod tracks this branch; `main` fast-forwarded alongside). See `git log` for exact commit SHAs (not pinned here — they drift per Strike #88).
 
 **Phase status (Sprint 6 closed; Sprint 7 in-flight, foundation marathon underway):**
 
@@ -487,6 +478,13 @@ MBI Parts 4b.0–4b.3 for Claude Code sessions.
 
 Confirmed against live DB on 2026-04-15. When the master spec disagrees, the live DB wins.
 
+> ⚠️ **`02_database/schema/*.sql` is a FROZEN ~001-003 baseline, NOT current truth.**
+> It predates ~100 migration-created tables/columns (e.g. `tenant.inputs.farm_id`, all
+> POULTRY/`flocks`/`poultry_event_log` tables) and still shows the strict `tenant.users`
+> RLS policy that prod replaced (mig 154). Initializing a DB from these SQL files then
+> `alembic stamp head` yields a structurally wrong schema. **Alembic migrations are the
+> single source of truth for schema.** (Surfaced 2026-06-21 debt sweep, finding L3.)
+
 - `shared.chemical_library.chem_name` (NOT `product_name`)
 - `shared.chemical_library.withholding_period_days` (NOT `whd_days` or `withholding_days_harvest`)
 - `shared.chemical_library.registered_crops` is `text[]` of production_id codes (NOT a single `crop_id` column)
@@ -518,7 +516,7 @@ These are shipped, tested, and revenue/UX-critical. Editing them risks regressio
 - `04_environment/Caddyfile.production`
 - `/opt/tis-bridge/server.js` and the `tis-bridge` systemd service
 - The `tis` systemd service (OpenClaw)
-- Alembic migrations 001 through 015a (current head: `015a_fix_chemical_compliance`). Never edit a stamped migration — write a new one.
+- Alembic migrations 001 through current head `155_poultry_created_by_fk` (single head as of 2026-06-21). Never edit a stamped migration — write a new one. Verify head with `docker exec teivaka_api alembic current`.
 
 Both the floating TISWidget and the `/tis` page are live; they share `POST /tis/chat`.
 
@@ -538,10 +536,8 @@ Python 3.12, FastAPI 0.115+, SQLAlchemy 2.0 async (never sync), PostgreSQL 16 + 
 - Migration 012 (`012_add_farm_worker_count_limits`) IS now in versions/ — fresh deploys should work, but verify on a clean DB before relying on it
 - worker_ai healthcheck definition wrong in docker-compose
 - Migration 004 (materialized views) stubbed as no-op pending inputs.farm_id scoping
-- /privacy and /terms pages don't exist but Register.jsx links them
 - Admin password still `Teivaka2025!` (default, must change)
 - Phone OTP to +679 doesn't deliver; fix path is WhatsApp OTP via existing Meta API
-- Frontend has CSS build warning: a file uses `${C.green}` inside plain CSS (JS template literal leaked into CSS) — needs grep to find
 
 ## How to work with Cody
 
