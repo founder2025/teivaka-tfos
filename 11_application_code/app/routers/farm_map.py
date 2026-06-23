@@ -8,12 +8,14 @@ properties carry kind/ref_id/label/area_ha; the rest of properties (colour,
 facility_type, …) round-trips untouched so the Leaflet/Geoman client owns its
 own styling. Replace-all keeps client and server in lockstep with no diffing.
 """
+from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from typing import Any, Optional
 from sqlalchemy import text
 
 from app.db.session import get_rls_db, get_db
+from app.core.audit_chain import emit_audit_event
 from app.middleware.rls import get_current_user
 from app.utils.roles import has_role
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -180,6 +182,19 @@ async def put_farm_map(farm_id: str, fc: FeatureCollection,
                     "area_ha": float(area) if isinstance(area, (int, float)) else None,
                     "uid": uid,
                 },
+            )
+        # Each newly-minted production unit -> one audit row (Universal Event Form
+        # Contract). Atomic with the map save; PRODUCTION_UNIT_ESTABLISHED matches the
+        # form-based /production-units path.
+        for _pu_id in created["blocks"]:
+            await emit_audit_event(
+                db=db,
+                tenant_id=UUID(tid),
+                actor_user_id=UUID(uid) if uid else None,
+                event_type="PRODUCTION_UNIT_ESTABLISHED",
+                entity_type="production_unit",
+                entity_id=_pu_id,
+                payload={"pu_id": _pu_id, "farm_id": farm_id, "source": "map_draw"},
             )
     # Auto-derive the farm's pin from the captured map and persist it on the farm
     # (own RLS context). Best-effort + isolated txn so it can never break the save

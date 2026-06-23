@@ -554,6 +554,16 @@ async def create_manual_task(
         {"tid": tid, "tenant": str(user["tenant_id"]), "farm": body.farm_id,
          "title": title, "rank": rank, "due": body.due_date},
     )
+    # One add -> one audit row (Universal Event Form Contract). Same session as the INSERT.
+    await emit_audit_event(
+        db=db,
+        tenant_id=UUID(str(user["tenant_id"])),
+        actor_user_id=UUID(str(user["user_id"])) if user.get("user_id") else None,
+        event_type="TASK_CREATED",
+        entity_type="task",
+        entity_id=tid,
+        payload={"task_id": tid, "farm_id": body.farm_id, "imperative": title, "source_module": "manual"},
+    )
     return _envelope_ok({"task_id": tid, "imperative": title, "status": "OPEN"})
 
 
