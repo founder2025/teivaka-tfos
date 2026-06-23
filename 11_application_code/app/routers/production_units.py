@@ -242,8 +242,9 @@ async def rename_production_unit(pu_id: str, body: PURename, user: dict = Depend
     async with get_rls_db(str(user["tenant_id"])) as db:
         res = await db.execute(
             text("""UPDATE tenant.production_units
-                       SET pu_name  = COALESCE(:name, pu_name),
-                           area_sqm = COALESCE(:area, area_sqm),
+                       SET pu_name      = COALESCE(:name, pu_name),
+                           farmer_label = COALESCE(:name, farmer_label),
+                           area_sqm     = COALESCE(:area, area_sqm),
                            updated_at = now()
                      WHERE pu_id = :pid AND tenant_id = :tid
                  RETURNING pu_id, pu_name, area_sqm"""),
