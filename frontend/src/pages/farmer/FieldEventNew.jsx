@@ -1185,12 +1185,23 @@ function feWithin48h(createdAt) {
   return !isNaN(t) && (Date.now() - t) <= 48 * 3600 * 1000;
 }
 
+const FE_EDIT_PROTECTED = new Set(["production_id", "cycle_id", "variety_id", "notes",
+  "photo_url", "photo_sha256", "photo_byte_size", "gps_lat", "gps_lng", "_recorded_at"]);
+const feLabel = (k) => k.replace(/_/g, " ").replace(/\b\w/, (c) => c.toUpperCase());
+
 function FieldEventEditModal({ evt, onClose, onSaved }) {
+  const isChemical = !!evt.chemical_application;
   const [note, setNote] = useState(evt.observation_text || "");
   const [photo, setPhoto] = useState(evt.photo_url || null);
+  const [fields, setFields] = useState(() => {
+    const p = evt.payload_jsonb || {}; const o = {};
+    Object.keys(p).forEach((k) => { if (!FE_EDIT_PROTECTED.has(k) && p[k] != null && p[k] !== "") o[k] = p[k]; });
+    return o;
+  });
   const [uploading, setUploading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+  const setField = (k, raw, isNum) => setFields((f) => ({ ...f, [k]: isNum ? (raw === "" ? "" : Number(raw)) : raw }));
   async function upload(file) {
     if (!file) return; setUploading(true);
     try {
@@ -1203,25 +1214,51 @@ function FieldEventEditModal({ evt, onClose, onSaved }) {
   async function save() {
     setBusy(true); setErr("");
     try {
+      const payload = { notes: note, photo_url: photo };
+      if (!isChemical) payload.fields = fields;
       const r = await fetch(`/api/v1/field-events/${encodeURIComponent(evt.event_id)}`, {
         method: "PATCH", headers: { ...feAuthHeaders(), "Content-Type": "application/json" },
-        body: JSON.stringify({ notes: note, photo_url: photo }),
+        body: JSON.stringify(payload),
       });
       const b = await r.json().catch(() => null);
       if (r.ok && b?.status === "success") onSaved();
       else setErr(b?.detail?.message || (typeof b?.detail === "string" ? b.detail : `Couldn't save (${r.status})`));
     } catch (e) { setErr(e.message); } finally { setBusy(false); }
   }
+  const fieldKeys = Object.keys(fields);
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.4)" }} onClick={onClose}>
-      <div className="bg-white rounded-2xl w-full max-w-md p-5" onClick={(e) => e.stopPropagation()}>
+      <div className="bg-white rounded-2xl w-full max-w-md p-5 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-1">
           <h2 className="text-base font-bold" style={{ color: C.soil }}>Correct this entry</h2>
           <button onClick={onClose} style={{ color: C.muted }}>✕</button>
         </div>
         <div className="text-[11px] mb-3" style={{ color: C.muted }}>You can fix this for 48 hours of logging — every change is logged.</div>
+
+        {isChemical ? (
+          <div className="text-xs mb-3 rounded-lg px-3 py-2" style={{ background: "#fff7e6", color: "#7a5b14", border: "1px solid #f0d9a0" }}>
+            This is a chemical record — its values drive the harvest-withholding window, so they can't be corrected here. Fix the note/photo, or delete and re-log.
+          </div>
+        ) : fieldKeys.length > 0 && (
+          <>
+            <div className="text-xs font-semibold mb-1" style={{ color: C.soil }}>What you logged</div>
+            <div className="space-y-2 mb-3">
+              {fieldKeys.map((k) => {
+                const v = fields[k]; const isNum = typeof v === "number";
+                return (
+                  <div key={k}>
+                    <label className="text-[11px]" style={{ color: C.muted }}>{feLabel(k)}</label>
+                    <input value={v} type={isNum ? "number" : "text"} onChange={(e) => setField(k, e.target.value, isNum)}
+                      className="w-full mt-0.5 rounded-lg border px-3 py-2 text-sm" style={{ borderColor: C.border }} />
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        )}
+
         <label className="text-xs font-semibold" style={{ color: C.soil }}>Note</label>
-        <textarea value={note} maxLength={500} rows={3} onChange={(e) => setNote(e.target.value)}
+        <textarea value={note} maxLength={500} rows={2} onChange={(e) => setNote(e.target.value)}
           className="w-full mt-1 mb-3 rounded-lg border px-3 py-2 text-sm" style={{ borderColor: C.border }} />
         <label className="text-xs font-semibold" style={{ color: C.soil }}>Photo</label>
         <div className="mt-1 mb-3">

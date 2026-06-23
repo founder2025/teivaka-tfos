@@ -15,6 +15,8 @@ Responses use the Part 13 envelope helper (app.schemas.envelope).
 """
 from __future__ import annotations
 
+import json
+
 from datetime import date, datetime, timezone
 from decimal import Decimal
 from typing import Any, Optional
@@ -87,12 +89,14 @@ class FieldEventDelete(BaseModel):
 
 
 class FieldEventEdit(BaseModel):
-    """In-window correction: note + evidence are editable; photo_url=null removes the photo.
-    exclude_unset distinguishes 'not sent' from 'set to null'."""
+    """In-window correction: note + evidence + the captured form values (fields).
+    `fields` merges into payload_jsonb (the display/report source of truth). photo_url=null
+    removes the photo. exclude_unset distinguishes 'not sent' from 'set to null'."""
     notes: Optional[str] = Field(default=None, max_length=500)
     photo_url: Optional[str] = Field(default=None, max_length=512)
     gps_lat: Optional[float] = None
     gps_lng: Optional[float] = None
+    fields: Optional[dict] = Field(default=None, description="Corrected captured values, merged into payload_jsonb.")
 
 
 # ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -477,7 +481,9 @@ async def edit_field_event(
     db: AsyncSession = Depends(get_tenant_db),
 ):
     """Farmer correction inside the 48h window: edit the note, change or remove the photo
-    (photo_url=null), fix GPS. Emits EVENT_CORRECTED — transparent + locked after the window."""
+    (photo_url=null), fix GPS, and correct the captured form values (`fields` → merged into
+    payload_jsonb). Chemical records reject `fields` (WHD safety, Inviolable #2). Emits
+    EVENT_CORRECTED — transparent + locked after the window."""
     row = (await db.execute(
         text("SELECT * FROM tenant.field_events WHERE event_id = :eid AND deleted_at IS NULL LIMIT 1"),
         {"eid": event_id},
@@ -499,6 +505,23 @@ async def edit_field_event(
         ph, sz = _hash_local_photo(body.photo_url)
         sets += ["photo_url = :purl", "photo_sha256 = :psha", "photo_byte_size = :psz"]
         params.update({"purl": body.photo_url, "psha": ph, "psz": sz}); changed.append("photo")
+    if "fields" in provided and body.fields:
+        # Chemical records drive the WHD harvest-block (Inviolable #2); editing their
+        # values here would silently move that window — deferred to the WHD-aware path.
+        if row["chemical_application"]:
+            raise HTTPException(status_code=422, detail=error_envelope(
+                "CHEMICAL_EDIT_UNSUPPORTED",
+                "Chemical record details can't be corrected here (withholding-period safety). "
+                "Fix the note/photo, or delete and re-log."))
+        _PROTECTED = {"production_id", "cycle_id", "variety_id", "notes",
+                      "photo_url", "photo_sha256", "photo_byte_size", "gps_lat", "gps_lng"}
+        clean = {k: v for k, v in body.fields.items() if k not in _PROTECTED}
+        if clean:
+            # payload_jsonb is the source of truth for display + reports (Strike #56);
+            # merge the corrections in.
+            sets.append("payload_jsonb = COALESCE(payload_jsonb, '{}'::jsonb) || CAST(:pjmerge AS jsonb)")
+            params["pjmerge"] = json.dumps(clean)
+            changed += list(clean.keys())
     if not sets:
         raise HTTPException(status_code=422, detail=error_envelope("NOTHING_TO_EDIT", "No editable fields supplied."))
     await db.execute(text(f"UPDATE tenant.field_events SET {', '.join(sets)} "
