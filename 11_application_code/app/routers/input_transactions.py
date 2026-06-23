@@ -56,46 +56,46 @@ async def list_input_transactions(
 @router.post("")
 async def log_input_transaction(body: InputTransactionCreate, user: dict = Depends(get_current_user)):
     txn_id = f"ITX-{datetime.now().strftime('%Y%m%d')}-{uuid.uuid4().hex[:4].upper()}"
+    # Stock-movement sign: USAGE/WASTE/TRANSFER decrease on-hand, the rest increase it.
+    # The update_input_stock trigger applies NEW.qty_change to tenant.inputs and
+    # check_stock_not_negative guards the decrease, so qty_change MUST be signed.
+    decreases = body.transaction_type in ("USAGE", "WASTE", "TRANSFER")
+    qty_change = (-abs(body.quantity)) if decreases else abs(body.quantity)
     async with get_rls_db(str(user["tenant_id"])) as db:
-        if body.idempotency_key:
-            result = await db.execute(
-                text("SELECT txn_id FROM tenant.input_transactions WHERE idempotency_key = :key LIMIT 1"),
-                {"key": body.idempotency_key}
-            )
-            existing = result.mappings().first()
-            if existing:
-                return {"data": {"txn_id": existing["txn_id"], "duplicate": True}}
-
+        cur = (await db.execute(
+            text("SELECT current_stock_qty FROM tenant.inputs WHERE input_id = :iid AND tenant_id = :tid"),
+            {"iid": body.input_id, "tid": str(user["tenant_id"])},
+        )).scalar()
+        if cur is None:
+            raise HTTPException(404, detail="input_id not found")
+        qty_before = cur
+        qty_after = qty_before + qty_change
         await db.execute(text("""
             INSERT INTO tenant.input_transactions
-                (txn_id, tenant_id, input_id, farm_id, cycle_id, pu_id,
-                 transaction_type, transaction_date, quantity, unit,
-                 unit_cost_fjd, total_cost_fjd, supplier_id, batch_number,
-                 expiry_date, notes, created_by, idempotency_key)
+                (txn_id, tenant_id, input_id, farm_id, txn_type, txn_date,
+                 qty_change, qty_before, qty_after,
+                 unit_cost_fjd, total_cost_fjd, cycle_id, pu_id, supplier_id, notes, performed_by)
             VALUES
-                (:txn_id, :tenant_id, :input_id, :farm_id, :cycle_id, :pu_id,
-                 :txn_type, :txn_date, :quantity, :unit,
-                 :unit_cost_fjd, :total_cost_fjd, :supplier_id, :batch_number,
-                 :expiry_date, :notes, :created_by, :idempotency_key)
+                (:txn_id, :tenant_id, :input_id, :farm_id, :txn_type, :txn_date,
+                 :qty_change, :qty_before, :qty_after,
+                 :unit_cost_fjd, :total_cost_fjd, :cycle_id, :pu_id, :supplier_id, :notes, :performed_by)
         """), {
             "txn_id": txn_id,
             "tenant_id": str(user["tenant_id"]),
             "input_id": body.input_id,
             "farm_id": body.farm_id,
-            "cycle_id": body.cycle_id,
-            "pu_id": body.pu_id,
             "txn_type": body.transaction_type,
             "txn_date": body.transaction_date,
-            "quantity": body.quantity,
-            "unit": body.unit,
+            "qty_change": qty_change,
+            "qty_before": qty_before,
+            "qty_after": qty_after,
             "unit_cost_fjd": body.unit_cost_fjd,
             "total_cost_fjd": body.total_cost_fjd,
+            "cycle_id": body.cycle_id,
+            "pu_id": body.pu_id,
             "supplier_id": body.supplier_id,
-            "batch_number": body.batch_number,
-            "expiry_date": body.expiry_date,
             "notes": body.notes,
-            "created_by": str(user["user_id"]),
-            "idempotency_key": body.idempotency_key,
+            "performed_by": str(user["user_id"]),
         })
         # One movement -> one audit row (Universal Event Form Contract). Same txn as the INSERT.
         await emit_audit_event(

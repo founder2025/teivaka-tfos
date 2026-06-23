@@ -60,11 +60,11 @@ async def create_equipment(body: EquipmentCreate, user: dict = Depends(get_curre
             INSERT INTO tenant.equipment
                 (equipment_id, tenant_id, farm_id, equipment_name, equipment_type,
                  brand, model, serial_number, purchase_date, purchase_cost_fjd,
-                 current_value_fjd, last_service_date, next_service_date, notes, created_by)
+                 current_value_fjd, last_service_date, next_service_date, notes)
             VALUES
                 (:equipment_id, :tenant_id, :farm_id, :equipment_name, :equipment_type,
                  :brand, :model, :serial_number, :purchase_date, :purchase_cost_fjd,
-                 :current_value_fjd, :last_service_date, :next_service_date, :notes, :created_by)
+                 :current_value_fjd, :last_service_date, :next_service_date, :notes)
         """), {
             "equipment_id": equipment_id,
             "tenant_id": str(user["tenant_id"]),
@@ -80,7 +80,6 @@ async def create_equipment(body: EquipmentCreate, user: dict = Depends(get_curre
             "last_service_date": body.last_service_date,
             "next_service_date": body.next_service_date,
             "notes": body.notes,
-            "created_by": str(user["user_id"]),
         })
         # One add -> one audit row (Universal Event Form Contract). Same txn as the INSERT.
         await emit_audit_event(
