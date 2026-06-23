@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import text
 from app.db.session import get_rls_db
 from app.middleware.rls import get_current_user
+from app.core.audit_chain import emit_audit_event
 from pydantic import BaseModel
 from decimal import Decimal
 from datetime import datetime
@@ -130,6 +131,22 @@ async def log_weather(body: WeatherLogCreate, user: dict = Depends(get_current_u
             "notes": body.notes,
             "created_by": str(user["user_id"]),
         })
+        # One log -> one audit row (Universal Event Form Contract). Same txn as the INSERT.
+        await emit_audit_event(
+            db=db,
+            tenant_id=uuid.UUID(str(user["tenant_id"])),
+            actor_user_id=uuid.UUID(str(user["user_id"])),
+            event_type="WEATHER_OBSERVED",
+            entity_type="weather_log",
+            entity_id=log_id,
+            occurred_at=body.observation_date,
+            payload={
+                "log_id": log_id,
+                "farm_id": body.farm_id,
+                "weather_condition": condition,
+                "rainfall_mm": str(body.rainfall_mm) if body.rainfall_mm is not None else None,
+            },
+        )
     return {"data": {"weather_id": log_id, "farm_id": body.farm_id}}
 
 

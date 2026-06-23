@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import text
 from app.db.session import get_rls_db
 from app.middleware.rls import get_current_user
+from app.core.audit_chain import emit_audit_event
 from pydantic import BaseModel
 from decimal import Decimal
 from datetime import datetime
@@ -104,6 +105,21 @@ async def create_worker(body: WorkerCreate, user: dict = Depends(get_current_use
             "start_date": start_date,
             "notes": body.notes,
         })
+        # One add -> one audit row (Universal Event Form Contract). Same txn as the INSERT.
+        await emit_audit_event(
+            db=db,
+            tenant_id=uuid.UUID(str(user["tenant_id"])),
+            actor_user_id=uuid.UUID(str(user["user_id"])),
+            event_type="WORKER_ADDED",
+            entity_type="worker",
+            entity_id=worker_id,
+            payload={
+                "worker_id": worker_id,
+                "farm_id": body.farm_id,
+                "full_name": body.full_name,
+                "worker_type": worker_type,
+            },
+        )
     return {"data": {"worker_id": worker_id, "full_name": body.full_name, "daily_rate_fjd": str(body.daily_rate_fjd)}}
 
 @router.patch("/{worker_id}/rate")
