@@ -547,12 +547,13 @@ async def create_manual_task(
                 (task_id, tenant_id, farm_id, task_type, title, description,
                  priority, status, imperative, source_module, task_rank, due_date)
             VALUES
-                (:tid, :tenant, :farm, 'OTHER', :title, :title,
-                 'MEDIUM', 'OPEN', :title, 'manual', :rank, :due)
+                (:tid, :tenant, :farm, 'OTHER', :title, :description,
+                 'MEDIUM', 'OPEN', :imperative, 'manual', :rank, :due)
             """
         ),
         {"tid": tid, "tenant": str(user["tenant_id"]), "farm": body.farm_id,
-         "title": title, "rank": rank, "due": body.due_date},
+         "title": title, "description": title, "imperative": title,
+         "rank": rank, "due": body.due_date},
     )
     # One add -> one audit row (Universal Event Form Contract). Same session as the INSERT.
     await emit_audit_event(
