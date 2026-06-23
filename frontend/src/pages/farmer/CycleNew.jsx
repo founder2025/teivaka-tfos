@@ -17,9 +17,17 @@
  */
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import ThemedSelect from "../../components/inputs/ThemedSelect.jsx";
+import { ChevronLeft, ShieldCheck, Check, Loader2, User } from "lucide-react";
 import CapacityCalc from "../../components/farm/CapacityCalc.jsx";
 import { completeLinkedTask } from "../../utils/taskBridge";
+
+// Match the (+) capture engine's date phrasing in the "About to record" preview.
+function prettyDate(ymd) {
+  if (!ymd) return "—";
+  const d = new Date(`${ymd}T00:00:00`);
+  if (isNaN(d)) return ymd;
+  return d.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+}
 
 // ── Helpers ──────────────────────────────────────────────────────────
 function authHeaders() {
@@ -41,7 +49,7 @@ function extractList(body, ...keys) {
 
 const TODAY = () => new Date().toISOString().slice(0, 10);
 
-// ── Sub-components (module scope to prevent focus-loss) ──────────────
+// ── Toast (module scope to prevent focus-loss) ──────────────────────
 function Toast({ message, onClose }) {
   if (!message) return null;
   return (
@@ -77,58 +85,6 @@ function Toast({ message, onClose }) {
         ×
       </button>
     </div>
-  );
-}
-
-function Label({ children, required }) {
-  return (
-    <label
-      style={{
-        display: "block",
-        fontSize: 13,
-        fontWeight: 600,
-        color: "var(--soil, var(--soil))",
-        marginBottom: 6,
-      }}
-    >
-      {children}
-      {required && <span style={{ color: "var(--red, var(--red))", marginLeft: 3 }}>*</span>}
-    </label>
-  );
-}
-
-function Field({ label, required, error, children }) {
-  return (
-    <div style={{ marginBottom: 16 }}>
-      <Label required={required}>{label}</Label>
-      {children}
-      {error && (
-        <div style={{ color: "var(--red, var(--red))", fontSize: 12, marginTop: 4 }}>
-          {error}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function Input({ value, onChange, type = "text", ...rest }) {
-  return (
-    <input
-      type={type}
-      value={value ?? ""}
-      onChange={(e) => onChange(e.target.value)}
-      style={{
-        width: "100%",
-        padding: "10px 12px",
-        border: "1px solid var(--line, var(--line))",
-        borderRadius: 6,
-        fontSize: 14,
-        background: "var(--paper)",
-        color: "var(--soil, var(--soil))",
-        boxSizing: "border-box",
-      }}
-      {...rest}
-    />
   );
 }
 
@@ -303,191 +259,127 @@ export default function CycleNew() {
     }
   }
 
+  // ── Engine card style language (mirrors capture/CaptureEngine.jsx) ──
+  const wrap = { maxWidth: 460, margin: "0 auto", padding: 16, color: "#3a3527" };
+  const card = { border: "1px solid #e6ded0", borderRadius: 14, padding: 14, marginBottom: 16, background: "#faf8f3" };
+  const cardHead = { fontSize: 11, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase", color: "#9a917c", marginBottom: 10 };
+  const fieldLabel = { display: "block", fontSize: 13, fontWeight: 600, marginBottom: 6, color: "#5a5a4a" };
+  const inputBox = { width: "100%", padding: 11, borderRadius: 10, border: "1px solid #d8d4c8", fontSize: 14, boxSizing: "border-box", background: "#fff" };
+  const backBtn = { display: "flex", alignItems: "center", gap: 4, background: "none", border: "none", color: "#6b6b6b", cursor: "pointer", marginBottom: 12 };
+
   // ── Render ────────────────────────────────────────────────────────
   if (loading) {
-    return (
-      <div style={{ padding: 32, color: "var(--soil, var(--soil))" }}>Loading…</div>
-    );
+    return <div style={{ ...wrap, padding: 32, color: "#6b6b6b" }}>Loading…</div>;
   }
 
+  const cropName = productions.find((p) => p.production_id === productionId)?.production_name;
+  const selPu = productionUnits.find((p) => p.pu_id === puId);
+  const blockLabel = selPu ? (selPu.farmer_label || selPu.pu_name || selPu.pu_id) : "—";
+  const areaHa = plannedAreaSqm ? parseFloat(plannedAreaSqm) / 10000
+    : (selPu?.area_sqm ? Number(selPu.area_sqm) / 10000 : null);
+  const ready = puId && productionId && plantingDate;
+
   return (
-    <div
-      style={{
-        maxWidth: 640,
-        margin: "0 auto",
-        padding: "24px 20px 40px",
-        color: "var(--soil, var(--soil))",
-      }}
-    >
+    <div style={wrap}>
       <Toast message={toast} onClose={() => setToast(null)} />
 
-      <h1 style={{ fontSize: 22, fontWeight: 600, marginBottom: 4 }}>
-        Start a crop run
-      </h1>
-      <p style={{ fontSize: 14, color: "var(--muted, #8A7A66)", marginBottom: 24 }}>
-        Begin a new production cycle on a block.
-      </p>
+      <button onClick={() => navigate("/farm/cycles")} style={backBtn}><ChevronLeft size={18} /> Back</button>
+      <h1 style={{ fontSize: 22, fontWeight: 800, marginBottom: 4 }}>Start a crop run</h1>
+      <p style={{ color: "#6b6b6b", fontSize: 13, marginBottom: 18 }}>Begin a new production cycle on a block.</p>
 
       {formError && (
-        <div
-          role="alert"
-          style={{
-            background: "#FBE5E5",
-            border: "1px solid var(--red, var(--red))",
-            color: "var(--red, var(--red))",
-            padding: "10px 14px",
-            borderRadius: 6,
-            marginBottom: 16,
-            fontSize: 13,
-          }}
-        >
+        <div role="alert" style={{ background: "#fbe5e5", border: "1px solid #c98b8b", color: "#9a3b3b", padding: "10px 12px", borderRadius: 12, marginBottom: 14, fontSize: 13 }}>
           {formError}
         </div>
       )}
 
-      <Field label="Farm" required>
-        <Input value={farmId || ""} disabled />
-      </Field>
+      {/* Anchors — Farm · Block · Crop · Operator (the 4-anchor identity on every record) */}
+      <div style={card}>
+        <div style={cardHead}>Anchors · farm · block · crop · operator</div>
+        <div style={{ display: "grid", gridTemplateColumns: "64px 1fr", rowGap: 10, alignItems: "center", fontSize: 14 }}>
+          <span style={{ color: "#9a917c" }}>Farm</span>
+          <span style={{ fontWeight: 600 }}>{farmId || "—"}</span>
 
-      <Field label="Block" required error={fieldErrors.puId}>
-        <ThemedSelect
-          value={puId}
-          onChange={(v) => setPuId(v)}
-          options={[
-            { value: "", label: "Select a block…" },
-            ...availablePUs.map((pu) => ({
-              value: pu.pu_id,
-              label: pu.farmer_label || pu.pu_name || pu.pu_id,
-            })),
-          ]}
-        />
-        {availablePUs.length === 0 && (
-          <div style={{ fontSize: 12, color: "var(--muted, #8A7A66)", marginTop: 4 }}>
-            All blocks have active cycles. Close one first.
+          <span style={{ color: "#9a917c" }}>Block</span>
+          <div>
+            <select value={puId} onChange={(e) => setPuId(e.target.value)} style={inputBox}>
+              <option value="">Select a block…</option>
+              {availablePUs.map((pu) => (
+                <option key={pu.pu_id} value={pu.pu_id}>{pu.farmer_label || pu.pu_name || pu.pu_id}</option>
+              ))}
+            </select>
+            {fieldErrors.puId && <div style={{ color: "#9a3b3b", fontSize: 12, marginTop: 4 }}>{fieldErrors.puId}</div>}
+            {availablePUs.length === 0 && (
+              <div style={{ fontSize: 12, color: "#9a917c", marginTop: 4 }}>All blocks have active cycles. Close one first.</div>
+            )}
+          </div>
+
+          <span style={{ color: "#9a917c" }}>Crop</span>
+          <div>
+            <select value={productionId} onChange={(e) => setProductionId(e.target.value)} style={inputBox}>
+              <option value="">Select a crop…</option>
+              {productions.map((p) => (
+                <option key={p.production_id} value={p.production_id}>{p.production_name}</option>
+              ))}
+            </select>
+            {fieldErrors.productionId && <div style={{ color: "#9a3b3b", fontSize: 12, marginTop: 4 }}>{fieldErrors.productionId}</div>}
+          </div>
+
+          <span style={{ color: "#9a917c" }}>Operator</span>
+          <span style={{ fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}><User size={14} />You</span>
+        </div>
+      </div>
+
+      {/* When */}
+      <div style={{ display: "flex", gap: 10, marginBottom: 16 }}>
+        <div style={{ flex: 1 }}>
+          <label style={fieldLabel}>Planting date</label>
+          <input type="date" value={plantingDate} onChange={(e) => setPlantingDate(e.target.value)} style={inputBox} />
+          {fieldErrors.plantingDate && <div style={{ color: "#9a3b3b", fontSize: 12, marginTop: 4 }}>{fieldErrors.plantingDate}</div>}
+        </div>
+        <div style={{ flex: 1 }}>
+          <label style={fieldLabel}>Expected harvest</label>
+          <input type="date" value={expectedHarvestDate} onChange={(e) => setExpectedHarvestDate(e.target.value)} style={inputBox} />
+        </div>
+      </div>
+
+      {/* Plan */}
+      <div style={card}>
+        <div style={cardHead}>Plan</div>
+        <label style={fieldLabel}>Planned area (m²)</label>
+        <input type="number" value={plannedAreaSqm} onChange={(e) => setPlannedAreaSqm(e.target.value)} min="0" step="0.01" style={{ ...inputBox, marginBottom: areaHa ? 8 : 14 }} />
+        {areaHa && (
+          <div style={{ margin: "0 0 14px", border: "1px solid #e6ded0", borderRadius: 12, padding: 12, background: "#fcfaf5" }}>
+            <CapacityCalc areaHa={areaHa} unit="acres" compact />
           </div>
         )}
-      </Field>
-
-      <Field label="Crop" required error={fieldErrors.productionId}>
-        <ThemedSelect
-          value={productionId}
-          onChange={(v) => setProductionId(v)}
-          options={[
-            { value: "", label: "Select a crop…" },
-            ...productions.map((p) => ({
-              value: p.production_id,
-              label: p.production_name,
-            })),
-          ]}
-        />
-      </Field>
-
-      <Field label="Planting date" required error={fieldErrors.plantingDate}>
-        <Input type="date" value={plantingDate} onChange={setPlantingDate} />
-      </Field>
-
-      <Field label="Expected harvest date">
-        <Input type="date" value={expectedHarvestDate} onChange={setExpectedHarvestDate} />
-      </Field>
-
-      <Field label="Planned area (m²)">
-        <Input type="number" value={plannedAreaSqm} onChange={setPlannedAreaSqm} min="0" step="0.01" />
-      </Field>
-
-      {(() => {
-        const selPu = productionUnits.find((p) => p.pu_id === puId);
-        const aha = plannedAreaSqm ? parseFloat(plannedAreaSqm) / 10000
-          : (selPu?.area_sqm ? Number(selPu.area_sqm) / 10000 : null);
-        if (!aha) return null;
-        return (
-          <div style={{ margin: "4px 0 8px", border: "1px solid #E6DED0", borderRadius: 12, padding: 12, background: "#FCFAF5" }}>
-            <CapacityCalc areaHa={aha} unit="acres" compact />
-          </div>
-        );
-      })()}
-
-      <Field label="Planned yield (kg)">
-        <Input type="number" value={plannedYieldKg} onChange={setPlannedYieldKg} min="0" step="0.01" />
-      </Field>
-
-      <Field label="3-Layer">
-        <ThemedSelect
-          value={layer}
-          onChange={(v) => setLayer(v)}
-          options={[
-            { value: "", label: "(none — set later)" },
-            { value: "CASH_FLOW", label: "Cash Flow (sell to market)" },
-            { value: "FOOD_SECURITY", label: "Food Security (feed family)" },
-            { value: "LONG_TERM_ASSET", label: "Long-Term Asset (perennial / grow value)" },
-          ]}
-        />
-      </Field>
-
-      <Field label="Cycle label (your name for this crop run)">
-        <Input
-          value={farmerLabel}
-          onChange={setFarmerLabel}
-          placeholder="e.g., Bed 3 eggplant — May start"
-          maxLength={64}
-        />
-      </Field>
-
-      <Field label="Notes">
-        <textarea
-          value={cycleNotes}
-          onChange={(e) => setCycleNotes(e.target.value)}
-          maxLength={500}
-          rows={3}
-          style={{
-            width: "100%",
-            padding: "10px 12px",
-            border: "1px solid var(--line, var(--line))",
-            borderRadius: 6,
-            fontSize: 14,
-            background: "var(--paper)",
-            color: "var(--soil, var(--soil))",
-            boxSizing: "border-box",
-            resize: "vertical",
-            fontFamily: "inherit",
-          }}
-        />
-      </Field>
-
-      <div style={{ display: "flex", gap: 12, marginTop: 24 }}>
-        <button
-          onClick={handleSubmit}
-          disabled={submitting}
-          style={{
-            background: "var(--green, var(--green))",
-            color: "#fff",
-            border: "none",
-            padding: "12px 24px",
-            borderRadius: 6,
-            fontSize: 14,
-            fontWeight: 600,
-            cursor: submitting ? "wait" : "pointer",
-            opacity: submitting ? 0.6 : 1,
-          }}
-        >
-          {submitting ? "Starting…" : "Start crop run"}
-        </button>
-        <button
-          onClick={() => navigate("/farm/cycles")}
-          disabled={submitting}
-          style={{
-            background: "transparent",
-            color: "var(--soil, var(--soil))",
-            border: "1px solid var(--line, var(--line))",
-            padding: "12px 24px",
-            borderRadius: 6,
-            fontSize: 14,
-            fontWeight: 500,
-            cursor: "pointer",
-          }}
-        >
-          Cancel
-        </button>
+        <label style={fieldLabel}>Planned yield (kg)</label>
+        <input type="number" value={plannedYieldKg} onChange={(e) => setPlannedYieldKg(e.target.value)} min="0" step="0.01" style={{ ...inputBox, marginBottom: 14 }} />
+        <label style={fieldLabel}>3-Layer</label>
+        <select value={layer} onChange={(e) => setLayer(e.target.value)} style={{ ...inputBox, marginBottom: 14 }}>
+          <option value="">(none — set later)</option>
+          <option value="CASH_FLOW">Cash Flow (sell to market)</option>
+          <option value="FOOD_SECURITY">Food Security (feed family)</option>
+          <option value="LONG_TERM_ASSET">Long-Term Asset (perennial / grow value)</option>
+        </select>
+        <label style={fieldLabel}>Cycle label (your name for this crop run)</label>
+        <input value={farmerLabel} onChange={(e) => setFarmerLabel(e.target.value)} placeholder="e.g., Bed 3 eggplant — May start" maxLength={64} style={{ ...inputBox, marginBottom: 14 }} />
+        <label style={fieldLabel}>Notes</label>
+        <textarea value={cycleNotes} onChange={(e) => setCycleNotes(e.target.value)} maxLength={500} rows={3} style={{ ...inputBox, resize: "vertical", fontFamily: "inherit" }} />
       </div>
+
+      {/* About to record — the audit preview */}
+      <div style={{ border: "1px solid #cfe0cf", background: "#f0f6f0", borderRadius: 12, padding: "10px 12px", marginBottom: 14, fontSize: 12.5, color: "#3c5a3c" }}>
+        <div style={{ fontWeight: 700, marginBottom: 4, display: "flex", alignItems: "center", gap: 6 }}><ShieldCheck size={14} /> About to record</div>
+        CYCLE_CREATED · {cropName || "—"} · {blockLabel} · {prettyDate(plantingDate)} · You
+      </div>
+
+      <button onClick={handleSubmit} disabled={submitting || !ready}
+        style={{ width: "100%", padding: 16, borderRadius: 14, border: "none", fontSize: 16, fontWeight: 700, color: "#fff",
+          background: (!ready) ? "#b8b8b8" : "#2e7d32", cursor: submitting || !ready ? "default" : "pointer",
+          display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+        {submitting ? <Loader2 size={18} /> : <Check size={18} />}{submitting ? "Starting…" : "Start crop run"}
+      </button>
     </div>
   );
 }
