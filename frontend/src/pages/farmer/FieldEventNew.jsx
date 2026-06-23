@@ -1187,7 +1187,16 @@ function feWithin48h(createdAt) {
 
 const FE_EDIT_PROTECTED = new Set(["production_id", "cycle_id", "variety_id", "notes",
   "photo_url", "photo_sha256", "photo_byte_size", "gps_lat", "gps_lng", "_recorded_at"]);
+// Chemical WHD-critical values are edited via dedicated controls, never the generic list.
+const FE_CHEM_HANDLED = new Set(["chemical_id", "application_rate", "tank_volume_liters", "event_date", "occurred_at"]);
 const feLabel = (k) => k.replace(/_/g, " ").replace(/\b\w/, (c) => c.toUpperCase());
+const feAddDays = (ymd, days) => {
+  if (!ymd || days == null) return null;
+  const d = new Date(`${String(ymd).slice(0, 10)}T00:00:00`);
+  if (isNaN(d)) return null;
+  d.setDate(d.getDate() + Number(days));
+  return d.toISOString().slice(0, 10);
+};
 
 function FieldEventEditModal({ evt, onClose, onSaved }) {
   const isChemical = !!evt.chemical_application;
@@ -1195,13 +1204,42 @@ function FieldEventEditModal({ evt, onClose, onSaved }) {
   const [photo, setPhoto] = useState(evt.photo_url || null);
   const [fields, setFields] = useState(() => {
     const p = evt.payload_jsonb || {}; const o = {};
-    Object.keys(p).forEach((k) => { if (!FE_EDIT_PROTECTED.has(k) && p[k] != null && p[k] !== "") o[k] = p[k]; });
+    Object.keys(p).forEach((k) => {
+      if (FE_EDIT_PROTECTED.has(k)) return;
+      if (isChemical && FE_CHEM_HANDLED.has(k)) return;
+      if (p[k] != null && p[k] !== "") o[k] = p[k];
+    });
     return o;
   });
+  // Chemical-only state (WHD-critical).
+  const [chems, setChems] = useState([]);
+  const [chemQuery, setChemQuery] = useState("");
+  const [chemId, setChemId] = useState(evt.chemical_id || evt.payload_jsonb?.chemical_id || "");
+  const [appDate, setAppDate] = useState(String(evt.event_date || "").slice(0, 10));
+  const [rate, setRate] = useState(evt.chemical_dose_per_liter ?? evt.payload_jsonb?.application_rate ?? "");
+  const [tank, setTank] = useState(evt.tank_volume_liters ?? evt.payload_jsonb?.tank_volume_liters ?? "");
   const [uploading, setUploading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const setField = (k, raw, isNum) => setFields((f) => ({ ...f, [k]: isNum ? (raw === "" ? "" : Number(raw)) : raw }));
+
+  useEffect(() => {
+    if (!isChemical) return;
+    let cancelled = false;
+    (async () => {
+      const b = await (await fetch("/api/v1/chemicals", { headers: feAuthHeaders() })).json().catch(() => null);
+      if (!cancelled) setChems(b?.data || []);
+    })();
+    return () => { cancelled = true; };
+  }, [isChemical]);
+
+  const selectedChem = chems.find((c) => c.chemical_id === chemId) || null;
+  const whdDays = selectedChem?.withholding_period_days;
+  const newClear = feAddDays(appDate, whdDays);
+  const chemFiltered = chemQuery
+    ? chems.filter((c) => (c.chem_name || "").toLowerCase().includes(chemQuery.toLowerCase()))
+    : chems;
+
   async function upload(file) {
     if (!file) return; setUploading(true);
     try {
@@ -1214,8 +1252,15 @@ function FieldEventEditModal({ evt, onClose, onSaved }) {
   async function save() {
     setBusy(true); setErr("");
     try {
-      const payload = { notes: note, photo_url: photo };
-      if (!isChemical) payload.fields = fields;
+      const payload = { notes: note, photo_url: photo, fields };
+      if (isChemical) {
+        if (!chemId) { setErr("Pick a chemical from the list."); setBusy(false); return; }
+        if (!appDate) { setErr("Set the application date."); setBusy(false); return; }
+        payload.chemical_id = chemId;
+        payload.event_date = appDate;
+        payload.application_rate = rate === "" ? null : Number(rate);
+        payload.tank_volume_liters = tank === "" ? null : Number(tank);
+      }
       const r = await fetch(`/api/v1/field-events/${encodeURIComponent(evt.event_id)}`, {
         method: "PATCH", headers: { ...feAuthHeaders(), "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -1235,11 +1280,46 @@ function FieldEventEditModal({ evt, onClose, onSaved }) {
         </div>
         <div className="text-[11px] mb-3" style={{ color: C.muted }}>You can fix this for 48 hours of logging — every change is logged.</div>
 
-        {isChemical ? (
-          <div className="text-xs mb-3 rounded-lg px-3 py-2" style={{ background: "#fff7e6", color: "#7a5b14", border: "1px solid #f0d9a0" }}>
-            This is a chemical record — its values drive the harvest-withholding window, so they can't be corrected here. Fix the note/photo, or delete and re-log.
+        {isChemical && (
+          <div className="mb-3">
+            <div className="text-xs font-semibold mb-1" style={{ color: C.soil }}>Chemical (re-runs the withholding window)</div>
+            <input placeholder="Search chemical…" value={chemQuery} onChange={(e) => setChemQuery(e.target.value)}
+              className="w-full rounded-lg border px-3 py-2 text-sm mb-2" style={{ borderColor: C.border }} />
+            <div className="space-y-1 mb-2 max-h-44 overflow-y-auto">
+              {chems.length === 0 ? <div className="text-xs" style={{ color: C.muted }}>Loading chemicals…</div>
+                : chemFiltered.map((c) => (
+                  <button key={c.chemical_id} onClick={() => setChemId(c.chemical_id)}
+                    className="w-full text-left px-3 py-2 rounded-lg border text-sm"
+                    style={{ borderColor: chemId === c.chemical_id ? C.greenDk : C.border, background: chemId === c.chemical_id ? "#eaf3ea" : "#fff" }}>
+                    <span className="font-semibold block">{c.chem_name}</span>
+                    <span className="text-xs" style={{ color: C.muted }}>{c.active_ingredient ? `${c.active_ingredient} · ` : ""}WHD {c.withholding_period_days ?? "?"}d</span>
+                  </button>
+                ))}
+            </div>
+            <label className="text-[11px]" style={{ color: C.muted }}>Application date</label>
+            <input type="date" value={appDate} onChange={(e) => setAppDate(e.target.value)}
+              className="w-full mt-0.5 mb-2 rounded-lg border px-3 py-2 text-sm" style={{ borderColor: C.border }} />
+            <div className="grid grid-cols-2 gap-2 mb-2">
+              <div>
+                <label className="text-[11px]" style={{ color: C.muted }}>Rate</label>
+                <input type="number" value={rate} onChange={(e) => setRate(e.target.value)}
+                  className="w-full mt-0.5 rounded-lg border px-3 py-2 text-sm" style={{ borderColor: C.border }} />
+              </div>
+              <div>
+                <label className="text-[11px]" style={{ color: C.muted }}>Tank (L)</label>
+                <input type="number" value={tank} onChange={(e) => setTank(e.target.value)}
+                  className="w-full mt-0.5 rounded-lg border px-3 py-2 text-sm" style={{ borderColor: C.border }} />
+              </div>
+            </div>
+            <div className="text-xs rounded-lg px-3 py-2" style={{ background: "#fff7e6", color: "#7a5b14", border: "1px solid #f0d9a0" }}>
+              {selectedChem
+                ? <>⚠ New harvest-clear date: <b>{newClear || "?"}</b> ({whdDays ?? "?"}-day withholding from {appDate || "?"})</>
+                : <>Pick a chemical to see the new harvest-clear date.</>}
+            </div>
           </div>
-        ) : fieldKeys.length > 0 && (
+        )}
+
+        {fieldKeys.length > 0 && (
           <>
             <div className="text-xs font-semibold mb-1" style={{ color: C.soil }}>What you logged</div>
             <div className="space-y-2 mb-3">

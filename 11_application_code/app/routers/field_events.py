@@ -91,12 +91,27 @@ class FieldEventDelete(BaseModel):
 class FieldEventEdit(BaseModel):
     """In-window correction: note + evidence + the captured form values (fields).
     `fields` merges into payload_jsonb (the display/report source of truth). photo_url=null
-    removes the photo. exclude_unset distinguishes 'not sent' from 'set to null'."""
+    removes the photo. exclude_unset distinguishes 'not sent' from 'set to null'.
+
+    Chemical (spray) records also accept WHD-critical structured corrections —
+    chemical_id, event_date (application date), application_rate, tank_volume_liters —
+    which re-run the withholding window (whd_clearance_date)."""
     notes: Optional[str] = Field(default=None, max_length=500)
     photo_url: Optional[str] = Field(default=None, max_length=512)
     gps_lat: Optional[float] = None
     gps_lng: Optional[float] = None
     fields: Optional[dict] = Field(default=None, description="Corrected captured values, merged into payload_jsonb.")
+    # Chemical-only WHD-critical corrections (ignored on non-chemical rows).
+    chemical_id: Optional[str] = Field(default=None, description="Corrected chemical (re-runs WHD).")
+    event_date: Optional[str] = Field(default=None, description="Corrected application date (re-runs WHD).")
+    application_rate: Optional[float] = None
+    tank_volume_liters: Optional[float] = None
+
+
+# payload_jsonb keys that are NOT free-text corrections (structural anchors + evidence
+# managed via their own columns) — never merged from a client `fields` dict.
+_FE_PROTECTED = {"production_id", "cycle_id", "variety_id", "notes",
+                 "photo_url", "photo_sha256", "photo_byte_size", "gps_lat", "gps_lng"}
 
 
 # ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -505,17 +520,59 @@ async def edit_field_event(
         ph, sz = _hash_local_photo(body.photo_url)
         sets += ["photo_url = :purl", "photo_sha256 = :psha", "photo_byte_size = :psz"]
         params.update({"purl": body.photo_url, "psha": ph, "psz": sz}); changed.append("photo")
-    if "fields" in provided and body.fields:
-        # Chemical records drive the WHD harvest-block (Inviolable #2); editing their
-        # values here would silently move that window — deferred to the WHD-aware path.
-        if row["chemical_application"]:
-            raise HTTPException(status_code=422, detail=error_envelope(
-                "CHEMICAL_EDIT_UNSUPPORTED",
-                "Chemical record details can't be corrected here (withholding-period safety). "
-                "Fix the note/photo, or delete and re-log."))
-        _PROTECTED = {"production_id", "cycle_id", "variety_id", "notes",
-                      "photo_url", "photo_sha256", "photo_byte_size", "gps_lat", "gps_lng"}
-        clean = {k: v for k, v in body.fields.items() if k not in _PROTECTED}
+    if row["chemical_application"]:
+        # WHD-aware chemical correction (Inviolable #2). The HARD GATE at harvest
+        # (enforce_harvest_compliance) recomputes clearance LIVE from event_date +
+        # chemical_id, so a correction takes effect automatically and cannot be
+        # bypassed. The stored whd_clearance_date column's trigger is BEFORE INSERT
+        # only, so we refresh it here in app code; and we record the WHD-critical
+        # before-values in the EVENT_CORRECTED audit payload for full traceability.
+        chem_changed = False
+        if "event_date" in provided and body.event_date:
+            sets.append("event_date = CAST(:evd AS timestamptz)")
+            params["evd"] = body.event_date; changed.append("event_date"); chem_changed = True
+        if "chemical_id" in provided and body.chemical_id:
+            sets.append("chemical_id = :chid")
+            params["chid"] = body.chemical_id; changed.append("chemical_id"); chem_changed = True
+        if "application_rate" in provided:
+            sets.append("chemical_dose_per_liter = :rate")
+            params["rate"] = body.application_rate; changed.append("application_rate")
+        if "tank_volume_liters" in provided:
+            sets.append("tank_volume_liters = :tvol")
+            params["tvol"] = body.tank_volume_liters; changed.append("tank_volume_liters")
+        if chem_changed:
+            eff_chem = body.chemical_id if ("chemical_id" in provided and body.chemical_id) else row["chemical_id"]
+            whd_row = (await db.execute(
+                text("SELECT withholding_period_days FROM shared.chemical_library WHERE chemical_id = :cid"),
+                {"cid": eff_chem},
+            )).first()
+            if whd_row is None:
+                raise HTTPException(status_code=422, detail=error_envelope(
+                    "CHEMICAL_NOT_FOUND", "That chemical isn't in the library — pick one from the list."))
+            params["whd_days"] = int(whd_row[0] or 0)
+            if "event_date" in provided and body.event_date:
+                sets.append("whd_clearance_date = (CAST(:whd_src AS date) + :whd_days)")
+                params["whd_src"] = body.event_date
+            else:
+                sets.append("whd_clearance_date = (event_date::date + :whd_days)")
+            changed.append("whd_clearance_date")
+        # Keep payload_jsonb (display/report source of truth, Strike #56) in sync.
+        pj_sync: dict = {}
+        if "chemical_id" in provided and body.chemical_id:
+            pj_sync["chemical_id"] = body.chemical_id
+        if "application_rate" in provided:
+            pj_sync["application_rate"] = body.application_rate
+        if "tank_volume_liters" in provided:
+            pj_sync["tank_volume_liters"] = body.tank_volume_liters
+        if "fields" in provided and body.fields:
+            for k, vv in body.fields.items():
+                if k not in _FE_PROTECTED and k not in ("chemical_id", "application_rate", "tank_volume_liters", "event_date"):
+                    pj_sync[k] = vv; changed.append(k)
+        if pj_sync:
+            sets.append("payload_jsonb = COALESCE(payload_jsonb, '{}'::jsonb) || CAST(:pjmerge AS jsonb)")
+            params["pjmerge"] = json.dumps(pj_sync)
+    elif "fields" in provided and body.fields:
+        clean = {k: v for k, v in body.fields.items() if k not in _FE_PROTECTED}
         if clean:
             # payload_jsonb is the source of truth for display + reports (Strike #56);
             # merge the corrections in.
@@ -526,10 +583,21 @@ async def edit_field_event(
         raise HTTPException(status_code=422, detail=error_envelope("NOTHING_TO_EDIT", "No editable fields supplied."))
     await db.execute(text(f"UPDATE tenant.field_events SET {', '.join(sets)} "
                           f"WHERE event_id = :eid AND deleted_at IS NULL"), params)
+    audit_payload: dict = {"event_id": event_id, "changed": changed}
+    # For WHD-critical chemical corrections, preserve the before-values in the chain so
+    # any change to a withholding window is permanently traceable (Inviolable #2).
+    if row["chemical_application"] and ({"chemical_id", "event_date"} & set(changed)):
+        ed = row["event_date"]
+        wcd = row["whd_clearance_date"]
+        audit_payload["whd_before"] = {
+            "chemical_id": row["chemical_id"],
+            "event_date": ed.isoformat() if hasattr(ed, "isoformat") else ed,
+            "whd_clearance_date": wcd.isoformat() if hasattr(wcd, "isoformat") else wcd,
+        }
     await emit_audit_event(
         db=db, tenant_id=UUID(str(user["tenant_id"])), actor_user_id=UUID(str(user["user_id"])),
         event_type="EVENT_CORRECTED", entity_type="field_event", entity_id=event_id,
-        payload={"event_id": event_id, "changed": changed},
+        payload=audit_payload,
     )
     updated = (await db.execute(
         text("SELECT * FROM tenant.field_events WHERE event_id = :eid"), {"eid": event_id},
