@@ -22,9 +22,17 @@
  * re-mount inputs (focus-loss bug the brief flagged).
  */
 import { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import ThemedSelect from "../../components/inputs/ThemedSelect.jsx";
+import { useNavigate } from "react-router-dom";
+import { ChevronLeft, ShieldCheck, Check, Loader2, User } from "lucide-react";
 import { completeLinkedTask } from "../../utils/taskBridge";
+
+// Match the (+) capture engine's date phrasing in the "About to record" preview.
+function prettyDate(ymd) {
+  if (!ymd) return "—";
+  const d = new Date(`${ymd}T00:00:00`);
+  if (isNaN(d)) return ymd;
+  return d.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+}
 
 const C = {
   soil:    "var(--soil)",
@@ -51,28 +59,7 @@ function todayISO() {
   return new Date().toISOString().slice(0, 10);
 }
 
-const inputCls =
-  "w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--green)]";
-
 // ── Sub-components (module scope; never redefined inside parent) ─────────────
-
-function Label({ htmlFor, children }) {
-  return (
-    <label htmlFor={htmlFor} className="block text-sm font-semibold mb-1" style={{ color: C.soil }}>
-      {children}
-    </label>
-  );
-}
-
-function Field({ label, htmlFor, hint, children }) {
-  return (
-    <div>
-      <Label htmlFor={htmlFor}>{label}</Label>
-      {children}
-      {hint && <p className="text-xs mt-1" style={{ color: C.muted }}>{hint}</p>}
-    </div>
-  );
-}
 
 function Toast({ message }) {
   if (!message) return null;
@@ -318,156 +305,107 @@ export default function HarvestNew() {
       ? "No active cycles for this crop"
       : "Select a cycle…";
 
+  // ── Engine card style language (mirrors capture/CaptureEngine.jsx) ──
+  const wrap = { maxWidth: 460, margin: "0 auto", padding: 16, color: "#3a3527" };
+  const card = { border: "1px solid #e6ded0", borderRadius: 14, padding: 14, marginBottom: 16, background: "#faf8f3" };
+  const cardHead = { fontSize: 11, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase", color: "#9a917c", marginBottom: 10 };
+  const fieldLabel = { display: "block", fontSize: 13, fontWeight: 600, marginBottom: 6, color: "#5a5a4a" };
+  const inputBox = { width: "100%", padding: 11, borderRadius: 10, border: "1px solid #d8d4c8", fontSize: 14, boxSizing: "border-box", background: "#fff" };
+  const backBtn = { display: "flex", alignItems: "center", gap: 4, background: "none", border: "none", color: "#6b6b6b", cursor: "pointer", marginBottom: 12 };
+
+  const cropName = productions.find((p) => p.production_id === cropId)?.production_name;
+
   return (
-    <div className="space-y-4">
+    <div style={wrap}>
       <Toast message={toast} />
 
-      <div className="pt-1">
-        <div className="text-xs font-medium" style={{ color: C.muted }}>
-          <Link to="/farm" style={{ color: C.muted }}>← Farm</Link>
+      <button onClick={() => navigate("/farm")} style={backBtn}><ChevronLeft size={18} /> Back</button>
+      <h1 style={{ fontSize: 22, fontWeight: 800, marginBottom: 4 }}>Record harvest</h1>
+      <p style={{ color: "#6b6b6b", fontSize: 13, marginBottom: 18 }}>Chemical withholding is enforced at submit. No override here.</p>
+
+      {/* Anchors — Crop · Cycle · Block · Operator */}
+      <div style={card}>
+        <div style={cardHead}>Anchors · crop · cycle · operator</div>
+        <div style={{ display: "grid", gridTemplateColumns: "64px 1fr", rowGap: 10, alignItems: "center", fontSize: 14 }}>
+          <span style={{ color: "#9a917c" }}>Crop</span>
+          {productionsLoading
+            ? <span style={{ color: "#9a917c" }}>Loading crops…</span>
+            : productionsError
+              ? <span style={{ color: "#9a3b3b", fontSize: 12 }}>Could not load crops: {productionsError}</span>
+              : <select value={cropId} onChange={(e) => setCropId(e.target.value)} style={inputBox}>
+                  <option value="">Select a crop…</option>
+                  {productions.map((p) => <option key={p.production_id} value={p.production_id}>{p.production_name}</option>)}
+                </select>}
+
+          <span style={{ color: "#9a917c" }}>Cycle</span>
+          {cyclesLoading
+            ? <span style={{ color: "#9a917c" }}>Loading cycles…</span>
+            : cyclesError
+              ? <span style={{ color: "#9a3b3b", fontSize: 12 }}>Could not load cycles: {cyclesError}</span>
+              : <select value={cycleId} onChange={(e) => setCycleId(e.target.value)} disabled={!cropId} style={inputBox}>
+                  <option value="">{cyclePlaceholder}</option>
+                  {filteredCycles.map((c) => <option key={c.cycle_id} value={c.cycle_id}>Cycle {c.block_sequence ?? c.cycle_id}</option>)}
+                </select>}
+
+          {selectedCycle?.pu_id && <><span style={{ color: "#9a917c" }}>Block</span><span style={{ fontWeight: 600 }}>{selectedCycle.pu_id}</span></>}
+
+          <span style={{ color: "#9a917c" }}>Operator</span>
+          <span style={{ fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}><User size={14} />You</span>
         </div>
-        <h1 className="text-2xl font-bold mt-0.5" style={{ color: C.soil }}>Record harvest</h1>
-        <p className="text-xs mt-1" style={{ color: C.muted }}>
-          Chemical withholding is enforced at submit. No override here.
-        </p>
       </div>
 
-      <form
-        onSubmit={onSubmit}
-        className="bg-white rounded-2xl px-4 py-5 space-y-4"
-        style={{ border: `1px solid ${C.border}` }}
-      >
-        <Field label="Crop" htmlFor="crop_id">
-          {productionsLoading ? (
-            <div className="text-sm" style={{ color: C.muted }}>Loading crops…</div>
-          ) : productionsError ? (
-            <div className="text-sm" style={{ color: C.red }}>Could not load crops: {productionsError}</div>
-          ) : (
-            <ThemedSelect
-              id="crop_id"
-              name="production_id"
-              value={cropId}
-              onChange={setCropId}
-              options={productions.map((p) => ({
-                value: p.production_id,
-                label: p.production_name,
-              }))}
-              placeholder="Select a crop…"
-            />
-          )}
-        </Field>
+      {/* When + how much */}
+      <div style={{ display: "flex", gap: 10, marginBottom: 16 }}>
+        <div style={{ flex: 1 }}>
+          <label style={fieldLabel}>Harvest date</label>
+          <input type="date" value={harvestDate} onChange={(e) => setHarvestDate(e.target.value)} style={inputBox} />
+        </div>
+        <div style={{ flex: 1 }}>
+          <label style={fieldLabel}>Quantity (kg)</label>
+          <input type="number" inputMode="decimal" min="0.1" step="0.1" value={qtyKg} onChange={(e) => setQtyKg(e.target.value)} placeholder="e.g. 50" style={inputBox} />
+        </div>
+      </div>
 
-        <Field label="Cycle" htmlFor="cycle_id" hint="Filtered to active cycles for the selected crop.">
-          {cyclesLoading ? (
-            <div className="text-sm" style={{ color: C.muted }}>Loading cycles…</div>
-          ) : cyclesError ? (
-            <div className="text-sm" style={{ color: C.red }}>Could not load cycles: {cyclesError}</div>
-          ) : (
-            <ThemedSelect
-              id="cycle_id"
-              name="cycle_id"
-              value={cycleId}
-              onChange={setCycleId}
-              options={filteredCycles.map((c) => ({
-                value: c.cycle_id,
-                label: `Cycle ${c.block_sequence ?? c.cycle_id}`,
-              }))}
-              placeholder={cyclePlaceholder}
-              disabled={!cropId}
-            />
-          )}
-        </Field>
-
-        <Field label="Harvest date" htmlFor="harvest_date">
-          <input
-            id="harvest_date"
-            type="date"
-            className={inputCls}
-            style={{ borderColor: C.border }}
-            value={harvestDate}
-            onChange={(e) => setHarvestDate(e.target.value)}
-          />
-        </Field>
-
-        <Field label="Quantity (kg)" htmlFor="qty_kg">
-          <input
-            id="qty_kg"
-            type="number"
-            inputMode="decimal"
-            min="0.1"
-            step="0.1"
-            className={inputCls}
-            style={{ borderColor: C.border }}
-            value={qtyKg}
-            onChange={(e) => setQtyKg(e.target.value)}
-            placeholder="e.g. 50"
-          />
-        </Field>
-
-        <Field label="Grade" htmlFor="grade">
-          <ThemedSelect
-            id="grade"
-            name="grade"
-            value={grade}
-            onChange={setGrade}
-            options={GRADES.map((g) => ({ value: g, label: `Grade ${g}` }))}
-            placeholder="Select grade…"
-          />
-        </Field>
-
-        <Field label="Destination" htmlFor="destination">
-          <ThemedSelect
-            id="destination"
-            name="destination"
-            value={destination}
-            onChange={setDestination}
-            options={DESTINATIONS.map((d) => ({ value: d, label: d }))}
-            placeholder="Select destination…"
-          />
-          {destination === "OTHER" && (
-            <input
-              type="text"
-              className={`${inputCls} mt-2`}
-              style={{ borderColor: C.border }}
-              value={destinationOther}
-              onChange={(e) => setDestinationOther(e.target.value)}
-              placeholder="Buyer name or description"
-            />
-          )}
-        </Field>
-
-        <Field label="Notes" htmlFor="notes" hint="Optional. Anything worth remembering about this harvest.">
-          <textarea
-            id="notes"
-            rows={3}
-            className={inputCls}
-            style={{ borderColor: C.border }}
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-          />
-        </Field>
-
-        {submitError && (
-          <div
-            className="rounded-lg p-3 text-sm"
-            style={{ background: "#FDECEE", border: `1px solid ${C.border}`, color: C.red }}
-          >
-            {submitError}
+      {/* Detail */}
+      <div style={card}>
+        <div style={cardHead}>Detail</div>
+        <div style={{ display: "flex", gap: 10, marginBottom: 14 }}>
+          <div style={{ flex: 1 }}>
+            <label style={fieldLabel}>Grade</label>
+            <select value={grade} onChange={(e) => setGrade(e.target.value)} style={inputBox}>
+              {GRADES.map((g) => <option key={g} value={g}>Grade {g}</option>)}
+            </select>
           </div>
+          <div style={{ flex: 1 }}>
+            <label style={fieldLabel}>Destination</label>
+            <select value={destination} onChange={(e) => setDestination(e.target.value)} style={inputBox}>
+              {DESTINATIONS.map((d) => <option key={d} value={d}>{d}</option>)}
+            </select>
+          </div>
+        </div>
+        {destination === "OTHER" && (
+          <input type="text" value={destinationOther} onChange={(e) => setDestinationOther(e.target.value)} placeholder="Buyer name or description" style={{ ...inputBox, marginBottom: 14 }} />
         )}
+        <label style={fieldLabel}>Notes</label>
+        <textarea rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Anything worth remembering about this harvest" style={{ ...inputBox, resize: "vertical", fontFamily: "inherit" }} />
+      </div>
 
-        <button
-          type="submit"
-          disabled={!canSubmit}
-          className="w-full py-3 rounded-xl font-semibold text-white transition-colors"
-          style={{
-            background: canSubmit ? C.green : "#B8AE9B",
-            cursor: canSubmit ? "pointer" : "not-allowed",
-          }}
-        >
-          {submitting ? "Logging harvest…" : "Log harvest"}
-        </button>
-      </form>
+      {submitError && (
+        <div style={{ background: "#fbe5e5", border: "1px solid #c98b8b", color: "#9a3b3b", padding: "10px 12px", borderRadius: 12, marginBottom: 14, fontSize: 13 }}>{submitError}</div>
+      )}
+
+      {/* About to record — the audit preview */}
+      <div style={{ border: "1px solid #cfe0cf", background: "#f0f6f0", borderRadius: 12, padding: "10px 12px", marginBottom: 14, fontSize: 12.5, color: "#3c5a3c" }}>
+        <div style={{ fontWeight: 700, marginBottom: 4, display: "flex", alignItems: "center", gap: 6 }}><ShieldCheck size={14} /> About to record</div>
+        HARVEST_LOGGED · {cropName || "—"} · {qtyKg || "0"} kg · Grade {grade} · {prettyDate(harvestDate)} · You
+      </div>
+
+      <button onClick={onSubmit} disabled={!canSubmit}
+        style={{ width: "100%", padding: 16, borderRadius: 14, border: "none", fontSize: 16, fontWeight: 700, color: "#fff",
+          background: canSubmit ? "#2e7d32" : "#b8b8b8", cursor: canSubmit ? "pointer" : "default",
+          display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+        {submitting ? <Loader2 size={18} /> : <Check size={18} />}{submitting ? "Logging harvest…" : "Log harvest"}
+      </button>
 
       <ComplianceModal open={!!modal} detail={modal} onClose={() => setModal(null)} />
     </div>
