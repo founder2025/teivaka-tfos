@@ -323,11 +323,12 @@ class ProfilePatch(BaseModel):
     field_visibility: dict | None = None
     specialty: str | None = None
     also_account_types: list[str] | None = None
+    share_location: bool | None = None
 
 
 _EDITABLE = ("full_name", "whatsapp_number", "country", "preferred_language", "account_type", "bio",
              "avatar_url", "cover_url", "unit_mode", "pref_currency", "pref_weight", "pref_area", "pref_temp",
-             "notify_whatsapp", "notify_tasks", "notify_weather", "specialty")
+             "notify_whatsapp", "notify_tasks", "notify_weather", "specialty", "share_location")
 _ACCOUNT_TYPES = {"FARMER", "BUYER", "SUPPLIER", "SERVICE_PROVIDER", "BANKER", "BUSINESS", "EXPORTER", "IMPORTER"}
 
 
@@ -358,6 +359,10 @@ async def update_me(
     if "also_account_types" in data and data["also_account_types"] is not None:
         from app.core.account_types import clean_also_categories
         sets.append("also_account_types = :also"); params["also"] = clean_also_categories(data["also_account_types"])
+    # Any explicit location-sharing choice is the member's one-time consent —
+    # stamp it so Slice 3 only ever shows acknowledged members (no silent exposure).
+    if "share_location" in data and data["share_location"] is not None:
+        sets.append("location_share_ack_at = now()")
     if not sets:
         return {"data": {"updated": 0}}
     await db.execute(text(f"UPDATE tenant.users SET {', '.join(sets)} WHERE user_id = :uid"), params)
@@ -550,10 +555,19 @@ async def my_prefs(
         "AND table_name='users' AND column_name IN ('pref_weight','pref_currency')"))).scalar()
     unit_sel = ", pref_weight, pref_currency, whatsapp_number" if int(has_units or 0) >= 2 \
         else ", NULL AS pref_weight, NULL AS pref_currency, whatsapp_number"
+    # share_location shipped in migration 164 — probe so pre-164 deployments don't error.
+    has_share = (await db.execute(text(
+        "SELECT count(*) FROM information_schema.columns WHERE table_schema='tenant' "
+        "AND table_name='users' AND column_name='share_location'"))).scalar()
+    share_sel = ", share_location, location_share_ack_at" if int(has_share or 0) >= 1 \
+        else ", true AS share_location, NULL AS location_share_ack_at"
     row = (await db.execute(text(
-        f"SELECT notify_whatsapp, notify_tasks, notify_weather, preferred_language{unit_sel} "
+        f"SELECT notify_whatsapp, notify_tasks, notify_weather, preferred_language{unit_sel}{share_sel} "
         "FROM tenant.users WHERE user_id = :uid"), {"uid": str(user["user_id"])})).mappings().first()
-    return {"data": dict(row) if row else {}}
+    d = dict(row) if row else {}
+    if "location_share_ack_at" in d:
+        d["location_share_ack"] = d.pop("location_share_ack_at") is not None
+    return {"data": d}
 
 
 @router.get("/tours")

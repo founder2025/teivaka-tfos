@@ -453,6 +453,17 @@ function FarmSettingsInner() {
                 <SRow label="WhatsApp alerts" sub="Get alerts on WhatsApp" right={<Toggle busy={busyPref} on={!!prefs.notify_whatsapp} onClick={() => patchMe({ notify_whatsapp: !prefs.notify_whatsapp })} />} />
                 <SRow label="Task reminders" right={<Toggle busy={busyPref} on={!!prefs.notify_tasks} onClick={() => patchMe({ notify_tasks: !prefs.notify_tasks })} />} />
                 <SRow label="Weather alerts" right={<Toggle busy={busyPref} on={!!prefs.notify_weather} onClick={() => patchMe({ notify_weather: !prefs.notify_weather })} />} />
+                <SRow
+                  label="Show my location to verified members"
+                  sub={
+                    prefs.share_location === false
+                      ? "Hidden — you won't appear on the network map."
+                      : prefs.location_share_ack
+                        ? "Verified buyers, farmers and service providers can see your farm on the network map with the distance to you. Turn off to hide."
+                        : "Lets verified members find you on the network map with the distance to you. We only ever show your location to verified members. Turn off any time to stay hidden."
+                  }
+                  right={<Toggle busy={busyPref} on={prefs.share_location !== false} onClick={() => patchMe({ share_location: !(prefs.share_location !== false) })} />}
+                />
               </SettingsCard>
 
               {/* ── Structure (zones + blocks) ── */}
