@@ -530,6 +530,23 @@ These are shipped, tested, and revenue/UX-critical. Editing them risks regressio
 
 Both the floating TISWidget and the `/tis` page are live; they share `POST /tis/chat`.
 
+## Edit/correction window (48h) + session gotcha (2026-06-23)
+
+- **48h correction window LIVE** (`app/core/edit_window.py`, `assert_within_edit_window`): a source
+  record is editable for 48h from server `created_at` (never `occurred_at` — backdating can't extend it);
+  past that, edits/deletes return 403 `EDIT_WINDOW_CLOSED`. The audit chain stays immutable forever
+  (mig 153) — this governs SOURCE rows. Applied to: `cash-ledger` PATCH/DELETE; `field-events` (new
+  farmer PATCH edit note/photo/GPS + soft-delete), each emitting a correction event (`CASH_UPDATED`/
+  `CASH_DELETED`/`EVENT_CORRECTED`). Frontend: Capture-Engine "Saved" screen offers Edit-note / change-
+  remove-photo for FE- records within the window. Block rename now syncs `farmer_label` (was only
+  `pu_name`) so renames show in crop dropdowns.
+- **GOTCHA (cost 3 debug rounds — persist):** `get_tenant_db` wraps `get_rls_db`'s `async with
+  session.begin()`, which AUTO-COMMITS on exit and FORBIDS an explicit `await db.commit()` inside (it
+  raises → generic 500 via the Sentry-only handler, nothing in `docker logs`). Endpoints on
+  `get_tenant_db`/`get_rls_db` must NOT call `db.commit()`. (Latent in legacy `field_events.create` +
+  `soft_delete` — never caught because the engine posts to `/events`, not `/field-events`.) Also: legacy
+  `tenant.field_events` has `created_at` but NO `updated_at` column — don't SET it.
+
 ## Alembic workaround (asyncpg)
 
 - asyncpg rejects multi-statement strings in `op.execute()`. Use the `_exec_each(statements)` helper pattern (see migrations 014, 015a) — one DDL statement per call.
