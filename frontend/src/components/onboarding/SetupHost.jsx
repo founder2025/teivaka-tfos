@@ -67,6 +67,11 @@ export default function SetupHost() {
   const [data, setData] = useState(null);
   const [hidden, setHidden] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
+  // Slice C — inline "Name your farm" (no deep-link to settings on first run).
+  const [editingFarm, setEditingFarm] = useState(false);
+  const [farmNameInput, setFarmNameInput] = useState("");
+  const [savingFarm, setSavingFarm] = useState(false);
+  const [farmErr, setFarmErr] = useState("");
 
   const load = useCallback(async () => {
     try {
@@ -94,6 +99,34 @@ export default function SetupHost() {
     }
   };
 
+  // Save the farm name right here on /home. First run has no farm yet → create it
+  // (farm-basics builds the farm + default block + audit); a later rename → PATCH.
+  // Both are real, audit-emitting endpoints — no mock, no deep-link required.
+  const saveFarmName = async () => {
+    const name = farmNameInput.trim();
+    if (!name) return;
+    setSavingFarm(true);
+    setFarmErr("");
+    try {
+      const fid = data.farm_id;
+      const res = fid
+        ? await fetch(`/api/v1/farms/${encodeURIComponent(fid)}`, {
+            method: "PATCH", headers: authHeaders(), body: JSON.stringify({ farm_name: name }),
+          })
+        : await fetch("/api/v1/onboarding/farm-basics", {
+            method: "POST", headers: authHeaders(), body: JSON.stringify({ farm_name: name }),
+          });
+      if (!res.ok) throw new Error(String(res.status));
+      setEditingFarm(false);
+      await load(); // refresh checklist + greeting so the new name leads immediately
+    } catch {
+      setFarmErr("Couldn't save that just now — please try again.");
+    } finally {
+      setSavingFarm(false);
+    }
+  };
+
+  const firstName = (data.full_name || "").trim().split(/\s+/)[0] || "";
   const pillars = personaGroupKey(data.account_type);
   const hasFarm = pillars.includes("farm");
   const group = hasFarm ? "PRODUCER" : pillars.includes("classroom") && !hasFarm ? "TRADE" : "PRODUCER";
@@ -129,12 +162,18 @@ export default function SetupHost() {
           </span>
           <div className="flex-1 min-w-0">
             <p className="font-semibold text-sm" style={{ color: C.soil }}>
-              {allDone ? "You're all set" : "Welcome to Teivaka"}
+              {allDone
+                ? "You're all set"
+                : firstName
+                  ? `Welcome, ${firstName}`
+                  : "Welcome to Teivaka"}
             </p>
             <p className="text-xs mt-0.5" style={{ color: C.muted }}>
               {allDone
                 ? "Your account is set up. You can close this any time."
-                : "Set up your account bit by bit. Nothing here stops you using Teivaka — finish whenever you like."}
+                : data.farm_name
+                  ? `${data.farm_name} is on Teivaka — finish setup whenever you like.`
+                  : "Set up your account bit by bit. Nothing here stops you using Teivaka — finish whenever you like."}
             </p>
           </div>
           <button
@@ -169,7 +208,15 @@ export default function SetupHost() {
               <li key={r.key}>
                 <button
                   type="button"
-                  onClick={() => navigate(r.to)}
+                  onClick={() => {
+                    if (r.key === "farm") {
+                      setFarmErr("");
+                      setFarmNameInput(data.farm_name || "");
+                      setEditingFarm((v) => !v);
+                    } else {
+                      navigate(r.to);
+                    }
+                  }}
                   className="w-full flex items-center gap-3 px-2 py-2 rounded-lg text-left hover:bg-black/[0.03]"
                   aria-label={r.done ? `${r.label} — done` : `${r.label} — open form`}
                 >
@@ -186,6 +233,48 @@ export default function SetupHost() {
                   </span>
                   {!r.done && <ChevronRight size={16} style={{ color: C.muted }} aria-hidden="true" />}
                 </button>
+
+                {/* Inline farm naming — name it here, no trip to settings */}
+                {r.key === "farm" && editingFarm && (
+                  <div className="px-2 pb-2 pt-1">
+                    <input
+                      type="text"
+                      autoFocus
+                      value={farmNameInput}
+                      onChange={(e) => setFarmNameInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") saveFarmName();
+                        if (e.key === "Escape") setEditingFarm(false);
+                      }}
+                      placeholder="e.g. Koroi Family Farm"
+                      maxLength={120}
+                      className="w-full text-sm rounded-lg px-3 py-2"
+                      style={{ border: `1px solid ${C.line}`, color: C.soil, outline: "none" }}
+                    />
+                    {farmErr && (
+                      <p className="text-xs mt-1" style={{ color: "var(--red)" }}>{farmErr}</p>
+                    )}
+                    <div className="flex items-center gap-2 mt-2">
+                      <button
+                        type="button"
+                        onClick={saveFarmName}
+                        disabled={savingFarm || !farmNameInput.trim()}
+                        className="px-3 py-1.5 rounded-lg text-white text-xs font-semibold disabled:opacity-50"
+                        style={{ background: C.green }}
+                      >
+                        {savingFarm ? "Saving…" : "Save"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setEditingFarm(false)}
+                        className="text-xs"
+                        style={{ color: C.muted }}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
               </li>
             ))}
           </ul>
@@ -197,7 +286,16 @@ export default function SetupHost() {
             {!allDone ? (
               <button
                 type="button"
-                onClick={() => navigate(cta.to)}
+                onClick={() => {
+                  // PRODUCER with no farm yet → name it inline instead of leaving /home.
+                  if (group === "PRODUCER" && !(data.items && data.items.farm)) {
+                    setFarmErr("");
+                    setFarmNameInput(data.farm_name || "");
+                    setEditingFarm(true);
+                  } else {
+                    navigate(cta.to);
+                  }
+                }}
                 className="px-3 py-2 rounded-lg text-white text-xs font-semibold"
                 style={{ background: C.green }}
               >

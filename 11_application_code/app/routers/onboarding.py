@@ -452,7 +452,7 @@ async def setup_status(user: dict = Depends(get_current_user)):
             await session.execute(
                 text(
                     """
-                    SELECT farm_id, region_id, location_name, land_area_ha
+                    SELECT farm_id, farm_name, region_id, location_name, land_area_ha
                     FROM tenant.farms WHERE tenant_id = :tid ORDER BY created_at ASC LIMIT 1
                     """
                 ),
@@ -494,6 +494,10 @@ async def setup_status(user: dict = Depends(get_current_user)):
                 "email_verified": bool(urow and urow["email_verified"]),
                 "account_type": (urow["account_type"] if urow else None),
                 "dismissed": bool(urow and urow["setup_dismissed_at"]),
+                # Slice C — greet the farmer by name + let "Name your farm" save inline.
+                "full_name": full_name or None,
+                "farm_id": (frow["farm_id"] if frow else None),
+                "farm_name": (frow["farm_name"] if frow else None),
             }
         )
     finally:
