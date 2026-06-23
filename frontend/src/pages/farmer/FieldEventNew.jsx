@@ -1178,6 +1178,75 @@ function feDetail(e) {
   return "—";
 }
 
+// 48h correction window (mirrors backend app/core/edit_window.py — created_at, not occurred_at).
+function feWithin48h(createdAt) {
+  if (!createdAt) return false;
+  const t = Date.parse(createdAt);
+  return !isNaN(t) && (Date.now() - t) <= 48 * 3600 * 1000;
+}
+
+function FieldEventEditModal({ evt, onClose, onSaved }) {
+  const [note, setNote] = useState(evt.observation_text || "");
+  const [photo, setPhoto] = useState(evt.photo_url || null);
+  const [uploading, setUploading] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  async function upload(file) {
+    if (!file) return; setUploading(true);
+    try {
+      const fd = new FormData(); fd.append("file", file);
+      const t = localStorage.getItem("tfos_access_token");
+      const b = await (await fetch("/api/v1/community/uploads", { method: "POST", headers: t ? { Authorization: `Bearer ${t}` } : {}, body: fd })).json().catch(() => null);
+      const url = b?.data?.url || b?.url; if (url) setPhoto(url); else setErr("Photo upload failed");
+    } finally { setUploading(false); }
+  }
+  async function save() {
+    setBusy(true); setErr("");
+    try {
+      const r = await fetch(`/api/v1/field-events/${encodeURIComponent(evt.event_id)}`, {
+        method: "PATCH", headers: { ...feAuthHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({ notes: note, photo_url: photo }),
+      });
+      const b = await r.json().catch(() => null);
+      if (r.ok && b?.status === "success") onSaved();
+      else setErr(b?.detail?.message || (typeof b?.detail === "string" ? b.detail : `Couldn't save (${r.status})`));
+    } catch (e) { setErr(e.message); } finally { setBusy(false); }
+  }
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.4)" }} onClick={onClose}>
+      <div className="bg-white rounded-2xl w-full max-w-md p-5" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-1">
+          <h2 className="text-base font-bold" style={{ color: C.soil }}>Correct this entry</h2>
+          <button onClick={onClose} style={{ color: C.muted }}>✕</button>
+        </div>
+        <div className="text-[11px] mb-3" style={{ color: C.muted }}>You can fix this for 48 hours of logging — every change is logged.</div>
+        <label className="text-xs font-semibold" style={{ color: C.soil }}>Note</label>
+        <textarea value={note} maxLength={500} rows={3} onChange={(e) => setNote(e.target.value)}
+          className="w-full mt-1 mb-3 rounded-lg border px-3 py-2 text-sm" style={{ borderColor: C.border }} />
+        <label className="text-xs font-semibold" style={{ color: C.soil }}>Photo</label>
+        <div className="mt-1 mb-3">
+          {photo ? (
+            <div className="flex items-center gap-3">
+              <img src={photo} alt="" className="w-14 h-14 rounded object-cover" />
+              <button onClick={() => setPhoto(null)} className="text-xs" style={{ color: "#9a3b3b" }}>Remove photo</button>
+            </div>
+          ) : (
+            <label className="inline-block text-xs px-3 py-2 rounded-lg border cursor-pointer" style={{ borderColor: C.border, color: C.greenDk }}>
+              {uploading ? "Uploading…" : "Add / change photo"}
+              <input type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => upload(e.target.files?.[0])} />
+            </label>
+          )}
+        </div>
+        {err && <div className="text-xs mb-2" style={{ color: "#9a3b3b" }}>{err}</div>}
+        <div className="flex gap-2">
+          <button onClick={onClose} className="flex-1 py-2 rounded-lg border text-sm" style={{ borderColor: C.border }}>Cancel</button>
+          <button onClick={save} disabled={busy || uploading} className="flex-1 py-2 rounded-lg text-white text-sm font-semibold" style={{ background: C.greenDk }}>{busy ? "Saving…" : "Save changes"}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function FieldEventsLog() {
   const navigate = useNavigate();
   const { farmId } = useCurrentFarm();
@@ -1191,6 +1260,7 @@ function FieldEventsLog() {
     enabled: !!farmId, retry: 0,
   });
   const events = data?.data?.events ?? [];
+  const [editEvt, setEditEvt] = useState(null);
 
   return (
     <div className="tfp max-w-5xl mx-auto p-4 space-y-4">
@@ -1204,8 +1274,8 @@ function FieldEventsLog() {
 
       <div className="rounded-2xl border bg-white overflow-hidden" style={{ borderColor: C.border }}>
         <div className="hidden md:grid items-center px-4 py-2 text-[10px] font-bold uppercase"
-          style={{ color: C.muted, gridTemplateColumns: "96px 120px 1fr 90px 80px", borderBottom: `1px solid ${C.border}` }}>
-          <span>Date</span><span>Type</span><span>Detail</span><span>Block</span><span>By</span>
+          style={{ color: C.muted, gridTemplateColumns: "96px 120px 1fr 90px 80px 56px", borderBottom: `1px solid ${C.border}` }}>
+          <span>Date</span><span>Type</span><span>Detail</span><span>Block</span><span>By</span><span></span>
         </div>
         {isLoading ? (
           <div className="px-4 py-10 text-center text-sm" style={{ color: C.muted }}>Loading…</div>
@@ -1222,16 +1292,20 @@ function FieldEventsLog() {
           </div>
         ) : events.map((e) => (
           <div key={e.event_id} className="flex md:grid md:items-center gap-3 px-4 py-3"
-            style={{ gridTemplateColumns: "96px 120px 1fr 90px 80px", borderTop: `1px solid rgba(92,64,51,0.06)` }}>
+            style={{ gridTemplateColumns: "96px 120px 1fr 90px 80px 56px", borderTop: `1px solid rgba(92,64,51,0.06)` }}>
             <span className="text-[11px] shrink-0" style={{ color: C.muted }}>{feDate(e.event_date)}</span>
             <span className="text-sm font-medium md:font-normal" style={{ color: C.soil }}>{FE_HUMAN[e.event_type] || e.event_type}</span>
             <span className="flex-1 min-w-0 text-[13px] md:truncate" style={{ color: C.soil }}>{feDetail(e)}</span>
             <span className="text-[11px]" style={{ color: C.muted }}>{feShort(e.pu_id)}</span>
             <span className="text-[11px]" style={{ color: C.muted }}>{feShort(e.created_by)}</span>
+            {feWithin48h(e.created_at)
+              ? <button onClick={() => setEditEvt(e)} className="text-[11px] font-semibold text-left" style={{ color: C.greenDk }}>Edit</button>
+              : <span className="text-[11px]" style={{ color: C.muted }} title="Locked after 48h">🔒</span>}
           </div>
         ))}
       </div>
-      <p className="text-[11px]" style={{ color: C.muted }}>Showing the most recent {events.length} event{events.length === 1 ? "" : "s"} for this farm.</p>
+      <p className="text-[11px]" style={{ color: C.muted }}>Showing the most recent {events.length} event{events.length === 1 ? "" : "s"} for this farm. Entries can be corrected for 48 hours, then lock 🔒.</p>
+      {editEvt && <FieldEventEditModal evt={editEvt} onClose={() => setEditEvt(null)} onSaved={() => { refetch(); setEditEvt(null); }} />}
     </div>
   );
 }
