@@ -10,6 +10,14 @@ import { useNavigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { apiClient } from '../../../utils/apiClient';
+import EventCorrectModal from '../../../components/EventCorrectModal';
+
+// 48h correction window — gate the Edit affordance by server created_at.
+function within48h(createdAt) {
+  if (!createdAt) return false;
+  const t = Date.parse(createdAt);
+  return Number.isFinite(t) && (Date.now() - t) <= 48 * 3600 * 1000;
+}
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false, staleTime: 30_000 } } });
 const C = { soil: 'var(--soil)', cream: 'var(--cream)', green: 'var(--green)', amber: 'var(--amber)', red: 'var(--red)', border: '#E6DED0', muted: 'var(--muted)' };
@@ -62,24 +70,21 @@ function PoultryDashboardInner() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [editEvt, setEditEvt] = useState(null);
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await apiClient.get('/poultry/dashboard');
-        if (cancelled) return;
-        setData(res?.data || null);
-        setLoading(false);
-      } catch (e) {
-        if (!cancelled) {
-          setError(e.message || 'Could not load dashboard');
-          setLoading(false);
-        }
-      }
-    })();
-    return () => { cancelled = true; };
-  }, []);
+  async function load() {
+    try {
+      const res = await apiClient.get('/poultry/dashboard');
+      setData(res?.data || null);
+      setError(null);
+    } catch (e) {
+      setError(e.message || 'Could not load dashboard');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => { load(); }, []);
 
   const kpis = data?.kpis || {};
   const events = data?.recent_events || [];
@@ -201,7 +206,12 @@ function PoultryDashboardInner() {
                         <div className="text-sm font-medium">{EVENT_LABELS[ev.event_type] || ev.event_type}</div>
                         <div className="text-xs" style={{ color: C.muted }}>{formatRelativeTime(ev.occurred_at)}</div>
                       </div>
-                      <div className="text-xs mt-1" style={{ color: C.muted }}>{eventSummary(ev)}</div>
+                      <div className="flex items-center justify-between mt-1">
+                        <div className="text-xs" style={{ color: C.muted }}>{eventSummary(ev)}</div>
+                        {within48h(ev.created_at)
+                          ? <button onClick={() => setEditEvt(ev)} className="text-xs underline shrink-0 ml-2" style={{ color: C.green }}>Edit</button>
+                          : <span className="text-xs shrink-0 ml-2" style={{ color: C.muted }} title="Locked after 48h">🔒</span>}
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -212,6 +222,13 @@ function PoultryDashboardInner() {
           </>
         )}
       </div>
+      {editEvt && (
+        <EventCorrectModal
+          event={editEvt}
+          onClose={() => setEditEvt(null)}
+          onSaved={() => { setEditEvt(null); load(); }}
+        />
+      )}
     </div>
   );
 }

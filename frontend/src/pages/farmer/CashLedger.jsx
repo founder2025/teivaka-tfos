@@ -52,8 +52,16 @@ function Building({ title, body }) {
     <div style={{ fontSize: 12.5, color: "var(--muted)", marginTop: 6, lineHeight: 1.5 }}>{body}</div></div>;
 }
 
+// 48h correction window — edits/deletes lock by server created_at (backend enforces 403).
+function cashWithin48h(createdAt) {
+  if (!createdAt) return false;
+  const t = Date.parse(createdAt);
+  return Number.isFinite(t) && (Date.now() - t) <= 48 * 3600 * 1000;
+}
+
 function CashEventCard({ e, onEdit, onDelete }) {
   const inc = isIncome(e); const [railK, railL] = railOf(e);
+  const editable = cashWithin48h(e.created_at);
   return (
     <div className={`cash-event-card ${inc ? "in" : "out"}`}>
       <div className="cash-event-head">
@@ -74,8 +82,14 @@ function CashEventCard({ e, onEdit, onDelete }) {
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 6, paddingTop: 6, borderTop: "1px dashed var(--line)", flexWrap: "wrap" }}>
         <span className="verification-badge"><span className="verify-dot" />hash-chained</span>
         <span style={{ flex: 1 }} />
-        <button className="btn btn-secondary btn-sm" onClick={() => onEdit(e)}><Pencil size={12} />Edit</button>
-        <button className="btn btn-secondary btn-sm" style={{ color: "var(--red)" }} onClick={() => onDelete(e)}><Trash2 size={12} />Delete</button>
+        {editable ? (
+          <>
+            <button className="btn btn-secondary btn-sm" onClick={() => onEdit(e)}><Pencil size={12} />Edit</button>
+            <button className="btn btn-secondary btn-sm" style={{ color: "var(--red)" }} onClick={() => onDelete(e)}><Trash2 size={12} />Delete</button>
+          </>
+        ) : (
+          <span style={{ fontSize: 11, color: "var(--muted)" }} title="Locked after 48h — the audit trail is permanent">🔒 Locked</span>
+        )}
       </div>
     </div>
   );

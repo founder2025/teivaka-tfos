@@ -74,7 +74,7 @@ async def poultry_dashboard(
     # Recent 10 events
     result = await db.execute(text("""
         SELECT event_id, event_type, farm_id, pu_id, flock_id, occurred_at,
-               payload_jsonb, created_by
+               created_at, payload_jsonb, created_by
         FROM tenant.poultry_event_log
         ORDER BY occurred_at DESC
         LIMIT 10
@@ -88,6 +88,7 @@ async def poultry_dashboard(
             "pu_id": r["pu_id"],
             "flock_id": r["flock_id"],
             "occurred_at": r["occurred_at"].isoformat() if r["occurred_at"] else None,
+            "created_at": r["created_at"].isoformat() if r["created_at"] else None,
             "payload": r["payload_jsonb"],
         })
 

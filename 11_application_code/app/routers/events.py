@@ -28,6 +28,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.audit_chain import emit_audit_event
+from app.core.edit_window import assert_within_edit_window
 from app.middleware.rls import get_current_user, get_tenant_db
 from app.schemas.envelope import error_envelope, success_envelope
 from app.schemas.events_registry import get_schema_for_event_type, MORTALITY_CAUSES, VACCINATION_ROUTES, BIRD_REPLACEMENT_REASONS, BIRDS_SOLD_TYPES, HEALTH_SEVERITY, HEALTH_SYMPTOMS
@@ -1413,3 +1414,92 @@ async def submit_event(
 
     await db.commit()
     return resp
+
+
+# ── 48h correction window for animal events (poultry + livestock) ──────────────
+# Mirrors field_events.edit_field_event: a logged animal event is correctable for
+# EDIT_WINDOW_HOURS (48h) from server created_at, then locked. The corrected values
+# merge into payload_jsonb (the display/report source of truth, Strike #56) and a
+# transparent EVENT_CORRECTED audit row is emitted. The hash chain stays immutable.
+
+# Payload keys that must never be merged from the client (structural anchors +
+# evidence-integrity hashes — these are not free-text corrections).
+_ANIMAL_EVENT_EDIT_PROTECTED = {
+    "flock_id", "animal_ref", "species", "farm_id", "pu_id", "cycle_id",
+    "photo_sha256", "photo_byte_size", "voice_sha256", "voice_byte_size",
+}
+
+# Event types whose payload drives a compliance/withholding window or a
+# flocks.current_count side-effect — correcting their values here would silently
+# move that window or drift the bird count, so they are locked out of in-place edit.
+#   VACCINATION_GIVEN / HEALTH_OBSERVATION → withholding + SEVERE-sales block
+#   MORTALITY_LOGGED / BIRD_REPLACEMENT / BIRDS_SOLD → flocks.current_count delta
+_ANIMAL_EVENT_EDIT_BLOCKED = {
+    "VACCINATION_GIVEN", "HEALTH_OBSERVATION",
+    "MORTALITY_LOGGED", "BIRD_REPLACEMENT", "BIRDS_SOLD",
+}
+
+
+class AnimalEventEdit(BaseModel):
+    """In-window correction of an animal event's captured values (merged into payload_jsonb)."""
+    fields: dict = Field(..., description="Corrected captured values, merged into payload_jsonb.")
+
+
+@router.patch("/events/{event_id}", summary="Correct an animal event within the 48h window")
+async def edit_animal_event(
+    event_id: str,
+    body: AnimalEventEdit,
+    user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_tenant_db),
+):
+    try:
+        eid = str(UUID(event_id))
+    except (ValueError, AttributeError):
+        raise HTTPException(status_code=404, detail=error_envelope("EVENT_NOT_FOUND", f"No event {event_id!r}"))
+
+    # Resolve which backing table owns this event (RLS scopes both to the tenant).
+    target = None
+    row = None
+    for tbl in ("tenant.poultry_event_log", "tenant.livestock_events"):
+        found = (await db.execute(
+            text(f"SELECT event_id, event_type, created_at FROM {tbl} WHERE event_id = :eid LIMIT 1"),
+            {"eid": eid},
+        )).mappings().first()
+        if found:
+            target, row = tbl, found
+            break
+    if row is None:
+        raise HTTPException(status_code=404, detail=error_envelope("EVENT_NOT_FOUND", f"No event {event_id!r}"))
+
+    assert_within_edit_window(row["created_at"])
+
+    if row["event_type"] in _ANIMAL_EVENT_EDIT_BLOCKED:
+        raise HTTPException(status_code=422, detail=error_envelope(
+            "COMPLIANCE_EDIT_UNSUPPORTED",
+            "This record drives a compliance window or your live bird count, so its "
+            "values can't be corrected here. Log a fresh event with the right figures."))
+
+    clean = {k: v for k, v in (body.fields or {}).items() if k not in _ANIMAL_EVENT_EDIT_PROTECTED}
+    if not clean:
+        raise HTTPException(status_code=422, detail=error_envelope("NOTHING_TO_EDIT", "No editable fields supplied."))
+
+    await db.execute(
+        text(f"UPDATE {target} SET payload_jsonb = COALESCE(payload_jsonb, '{{}}'::jsonb) || CAST(:pj AS jsonb) "
+             f"WHERE event_id = :eid"),
+        {"pj": json.dumps(clean), "eid": eid},
+    )
+    await emit_audit_event(
+        db=db, tenant_id=UUID(str(user["tenant_id"])), actor_user_id=UUID(str(user["user_id"])),
+        event_type="EVENT_CORRECTED", entity_type="animal_event", entity_id=eid,
+        payload={"event_id": eid, "changed": list(clean.keys())},
+    )
+    updated = (await db.execute(
+        text(f"SELECT event_id, event_type, payload_jsonb FROM {target} WHERE event_id = :eid"),
+        {"eid": eid},
+    )).mappings().first()
+    return success_envelope({
+        "event_id": eid,
+        "event_type": updated["event_type"],
+        "payload": updated["payload_jsonb"],
+        "changed": list(clean.keys()),
+    })
