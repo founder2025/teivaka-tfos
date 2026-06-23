@@ -18,6 +18,16 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Navigate, Outlet, useLocation } from "react-router-dom";
 import { Plus, Sparkles, HelpCircle } from "lucide-react";
+// Eager, app-wide prototype stylesheet load (the permanent FOUC fix, 2026-06-23).
+// Every authenticated farmer surface renders inside FarmerShell and ~all of them use
+// the `.tfp` prototype classes, but the stylesheet was only lazy-imported by a few
+// pages (TfpShell/ClassroomPillar/CoursePlayer) — a single shared chunk. So whichever
+// page you landed on first painted raw until you hit one that pulled the chunk in, then
+// it cached for the session ("glitch on first load, normal after clicking a pillar").
+// Importing it here, in the shell that always mounts before any child page, guarantees
+// it is present on the first paint of every farmer surface. Kept out of main.jsx on
+// purpose so the public Landing/Login (no `.tfp`) stay lean for low-connectivity.
+import "../styles/prototype.css";
 import { useMe } from "../hooks/useMe";
 import { navPillarKeys } from "../utils/personas";
 
