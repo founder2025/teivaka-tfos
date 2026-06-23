@@ -26,7 +26,9 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.audit_chain import emit_audit_event
+from app.core.edit_window import assert_within_edit_window
 from app.core.task_engine import emit_task
+from app.routers.events import _hash_local_photo
 from app.middleware.rls import (
     ROLE_ADMIN,
     ROLE_FOUNDER,
@@ -82,6 +84,15 @@ class FieldEventCreate(BaseModel):
 
 class FieldEventDelete(BaseModel):
     reason: str = Field(min_length=1)
+
+
+class FieldEventEdit(BaseModel):
+    """In-window correction: note + evidence are editable; photo_url=null removes the photo.
+    exclude_unset distinguishes 'not sent' from 'set to null'."""
+    notes: Optional[str] = Field(default=None, max_length=500)
+    photo_url: Optional[str] = Field(default=None, max_length=512)
+    gps_lat: Optional[float] = None
+    gps_lng: Optional[float] = None
 
 
 # ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -456,6 +467,53 @@ async def get_field_event(
     return success_envelope(_row_to_dict(dict(row)))
 
 
+@router.patch("/{event_id}", summary="Correct a field event within the 48h window")
+async def edit_field_event(
+    event_id: str,
+    body: FieldEventEdit,
+    user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_tenant_db),
+):
+    """Farmer correction inside the 48h window: edit the note, change or remove the photo
+    (photo_url=null), fix GPS. Emits EVENT_CORRECTED — transparent + locked after the window."""
+    row = (await db.execute(
+        text("SELECT * FROM tenant.field_events WHERE event_id = :eid AND deleted_at IS NULL LIMIT 1"),
+        {"eid": event_id},
+    )).mappings().first()
+    if not row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
+                            detail=error_envelope("EVENT_NOT_FOUND", f"No event {event_id!r}"))
+    assert_within_edit_window(row["created_at"])
+
+    provided = body.model_dump(exclude_unset=True)
+    sets, params, changed = [], {"eid": event_id}, []
+    if "notes" in provided:
+        sets.append("observation_text = :notes"); params["notes"] = body.notes; changed.append("notes")
+    if "gps_lat" in provided:
+        sets.append("gps_lat = :glat"); params["glat"] = body.gps_lat; changed.append("gps_lat")
+    if "gps_lng" in provided:
+        sets.append("gps_lng = :glng"); params["glng"] = body.gps_lng; changed.append("gps_lng")
+    if "photo_url" in provided:
+        ph, sz = _hash_local_photo(body.photo_url)
+        sets += ["photo_url = :purl", "photo_sha256 = :psha", "photo_byte_size = :psz"]
+        params.update({"purl": body.photo_url, "psha": ph, "psz": sz}); changed.append("photo")
+    if not sets:
+        raise HTTPException(status_code=422, detail=error_envelope("NOTHING_TO_EDIT", "No editable fields supplied."))
+    sets.append("updated_at = NOW()")
+    await db.execute(text(f"UPDATE tenant.field_events SET {', '.join(sets)} "
+                          f"WHERE event_id = :eid AND deleted_at IS NULL"), params)
+    await emit_audit_event(
+        db=db, tenant_id=UUID(str(user["tenant_id"])), actor_user_id=UUID(str(user["user_id"])),
+        event_type="EVENT_CORRECTED", entity_type="field_event", entity_id=event_id,
+        payload={"event_id": event_id, "changed": changed},
+    )
+    await db.commit()
+    updated = (await db.execute(
+        text("SELECT * FROM tenant.field_events WHERE event_id = :eid"), {"eid": event_id},
+    )).mappings().first()
+    return success_envelope(_row_to_dict(dict(updated)))
+
+
 @router.delete("/{event_id}", summary="Soft-delete a field event")
 async def soft_delete_field_event(
     event_id: str,
@@ -463,6 +521,16 @@ async def soft_delete_field_event(
     user: dict = Depends(require_role(ROLE_FOUNDER, ROLE_ADMIN)),
     db: AsyncSession = Depends(get_tenant_db),
 ):
+    existing = (await db.execute(
+        text("SELECT created_at FROM tenant.field_events WHERE event_id = :eid AND deleted_at IS NULL LIMIT 1"),
+        {"eid": event_id},
+    )).mappings().first()
+    if not existing:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=error_envelope("EVENT_NOT_FOUND", f"No live event {event_id!r} to delete"),
+        )
+    assert_within_edit_window(existing["created_at"])
     result = await db.execute(
         text("""
             UPDATE tenant.field_events
@@ -480,13 +548,10 @@ async def soft_delete_field_event(
         },
     )
     row = result.mappings().first()
+    await emit_audit_event(
+        db=db, tenant_id=UUID(str(user["tenant_id"])), actor_user_id=UUID(str(user["user_id"])),
+        event_type="EVENT_CORRECTED", entity_type="field_event", entity_id=event_id,
+        payload={"event_id": event_id, "deleted": True, "reason": payload.reason.strip()},
+    )
     await db.commit()
-    if not row:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=error_envelope(
-                "EVENT_NOT_FOUND",
-                f"No live event {event_id!r} to delete",
-            ),
-        )
     return success_envelope(_row_to_dict(dict(row)))

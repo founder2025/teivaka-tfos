@@ -34,6 +34,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import text
 
 from app.core.audit_chain import emit_audit_event
+from app.core.edit_window import assert_within_edit_window
 from app.db.session import get_rls_db
 from app.middleware.rls import get_current_user
 from app.routers.events import _hash_local_photo   # content-fingerprint receipt photo/voice (single source of truth)
@@ -385,6 +386,8 @@ async def update_cash(
         ).mappings().first()
         if not existing:
             raise HTTPException(status_code=404, detail="ledger entry not found")
+        # 48h correction window — locked after that (audit trail is permanent).
+        assert_within_edit_window(existing["created_at"])
 
         # P-Doctrine-2: if PATCH is moving the row to a different Block,
         # the new pu_id must belong to the row's existing farm_id (farm_id
@@ -466,6 +469,8 @@ async def delete_cash(
         ).mappings().first()
         if not existing:
             raise HTTPException(status_code=404, detail="ledger entry not found")
+        # 48h correction window — locked after that (audit trail is permanent).
+        assert_within_edit_window(existing["created_at"])
 
         # Audit row first — captures the full pre-delete snapshot so the
         # chain is the only durable record of what was deleted.
