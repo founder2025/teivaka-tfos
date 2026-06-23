@@ -1,9 +1,0 @@
-import { CloudSun, AlertTriangle } from "lucide-react";
-const C={paper:"var(--paper)",green:"var(--green)",greenDk:"var(--green-dk)",soil:"var(--soil)",amber:"var(--amber)",red:"var(--red)",line:"var(--line)",muted:"var(--muted)",cream:"var(--cream)"};
-const W={location:"Korovou, Tailevu",hi:29,lo:23,conditions:"Partly cloudy",humidity:78,rain24h:4,forecast:[{day:"Tue",hi:30,lo:23,c:"Showers"},{day:"Wed",hi:31,lo:24,c:"Sunny"},{day:"Thu",hi:28,lo:22,c:"Rain"}],flags:["Heavy rain Thu — hold spraying"]};
-export default function WeatherStrip(){return(
-<section className="rounded-2xl px-4 py-4" style={{background:C.paper,border:`1px solid ${C.line}`}}>
-<div className="flex items-center gap-2 mb-3"><CloudSun size={15} style={{color:C.greenDk}}/><h3 className="text-sm font-semibold" style={{color:C.soil}}>{W.location}</h3><span className="text-xs" style={{color:C.muted}}>· prototype data · production wires Fiji Met Service</span></div>
-<div className="flex flex-wrap items-center gap-6"><div><div style={{fontSize:28,fontWeight:800,color:C.soil}}>{W.hi}°<span style={{fontSize:16,color:C.muted,fontWeight:400}}> / {W.lo}°</span></div><div className="text-sm" style={{color:C.soil}}>{W.conditions}</div><div className="text-[11px] mt-1 flex gap-3" style={{color:C.muted}}><span>Humidity {W.humidity}%</span><span>Rain 24h {W.rain24h}mm</span></div></div>
-<div className="flex gap-3">{W.forecast.map((f)=>(<div key={f.day} className="text-center rounded-xl p-2" style={{border:`1px solid ${C.line}`,minWidth:64}}><div className="text-[11px] font-semibold" style={{color:C.soil}}>{f.day}</div><div className="text-xs" style={{color:C.soil}}>{f.hi}°/{f.lo}°</div><div className="text-[10px]" style={{color:C.muted}}>{f.c}</div></div>))}</div></div>
-{W.flags.map((f,i)=>(<div key={i} className="flex items-center gap-1.5 text-[11px] mt-3 px-2 py-1.5 rounded" style={{background:C.cream,color:C.amber}}><AlertTriangle size={11}/>{f}</div>))}</section>);}

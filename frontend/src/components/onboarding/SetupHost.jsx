@@ -39,7 +39,7 @@ function authHeaders() {
 // Prototype onboardingCta strings (convergence) keyed by persona group.
 const CTA_BY_GROUP = {
   PRODUCER: { label: "Create your first farm", to: "/farm/settings" },
-  TRADE: { label: "Browse growers near you", to: "/community/map" },
+  TRADE: { label: "Browse the grower community", to: "/home" },
   SERVICE: { label: "List your services", to: "/me" },
   CAPITAL: { label: "Verify a farmer record", to: "/verify" },
   GOVERNANCE: { label: "Verify a farmer record", to: "/verify" },

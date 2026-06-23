@@ -28,7 +28,7 @@ const TABS = [
   { path: "/tis",                  label: "AI Assistant"   },
   { path: "/calendar",             label: "Calendar"       },
   { path: "/members",              label: "Members"        },
-  { path: "/community/map",        label: "Map"            },
+  { path: "/farm/locations",       label: "Map"            },
   { path: "/leaderboard",          label: "Leaderboard"    },
 ];
 

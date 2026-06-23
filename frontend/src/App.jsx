@@ -41,8 +41,6 @@ const AcceptInvite = lazy(() => import("./pages/AcceptInvite"));
 // ── Farmer pages (lazy — farmer bundle does NOT include admin code) ───────────
 const Landing       = lazy(() => import("./pages/Landing"));
 const MarketingPage = lazy(() => import("./pages/MarketingPage"));
-const Community     = lazy(() => import("./pages/farmer/Community"));
-const CommunityMap  = lazy(() => import("./pages/farmer/CommunityMap"));
 const MeSettings    = lazy(() => import("./pages/farmer/MeSettings"));
 const Promote       = lazy(() => import("./pages/me/Promote"));
 const MeVerification = lazy(() => import("./pages/me/MeVerification"));
@@ -290,12 +288,8 @@ export default function App() {
           <Route path="/tfos"         element={<MarketingPage pageKey="tfos" />} />
           <Route path="/our-farms"    element={<MarketingPage pageKey="our-farms" />} />
           <Route path="/farms"        element={<MarketingPage pageKey="farms" />} />
-          <Route path="/community" element={
-            <FarmerRoute><Community /></FarmerRoute>
-          } />
-          <Route path="/community/map" element={
-            <FarmerRoute><CommunityMap /></FarmerRoute>
-          } />
+          <Route path="/community" element={<Navigate to="/home" replace />} />
+          <Route path="/community/map" element={<Navigate to="/farm/locations" replace />} />
           <Route path="/kb" element={
             <FarmerRoute><KnowledgeBase /></FarmerRoute>
           } />
