@@ -84,6 +84,13 @@ export default function CaptureEngine({ config = cropsConfig, onDone }) {
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState("");
+  // 48h correction window — edit the just-logged record (note / photo) on the success screen.
+  const [editOpen, setEditOpen] = useState(false);
+  const [editNotes, setEditNotes] = useState("");
+  const [editPhoto, setEditPhoto] = useState(null);
+  const [editPhotoUploading, setEditPhotoUploading] = useState(false);
+  const [editBusy, setEditBusy] = useState(false);
+  const [editSaved, setEditSaved] = useState(false);
   const [chemicals, setChemicals] = useState([]);
   const [loadingChems, setLoadingChems] = useState(false);
   const [chemQuery, setChemQuery] = useState("");
@@ -201,6 +208,7 @@ export default function CaptureEngine({ config = cropsConfig, onDone }) {
     if (mediaRef.current && recording) { try { mediaRef.current.stop(); } catch { /* noop */ } }
     setRecording(false); setRecSecs(0);
     setOccurredDate(nowDateStr()); setOccurredTime(nowTimeStr()); setChemQuery(""); setLibQuery("");
+    setEditOpen(false); setEditSaved(false); setEditPhoto(null);
   }
   function pickVerb(v) {
     // "link" verbs hand off to an existing rich page (cycle/nursery/harvest)
@@ -347,6 +355,36 @@ export default function CaptureEngine({ config = cropsConfig, onDone }) {
     finally { setSubmitting(false); }
   }
 
+  // --- in-window correction of the just-logged field_events record ---
+  const canEditResult = !!result?.event_id && String(result.event_id).startsWith("FE-");
+  function openEdit() {
+    setEditNotes(values.notes || ""); setEditPhoto(photoUrl); setEditSaved(false); setEditOpen(true);
+  }
+  async function uploadEditPhoto(file) {
+    if (!file) return;
+    setEditPhotoUploading(true);
+    try {
+      const fd = new FormData(); fd.append("file", file);
+      const tok = localStorage.getItem("tfos_access_token");
+      const body = await (await fetch("/api/v1/community/uploads", { method: "POST", headers: tok ? { Authorization: `Bearer ${tok}` } : {}, body: fd })).json().catch(() => null);
+      const url = body?.data?.url || body?.url;
+      if (url) setEditPhoto(url);
+    } finally { setEditPhotoUploading(false); }
+  }
+  async function saveEdit() {
+    setEditBusy(true); setError("");
+    try {
+      const res = await fetch(`/api/v1/field-events/${encodeURIComponent(result.event_id)}`, {
+        method: "PATCH", headers: authHeaders(),
+        body: JSON.stringify({ notes: editNotes, photo_url: editPhoto }),
+      });
+      const parsed = await res.json().catch(() => null);
+      if (res.ok && parsed?.status === "success") { setEditSaved(true); setEditOpen(false); }
+      else setError(parsed?.detail?.message || (typeof parsed?.detail === "string" ? parsed.detail : `${res.status} ${res.statusText}`));
+    } catch (e) { setError(`Network error: ${e.message}`); }
+    finally { setEditBusy(false); }
+  }
+
   const wrap = { maxWidth: 460, margin: "0 auto", padding: 16 };
   const tile = { display: "flex", alignItems: "center", gap: 14, width: "100%", padding: 18,
     borderRadius: 16, border: "1px solid #e5e1d8", background: "#fff", cursor: "pointer", textAlign: "left", marginBottom: 12 };
@@ -362,18 +400,53 @@ export default function CaptureEngine({ config = cropsConfig, onDone }) {
 
   // --- success ---
   if (result) return (
-    <div style={wrap}><div style={{ textAlign: "center", padding: "32px 0" }}>
-      <Check size={56} style={{ color: "#2e7d32" }} />
-      <h2 style={{ fontSize: 20, fontWeight: 700, marginTop: 12 }}>Saved</h2>
-      <p style={{ color: "#6b6b6b", fontSize: 13, marginTop: 6 }}>
-        Recorded {result.event_id}{result.audit_hash ? ` · ${result.audit_hash.slice(0, 12)}…` : ""}</p>
-      <button onClick={reset} style={{ ...tile, justifyContent: "center", marginTop: 24 }}><Plus size={18} /> Log something else</button>
+    <div style={wrap}>
+      <div style={{ textAlign: "center", padding: "24px 0 8px" }}>
+        <Check size={56} style={{ color: "#2e7d32" }} />
+        <h2 style={{ fontSize: 20, fontWeight: 700, marginTop: 12 }}>{editSaved ? "Correction saved" : "Saved"}</h2>
+        <p style={{ color: "#6b6b6b", fontSize: 13, marginTop: 6 }}>
+          Recorded {result.event_id}{result.audit_hash ? ` · ${result.audit_hash.slice(0, 12)}…` : ""}</p>
+      </div>
+
+      {canEditResult && !editOpen && (
+        <div style={{ ...card, textAlign: "center" }}>
+          <p style={{ fontSize: 12.5, color: "#7a7363", marginBottom: 10 }}>Made a mistake? You can fix this for 48 hours — every change is logged.</p>
+          <button onClick={openEdit} style={{ background: "none", border: "1px solid #d8d4c8", borderRadius: 12, padding: "10px 16px", fontWeight: 600, cursor: "pointer", color: "#3c5a3c" }}>Edit note / photo</button>
+        </div>
+      )}
+
+      {canEditResult && editOpen && (
+        <div style={card}>
+          <div style={cardHead}>Correct this record</div>
+          <label style={fieldLabel}>Note</label>
+          <textarea value={editNotes} maxLength={500} rows={3} onChange={(e) => setEditNotes(e.target.value)} style={{ ...inputBox, resize: "vertical", marginBottom: 12 }} />
+          <label style={fieldLabel}>Photo</label>
+          {editPhoto ? (
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+              <img src={editPhoto} alt="" style={{ width: 56, height: 56, objectFit: "cover", borderRadius: 8 }} />
+              <button onClick={() => setEditPhoto(null)} style={{ background: "none", border: "none", color: "#9a3b3b", cursor: "pointer", fontSize: 13 }}>Remove photo</button>
+            </div>
+          ) : (
+            <label style={{ display: "inline-block", border: "1px dashed #cfc7b5", borderRadius: 10, padding: "8px 12px", cursor: "pointer", fontSize: 13, marginBottom: 12 }}>
+              {editPhotoUploading ? "Uploading…" : "Add / change photo"}
+              <input type="file" accept="image/*" capture="environment" style={{ display: "none" }} onChange={(e) => uploadEditPhoto(e.target.files?.[0])} />
+            </label>
+          )}
+          {error && <p style={{ color: "#9a3b3b", fontSize: 13, marginBottom: 10 }}>{error}</p>}
+          <div style={{ display: "flex", gap: 10 }}>
+            <button onClick={() => setEditOpen(false)} style={{ flex: 1, padding: 12, borderRadius: 12, border: "1px solid #d8d4c8", background: "#fff", cursor: "pointer" }}>Cancel</button>
+            <button onClick={saveEdit} disabled={editBusy || editPhotoUploading} style={{ flex: 1, padding: 12, borderRadius: 12, border: "none", background: "#2e7d32", color: "#fff", fontWeight: 700, cursor: "pointer" }}>{editBusy ? "Saving…" : "Save changes"}</button>
+          </div>
+        </div>
+      )}
+
+      <button onClick={reset} style={{ ...tile, justifyContent: "center", marginTop: 12 }}><Plus size={18} /> Log something else</button>
       {onDone && (
         <button onClick={onDone} style={{ ...tile, justifyContent: "center", marginTop: 0, background: "#2e7d32", color: "#fff", border: "none" }}>
           <Check size={18} /> Done
         </button>
       )}
-    </div></div>
+    </div>
   );
 
   // --- verb grid ---
