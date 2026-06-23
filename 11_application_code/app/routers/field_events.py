@@ -499,7 +499,6 @@ async def edit_field_event(
         params.update({"purl": body.photo_url, "psha": ph, "psz": sz}); changed.append("photo")
     if not sets:
         raise HTTPException(status_code=422, detail=error_envelope("NOTHING_TO_EDIT", "No editable fields supplied."))
-    sets.append("updated_at = NOW()")
     await db.execute(text(f"UPDATE tenant.field_events SET {', '.join(sets)} "
                           f"WHERE event_id = :eid AND deleted_at IS NULL"), params)
     await emit_audit_event(
