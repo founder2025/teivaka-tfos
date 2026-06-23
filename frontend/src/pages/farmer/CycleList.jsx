@@ -162,7 +162,7 @@ function ProductionInner() {
                         <div key={c.cycle_id} className="card" style={{ margin: 0, cursor: "pointer" }} onClick={() => navigate(`/farm/cycles/${encodeURIComponent(c.cycle_id)}`)}>
                           <div style={{ padding: "13px 14px" }}>
                             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
-                              <div style={{ fontWeight: 700, color: "var(--ink)", fontSize: 14 }}>{c.farmer_label || c.pu_id}</div>
+                              <div style={{ fontWeight: 700, color: "var(--ink)", fontSize: 14 }}>{c.farmer_label || c.pu_farmer_label || c.pu_name || c.pu_id}</div>
                               <span title={blocked ? "Harvest on hold" : "Clear"} style={{ flex: "none", width: 9, height: 9, borderRadius: "50%", background: blocked ? "var(--red)" : "var(--green)", marginTop: 4 }} />
                             </div>
                             <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 1 }}>{c.production_name || c.production_id}</div>

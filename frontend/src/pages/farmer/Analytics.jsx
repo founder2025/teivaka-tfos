@@ -27,6 +27,7 @@ import { Plus, X, ArrowLeft, ArrowRight, Check, Clock } from "lucide-react";
 import TfpShell from "../../components/farm/TfpShell";
 import { CurrentFarmProvider, useCurrentFarm } from "../../context/CurrentFarmContext";
 import FarmSelector from "../../components/farm/FarmSelector";
+import { useFarmName } from "../../utils/farmName";
 
 function authHeaders() { const t = localStorage.getItem("tfos_access_token"); return t ? { "Content-Type": "application/json", Authorization: `Bearer ${t}` } : { "Content-Type": "application/json" }; }
 function emitToast(m) { window.dispatchEvent(new CustomEvent("tfos:toast", { detail: { message: m } })); }
@@ -232,6 +233,7 @@ function SignalDetail({ s, flips, onBack, onTask, onAck, navigate }) {
 
 // ── Generate-task modal (real POST /tasks/manual) ──────────────────────────
 function GenerateTaskModal({ s, farmId, onClose }) {
+  const farmName = useFarmName(farmId);
   const [desc, setDesc] = useState(s.notes || `Review ${s.name} — currently ${s.status}.`);
   const [due, setDue] = useState(todayISO());
   const [busy, setBusy] = useState(false);
@@ -253,7 +255,7 @@ function GenerateTaskModal({ s, farmId, onClose }) {
         <div className="overlay-body">
           <div className="form-event-anchors">
             <div className="anchors-block-head">Anchors · Farm + Operator · from signal</div>
-            <div className="anchor-row"><span className="anchor-row-label">Farm</span><span className="anchor-row-value">{farmId}</span></div>
+            <div className="anchor-row"><span className="anchor-row-label">Farm</span><span className="anchor-row-value">{farmName || farmId}</span></div>
             <div className="anchor-row"><span className="anchor-row-label">Source signal</span><span className="anchor-row-value">{s.name} · {s.status}</span></div>
           </div>
           <div className="form-row" style={{ marginTop: 10 }}><label>Task description (pre-filled from recommendation)</label><textarea rows={3} maxLength={500} value={desc} onChange={(e) => setDesc(e.target.value)} /></div>

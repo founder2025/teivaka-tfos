@@ -11,6 +11,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ChevronLeft, ShieldCheck, Check, Loader2, User } from "lucide-react";
+import { useFarmName } from "../../utils/farmName";
 
 function authHeaders() {
   const t = localStorage.getItem("tfos_access_token");
@@ -49,6 +50,7 @@ export default function NurseryNew() {
   const [farmId, setFarmId] = useState(
     (typeof localStorage !== "undefined" && localStorage.getItem("tfos_current_farm_id")) || ""
   );
+  const farmName = useFarmName(farmId);
   const [productionId, setProductionId] = useState("");
   const [variety, setVariety] = useState("");
   const [seedSource, setSeedSource] = useState("");
@@ -154,7 +156,7 @@ export default function NurseryNew() {
             ? <select value={farmId} onChange={(e) => setFarmId(e.target.value)} style={inputBox}>
                 {farms.map((f) => <option key={f.farm_id} value={f.farm_id}>{f.farm_name || f.farm_id}</option>)}
               </select>
-            : <span style={{ fontWeight: 600 }}>{farmId || "—"}</span>}
+            : <span style={{ fontWeight: 600 }}>{farmName || farmId || "—"}</span>}
           <span style={{ color: "#9a917c" }}>Crop</span>
           <select value={productionId} onChange={(e) => setProductionId(e.target.value)} style={inputBox}>
             <option value="">Select a crop…</option>

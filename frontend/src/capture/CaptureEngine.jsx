@@ -22,6 +22,7 @@ import {
   ChevronLeft, Check, Loader2, Plus,
 } from "lucide-react";
 import cropsConfig from "./config/crops";
+import { useFarmName } from "../utils/farmName";
 
 const ICONS = {
   Eye, Droplet, Scissors, ShieldCheck, Sprout, Warehouse, Coins, Leaf, CalendarPlus, CalendarCheck,
@@ -150,6 +151,8 @@ export default function CaptureEngine({ config = cropsConfig, onDone }) {
   const selectedItem = useMemo(
     () => items.find((c) => c[ctx.idKey] === itemId) || null, [items, itemId, ctx.idKey],
   );
+  // Show the farmer's chosen farm name in the anchors card — never the internal farm_id code.
+  const anchorFarmName = useFarmName(selectedItem?.farm_id);
 
   // Chemical picker: load shared.chemical_library only when a spec needs it (Inviolable #2 —
   // chemical_id is the WHD trigger anchor; the farmer must pick a real catalog row, never free-text).
@@ -600,7 +603,7 @@ export default function CaptureEngine({ config = cropsConfig, onDone }) {
             <div style={cardHead}>Anchors · farm · {ctx.contextLabel.toLowerCase()} · operator</div>
             <div style={{ display: "grid", gridTemplateColumns: "64px 1fr", rowGap: 10, alignItems: "center", fontSize: 14 }}>
               <span style={{ color: "#9a917c" }}>Farm</span>
-              <span style={{ fontWeight: 600 }}>{selectedItem?.farm_id || "—"}</span>
+              <span style={{ fontWeight: 600 }}>{anchorFarmName || selectedItem?.farm_id || "—"}</span>
               <span style={{ color: "#9a917c" }}>{ctx.contextLabel}</span>
               {items.length === 1
                 ? <span style={{ fontWeight: 600 }}>{ctx.optionLabel(selectedItem)}</span>

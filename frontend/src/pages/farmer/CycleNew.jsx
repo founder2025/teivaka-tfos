@@ -20,6 +20,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { ChevronLeft, ShieldCheck, Check, Loader2, User } from "lucide-react";
 import CapacityCalc from "../../components/farm/CapacityCalc.jsx";
 import { completeLinkedTask } from "../../utils/taskBridge";
+import { useFarmName } from "../../utils/farmName";
 
 // Match the (+) capture engine's date phrasing in the "About to record" preview.
 function prettyDate(ymd) {
@@ -94,6 +95,7 @@ export default function CycleNew() {
 
   // Anchors
   const [farmId, setFarmId] = useState(null);
+  const farmName = useFarmName(farmId);
   const [searchParams] = useSearchParams();
   const [puId, setPuId] = useState(searchParams.get("pu") || "");
   const [productionId, setProductionId] = useState("");
@@ -298,7 +300,7 @@ export default function CycleNew() {
         <div style={cardHead}>Anchors · farm · block · crop · operator</div>
         <div style={{ display: "grid", gridTemplateColumns: "64px 1fr", rowGap: 10, alignItems: "center", fontSize: 14 }}>
           <span style={{ color: "#9a917c" }}>Farm</span>
-          <span style={{ fontWeight: 600 }}>{farmId || "—"}</span>
+          <span style={{ fontWeight: 600 }}>{farmName || farmId || "—"}</span>
 
           <span style={{ color: "#9a917c" }}>Block</span>
           <div>

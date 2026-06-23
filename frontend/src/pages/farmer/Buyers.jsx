@@ -18,6 +18,7 @@ import { Plus, Search, MapPin, Truck, X, Phone, Pencil } from "lucide-react";
 import TfpShell from "../../components/farm/TfpShell";
 import { CurrentFarmProvider, useCurrentFarm } from "../../context/CurrentFarmContext";
 import FarmSelector from "../../components/farm/FarmSelector";
+import { useFarmName } from "../../utils/farmName";
 
 function authHeaders() {
   const t = localStorage.getItem("tfos_access_token");
@@ -556,6 +557,7 @@ function Field({ label, children }) { return <div className="form-row"><label>{l
 
 function AddBuyerModal({ onClose, onSaved, edit }) {
   const { farmId } = useCurrentFarm();
+  const farmName = useFarmName(farmId);
   const c = edit || {};
   const [f, setF] = useState({
     customer_name: c.customer_name || "", customer_type: c.customer_type || "SUPERMARKET", island: c.island || "", distance_km: c.distance_km ?? "",
@@ -590,7 +592,7 @@ function AddBuyerModal({ onClose, onSaved, edit }) {
         <div className="overlay-body">
           <div className="form-event-anchors">
             <div className="anchors-block-head">Anchors · Farm + Operator</div>
-            <div className="anchor-row"><span className="anchor-row-label">Farm</span><span className="anchor-row-value">{farmId || "—"}</span></div>
+            <div className="anchor-row"><span className="anchor-row-label">Farm</span><span className="anchor-row-value">{farmName || farmId || "—"}</span></div>
           </div>
           <div className="form-row" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
             <div><label>Buyer name</label><input value={f.customer_name} onChange={set("customer_name")} placeholder="e.g. Nayans Supermarkets" /></div>
