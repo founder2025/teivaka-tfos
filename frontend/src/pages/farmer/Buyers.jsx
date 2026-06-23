@@ -45,7 +45,7 @@ const VIEW_TABS = [
   ["pipeline", "Pipeline", "Leads"], ["analytics", "Analytics", "Risk & trends"],
 ];
 
-async function getCustomers() { const r = await fetch("/api/v1/customers", { headers: authHeaders() }); if (!r.ok) throw new Error(r.status); return (await r.json())?.data ?? []; }
+async function getCustomers(farmId) { const u = farmId ? `/api/v1/customers?farm_id=${encodeURIComponent(farmId)}` : "/api/v1/customers"; const r = await fetch(u, { headers: authHeaders() }); if (!r.ok) throw new Error(r.status); return (await r.json())?.data ?? []; }
 async function getOrders(farmId) { const r = await fetch(`/api/v1/orders${farmId ? `?farm_id=${encodeURIComponent(farmId)}` : ""}`, { headers: authHeaders() }); if (!r.ok) throw new Error(r.status); return (await r.json())?.data ?? []; }
 async function getProductions() { const r = await fetch("/api/v1/productions?is_active=true", { headers: authHeaders() }); if (!r.ok) throw new Error(r.status); return (await r.json())?.data?.productions ?? []; }
 async function getCommunications(custId) { const r = await fetch(`/api/v1/customers/${encodeURIComponent(custId)}/communications`, { headers: authHeaders() }); if (!r.ok) throw new Error(r.status); return (await r.json())?.data ?? []; }
@@ -98,7 +98,7 @@ function BuyerCard({ b, onOpen }) {
           </div>
           {(b.city || b.distanceKm != null || b.ferry) && (
             <div className="buyer-card-loc">
-              <MapPin size={11} />{b.city || "—"}{b.distanceKm != null ? ` · ${b.distanceKm}km` : ""}
+              <MapPin size={11} />{b.city || "—"}{b.distanceKm != null ? ` · ${b.distanceKm} km away` : ""}
               {b.ferry && <span className="ferry-chip"><Truck size={9} />ferry</span>}
             </div>
           )}
@@ -157,7 +157,7 @@ function BuyersInner() {
   const [signalOpen, setSignalOpen] = useState(false);
   const [leadOpen, setLeadOpen] = useState(false);
 
-  const customersQ = useQuery({ queryKey: ["customers"], queryFn: getCustomers });
+  const customersQ = useQuery({ queryKey: ["customers", farmId], queryFn: () => getCustomers(farmId) });
   const ordersQ = useQuery({ queryKey: ["orders", farmId], queryFn: () => getOrders(farmId), enabled: !!farmId });
   const demandQ = useQuery({ queryKey: ["demand", farmId], queryFn: () => getDemandSignals(farmId), enabled: view === "demand" });
   const leadsQ = useQuery({ queryKey: ["leads", farmId], queryFn: () => getLeads(farmId), enabled: view === "pipeline" });
@@ -561,11 +561,24 @@ function AddBuyerModal({ onClose, onSaved, edit }) {
   const c = edit || {};
   const [f, setF] = useState({
     customer_name: c.customer_name || "", customer_type: c.customer_type || "SUPERMARKET", island: c.island || "", distance_km: c.distance_km ?? "",
+    gps_lat: c.gps_lat ?? "", gps_lng: c.gps_lng ?? "",
     contact_name: c.contact_name || "", contact_role: c.contact_role || "", phone: c.phone || "", whatsapp_number: c.whatsapp_number || "",
     payment_terms_days: String(c.payment_terms_days ?? "0"), preferred_channel: c.preferred_channel || "whatsapp", ferry_dependent: !!c.ferry_dependent, notes: c.notes || "",
   });
   const [busy, setBusy] = useState(false);
+  const [geoBusy, setGeoBusy] = useState(false);
   const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }));
+  // Pin the buyer's location — use it when you're physically at the buyer (e.g. a
+  // delivery), or type the coords. Real distance is computed from your farm to here.
+  const captureLocation = () => {
+    if (!navigator.geolocation) { emitToast("Location isn't available on this device — type the coordinates instead"); return; }
+    setGeoBusy(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => { setF((s) => ({ ...s, gps_lat: pos.coords.latitude.toFixed(6), gps_lng: pos.coords.longitude.toFixed(6) })); setGeoBusy(false); emitToast("Location pinned"); },
+      () => { setGeoBusy(false); emitToast("Couldn't read location — allow access or type the coordinates"); },
+      { enableHighAccuracy: true, timeout: 10000 },
+    );
+  };
   async function submit() {
     if (!f.customer_name.trim()) { emitToast("Buyer name is required"); return; }
     setBusy(true);
@@ -573,6 +586,8 @@ function AddBuyerModal({ onClose, onSaved, edit }) {
       const body = {
         customer_name: f.customer_name.trim(), customer_type: f.customer_type,
         island: f.island.trim() || null, distance_km: f.distance_km ? Number(f.distance_km) : null,
+        gps_lat: f.gps_lat !== "" && f.gps_lat != null ? Number(f.gps_lat) : null,
+        gps_lng: f.gps_lng !== "" && f.gps_lng != null ? Number(f.gps_lng) : null,
         contact_name: f.contact_name.trim() || null, contact_role: f.contact_role.trim() || null,
         phone: f.phone.trim() || null, whatsapp_number: f.whatsapp_number.trim() || null,
         preferred_channel: f.preferred_channel, ferry_dependent: !!f.ferry_dependent,
@@ -600,7 +615,20 @@ function AddBuyerModal({ onClose, onSaved, edit }) {
           </div>
           <div className="form-row" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 10 }}>
             <div><label>City</label><input value={f.island} onChange={set("island")} placeholder="e.g. Suva" /></div>
-            <div><label>Distance (km)</label><input type="number" min="0" value={f.distance_km} onChange={set("distance_km")} /></div>
+            <div>
+              <label>Buyer location (real distance)</label>
+              <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                <button type="button" className="btn btn-secondary" style={{ whiteSpace: "nowrap", display: "inline-flex", alignItems: "center", gap: 4 }} onClick={captureLocation} disabled={geoBusy}>
+                  <MapPin size={12} /> {geoBusy ? "Locating…" : "Pin location"}
+                </button>
+                <span style={{ fontSize: 11, color: f.gps_lat ? "var(--green-dk)" : "var(--muted)" }}>{f.gps_lat ? "Pinned ✓" : "Not set"}</span>
+              </div>
+            </div>
+          </div>
+          <div className="form-row" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginTop: 8 }}>
+            <div><label>Latitude</label><input type="number" step="any" value={f.gps_lat} onChange={set("gps_lat")} placeholder="-18.1416" /></div>
+            <div><label>Longitude</label><input type="number" step="any" value={f.gps_lng} onChange={set("gps_lng")} placeholder="178.4419" /></div>
+            <div><label>Approx km (no pin)</label><input type="number" min="0" value={f.distance_km} onChange={set("distance_km")} /></div>
           </div>
           <div className="form-row" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 10 }}>
             <div><label>Contact name</label><input value={f.contact_name} onChange={set("contact_name")} /></div>

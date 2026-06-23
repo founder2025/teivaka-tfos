@@ -6,9 +6,22 @@ from app.core.audit_chain import emit_audit_event
 from pydantic import BaseModel
 from typing import Optional
 from datetime import date
+from math import radians, sin, cos, asin, sqrt
 import uuid
 
 router = APIRouter()
+
+
+def _haversine_km(a_lat, a_lng, b_lat, b_lng):
+    """Great-circle distance in km between two lat/lng points. None if any missing."""
+    if a_lat is None or a_lng is None or b_lat is None or b_lng is None:
+        return None
+    a_lat, a_lng, b_lat, b_lng = float(a_lat), float(a_lng), float(b_lat), float(b_lng)
+    dlat = radians(b_lat - a_lat)
+    dlng = radians(b_lng - a_lng)
+    h = sin(dlat / 2) ** 2 + cos(radians(a_lat)) * cos(radians(b_lat)) * sin(dlng / 2) ** 2
+    return 6371.0 * 2 * asin(sqrt(h))
+
 
 VALID_CUSTOMER_TYPES = {
     "DIRECT", "WHOLESALE", "RESTAURANT", "SUPERMARKET", "EXPORT", "RELATED_PARTY",
@@ -26,14 +39,24 @@ class CustomerCreate(BaseModel):
     email: Optional[str] = None
     address: Optional[str] = None
     island: Optional[str] = None  # city / island
-    distance_km: Optional[float] = None
+    distance_km: Optional[float] = None  # manual fallback only — used when no GPS pin
+    gps_lat: Optional[float] = None
+    gps_lng: Optional[float] = None
     preferred_channel: Optional[str] = None
     ferry_dependent: bool = False
     payment_terms_days: int = 0  # 0 = cash on delivery
     notes: Optional[str] = None
 
 @router.get("")
-async def list_customers(customer_type: str = None, user: dict = Depends(get_current_user)):
+async def list_customers(
+    customer_type: str = None,
+    farm_id: str = None,
+    user: dict = Depends(get_current_user),
+):
+    """Lists this tenant's buyers. When `farm_id` is given and both that farm and
+    a buyer have GPS coords, `distance_km` is the REAL great-circle distance from
+    the farm to the buyer (distance_source='computed'); otherwise it falls back to
+    the manually-entered distance_km (distance_source='manual') or stays null."""
     async with get_rls_db(str(user["tenant_id"])) as db:
         params = {"tid": str(user["tenant_id"])}
         q = "SELECT * FROM tenant.customers WHERE tenant_id = :tid AND is_active = true"
@@ -41,7 +64,29 @@ async def list_customers(customer_type: str = None, user: dict = Depends(get_cur
             q += " AND customer_type = :customer_type"
             params["customer_type"] = customer_type
         result = await db.execute(text(q + " ORDER BY customer_name"), params)
-        return {"data": [dict(r) for r in result.mappings().all()]}
+        rows = [dict(r) for r in result.mappings().all()]
+
+        # Resolve the viewing farm's coords once, then compute real distances.
+        farm_lat = farm_lng = None
+        if farm_id:
+            frow = (await db.execute(
+                text("SELECT gps_lat, gps_lng FROM tenant.farms "
+                     "WHERE farm_id = :fid AND tenant_id = :tid"),
+                {"fid": farm_id, "tid": str(user["tenant_id"])},
+            )).mappings().first()
+            if frow:
+                farm_lat, farm_lng = frow["gps_lat"], frow["gps_lng"]
+
+        for r in rows:
+            computed = _haversine_km(farm_lat, farm_lng, r.get("gps_lat"), r.get("gps_lng"))
+            if computed is not None:
+                r["distance_km"] = round(computed, 1)
+                r["distance_source"] = "computed"
+            elif r.get("distance_km") is not None:
+                r["distance_source"] = "manual"
+            else:
+                r["distance_source"] = None
+        return {"data": rows}
 
 @router.get("/{customer_id}")
 async def get_customer(customer_id: str, user: dict = Depends(get_current_user)):
@@ -67,11 +112,11 @@ async def create_customer(body: CustomerCreate, user: dict = Depends(get_current
         await db.execute(text("""
             INSERT INTO tenant.customers
                 (customer_id, tenant_id, customer_name, customer_type, contact_name, contact_role,
-                 phone, whatsapp_number, email, address, island, distance_km,
+                 phone, whatsapp_number, email, address, island, distance_km, gps_lat, gps_lng,
                  preferred_channel, ferry_dependent, payment_terms_days, notes)
             VALUES
                 (:customer_id, :tenant_id, :customer_name, :customer_type, :contact_name, :contact_role,
-                 :phone, :whatsapp_number, :email, :address, :island, :distance_km,
+                 :phone, :whatsapp_number, :email, :address, :island, :distance_km, :gps_lat, :gps_lng,
                  :preferred_channel, :ferry_dependent, :payment_terms_days, :notes)
         """), {
             "customer_id": customer_id,
@@ -86,6 +131,8 @@ async def create_customer(body: CustomerCreate, user: dict = Depends(get_current
             "address": body.address,
             "island": body.island,
             "distance_km": body.distance_km,
+            "gps_lat": body.gps_lat,
+            "gps_lng": body.gps_lng,
             "preferred_channel": body.preferred_channel,
             "ferry_dependent": body.ferry_dependent,
             "payment_terms_days": body.payment_terms_days,
@@ -120,6 +167,8 @@ class CustomerPatch(BaseModel):
     address: Optional[str] = None
     island: Optional[str] = None
     distance_km: Optional[float] = None
+    gps_lat: Optional[float] = None
+    gps_lng: Optional[float] = None
     preferred_channel: Optional[str] = None
     ferry_dependent: Optional[bool] = None
     payment_terms_days: Optional[int] = None
