@@ -7,6 +7,7 @@ worker can only validly clock on inside the farm. GET /attendance — recent row
 Tenant-scoped via RLS: available to every farm account, each seeing only its own.
 """
 import math
+import uuid
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from typing import Optional
@@ -14,6 +15,7 @@ from sqlalchemy import text
 
 from app.db.session import get_rls_db
 from app.middleware.rls import get_current_user
+from app.core.audit_chain import emit_audit_event
 
 router = APIRouter()
 
@@ -121,6 +123,23 @@ async def clock(body: ClockIn, user: dict = Depends(get_current_user)):
             },
         )
         row = ins.mappings().first()
+        # One check-in -> one audit row (Universal Event Form Contract). Same txn as the INSERT.
+        await emit_audit_event(
+            db=db,
+            tenant_id=uuid.UUID(tid),
+            actor_user_id=uuid.UUID(uid) if uid else None,
+            event_type="WORKER_CHECKIN",
+            entity_type="worker_attendance",
+            entity_id=str(row["attendance_id"]),
+            occurred_at=row["occurred_at"],
+            payload={
+                "attendance_id": str(row["attendance_id"]),
+                "farm_id": body.farm_id,
+                "kind": body.kind,
+                "inside_boundary": inside,
+                "worker_name": body.worker_name,
+            },
+        )
 
     return {
         "attendance_id": str(row["attendance_id"]),

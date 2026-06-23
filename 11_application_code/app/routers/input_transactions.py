@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import text
 from app.db.session import get_rls_db
 from app.middleware.rls import get_current_user
+from app.core.audit_chain import emit_audit_event
 from pydantic import BaseModel
 from decimal import Decimal
 from datetime import datetime
@@ -96,4 +97,21 @@ async def log_input_transaction(body: InputTransactionCreate, user: dict = Depen
             "created_by": str(user["user_id"]),
             "idempotency_key": body.idempotency_key,
         })
+        # One movement -> one audit row (Universal Event Form Contract). Same txn as the INSERT.
+        await emit_audit_event(
+            db=db,
+            tenant_id=uuid.UUID(str(user["tenant_id"])),
+            actor_user_id=uuid.UUID(str(user["user_id"])),
+            event_type="INPUT_USED_ADJUSTMENT",
+            entity_type="input_transaction",
+            entity_id=txn_id,
+            occurred_at=body.transaction_date,
+            payload={
+                "txn_id": txn_id,
+                "farm_id": body.farm_id,
+                "input_id": body.input_id,
+                "transaction_type": body.transaction_type,
+                "quantity": str(body.quantity) if body.quantity is not None else None,
+            },
+        )
     return {"data": {"txn_id": txn_id, "transaction_type": body.transaction_type}}

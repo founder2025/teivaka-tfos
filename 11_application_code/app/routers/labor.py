@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import text
 from app.db.session import get_rls_db
 from app.middleware.rls import get_current_user
+from app.core.audit_chain import emit_audit_event
 from pydantic import BaseModel
 from decimal import Decimal
 from datetime import datetime
@@ -58,6 +59,22 @@ async def log_labor(body: LaborCreate, user: dict = Depends(get_current_user)):
             "overtime_pay": overtime_pay, "created_by": str(user["user_id"]),
             "idempotency_key": body.idempotency_key,
         })
+        # One log -> one audit row (Universal Event Form Contract). Same txn as the INSERT.
+        await emit_audit_event(
+            db=db,
+            tenant_id=uuid.UUID(str(user["tenant_id"])),
+            actor_user_id=uuid.UUID(str(user["user_id"])),
+            event_type="ATTENDANCE_LOGGED",
+            entity_type="labor_attendance",
+            entity_id=attendance_id,
+            occurred_at=body.work_date,
+            payload={
+                "attendance_id": attendance_id,
+                "farm_id": body.farm_id,
+                "worker_id": body.worker_id,
+                "hours_worked": str(body.hours_worked) if body.hours_worked is not None else None,
+            },
+        )
     return {"data": {"attendance_id": attendance_id}}
 
 @router.get("")
