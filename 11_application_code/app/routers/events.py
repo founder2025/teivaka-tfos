@@ -1432,17 +1432,23 @@ _ANIMAL_EVENT_EDIT_PROTECTED = {
 # Event types whose payload drives a compliance/withholding window or a
 # flocks.current_count side-effect — correcting their values here would silently
 # move that window or drift the bird count, so they are locked out of in-place edit.
-#   VACCINATION_GIVEN / HEALTH_OBSERVATION → withholding + SEVERE-sales block
+#   HEALTH_OBSERVATION → SEVERE-sales block (editing severity could un-block sales)
 #   MORTALITY_LOGGED / BIRD_REPLACEMENT / BIRDS_SOLD → flocks.current_count delta
+# VACCINATION_GIVEN is NOT blocked: its withholding is recomputed LIVE at sale
+# (check_vaccination_withholding), so a correction auto-applies, and we regenerate
+# its reminder task on edit (below).
 _ANIMAL_EVENT_EDIT_BLOCKED = {
-    "VACCINATION_GIVEN", "HEALTH_OBSERVATION",
+    "HEALTH_OBSERVATION",
     "MORTALITY_LOGGED", "BIRD_REPLACEMENT", "BIRDS_SOLD",
 }
 
 
 class AnimalEventEdit(BaseModel):
-    """In-window correction of an animal event's captured values (merged into payload_jsonb)."""
-    fields: dict = Field(..., description="Corrected captured values, merged into payload_jsonb.")
+    """In-window correction of an animal event's captured values (merged into payload_jsonb).
+    occurred_at corrects the event date — for VACCINATION_GIVEN this re-runs the
+    withholding window (recomputed live at sale) and regenerates the reminder task."""
+    fields: dict = Field(default_factory=dict, description="Corrected captured values, merged into payload_jsonb.")
+    occurred_at: Optional[str] = Field(default=None, description="Corrected event date/time.")
 
 
 @router.patch("/events/{event_id}", summary="Correct an animal event within the 48h window")
@@ -1457,16 +1463,18 @@ async def edit_animal_event(
     except (ValueError, AttributeError):
         raise HTTPException(status_code=404, detail=error_envelope("EVENT_NOT_FOUND", f"No event {event_id!r}"))
 
+    tenant_uuid = UUID(str(user["tenant_id"]))
+
     # Resolve which backing table owns this event (RLS scopes both to the tenant).
     target = None
     row = None
     for tbl in ("tenant.poultry_event_log", "tenant.livestock_events"):
         found = (await db.execute(
-            text(f"SELECT event_id, event_type, created_at FROM {tbl} WHERE event_id = :eid LIMIT 1"),
+            text(f"SELECT * FROM {tbl} WHERE event_id = :eid LIMIT 1"),
             {"eid": eid},
         )).mappings().first()
         if found:
-            target, row = tbl, found
+            target, row = tbl, dict(found)
             break
     if row is None:
         raise HTTPException(status_code=404, detail=error_envelope("EVENT_NOT_FOUND", f"No event {event_id!r}"))
@@ -1479,20 +1487,81 @@ async def edit_animal_event(
             "This record drives a compliance window or your live bird count, so its "
             "values can't be corrected here. Log a fresh event with the right figures."))
 
+    provided = body.model_dump(exclude_unset=True)
     clean = {k: v for k, v in (body.fields or {}).items() if k not in _ANIMAL_EVENT_EDIT_PROTECTED}
-    if not clean:
+    occ_provided = "occurred_at" in provided and bool(body.occurred_at)
+
+    sets, params, changed = [], {"eid": eid}, []
+    if clean:
+        sets.append("payload_jsonb = COALESCE(payload_jsonb, '{}'::jsonb) || CAST(:pj AS jsonb)")
+        params["pj"] = json.dumps(clean)
+        changed += list(clean.keys())
+    if occ_provided:
+        sets.append("occurred_at = CAST(:occ AS timestamptz)")
+        params["occ"] = body.occurred_at
+        changed.append("occurred_at")
+    if not sets:
         raise HTTPException(status_code=422, detail=error_envelope("NOTHING_TO_EDIT", "No editable fields supplied."))
 
-    await db.execute(
-        text(f"UPDATE {target} SET payload_jsonb = COALESCE(payload_jsonb, '{{}}'::jsonb) || CAST(:pj AS jsonb) "
-             f"WHERE event_id = :eid"),
-        {"pj": json.dumps(clean), "eid": eid},
-    )
+    await db.execute(text(f"UPDATE {target} SET {', '.join(sets)} WHERE event_id = :eid"), params)
+
+    audit_payload: dict = {"event_id": eid, "changed": changed}
+    is_vaccination = target == "tenant.poultry_event_log" and row["event_type"] == "VACCINATION_GIVEN"
+    if is_vaccination:
+        old_occ = row.get("occurred_at")
+        audit_payload["vaccine_before"] = {
+            "vaccine_id": (row.get("payload_jsonb") or {}).get("vaccine_id"),
+            "occurred_at": old_occ.isoformat() if hasattr(old_occ, "isoformat") else old_occ,
+        }
     await emit_audit_event(
-        db=db, tenant_id=UUID(str(user["tenant_id"])), actor_user_id=UUID(str(user["user_id"])),
+        db=db, tenant_id=tenant_uuid, actor_user_id=UUID(str(user["user_id"])),
         event_type="EVENT_CORRECTED", entity_type="animal_event", entity_id=eid,
-        payload={"event_id": eid, "changed": list(clean.keys())},
+        payload=audit_payload,
     )
+
+    # Vaccination: enforcement (check_vaccination_withholding) is live at sale, so the
+    # corrected vaccine/date applies automatically. Regenerate the reminder task so the
+    # farmer-facing countdown matches the corrected record.
+    if is_vaccination and row.get("flock_id"):
+        from app.services.task_generator import (
+            create_compliance_task,
+            close_compliance_tasks_for_entity,
+            vaccination_withholding_task,
+        )
+        flock_id = row["flock_id"]
+        await close_compliance_tasks_for_entity(
+            db=db, tenant_id=tenant_uuid, entity_type="flock", entity_id=flock_id,
+            title_prefix=f"auto:vaccine_withhold:{flock_id}",
+        )
+        new_payload = {**(row.get("payload_jsonb") or {}), **clean}
+        vaccine_id = new_payload.get("vaccine_id")
+        if vaccine_id:
+            v_row = (await db.execute(
+                text("""
+                    SELECT name,
+                           COALESCE((attributes->>'withholding_eggs_days')::int, 0) AS eggs_days,
+                           COALESCE((attributes->>'withholding_meat_days')::int, 0) AS meat_days
+                    FROM shared.farm_libraries WHERE library_id = :vid
+                """), {"vid": vaccine_id},
+            )).first()
+            if v_row:
+                max_days = max(int(v_row.eggs_days or 0), int(v_row.meat_days or 0))
+                if max_days > 0:
+                    fl = (await db.execute(
+                        text("SELECT flock_label FROM tenant.flocks WHERE flock_id = :fid LIMIT 1"),
+                        {"fid": flock_id},
+                    )).first()
+                    flock_label = fl.flock_label if fl else flock_id
+                    sale_kind = "eggs" if v_row.eggs_days >= v_row.meat_days else "meat"
+                    title, imperative, description = vaccination_withholding_task(
+                        flock_id, flock_label, v_row.name, max_days, sale_kind)
+                    await create_compliance_task(
+                        db=db, tenant_id=tenant_uuid, farm_id=row.get("farm_id"),
+                        entity_type="flock", entity_id=flock_id,
+                        title=title, imperative=imperative, description=description,
+                        priority="MEDIUM", task_rank=600,
+                    )
+
     updated = (await db.execute(
         text(f"SELECT event_id, event_type, payload_jsonb FROM {target} WHERE event_id = :eid"),
         {"eid": eid},
@@ -1501,5 +1570,5 @@ async def edit_animal_event(
         "event_id": eid,
         "event_type": updated["event_type"],
         "payload": updated["payload_jsonb"],
-        "changed": list(clean.keys()),
+        "changed": changed,
     })
