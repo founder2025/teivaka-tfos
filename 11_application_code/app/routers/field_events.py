@@ -361,7 +361,9 @@ async def create_field_event(
                 },
             )
 
-        await db.commit()
+        # get_tenant_db wraps get_rls_db (session.begin) — it auto-commits on exit;
+        # an explicit commit() inside the begin() block raises. (Was a latent 500 on
+        # the legacy /field-events create path, e.g. Compliance "Log chemical".)
     except HTTPException:
         raise
     except Exception as e:
@@ -506,7 +508,6 @@ async def edit_field_event(
         event_type="EVENT_CORRECTED", entity_type="field_event", entity_id=event_id,
         payload={"event_id": event_id, "changed": changed},
     )
-    await db.commit()
     updated = (await db.execute(
         text("SELECT * FROM tenant.field_events WHERE event_id = :eid"), {"eid": event_id},
     )).mappings().first()
@@ -552,5 +553,4 @@ async def soft_delete_field_event(
         event_type="EVENT_CORRECTED", entity_type="field_event", entity_id=event_id,
         payload={"event_id": event_id, "deleted": True, "reason": payload.reason.strip()},
     )
-    await db.commit()
     return success_envelope(_row_to_dict(dict(row)))
