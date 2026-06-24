@@ -248,7 +248,7 @@ export default function Members() {
               </div>
             )}
 
-            <div className="relative rounded-2xl overflow-hidden" style={{ height: 420, border: `1px solid ${C.line}` }}>
+            <div className="relative rounded-2xl overflow-hidden" style={{ height: 420, border: `1px solid ${C.line}`, isolation: "isolate", zIndex: 0 }}>
               <div ref={elRef} style={{ position: "absolute", inset: 0, background: C.cream }} />
               {members.length === 0 && !data.you && (
                 <div className="absolute inset-0 z-[500] flex items-center justify-center text-center px-6" style={{ background: "rgba(255,255,255,0.82)" }}>

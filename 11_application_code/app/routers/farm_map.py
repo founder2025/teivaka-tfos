@@ -51,6 +51,22 @@ def _compute_pin(features):
     return (round(sum(lats) / len(lats), 6), round(sum(lngs) / len(lngs), 6))
 
 
+def _centroid_from_map_rows(rows):
+    """Centroid of a farm's drawn map_features rows (BOUNDARY preferred, else all) —
+    used to anchor the network map to whatever the farmer actually drew when the
+    denormalized farms.gps_lat/lng isn't populated. rows: mappings with
+    properties (jsonb) + geometry (GeoJSON dict)."""
+    boundary = [r for r in rows if (r["properties"] or {}).get("kind") == "BOUNDARY"]
+    src = boundary or list(rows)
+    lats, lngs = [], []
+    for r in src:
+        g = r["geometry"] or {}
+        _walk_coords(g.get("coordinates"), lats, lngs)
+    if not lats:
+        return None
+    return (round(sum(lats) / len(lats), 6), round(sum(lngs) / len(lngs), 6))
+
+
 class Feature(BaseModel):
     type: str = "Feature"
     geometry: dict[str, Any]
@@ -169,9 +185,29 @@ async def network_map(radius_km: float = None,
         )).mappings().first()
     o_lat = origin["gps_lat"] if origin else None
     o_lng = origin["gps_lng"] if origin else None
+    o_name = origin["name"] if origin else None
+
+    # Anchor to the farm MAP: if the denormalized farm gps isn't set, fall back to
+    # the centroid of the viewer's actually-drawn map (tenant.map_features). Read in
+    # a tenant-scoped session — map_features RLS is strict, so it needs a real
+    # app.tenant_id (get_db's empty context would ''::uuid-crash it).
+    if o_lat is None:
+        try:
+            async with get_rls_db(viewer_tid) as vdb:
+                mrows = (await vdb.execute(
+                    text("SELECT properties, geometry FROM tenant.map_features WHERE tenant_id = :tid"),
+                    {"tid": viewer_tid},
+                )).mappings().all()
+            c = _centroid_from_map_rows(mrows)
+            if c:
+                o_lat, o_lng = c
+                o_name = o_name or "Your farm"
+        except Exception:
+            pass  # map read must never break the network response
+
     # The viewer's own pin (exact — it's their own location), so a solo user still
     # sees the map populate with "You are here" instead of a blank canvas.
-    you = ({"name": (origin["name"] if origin else None) or "You",
+    you = ({"name": o_name or "You",
             "lat": float(o_lat), "lng": float(o_lng)} if o_lat is not None else None)
 
     # Migration-tolerant: if the 164 consent columns aren't in the DB yet, return
