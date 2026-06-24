@@ -48,6 +48,7 @@ from app.routers import (
     cash,
     income,
     labor,
+    push,
     inputs,
     input_transactions,
     equipment,
@@ -358,6 +359,7 @@ app.include_router(field_events.router,       prefix=f"{PREFIX}/field-events",  
 app.include_router(cash.router,               prefix=f"{PREFIX}/cash-ledger",        tags=["Cash Ledger"])
 app.include_router(income.router,             prefix=f"{PREFIX}/income",             tags=["Income"])
 app.include_router(labor.router,              prefix=f"{PREFIX}/labor",              tags=["Labor"])
+app.include_router(push.router,               prefix=f"{PREFIX}/push",               tags=["Push Devices"])
 app.include_router(inputs.router,             prefix=f"{PREFIX}/inputs",             tags=["Inputs & Inventory"])
 app.include_router(input_transactions.router, prefix=f"{PREFIX}/input-transactions", tags=["Input Transactions"])
 

@@ -459,7 +459,12 @@ function LauncherSheet() {
 }
 
 export default function FarmerShell() {
-  useEffect(() => { firePings(); }, []);
+  useEffect(() => {
+    firePings();
+    // Native shell only: register this device for push now that the farmer is
+    // authenticated (this shell only mounts for logged-in farmers). No-op on web.
+    import("../native/push").then((m) => m.initPush()).catch(() => {});
+  }, []);
   return (
     <LeftRailProvider>
       <LauncherProvider>

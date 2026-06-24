@@ -100,6 +100,55 @@ export function installNativeNetworkShim() {
   }
 }
 
+// ── Native Evidence capture (Camera + Geolocation) ──────────────────────────
+// Both return web-compatible values so the caller's existing upload/state code is
+// unchanged; both return null on the web or on cancel/deny so the caller can fall
+// back to its DOM path.
+
+function b64ToBlob(b64, type) {
+  const chars = atob(b64);
+  const bytes = new Uint8Array(chars.length);
+  for (let i = 0; i < chars.length; i++) bytes[i] = chars.charCodeAt(i);
+  return new Blob([bytes], { type });
+}
+
+/**
+ * Open the native camera/photo picker and return a File (jpeg) ready for the
+ * existing /community/uploads POST. null on web, cancel, or permission denial.
+ */
+export async function nativeTakePhoto() {
+  const Camera = plugin('Camera');
+  if (!Camera) return null;
+  try {
+    const photo = await Camera.getPhoto({
+      quality: 70,
+      allowEditing: false,
+      resultType: 'base64',   // CameraResultType.Base64
+      source: 'PROMPT',       // let the farmer choose camera or gallery
+      saveToGallery: false,
+      correctOrientation: true,
+    });
+    if (!photo?.base64String) return null;
+    const fmt = (photo.format || 'jpeg').toLowerCase();
+    const blob = b64ToBlob(photo.base64String, `image/${fmt}`);
+    return new File([blob], `evidence.${fmt}`, { type: `image/${fmt}` });
+  } catch {
+    return null; // user cancelled or denied — caller keeps prior state
+  }
+}
+
+/** Native GPS fix → {lat,lng} or null (web / denied / unavailable). */
+export async function nativeGetPosition() {
+  const Geo = plugin('Geolocation');
+  if (!Geo) return null;
+  try {
+    try { await Geo.requestPermissions?.(); } catch { /* older plugin */ }
+    const pos = await Geo.getCurrentPosition({ enableHighAccuracy: true, timeout: 10000 });
+    if (pos?.coords) return { lat: pos.coords.latitude, lng: pos.coords.longitude };
+  } catch { /* denied / timeout / unavailable */ }
+  return null;
+}
+
 // Keep the native status bar in sync with the Ocean Teal theme (light/dark).
 export async function syncStatusBar() {
   const StatusBar = plugin('StatusBar');

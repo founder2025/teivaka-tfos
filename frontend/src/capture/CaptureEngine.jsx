@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import cropsConfig from "./config/crops";
 import { useFarmName } from "../utils/farmName";
+import { isNative, nativeTakePhoto, nativeGetPosition } from "../native/bridge";
 
 const ICONS = {
   Eye, Droplet, Scissors, ShieldCheck, Sprout, Warehouse, Coins, Leaf, CalendarPlus, CalendarCheck,
@@ -280,7 +281,21 @@ export default function CaptureEngine({ config = cropsConfig, onDone, onBack, pr
     } catch (e) { setError(`Photo upload error: ${e.message}`); }
     finally { setPhotoUploading(false); }
   }
-  function captureGps() {
+  // Native shell: take the photo with the device camera plugin (better UX +
+  // store-review compliance) then reuse the existing upload path. Web keeps the
+  // <input type=file capture> path below.
+  async function takePhotoNative() {
+    const file = await nativeTakePhoto();
+    if (file) uploadPhoto(file);
+  }
+  async function captureGps() {
+    if (isNative()) {
+      setGpsStatus("locating");
+      const p = await nativeGetPosition();
+      if (p) { setGps(p); setGpsStatus("captured"); }
+      else setGpsStatus("denied");
+      return;
+    }
     if (!navigator.geolocation) { setGpsStatus("unavailable"); return; }
     setGpsStatus("locating");
     navigator.geolocation.getCurrentPosition(
@@ -674,11 +689,18 @@ export default function CaptureEngine({ config = cropsConfig, onDone, onBack, pr
           <div style={card}>
             <div style={cardHead}>Evidence · lifts verification</div>
             <div style={{ display: "flex", gap: 8 }}>
-              <label style={evBtn(!!photoUrl)}>
-                <Camera size={20} style={{ color: photoUrl ? "var(--green)" : "var(--muted)" }} />
-                <span style={{ fontWeight: 600 }}>{photoUploading ? "…" : photoUrl ? "Photo ✓" : "Photo"}</span>
-                <input type="file" accept="image/*" capture="environment" style={{ display: "none" }} onChange={(e) => uploadPhoto(e.target.files?.[0])} />
-              </label>
+              {isNative() ? (
+                <button type="button" onClick={takePhotoNative} style={evBtn(!!photoUrl)}>
+                  <Camera size={20} style={{ color: photoUrl ? "var(--green)" : "var(--muted)" }} />
+                  <span style={{ fontWeight: 600 }}>{photoUploading ? "…" : photoUrl ? "Photo ✓" : "Photo"}</span>
+                </button>
+              ) : (
+                <label style={evBtn(!!photoUrl)}>
+                  <Camera size={20} style={{ color: photoUrl ? "var(--green)" : "var(--muted)" }} />
+                  <span style={{ fontWeight: 600 }}>{photoUploading ? "…" : photoUrl ? "Photo ✓" : "Photo"}</span>
+                  <input type="file" accept="image/*" capture="environment" style={{ display: "none" }} onChange={(e) => uploadPhoto(e.target.files?.[0])} />
+                </label>
+              )}
               <button type="button" onClick={captureGps} style={evBtn(!!gps)}>
                 <MapPin size={20} style={{ color: gps ? "var(--green)" : "var(--muted)" }} />
                 <span style={{ fontWeight: 600 }}>{gps ? "GPS ✓" : gpsStatus === "locating" ? "…" : "GPS"}</span>
