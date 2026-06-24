@@ -53,10 +53,8 @@ import {
   // Tile chrome
   Lock,
   ArrowLeft,
-  Settings,
 } from "lucide-react";
 import Modal from "../ui/Modal";
-import GroupCatalogSection from "../settings/GroupCatalogSection";
 import CaptureEngine from "../../capture/CaptureEngine";
 import cropsConfig from "../../capture/config/crops";
 import poultryConfig from "../../capture/config/animal-poultry";
@@ -156,14 +154,10 @@ export default function LogSheet({ isOpen, onClose }) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
   const [selectedVertical, setSelectedVertical] = useState(null);
-  // Phase 5.10c: Level 3 manage-panel state.
-  // viewMode: 'grid' (Level 1+2) or 'manage' (Level 3 inline toggle panel)
-  // activeFarmId: lifted from fetch closure so the manage panel can use it
-  // localActiveGroups: optimistic override for shouldShowManageLink, set by
-  // GroupCatalogSection's onStateChange callback while in manage panel
-  const [viewMode, setViewMode] = useState("grid");
+  // activeFarmId: lifted from fetch closure so the catalog fetch can use it.
+  // ('Manage groups' was removed from the (+) — enterprises live in Me Settings
+  // + onboarding; the (+) is logging-only.)
   const [activeFarmId, setActiveFarmId] = useState(null);
-  const [localActiveGroups, setLocalActiveGroups] = useState(null);
   // Animal vertical splits into two sub-flows (different anchor models): POULTRY
   // (flock-anchored, verb engine) and LIVESTOCK (species/paddock, existing tiles).
   const [animalSub, setAnimalSub] = useState(null);
@@ -172,8 +166,6 @@ export default function LogSheet({ isOpen, onClose }) {
     if (!isOpen) {
       setSelectedVertical(null);
       setAnimalSub(null);
-      setViewMode("grid");
-      setLocalActiveGroups(null);
       return;
     }
 
@@ -234,15 +226,9 @@ export default function LogSheet({ isOpen, onClose }) {
   }, [isOpen]);
 
   const events = data?.data?.events || [];
-  const groupLabels = data?.meta?.group_labels || {};
-  // Phase 5.9: meta.active_groups present only when farm_id was passed to the
-  // endpoint. When absent (older response shape, fetch failed, or no farm),
-  // shouldShowManageLink stays false — graceful degradation.
-  // Phase 5.10c: localActiveGroups overrides the server value while the user
-  // is toggling in the inline manage panel — instant Level 1 link sync.
-  const activeGroups = localActiveGroups ?? data?.meta?.active_groups ?? null;
-  const shouldShowManageLink =
-    Array.isArray(activeGroups) && activeGroups.length < 11;
+  // meta.active_groups present only when farm_id was passed to the endpoint (else
+  // null → fail-open: the (+) shows all verticals).
+  const activeGroups = data?.meta?.active_groups ?? null;
 
   // Every vertical now drills into the config-driven Capture Engine — there is no
   // tile wall left (the (+) de-bloat is complete).
@@ -268,7 +254,7 @@ export default function LogSheet({ isOpen, onClose }) {
   }, [selectedVertical, animalSub, showPoultry, showLivestock]);
 
   const isLevel2 = selectedVertical !== null;
-  const isManage = viewMode === "manage";
+  const isManage = false; // 'Manage groups' moved out of the (+) → Me Settings + onboarding
   const headerTitle = isManage
     ? "Manage groups"
     : isLevel2
@@ -284,25 +270,6 @@ export default function LogSheet({ isOpen, onClose }) {
       title={headerTitle}
       size="lg"
     >
-      {!isManage && !isLevel2 && (
-        <div className="mb-3 flex items-center justify-end">
-          <button
-            type="button"
-            onClick={() => setViewMode("manage")}
-            aria-label="Manage groups"
-            className="inline-flex items-center gap-1 text-sm text-gray-600 hover:text-gray-900 transition"
-            style={{
-              background: "transparent",
-              border: "none",
-              padding: 6,
-              cursor: "pointer",
-            }}
-          >
-            <Settings className="w-5 h-5" />
-          </button>
-        </div>
-      )}
-
       {!isManage && isLevel2 && (
         <div className="mb-3">
           <button
@@ -390,69 +357,6 @@ export default function LogSheet({ isOpen, onClose }) {
       {/* WHOLE-farm drills into the Money engine (cash-ledger) — no tile wall. */}
       {!isManage && !isLoading && !error && isLevel2 && selectedVertical === "WHOLE" && (
         <CaptureEngine config={moneyConfig} onDone={onClose} />
-      )}
-
-      {!isManage && !isLevel2 && shouldShowManageLink && (
-        <div className="mt-3 pt-3 border-t border-gray-100 text-center">
-          <button
-            type="button"
-            onClick={() => setViewMode("manage")}
-            className="text-sm underline"
-            style={{
-              color: C.soil,
-              background: "transparent",
-              border: "none",
-              padding: "4px 8px",
-              cursor: "pointer",
-            }}
-          >
-            Manage groups →
-          </button>
-        </div>
-      )}
-
-      {/* Phase 5.10c: Level 3 inline manage panel */}
-      {isManage && (
-        <div className="flex flex-col" style={{ minHeight: 320 }}>
-          <div
-            className="overflow-y-auto"
-            style={{ flex: 1, maxHeight: "60vh" }}
-          >
-            <GroupCatalogSection
-              farmId={activeFarmId}
-              inlineMode
-              groupLabels={groupLabels}
-              onStateChange={(newMap) => {
-                const newActive = Object.entries(newMap)
-                  .filter(([, v]) => v)
-                  .map(([k]) => k);
-                setLocalActiveGroups(newActive);
-              }}
-            />
-          </div>
-          <div
-            className="mt-4 pt-3"
-            style={{ borderTop: `1px solid ${C.border || "var(--line)"}` }}
-          >
-            <button
-              type="button"
-              onClick={() => setViewMode("grid")}
-              style={{
-                width: "100%",
-                padding: 14,
-                background: C.green || "var(--green)",
-                color: "#fff",
-                border: "none",
-                borderRadius: 8,
-                fontSize: 16,
-                fontWeight: 600,
-                cursor: "pointer",
-              }}
-            >
-              Done
-            </button>
-          </div>
-        </div>
       )}
 
       {!isManage && (
