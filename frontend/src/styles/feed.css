@@ -66,6 +66,17 @@
 .tfp .cm-post-photos { display: grid; gap: 6px; margin: 10px 0 4px; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
 .tfp .cm-post-photos img { width: 100%; border-radius: 8px; display: block; }
 
+/* Activity-based composer chips (Teivaka = agricultural OS, not a social app) */
+.tfp .cm-activity-row { display: flex; flex-wrap: wrap; gap: 7px; margin: 2px 0 10px; }
+.tfp .cm-activity-chip {
+  display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px; border-radius: 999px;
+  border: 1px solid var(--line); background: var(--paper); color: var(--soil);
+  font-size: 12.5px; font-weight: 600; cursor: pointer; font-family: inherit;
+}
+.tfp .cm-activity-chip:hover { border-color: var(--green); color: var(--green-dk); }
+.tfp .cm-activity-chip.on { background: var(--green); border-color: var(--green); color: #fff; }
+@media (max-width: 560px) { .tfp .cm-activity-chip { padding: 8px 11px; min-height: 40px; } }
+
 /* Long-body clamp + "…more" toggle */
 .tfp .cm-clamp { display: -webkit-box; -webkit-line-clamp: 5; -webkit-box-orient: vertical; overflow: hidden; }
 .tfp .cm-more-btn { background: none; border: none; color: var(--green); font-weight: 600; font-size: 12.5px; cursor: pointer; padding: 2px 0; font-family: inherit; }

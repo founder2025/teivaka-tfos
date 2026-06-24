@@ -11,7 +11,7 @@ import {
   Image, MapPin, HelpCircle, Link2, Send, Star, MessageSquare, Repeat2, Share2,
   Smile, MoreHorizontal, Trash2, Check, BadgeCheck, X, Leaf, ShoppingBag, Gift,
   Droplet, BookOpen, Rss, UserPlus, UserCheck, Pencil, Flag,
-  Pin, Archive, Copy, EyeOff, Ban, BellOff, Bookmark, Users, Camera, MailCheck, Play,
+  Pin, Archive, Copy, EyeOff, Ban, BellOff, Bookmark, Users, Camera, MailCheck, Play, Sprout, Award,
 } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { getCurrentUser } from "../../utils/auth";
@@ -209,6 +209,27 @@ const DRAFT_KEY = "tfos_feed_draft";
 const BODY_MAX = 2000; // backend CHECK caps body at 2000 chars
 const EMOJIS = ["🌱", "🌾", "🍌", "🥥", "🍠", "🌶️", "🍆", "🥬", "🐔", "🐐", "🐄", "🐖", "🐝", "🐟", "🚜", "🌧️", "☀️", "🌊", "💪", "🙏", "❤️", "😀", "😂", "👍", "🎉", "✅", "🔥", "🇫🇯"];
 
+// Teivaka is an Agricultural OS, not a social app — the composer leads with WHAT
+// kind of contribution this is. Each chip maps to real post fields (Question →
+// is_question; the rest → the `vertical` tag shown on the post), so it's honest, not
+// decorative. (The "verified farm record" path lives in the (+) Capture Engine.)
+const ACTIVITIES = [
+  { key: "update",      label: "Farm Update",      Icon: Sprout },
+  { key: "question",    label: "Question",         Icon: HelpCircle },
+  { key: "knowledge",   label: "Knowledge",        Icon: BookOpen },
+  { key: "opportunity", label: "Opportunity",      Icon: ShoppingBag },
+  { key: "help",        label: "Looking for help", Icon: Users },
+  { key: "achievement", label: "Achievement",      Icon: Award },
+];
+const SMART_PROMPTS = [
+  "What happened on your farm today?",
+  "Did you plant anything today?",
+  "Any pest or disease issues this week?",
+  "Share one thing that worked well.",
+  "What did you harvest or sell recently?",
+  "Ask the community a question.",
+];
+
 function Composer({ me, onPosted, groupId }) {
   // Draft autosave: restore an unfinished post (text + already-uploaded photos)
   // if the user navigated away mid-compose.
@@ -225,6 +246,7 @@ function Composer({ me, onPosted, groupId }) {
   const [needVerify, setNeedVerify] = useState(false);
   const [resending, setResending] = useState(false);
   const [emojiOpen, setEmojiOpen] = useState(false);
+  const [promptText] = useState(() => SMART_PROMPTS[Math.floor(Math.random() * SMART_PROMPTS.length)]);
   const [myEmail, setMyEmail] = useState(me?.email || "");
   const fileRef = useRef();
   const cameraRef = useRef();
@@ -244,6 +266,11 @@ function Composer({ me, onPosted, groupId }) {
     } catch { /* storage full/blocked — autosave is best-effort */ }
   }, [draft]);
   const set = (k, v) => setDraft((d) => ({ ...d, [k]: v }));
+  const activeActivity = draft.isQuestion ? "question" : (ACTIVITIES.find((a) => a.label === draft.vertical)?.key || null);
+  const selectActivity = (a) => {
+    if (a.key === "question") setDraft((d) => ({ ...d, isQuestion: !d.isQuestion, vertical: "" }));
+    else setDraft((d) => ({ ...d, vertical: d.vertical === a.label ? "" : a.label, isQuestion: false }));
+  };
   const pickFile = async (e) => {
     const files = Array.from(e.target.files || []); e.target.value = ""; if (!files.length) return;
     setUploading(true);
@@ -291,7 +318,17 @@ function Composer({ me, onPosted, groupId }) {
     <div className="cm-composer">
       <div className="cm-composer-avatar"><Avatar src={me?.avatar_url} name={me?.full_name} size={40} /></div>
       <div className="cm-composer-body">
-        <textarea placeholder="Share with your network…" value={draft.body} maxLength={BODY_MAX} onChange={(e) => set("body", e.target.value)} />
+        <div className="cm-activity-row">
+          {ACTIVITIES.map((a) => {
+            const on = activeActivity === a.key;
+            return (
+              <button key={a.key} type="button" className={`cm-activity-chip${on ? " on" : ""}`} onClick={() => selectActivity(a)}>
+                <a.Icon size={14} />{a.label}
+              </button>
+            );
+          })}
+        </div>
+        <textarea placeholder={promptText} value={draft.body} maxLength={BODY_MAX} onChange={(e) => set("body", e.target.value)} />
         {draft.body.length > BODY_MAX - 300 && (
           <div style={{ textAlign: "right", fontSize: 11, color: draft.body.length >= BODY_MAX ? "#b3261e" : "var(--muted)", marginTop: 2 }}>
             {draft.body.length.toLocaleString()} / {BODY_MAX.toLocaleString()}
@@ -336,7 +373,6 @@ function Composer({ me, onPosted, groupId }) {
             </>}
             <button className="cm-tool-btn" onClick={() => setEmojiOpen((v) => !v)} style={narrow ? { minHeight: 44 } : undefined}><Smile size={13} />Emoji</button>
             <button className="cm-tool-btn" onClick={() => setModal("place")} style={narrow ? { minHeight: 44 } : undefined}><MapPin size={13} />Place</button>
-            <button className={`cm-tool-btn ${draft.isQuestion ? "cm-tool-active" : ""}`} onClick={() => set("isQuestion", !draft.isQuestion)} style={narrow ? { minHeight: 44 } : undefined}><HelpCircle size={13} />Ask</button>
             <button className="cm-tool-btn" onClick={() => setModal("mention")} style={narrow ? { minHeight: 44 } : undefined}><UserPlus size={13} />Mention</button>
             {!narrow && <button className="cm-tool-btn" onClick={() => setModal("link")}><Link2 size={13} />Link record</button>}
             <button className={`cm-tool-btn ${draft.kind === "EDU_REEL" ? "cm-tool-active" : ""}`} onClick={() => set("kind", draft.kind === "EDU_REEL" ? "POST" : "EDU_REEL")} style={narrow ? { minHeight: 44 } : undefined}><BookOpen size={13} />Reel</button>
