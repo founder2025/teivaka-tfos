@@ -16,7 +16,9 @@ import { useCapabilities } from "../../utils/capabilities";
 import {
   Home, BookOpen, Tractor, Sparkles, Search, MessageSquare, Bell, ChevronDown,
   Star, Bookmark, Plus, Shield, DollarSign, ShoppingBag, Rss, Users, List as ListIcon, TrendingUp,
+  HelpCircle, Calendar,
 } from "lucide-react";
+import { useMe } from "../../hooks/useMe";
 import TfpShell from "../../components/farm/TfpShell";
 import MarketIntelligence from "../../components/home/MarketIntelligence";
 import FeedView from "../../components/home/FeedView";
@@ -41,6 +43,91 @@ function timeAgo(iso) {
   return `${Math.floor(s / 86400)}d ago`;
 }
 function fjd(v) { return formatMoney(v); }
+
+// ── Community landing blocks (screenshot layout) ──────────────────────────────
+function Greeting({ me }) {
+  const h = new Date().getHours();
+  const part = h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening";
+  const name = (me?.full_name || me?.name || "").trim().split(" ")[0] || me?.username || "there";
+  return (
+    <div style={{ marginBottom: 16 }}>
+      <div style={{ color: "var(--muted)", fontSize: 14 }}>{part}, {name} 👋</div>
+      <h1 style={{ fontSize: 24, fontWeight: 800, color: "var(--soil)", margin: "2px 0" }}>Welcome to the community</h1>
+      <div style={{ color: "var(--muted)", fontSize: 13.5 }}>Connect. Share. Learn. Grow together.</div>
+    </div>
+  );
+}
+
+function StatTile({ Icon, label, value, color }) {
+  return (
+    <div className="card" style={{ padding: 14, display: "flex", gap: 10, alignItems: "center" }}>
+      <span style={{ width: 36, height: 36, borderRadius: 10, background: `${color}1a`, color, display: "grid", placeItems: "center", flexShrink: 0 }}>
+        <Icon size={18} />
+      </span>
+      <div style={{ minWidth: 0 }}>
+        <div style={{ fontSize: 20, fontWeight: 800, color: "var(--soil)" }}>{value}</div>
+        <div style={{ fontSize: 12, color: "var(--muted)" }}>{label}</div>
+      </div>
+    </div>
+  );
+}
+function StatsStrip({ posts, connections }) {
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 10, marginBottom: 16 }}>
+      <StatTile Icon={MessageSquare} label="New posts"       value={posts ?? "—"}       color="#2E6BB8" />
+      <StatTile Icon={HelpCircle}    label="New questions"   value={0}                  color="#7E57C2" />
+      <StatTile Icon={Calendar}      label="Events this week" value={0}                 color="#C9A227" />
+      <StatTile Icon={Users}         label="New connections" value={connections ?? "—"} color="#5C9A3F" />
+    </div>
+  );
+}
+
+// Real highlights from recent community posts; honest-empty when there are none.
+function WhatsHappening({ posts }) {
+  const navigate = useNavigate();
+  const recent = (posts || []).slice(0, 3);
+  return (
+    <div className="card" style={{ padding: 14 }}>
+      <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase", color: "var(--green-dk)", marginBottom: 10 }}>What's happening</div>
+      {recent.length === 0 ? (
+        <div style={{ fontSize: 12.5, color: "var(--muted)" }}>Nothing new yet — community highlights show here as farmers post.</div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {recent.map((p) => (
+            <div key={p.post_id} style={{ borderBottom: "1px solid var(--line)", paddingBottom: 8 }}>
+              <div style={{ fontSize: 13, color: "var(--soil)", lineHeight: 1.4 }}>{(p.body || "").slice(0, 90)}{(p.body || "").length > 90 ? "…" : ""}</div>
+              <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 2 }}>{p.author_name || "Farmer"} · {timeAgo(p.created_at)}</div>
+            </div>
+          ))}
+        </div>
+      )}
+      <button onClick={() => navigate("/home/feed")} style={{ marginTop: 8, background: "none", border: "none", color: "var(--green-dk)", fontWeight: 600, fontSize: 12.5, cursor: "pointer", padding: 0 }}>View all updates →</button>
+    </div>
+  );
+}
+
+function TrendingTopics() {
+  return (
+    <div className="card" style={{ padding: 14, marginTop: 14 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 10 }}>
+        <TrendingUp size={15} style={{ color: "var(--green-dk)" }} />
+        <strong style={{ fontSize: 13, color: "var(--soil)" }}>Trending topics</strong>
+      </div>
+      <div style={{ fontSize: 12.5, color: "var(--muted)" }}>Topics rank here as the community tags its posts. Nothing trending yet.</div>
+    </div>
+  );
+}
+function UpcomingEvents() {
+  return (
+    <div className="card" style={{ padding: 14, marginTop: 14 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 10 }}>
+        <Calendar size={15} style={{ color: "var(--green-dk)" }} />
+        <strong style={{ fontSize: 13, color: "var(--soil)" }}>Upcoming events</strong>
+      </div>
+      <div style={{ fontSize: 12.5, color: "var(--muted)" }}>No events scheduled yet — community events will show here.</div>
+    </div>
+  );
+}
 
 const PILLARS = [
   { id: "home", label: "Home", Icon: Home, to: "/home" },
@@ -93,18 +180,25 @@ export default function HomePillar() {
   const { pathname } = useLocation();
   const view = pathname.split("/")[2] || "feed";
   const { can } = useCapabilities();
-  const wide = !useIsNarrow(1100); // room for the Sponsor Corner right rail
+  const wide = !useIsNarrow(1100); // room for the right rail
+  const me = useMe();
   const [posts, setPosts] = useState(null);
   const [listings, setListings] = useState(null);
+  const [connections, setConnections] = useState(null);
 
   useEffect(() => {
     (async () => {
-      const [p, l] = await Promise.allSettled([
+      const [p, l, pe] = await Promise.allSettled([
         getJSON("/api/v1/community/posts?limit=30"),
         getJSON("/api/v1/community/listings"),
+        getJSON("/api/v1/community/people"),
       ]);
       setPosts(p.status === "fulfilled" ? (p.value?.data?.posts || p.value?.data || []) : []);
       setListings(l.status === "fulfilled" ? (l.value?.data || []) : []);
+      if (pe.status === "fulfilled") {
+        const people = pe.value?.data?.people || pe.value?.data || [];
+        setConnections(Array.isArray(people) ? people.length : null);
+      }
     })();
   }, []);
 
@@ -126,25 +220,38 @@ export default function HomePillar() {
   if (gateFlag && !flagOn(gateFlag)) {
     body = <DisabledNotice what={head ? head[0] : "This area"} />;
   } else if (view === "feed") {
+    const postCount = posts == null ? null : posts.length;
     body = wide ? (
       <div style={{ display: "flex", gap: 20, alignItems: "flex-start" }}>
         <div style={{ flex: 1, minWidth: 0 }}>
+          <Greeting me={me} />
+          <StatsStrip posts={postCount} connections={connections} />
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 320px", gap: 16, marginBottom: 16, alignItems: "start" }}>
+            <WhatsHappening posts={posts} />
+            <WeatherStrip />
+          </div>
           <NewsCard />
-          <WeatherStrip />
           <StoriesRow />
           <FeedView initialFilter="all" />
         </div>
         <aside style={{ width: 300, flexShrink: 0, position: "sticky", top: 72 }}>
           <SponsorCorner />
+          <TrendingTopics />
+          <UpcomingEvents />
         </aside>
       </div>
     ) : (
       <>
-        <NewsCard />
+        <Greeting me={me} />
+        <StatsStrip posts={postCount} connections={connections} />
+        <WhatsHappening posts={posts} />
         <WeatherStrip />
         <SponsorCorner compact />
+        <NewsCard />
         <StoriesRow />
         <FeedView initialFilter="all" />
+        <TrendingTopics />
+        <UpcomingEvents />
       </>
     );
   } else if (view === "following") {
@@ -178,7 +285,7 @@ export default function HomePillar() {
     <div className="tfp">
       <main className="main-content">
         <div className="main-inner">
-          <PageHead title={head[0]} sub={head[1]} action={action} />
+          {view !== "feed" && <PageHead title={head[0]} sub={head[1]} action={action} />}
           {body}
         </div>
       </main>
