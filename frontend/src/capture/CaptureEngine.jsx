@@ -72,7 +72,20 @@ const DEFAULT_CONTEXT = {
   injectPayload: (c) => (c.production_id ? { production_id: c.production_id } : {}),
 };
 
-export default function CaptureEngine({ config = cropsConfig, onDone, preselect }) {
+// Resolve the EventSpec for an event_type across a config's verbs (primary or a branch
+// option) so a catalog card can jump straight to its form. Returns {verb, spec} or null.
+function findSpecByEventType(config, et) {
+  for (const v of config.verbs || []) {
+    if (v.route) continue;
+    const p = v.resolve?.primary;
+    if (p && p.event_type === et) return { verb: v, spec: p };
+    const opt = (v.resolve?.branch?.options || []).find((o) => o.event_type === et);
+    if (opt) return { verb: v, spec: opt };
+  }
+  return null;
+}
+
+export default function CaptureEngine({ config = cropsConfig, onDone, onBack, preselect }) {
   const navigate = useNavigate();
   const ctx = config.context || DEFAULT_CONTEXT;
   const [items, setItems] = useState([]);
@@ -149,14 +162,19 @@ export default function CaptureEngine({ config = cropsConfig, onDone, preselect 
     return () => { off = true; };
   }, [ctx.loader]);
 
-  // Deep-link preselect (e.g. a dashboard quick-action opens the (+) already aimed
-  // at a verb and/or a specific flock). Applied exactly once; no preselect => the
-  // normal verb-grid flow is untouched. `route` verbs are skipped — a deep-link
-  // should never auto-navigate the user away from the sheet.
+  // Deep-link preselect: the catalog (+) opens the engine already aimed at a specific
+  // event_type (jump straight to its form, skipping verb + branch), and/or a specific
+  // verb, and/or a pre-anchored item (flock). Applied exactly once; no preselect => the
+  // normal verb-grid flow is untouched. `route` verbs are skipped — a deep-link should
+  // never auto-navigate the user away from the sheet.
   useEffect(() => {
     if (preAppliedRef.current || !preselect) return;
     preAppliedRef.current = true;
     if (preselect.itemId) setItemId(preselect.itemId);
+    if (preselect.eventType) {
+      const hit = findSpecByEventType(config, preselect.eventType);
+      if (hit) { setVerb(hit.verb); clearEntry(); setSpec(hit.spec); return; }
+    }
     if (preselect.verbId) {
       const v = (config.verbs || []).find((x) => x.id === preselect.verbId);
       if (v && !v.route) {
@@ -243,6 +261,9 @@ export default function CaptureEngine({ config = cropsConfig, onDone, preselect 
   function reset() {
     setVerb(null); setSpec(null); setResult(null); clearEntry();
   }
+  // When the engine was opened from the catalog (onBack provided), "Back" and "Log
+  // something else" return to the catalog rather than the in-engine verb grid.
+  const goBack = onBack || reset;
 
   async function uploadPhoto(file) {
     if (!file) return;
@@ -462,7 +483,7 @@ export default function CaptureEngine({ config = cropsConfig, onDone, preselect 
         </div>
       )}
 
-      <button onClick={reset} style={{ ...tile, justifyContent: "center", marginTop: 12 }}><Plus size={18} /> Log something else</button>
+      <button onClick={goBack} style={{ ...tile, justifyContent: "center", marginTop: 12 }}><Plus size={18} /> Log something else</button>
       {onDone && (
         <button onClick={onDone} style={{ ...tile, justifyContent: "center", marginTop: 0, background: "#2e7d32", color: "#fff", border: "none" }}>
           <Check size={18} /> Done
@@ -488,7 +509,7 @@ export default function CaptureEngine({ config = cropsConfig, onDone, preselect 
   // --- branch choice (verb has no primary) ---
   if (!spec) return (
     <div style={wrap}>
-      <button onClick={reset} style={backBtn}><ChevronLeft size={18} /> Back</button>
+      <button onClick={goBack} style={backBtn}><ChevronLeft size={18} /> Back</button>
       <h1 style={{ fontSize: 20, fontWeight: 800, marginBottom: 12 }}>{verb.resolve.branch?.prompt || verb.label}</h1>
       {(verb.resolve.branch?.options || []).map((o) => (
         <button key={o.event_type} style={tile} onClick={() => { clearEntry(); setSpec(o); }}>
@@ -612,7 +633,7 @@ export default function CaptureEngine({ config = cropsConfig, onDone, preselect 
 
   return (
     <div style={wrap}>
-      <button onClick={reset} style={backBtn}><ChevronLeft size={18} /> Back</button>
+      <button onClick={goBack} style={backBtn}><ChevronLeft size={18} /> Back</button>
       <h1 style={{ fontSize: 20, fontWeight: 800, marginBottom: 14 }}>{spec.choiceLabel || verb.label}</h1>
       {loadingItems ? <p style={{ color: "#6b6b6b" }}>{ctx.loadingMsg}</p>
         : items.length === 0 ? <p style={{ color: "#9a3b3b" }}>{ctx.emptyMsg}</p>

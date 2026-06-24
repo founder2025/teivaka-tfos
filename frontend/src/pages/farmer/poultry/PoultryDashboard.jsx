@@ -293,7 +293,7 @@ function TrendsSection({ trends }) {
         <div className="rounded-md border p-6 text-center" style={{ background: '#fff', borderColor: C.border }}>
           <div className="text-sm mb-2" style={{ color: C.soil }}>No trends data yet</div>
           <div className="text-xs mb-4" style={{ color: C.muted }}>Log eggs collected and feed used to see your operations chart up here.</div>
-          <button onClick={() => openLauncher({ vertical: 'ANIMAL', animalSub: 'POULTRY', verbId: 'eggs' })} className="px-3 py-2 rounded-md text-sm font-medium" style={{ background: C.green, color: '#fff' }}>
+          <button onClick={() => openLauncher({ vertical: 'POULTRY', eventType: 'EGGS_COLLECTED' })} className="px-3 py-2 rounded-md text-sm font-medium" style={{ background: C.green, color: '#fff' }}>
             Log eggs collected →
           </button>
         </div>
