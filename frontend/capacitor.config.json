@@ -1,0 +1,35 @@
+{
+  "appId": "com.teivaka.tfos",
+  "appName": "Teivaka",
+  "webDir": "dist",
+  "backgroundColor": "#F8FAFC",
+  "loggingBehavior": "production",
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 600,
+      "launchAutoHide": false,
+      "backgroundColor": "#0BAF9A",
+      "showSpinner": false,
+      "androidScaleType": "CENTER_CROP"
+    },
+    "StatusBar": {
+      "overlaysWebView": false
+    },
+    "Keyboard": {
+      "resize": "native",
+      "resizeOnFullScreen": true
+    },
+    "PushNotifications": {
+      "presentationOptions": ["badge", "sound", "alert"]
+    }
+  },
+  "ios": {
+    "contentInset": "never",
+    "backgroundColor": "#F8FAFC",
+    "limitsNavigationsToAppBoundDomains": false
+  },
+  "android": {
+    "allowMixedContent": false,
+    "backgroundColor": "#F8FAFC"
+  }
+}
