@@ -29,6 +29,7 @@ export const PILLAR_SUB_NAV = {
       { path: "/home/marketplace", label: "Marketplace",   icon: Store },
       { path: "/home/prices",      label: "Market prices", icon: TrendingUp },
       { path: "/home/directory",   label: "Directory",     icon: Contact },
+      { path: "/members",          label: "Network map",   icon: MapPin },
       { path: "/home/groups",      label: "Groups",        icon: Users2 },
     ],
   },
