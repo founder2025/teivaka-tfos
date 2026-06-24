@@ -12,7 +12,7 @@
  * lets you Share (verified members can find you) or Stay hidden — the proactive
  * version of the Slice 2 toggle, so nobody appears on the map unknowingly.
  */
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { MapPin, ShieldCheck, Users, EyeOff } from "lucide-react";
@@ -37,6 +37,8 @@ export default function Members() {
   const [data, setData] = useState({ members: [], count: 0, has_origin: false });
   const [prefs, setPrefs] = useState(null); // {share_location, location_share_ack}
   const [savingPref, setSavingPref] = useState(false);
+  const [radius, setRadius] = useState(null); // km within; null = Any
+  const [cats, setCats] = useState([]);        // selected account_type filters
 
   async function loadPrefs() {
     try {
@@ -45,18 +47,25 @@ export default function Members() {
     } catch { setPrefs({}); }
   }
 
-  async function loadNetwork() {
+  // Radius + category filtering is pushed to the server (?radius_km=&categories=)
+  // so the client only downloads members in-radius, not the whole platform.
+  const loadNetwork = useCallback(async () => {
     setState("loading");
     try {
-      const r = await fetch("/api/v1/farm-map/network", { headers: authHeaders() });
+      const p = new URLSearchParams();
+      if (radius) p.set("radius_km", String(radius));
+      if (cats.length) p.set("categories", cats.join(","));
+      const qs = p.toString();
+      const r = await fetch(`/api/v1/farm-map/network${qs ? `?${qs}` : ""}`, { headers: authHeaders() });
       if (r.status === 403) { setState("forbidden"); return; }
       if (!r.ok) throw new Error(String(r.status));
       setData(await r.json());
       setState("ready");
     } catch { setState("error"); }
-  }
+  }, [radius, cats]);
 
-  useEffect(() => { loadPrefs(); loadNetwork(); }, []);
+  useEffect(() => { loadPrefs(); }, []);
+  useEffect(() => { loadNetwork(); }, [loadNetwork]);
 
   // Init the map once the ready state mounts the map element.
   useEffect(() => {
@@ -85,6 +94,14 @@ export default function Members() {
     if (data.you && data.you.lat != null && data.you.lng != null) {
       const yll = [Number(data.you.lat), Number(data.you.lng)];
       bounds.push(yll);
+      // Radius ring around you (Google-Maps "within X km" visual).
+      if (radius) {
+        const circle = L.circle(yll, {
+          radius: radius * 1000, color: "var(--green)", weight: 1,
+          fillColor: "var(--green)", fillOpacity: 0.06,
+        }).addTo(lg);
+        try { circle.getBounds().isValid() && bounds.push(circle.getBounds().getNorthEast(), circle.getBounds().getSouthWest()); } catch { /* ignore */ }
+      }
       L.circleMarker(yll, { radius: 8, color: "#fff", weight: 2, fillColor: "#2C1A0E", fillOpacity: 1 })
         .bindPopup(`<strong>You are here</strong><br/><span style="color:#888">${data.you.name || "Your farm"}</span>`)
         .addTo(lg);
@@ -102,7 +119,7 @@ export default function Members() {
         .addTo(lg);
     });
     if (bounds.length) mapRef.current.fitBounds(bounds, { padding: [40, 40], maxZoom: 12 });
-  }, [data, state]);
+  }, [data, state, radius]);
 
   const setSharing = async (share) => {
     setSavingPref(true);
@@ -187,7 +204,47 @@ export default function Members() {
             {!data.has_origin && (
               <div className="rounded-xl px-4 py-3 mb-3 text-xs flex items-center gap-2" style={{ background: C.cream, color: C.soil, border: `1px solid ${C.line}` }}>
                 <MapPin size={14} style={{ color: C.greenDk }} />
-                Set your farm location (Farm → Map) to see exact distances to each member.
+                Set your farm location (Farm → Map) to filter by distance and see exact distances.
+              </div>
+            )}
+
+            {/* Radius filter — within X km of you */}
+            <div className="flex flex-wrap items-center gap-2 mb-2">
+              <span className="text-xs font-semibold" style={{ color: C.muted }}>Within</span>
+              {[5, 10, 25, 50, 100, null].map((km) => (
+                <button key={km ?? "any"} type="button" onClick={() => setRadius(km)}
+                  className="px-2.5 py-1 rounded-full text-xs font-semibold"
+                  style={radius === km
+                    ? { background: C.green, color: "#fff" }
+                    : { background: "#fff", color: C.soil, border: `1px solid ${C.line}` }}>
+                  {km ? `${km} km` : "Any"}
+                </button>
+              ))}
+            </div>
+
+            {/* Category filter — chips with per-category counts (within radius) */}
+            {data.category_counts && Object.keys(data.category_counts).length > 0 && (
+              <div className="flex flex-wrap items-center gap-2 mb-3">
+                <button type="button" onClick={() => setCats([])}
+                  className="px-2.5 py-1 rounded-full text-xs font-semibold"
+                  style={cats.length === 0
+                    ? { background: C.greenDk, color: "#fff" }
+                    : { background: "#fff", color: C.soil, border: `1px solid ${C.line}` }}>
+                  All
+                </button>
+                {Object.entries(data.category_counts).sort((a, b) => b[1] - a[1]).map(([cat, n]) => {
+                  const on = cats.includes(cat);
+                  return (
+                    <button key={cat} type="button"
+                      onClick={() => setCats((s) => (on ? s.filter((x) => x !== cat) : [...s, cat]))}
+                      className="px-2.5 py-1 rounded-full text-xs font-semibold"
+                      style={on
+                        ? { background: C.greenDk, color: "#fff" }
+                        : { background: "#fff", color: C.soil, border: `1px solid ${C.line}` }}>
+                      {(TYPE_LABEL[cat] || cat)} · {n}
+                    </button>
+                  );
+                })}
               </div>
             )}
 
@@ -206,14 +263,17 @@ export default function Members() {
 
             {members.length === 0 && data.you && (
               <p className="text-xs mt-3" style={{ color: C.muted }}>
-                You're on the map. Other verified members appear here once they share their location.
+                {radius || cats.length
+                  ? "No members match these filters. Try a wider radius or fewer categories."
+                  : "You're on the map. Other verified members appear here once they share their location."}
               </p>
             )}
 
             {members.length > 0 && (
               <div className="mt-4">
                 <p className="text-xs font-semibold mb-2" style={{ color: C.muted }}>
-                  {data.count} member{data.count === 1 ? "" : "s"} sharing · nearest first
+                  {data.count} member{data.count === 1 ? "" : "s"}{radius ? ` within ${radius} km` : ""} · nearest first
+                  {data.truncated ? " · showing nearest 500 — narrow the radius or filters" : ""}
                 </p>
                 <div className="grid gap-2">
                   {nearest.map((m) => (

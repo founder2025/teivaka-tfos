@@ -126,7 +126,9 @@ def _fuzz(lat, lng, seed):
 
 
 @router.get("/network")
-async def network_map(user: dict = Depends(get_current_user),
+async def network_map(radius_km: float = None,
+                      categories: str = None,
+                      user: dict = Depends(get_current_user),
                       db: AsyncSession = _Depends(get_db)):
     """Networking map — verified members who opted to share, plotted with the EXACT
     distance from the viewer but a ~1km-FUZZED pin (Operator posture 2026-06-23:
@@ -178,13 +180,27 @@ async def network_map(user: dict = Depends(get_current_user),
     if not has_share:
         return {"members": [], "count": 0, "has_origin": o_lat is not None, "you": you, "degraded": "share_columns_missing"}
 
-    members = []
+    # Optional radius bounding-box prefilter — a cheap cut on the gps columns
+    # before the exact haversine below. Only when both a radius and an origin exist.
+    qp = {"viewer_tid": viewer_tid}
+    bbox_f = bbox_u = ""
+    if radius_km and o_lat is not None:
+        dlat = float(radius_km) / 111.0
+        dlng = float(radius_km) / (111.320 * (math.cos(math.radians(float(o_lat))) or 1e-6))
+        qp.update({
+            "lat_lo": float(o_lat) - dlat, "lat_hi": float(o_lat) + dlat,
+            "lng_lo": float(o_lng) - dlng, "lng_hi": float(o_lng) + dlng,
+        })
+        bbox_f = " AND f.gps_lat BETWEEN :lat_lo AND :lat_hi AND f.gps_lng BETWEEN :lng_lo AND :lng_hi"
+        bbox_u = " AND u.gps_lat BETWEEN :lat_lo AND :lat_hi AND u.gps_lng BETWEEN :lng_lo AND :lng_hi"
+
+    candidates = []
 
     # 1) Farmers — one pin per opted-in member farm with coords (representative =
     #    earliest opted-in user in that tenant). Excludes the viewer's own tenant.
-    frows = (await db.execute(text("""
+    frows = (await db.execute(text(f"""
         SELECT DISTINCT ON (f.farm_id)
-               f.farm_id, f.farm_name, f.gps_lat, f.gps_lng,
+               f.farm_id AS key, f.farm_name AS name, f.gps_lat, f.gps_lng,
                u.account_type, u.kyc_verified
           FROM tenant.farms f
           JOIN tenant.users u
@@ -193,48 +209,69 @@ async def network_map(user: dict = Depends(get_current_user),
            AND u.location_share_ack_at IS NOT NULL
          WHERE f.gps_lat IS NOT NULL AND f.gps_lng IS NOT NULL
            AND f.is_active = true
-           AND f.tenant_id <> :viewer_tid
+           AND f.tenant_id <> :viewer_tid{bbox_f}
          ORDER BY f.farm_id, u.created_at
-    """), {"viewer_tid": viewer_tid})).mappings().all()
+    """), qp)).mappings().all()
     for r in frows:
-        flat, flng = _fuzz(r["gps_lat"], r["gps_lng"], r["farm_id"])
-        dist = _haversine_km(o_lat, o_lng, r["gps_lat"], r["gps_lng"])
-        members.append({
-            "id": hashlib.sha256(str(r["farm_id"]).encode()).hexdigest()[:12],
-            "name": r["farm_name"] or "Member farm",
-            "account_type": r["account_type"] or "FARMER",
-            "verified": bool(r["kyc_verified"]),
-            "lat": flat, "lng": flng,
-            "distance_km": round(dist, 1) if dist is not None else None,
-        })
+        candidates.append({"key": r["key"], "name": r["name"] or "Member farm",
+                           "account_type": r["account_type"] or "FARMER",
+                           "verified": bool(r["kyc_verified"]),
+                           "rlat": r["gps_lat"], "rlng": r["gps_lng"]})
 
     # 2) Non-farm members — opted-in users with their own coords whose tenant has
     #    NO mapped farm (so a farmer is never double-listed via their user row).
     if has_user_geo:
-        urows = (await db.execute(text("""
-            SELECT u.user_id, u.full_name, u.account_type, u.kyc_verified, u.gps_lat, u.gps_lng
+        urows = (await db.execute(text(f"""
+            SELECT u.user_id AS key, u.full_name AS name, u.account_type, u.kyc_verified,
+                   u.gps_lat, u.gps_lng
               FROM tenant.users u
              WHERE u.share_location = true AND u.location_share_ack_at IS NOT NULL
                AND u.gps_lat IS NOT NULL AND u.gps_lng IS NOT NULL
-               AND u.tenant_id <> :viewer_tid
+               AND u.tenant_id <> :viewer_tid{bbox_u}
                AND NOT EXISTS (SELECT 1 FROM tenant.farms f
                                 WHERE f.tenant_id = u.tenant_id
                                   AND f.gps_lat IS NOT NULL AND f.is_active = true)
-        """), {"viewer_tid": viewer_tid})).mappings().all()
+        """), qp)).mappings().all()
         for r in urows:
-            flat, flng = _fuzz(r["gps_lat"], r["gps_lng"], str(r["user_id"]))
-            dist = _haversine_km(o_lat, o_lng, r["gps_lat"], r["gps_lng"])
-            members.append({
-                "id": hashlib.sha256(str(r["user_id"]).encode()).hexdigest()[:12],
-                "name": r["full_name"] or "Member",
-                "account_type": r["account_type"] or "MEMBER",
-                "verified": bool(r["kyc_verified"]),
-                "lat": flat, "lng": flng,
-                "distance_km": round(dist, 1) if dist is not None else None,
-            })
+            candidates.append({"key": str(r["key"]), "name": r["name"] or "Member",
+                               "account_type": r["account_type"] or "MEMBER",
+                               "verified": bool(r["kyc_verified"]),
+                               "rlat": r["gps_lat"], "rlng": r["gps_lng"]})
 
-    members.sort(key=lambda m: (m["distance_km"] is None, m["distance_km"] or 0))
-    return {"members": members, "count": len(members), "has_origin": o_lat is not None, "you": you}
+    # Exact distance + precise radius cut (the bbox above is only a coarse prefilter).
+    for c in candidates:
+        c["distance_km"] = _haversine_km(o_lat, o_lng, c["rlat"], c["rlng"])
+    if radius_km and o_lat is not None:
+        candidates = [c for c in candidates
+                      if c["distance_km"] is not None and c["distance_km"] <= float(radius_km)]
+
+    # Per-category counts over the in-radius set (ALL categories) — computed BEFORE
+    # the category filter so unselected chips still show their counts.
+    category_counts = {}
+    for c in candidates:
+        category_counts[c["account_type"]] = category_counts.get(c["account_type"], 0) + 1
+
+    cats = [s.strip().upper() for s in (categories or "").split(",") if s.strip()]
+    if cats:
+        candidates = [c for c in candidates if c["account_type"] in cats]
+
+    candidates.sort(key=lambda c: (c["distance_km"] is None, c["distance_km"] or 0))
+    _CAP = 500
+    truncated = len(candidates) > _CAP
+    candidates = candidates[:_CAP]
+
+    members = []
+    for c in candidates:
+        flat, flng = _fuzz(c["rlat"], c["rlng"], c["key"])
+        members.append({
+            "id": hashlib.sha256(str(c["key"]).encode()).hexdigest()[:12],
+            "name": c["name"], "account_type": c["account_type"], "verified": c["verified"],
+            "lat": flat, "lng": flng,
+            "distance_km": round(c["distance_km"], 1) if c["distance_km"] is not None else None,
+        })
+    return {"members": members, "count": len(members), "category_counts": category_counts,
+            "truncated": truncated, "radius_km": radius_km,
+            "has_origin": o_lat is not None, "you": you}
 
 
 @router.get("/{farm_id}")
