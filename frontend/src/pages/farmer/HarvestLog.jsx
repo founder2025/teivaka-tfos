@@ -12,7 +12,7 @@
  * Hard rule (inviolable #2): override_reason MUST be non-empty when override=true.
  * UI also blocks submit until either compliance is green OR override_reason set.
  */
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import ThemedSelect from "../../components/inputs/ThemedSelect.jsx";
 
@@ -95,6 +95,37 @@ export default function HarvestLog() {
   const [checking, setChecking] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+
+  // Pick the cycle by crop + block (never type internal codes); selection sets
+  // both cycle_id and pu_id behind the scenes.
+  const [cycles, setCycles] = useState([]);
+  const [cyclesLoading, setCyclesLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/v1/cycles?cycle_status=ACTIVE&limit=100", { headers: authHeaders() })
+      .then((r) => (r.ok ? r.json() : {}))
+      .then((b) => {
+        if (cancelled) return;
+        const list = b?.data?.cycles || b?.data || b?.cycles || [];
+        setCycles(Array.isArray(list) ? list : []);
+      })
+      .catch(() => {})
+      .finally(() => { if (!cancelled) setCyclesLoading(false); });
+    return () => { cancelled = true; };
+  }, []);
+
+  const cycleLabel = (c) => {
+    const block = c.pu_farmer_label || c.pu_name || c.pu_id;
+    return c.production_name ? `${c.production_name}${block ? ` · ${block}` : ""}` : (block || c.cycle_id);
+  };
+
+  function selectCycle(cycleId) {
+    const c = cycles.find((x) => x.cycle_id === cycleId);
+    setForm((f) => ({ ...f, cycle_id: cycleId, pu_id: c?.pu_id || "" }));
+    setCompliance(null);
+    setError("");
+  }
 
   function update(field, value) {
     setForm((f) => ({ ...f, [field]: value }));
@@ -196,16 +227,16 @@ export default function HarvestLog() {
         </div>
 
         <form onSubmit={submit} className="p-5 space-y-4">
-          <Field label="Cycle ID" htmlFor="cycle_id" hint="e.g. F001-PU002-EGG-2026-001">
-            <input id="cycle_id" className={inputCls} style={{ borderColor: C.border }}
-                   value={form.cycle_id} onChange={(e) => update("cycle_id", e.target.value)}
-                   placeholder="F001-PU002-EGG-2026-001" autoComplete="off" />
-          </Field>
-
-          <Field label="Production Unit (PU)" htmlFor="pu_id" hint="e.g. F001-PU002">
-            <input id="pu_id" className={inputCls} style={{ borderColor: C.border }}
-                   value={form.pu_id} onChange={(e) => update("pu_id", e.target.value)}
-                   placeholder="F001-PU002" autoComplete="off" />
+          <Field label="Crop &amp; block" htmlFor="cycle_id"
+                 hint={cyclesLoading ? "Loading your cycles…" : (cycles.length ? "Pick the cycle you're harvesting" : "No active cycles yet — start one in Farm → Production first")}>
+            <ThemedSelect
+              id="cycle_id"
+              name="cycle_id"
+              value={form.cycle_id}
+              onChange={selectCycle}
+              options={cycles.map((c) => ({ value: c.cycle_id, label: cycleLabel(c) }))}
+              placeholder={cycles.length ? "Select cycle…" : "No active cycles"}
+            />
           </Field>
 
           <Field label="Harvest date" htmlFor="harvest_date">
