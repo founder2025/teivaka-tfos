@@ -458,7 +458,7 @@ function UsageModal({ farmId, equip, onClose, onSaved }) {
             <div><label>Fuel litres</label><input type="number" min="0" step="0.1" value={f.fuel_litres} onChange={set("fuel_litres")} /></div>
             <div><label>Fuel cost (FJD)</label><input type="number" min="0" step="0.01" value={f.fuel_cost_fjd} onChange={set("fuel_cost_fjd")} /></div>
           </div>
-          <Field label="Cycle (optional — allocates cost)"><select value={f.cycle_id} onChange={set("cycle_id")}><option value="">Whole-farm / overhead</option>{cycles.map((c) => <option key={c.cycle_id} value={c.cycle_id}>{c.cycle_id}{c.crop_name ? ` · ${c.crop_name}` : ""}</option>)}</select></Field>
+          <Field label="Cycle (optional — allocates cost)"><select value={f.cycle_id} onChange={set("cycle_id")}><option value="">Whole-farm / overhead</option>{cycles.map((c) => <option key={c.cycle_id} value={c.cycle_id}>{c.crop_name || c.farmer_label || c.cycle_id}</option>)}</select></Field>
           <div className="form-row" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 10 }}>
             <div><label>Task</label><input value={f.task} onChange={set("task")} placeholder="e.g. Land prep" /></div>
             <div><label>Operator</label><input value={f.operator} onChange={set("operator")} /></div>

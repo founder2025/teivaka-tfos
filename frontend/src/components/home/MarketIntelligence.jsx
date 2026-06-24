@@ -50,6 +50,36 @@ function Field({ label, children }) {
 }
 const inp = { width: "100%", padding: "8px 10px", border: "1px solid var(--line)", borderRadius: 8, fontSize: 14, background: "var(--paper)" };
 
+// Crop picker — farmers choose their crop by name, never type the internal code.
+// Productions are fetched once per session (module cache).
+let _prodCache = null;
+let _prodPromise = null;
+function loadProductions() {
+  if (_prodCache) return Promise.resolve(_prodCache);
+  if (!_prodPromise) {
+    _prodPromise = getJSON("/api/v1/productions")
+      .then((b) => {
+        const list = b?.data?.productions || b?.data || b?.productions || b || [];
+        _prodCache = (Array.isArray(list) ? list : []).filter((p) => p && p.production_id);
+        return _prodCache;
+      })
+      .catch(() => { _prodCache = []; return _prodCache; });
+  }
+  return _prodPromise;
+}
+function CropSelect({ value, onChange, label = "Crop" }) {
+  const [prods, setProds] = useState(_prodCache || []);
+  useEffect(() => { let alive = true; loadProductions().then((p) => { if (alive) setProds(p); }); return () => { alive = false; }; }, []);
+  return (
+    <Field label={label}>
+      <select style={inp} value={value} onChange={(e) => onChange(e.target.value)}>
+        <option value="">Select crop…</option>
+        {prods.map((p) => <option key={p.production_id} value={p.production_id}>{p.production_name || p.production_id}</option>)}
+      </select>
+    </Field>
+  );
+}
+
 function Modal({ title, onClose, onSubmit, busy, children }) {
   return (
     <div className="overlay-backdrop show" style={{ alignItems: "center", padding: 16 }} onClick={onClose}>
@@ -69,7 +99,7 @@ function PriceModal({ onClose, onDone }) {
   const [f, setF] = useState({ production_id: "", price_per_kg_fjd: "", quantity_kg: "", grade: "A", location_region: "", island: "", buyer_type: "", is_actual_sale: true });
   const [busy, setBusy] = useState(false); const [err, setErr] = useState(null);
   const submit = async () => {
-    if (!f.production_id || !f.price_per_kg_fjd) { setErr("Crop code and price are required."); return; }
+    if (!f.production_id || !f.price_per_kg_fjd) { setErr("Crop and price are required."); return; }
     setBusy(true); setErr(null);
     try { await postJSON("/api/v1/market/prices", { ...f, price_per_kg_fjd: Number(f.price_per_kg_fjd), quantity_kg: f.quantity_kg ? Number(f.quantity_kg) : null }); onDone(); }
     catch (e) { setErr(String(e.message || e)); setBusy(false); }
@@ -77,7 +107,7 @@ function PriceModal({ onClose, onDone }) {
   return (
     <Modal title="Submit a market price" onClose={onClose} onSubmit={submit} busy={busy}>
       {err && <div className="comm-note" style={{ marginBottom: 10, color: "#b3261e" }}>{err}</div>}
-      <Field label="Crop code (e.g. CRP-TOM)"><input style={inp} value={f.production_id} onChange={(e) => setF({ ...f, production_id: e.target.value.toUpperCase() })} /></Field>
+      <CropSelect value={f.production_id} onChange={(v) => setF({ ...f, production_id: v })} />
       <div style={{ display: "flex", gap: 10 }}>
         <Field label="Price FJD/kg"><input style={inp} type="number" step="0.01" value={f.price_per_kg_fjd} onChange={(e) => setF({ ...f, price_per_kg_fjd: e.target.value })} /></Field>
         <Field label="Quantity kg (sold)"><input style={inp} type="number" step="0.01" value={f.quantity_kg} onChange={(e) => setF({ ...f, quantity_kg: e.target.value })} /></Field>
@@ -99,7 +129,7 @@ function DemandModal({ onClose, onDone }) {
   const [f, setF] = useState({ production_id: "", quantity_kg: "", frequency: "WEEKLY", grade: "A", buyer_type: "", island: "", price_offered_fjd: "", required_by: "", notes: "" });
   const [busy, setBusy] = useState(false); const [err, setErr] = useState(null);
   const submit = async () => {
-    if (!f.production_id || !f.quantity_kg) { setErr("Crop code and quantity are required."); return; }
+    if (!f.production_id || !f.quantity_kg) { setErr("Crop and quantity are required."); return; }
     setBusy(true); setErr(null);
     try { await postJSON("/api/v1/market/demand", { ...f, quantity_kg: Number(f.quantity_kg), price_offered_fjd: f.price_offered_fjd ? Number(f.price_offered_fjd) : null, required_by: f.required_by || null }); onDone(); }
     catch (e) { setErr(String(e.message || e)); setBusy(false); }
@@ -107,7 +137,7 @@ function DemandModal({ onClose, onDone }) {
   return (
     <Modal title="Post buyer demand" onClose={onClose} onSubmit={submit} busy={busy}>
       {err && <div className="comm-note" style={{ marginBottom: 10, color: "#b3261e" }}>{err}</div>}
-      <Field label="Crop code (e.g. CRP-TOM)"><input style={inp} value={f.production_id} onChange={(e) => setF({ ...f, production_id: e.target.value.toUpperCase() })} /></Field>
+      <CropSelect value={f.production_id} onChange={(v) => setF({ ...f, production_id: v })} />
       <div style={{ display: "flex", gap: 10 }}>
         <Field label="Quantity kg"><input style={inp} type="number" step="0.01" value={f.quantity_kg} onChange={(e) => setF({ ...f, quantity_kg: e.target.value })} /></Field>
         <Field label="Frequency"><select style={inp} value={f.frequency} onChange={(e) => setF({ ...f, frequency: e.target.value })}><option>ONE_OFF</option><option>WEEKLY</option><option>MONTHLY</option><option>QUARTERLY</option><option>RECURRING</option></select></Field>
@@ -130,7 +160,7 @@ function SupplyModal({ onClose, onDone }) {
   const [busy, setBusy] = useState(false); const [err, setErr] = useState(null);
   const projected = (f.plants && f.expected_yield_per_unit_kg) ? Math.round(Number(f.plants) * Number(f.expected_yield_per_unit_kg) * Number(f.success_probability || 0.85)) : null;
   const submit = async () => {
-    if (!f.production_id) { setErr("Crop code is required."); return; }
+    if (!f.production_id) { setErr("Crop is required."); return; }
     setBusy(true); setErr(null);
     try { await postJSON("/api/v1/market/supply", { ...f, plants: f.plants ? Number(f.plants) : null, expected_yield_per_unit_kg: f.expected_yield_per_unit_kg ? Number(f.expected_yield_per_unit_kg) : null, success_probability: Number(f.success_probability || 0.85), harvest_date: f.harvest_date || null }); onDone(); }
     catch (e) { setErr(String(e.message || e)); setBusy(false); }
@@ -138,7 +168,7 @@ function SupplyModal({ onClose, onDone }) {
   return (
     <Modal title="Post a projected harvest" onClose={onClose} onSubmit={submit} busy={busy}>
       {err && <div className="comm-note" style={{ marginBottom: 10, color: "#b3261e" }}>{err}</div>}
-      <Field label="Crop code (e.g. CRP-TOM)"><input style={inp} value={f.production_id} onChange={(e) => setF({ ...f, production_id: e.target.value.toUpperCase() })} /></Field>
+      <CropSelect value={f.production_id} onChange={(v) => setF({ ...f, production_id: v })} />
       <div style={{ display: "flex", gap: 10 }}>
         <Field label="Plants"><input style={inp} type="number" value={f.plants} onChange={(e) => setF({ ...f, plants: e.target.value })} /></Field>
         <Field label="Yield kg/plant"><input style={inp} type="number" step="0.1" value={f.expected_yield_per_unit_kg} onChange={(e) => setF({ ...f, expected_yield_per_unit_kg: e.target.value })} /></Field>

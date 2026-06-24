@@ -476,17 +476,17 @@ function FarmSettingsInner() {
                 ))}
                 {blocks.map((b) => (
                   <SRow key={b.pu_id} label={b.farmer_label || b.pu_name || b.pu_id}
-                    sub={`Block · ${b.pu_id}${b.area_sqm ? ` · ${b.area_sqm} m²` : ""}`}
+                    sub={`Block${b.area_sqm ? ` · ${b.area_sqm} m²` : ""}`}
                     right={<button className="btn btn-sm btn-secondary" title="Rename block" onClick={() => setRenameWhat({ title: "Rename block", label: "Block name", current: b.pu_name, areaLabel: "Area (m²)", area: b.area_sqm, endpoint: `/api/v1/production-units/${encodeURIComponent(b.pu_id)}`, nameKey: "pu_name", areaKey: "area_sqm", key: ["set-pu", farmId] })}><Pencil size={11} /></button>} />
                 ))}
               </SettingsCard>
 
               {/* ── Crop run labels ── */}
-              <SettingsCard icon={Sprout} title="Crop run names" desc="Give each cycle a friendly name — the crop type and ID stay fixed">
+              <SettingsCard icon={Sprout} title="Crop run names" desc="Give each cycle a friendly name — the crop type stays fixed">
                 {allCycles.length === 0 && <div style={{ padding: "11px 8px", color: "var(--muted)", fontSize: 13 }}>No cycles yet. Plant a cycle in Production, then name it here so it's easy to recognise.</div>}
                 {allCycles.slice(0, 20).map((c) => (
                   <SRow key={c.cycle_id} label={cycleName(c)}
-                    sub={`${c.production_name || c.crop || ""}${c.cycle_status || c.status ? ` · ${c.cycle_status || c.status}` : ""} · ${c.cycle_id}`}
+                    sub={`${c.production_name || c.crop || ""}${c.cycle_status || c.status ? ` · ${c.cycle_status || c.status}` : ""}`}
                     right={<button className="btn btn-sm btn-secondary" title="Rename cycle" onClick={() => setRelabel(c)}><Pencil size={11} /></button>} />
                 ))}
               </SettingsCard>

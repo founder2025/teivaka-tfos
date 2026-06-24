@@ -122,7 +122,7 @@ function ManageInner() {
                     {f.farm_id === farmId && <span className="text-[10px] px-1.5 py-0.5 rounded-full" style={{ background: C.greenTint, color: C.greenDk }}>current</span>}
                     {archived && <span className="text-[10px] px-1.5 py-0.5 rounded-full" style={{ background: C.cream, color: C.muted }}>archived</span>}
                   </div>
-                  <div className="text-[11px] mt-0.5" style={{ color: C.muted }}>{f.farm_id}{f.location_island ? ` · ${f.location_island}` : ""}{cropLabel(f) ? ` · ${cropLabel(f)}` : ""}</div>
+                  <div className="text-[11px] mt-0.5" style={{ color: C.muted }}>{[f.location_island, cropLabel(f)].filter(Boolean).join(" · ")}</div>
                   <div className="text-[11px]" style={{ color: C.muted }}>{(f.active_cycles ?? 0)} active cycle{f.active_cycles === 1 ? "" : "s"} · {(f.member_count ?? 0)} member{f.member_count === 1 ? "" : "s"} · {(f.zone_count ?? 0)} zone{f.zone_count === 1 ? "" : "s"} · {acres(f.land_area_ha)}</div>
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
