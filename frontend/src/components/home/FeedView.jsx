@@ -11,7 +11,7 @@ import {
   Image, MapPin, HelpCircle, Link2, Send, Star, MessageSquare, Repeat2, Share2,
   Smile, MoreHorizontal, Trash2, Check, BadgeCheck, X, Leaf, ShoppingBag, Gift,
   Droplet, BookOpen, Rss, UserPlus, UserCheck, Pencil, Flag,
-  Pin, Archive, Copy, EyeOff, Ban, BellOff, Bookmark, Users, Camera, MailCheck,
+  Pin, Archive, Copy, EyeOff, Ban, BellOff, Bookmark, Users, Camera, MailCheck, Play,
 } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { getCurrentUser } from "../../utils/auth";
@@ -428,6 +428,30 @@ function Replies({ post, me, onCount }) {
 }
 
 /* ---------------- post card ---------------- */
+const isVid = (src) => /\.(mp4|webm|mov)$/i.test(src);
+// Facebook-style media grid: 1 full · 2 side-by-side · 3 (1 big + 2) · 4+ (2×2,
+// "+N" overlay on the 4th). Fixed aspect-ratio tiles → no layout shift; tap → lightbox.
+function PostMedia({ photos, onOpen }) {
+  const n = photos.length;
+  const shown = photos.slice(0, 4);
+  const cls = n === 1 ? "one" : n === 2 ? "two" : n === 3 ? "three" : "four";
+  return (
+    <div className={`cm-media cm-media-${cls}`}>
+      {shown.map((src, i) => {
+        const extra = n > 4 && i === 3 ? n - 4 : 0;
+        return (
+          <button type="button" key={i} className="cm-media-tile" onClick={() => onOpen(i)} aria-label="Open media">
+            {isVid(src)
+              ? <><video src={src} preload="metadata" muted playsInline /><span className="cm-media-play"><Play size={20} /></span></>
+              : <img src={src} alt="" loading="lazy" decoding="async" />}
+            {extra > 0 && <span className="cm-media-more">+{extra}</span>}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 function PostCard({ post, me, onChange, onRemoved }) {
   const navigate = useNavigate();
   const [p, setP] = useState(post);
@@ -574,11 +598,7 @@ function PostCard({ post, me, onChange, onRemoved }) {
       {p.link_audit_hash && (
         <a className="cm-link-record" href={`/verify/${p.link_audit_hash}`} target="_blank" rel="noreferrer"><Link2 size={12} />Linked record · {p.link_audit_hash}</a>
       )}
-      {p.photos?.length > 0 && (
-        <div className="cm-post-photos">{p.photos.map((src, i) => (/\.(mp4|webm|mov)$/i.test(src)
-          ? <video key={i} src={src} controls preload="metadata" onClick={(e) => { e.preventDefault(); setLightbox(i); }} style={{ cursor: "pointer" }} />
-          : <img key={i} src={src} alt="" loading="lazy" decoding="async" onClick={() => setLightbox(i)} style={{ cursor: "pointer" }} />))}</div>
-      )}
+      {p.photos?.length > 0 && <PostMedia photos={p.photos} onOpen={setLightbox} />}
 
       {summaryKeys.length > 0 && (
         <div className="v103-react-summary">
