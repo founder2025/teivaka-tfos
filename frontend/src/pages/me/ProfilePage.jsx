@@ -275,6 +275,46 @@ function BizModal({ biz, onClose, onSaved }) {
   );
 }
 
+// Trust Score — real signals from GET /community/trust-score (KYC + certificates +
+// audit records authored + posts linked to a verified record). Own-profile only
+// (the endpoint scores the authenticated user); honest-hidden if it can't load.
+function TrustScoreCard() {
+  const [d, setD] = useState(null);
+  useEffect(() => {
+    getJSON("/api/v1/community/trust-score").then((r) => setD(r?.data ?? r ?? null)).catch(() => setD(null));
+  }, []);
+  if (!d || typeof d.score !== "number") return null;
+  const label = d.score >= 80 ? "Excellent" : d.score >= 50 ? "Good" : "Building";
+  const checks = [
+    ["Identity verified", d.kyc_verified],
+    ["Verified records logged", (d.verified_records || 0) > 0],
+    ["Certificates earned", (d.certificates || 0) > 0],
+    ["Records shared to community", (d.linked_posts || 0) > 0],
+  ];
+  return (
+    <div style={{ ...card }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+        <Shield size={16} style={{ color: C.green }} />
+        <strong style={{ color: C.soil }}>Trust Score</strong>
+      </div>
+      <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
+        <span style={{ fontSize: 38, fontWeight: 800, color: C.soil, lineHeight: 1 }}>{d.score}</span>
+        <span style={{ fontSize: 14, color: C.muted }}>/100</span>
+        <span style={{ marginLeft: "auto", fontSize: 12.5, fontWeight: 700, color: C.greenDk }}>{label}</span>
+      </div>
+      <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 8 }}>
+        {checks.map(([t, on]) => (
+          <div key={t} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: on ? C.soil : C.muted }}>
+            {on ? <BadgeCheck size={15} style={{ color: C.green }} /> : <Shield size={15} style={{ color: C.muted, opacity: 0.5 }} />}
+            {t}
+          </div>
+        ))}
+      </div>
+      <a href="/verify" style={{ display: "inline-block", marginTop: 12, color: C.greenDk, fontSize: 12.5, fontWeight: 600, textDecoration: "none" }}>How trust score works →</a>
+    </div>
+  );
+}
+
 export default function ProfilePage({ self = false }) {
   const { id: routeId } = useParams();
   const navigate = useNavigate();
@@ -590,6 +630,7 @@ export default function ProfilePage({ self = false }) {
 
         {/* tab body */}
         {tab === "overview" && <>
+          {isYou && <TrustScoreCard />}
           {isYou && (() => {
             const checks = [["Photo", !!p.avatar_url], ["Cover", !!p.cover_url], ["Bio", !!p.bio], ["Phone", !!p.phone], ["Location", !!p.country], ["First post", (p.stats?.posts || 0) > 0]];
             const done = checks.filter((c) => c[1]).length;
