@@ -242,3 +242,12 @@ html.native-app .tap { min-height: 44px; }
 
 /* Bottom nav already pads safe-bottom in JSX; this guarantees content above it. */
 .has-bottomnav { padding-bottom: calc(var(--bottomnav-h) + var(--safe-bottom)); }
+
+/* Native bottom-sheet entrance (mobile Modal). Desktop centered modals reuse a soft fade. */
+@keyframes sheet-up { from { transform: translateY(100%); } to { transform: translateY(0); } }
+@keyframes sheet-fade { from { opacity: 0; transform: scale(0.98); } to { opacity: 1; transform: scale(1); } }
+.sheet-anim { animation: sheet-up 240ms cubic-bezier(0.22, 1, 0.36, 1); }
+@media (min-width: 768px) { .sheet-anim { animation: sheet-fade 160ms ease-out; } }
+@media (prefers-reduced-motion: reduce) { .sheet-anim { animation: none; } }
+/* Grabber bar at the top of a mobile sheet (the universal "drag me down" affordance). */
+.sheet-grabber { width: 36px; height: 4px; border-radius: 999px; background: var(--line); margin: 8px auto 2px; }

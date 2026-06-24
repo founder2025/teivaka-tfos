@@ -89,12 +89,17 @@ export default function Modal({
     >
       <div
         ref={dialogRef}
-        className={`w-full ${sizeMaxW} bg-white rounded-t-2xl md:rounded-2xl overflow-hidden flex flex-col`}
+        className={`sheet-anim w-full ${sizeMaxW} bg-white rounded-t-2xl md:rounded-2xl overflow-hidden flex flex-col`}
         style={{
           border: `1px solid ${C.border}`,
           maxHeight: "92vh",
+          // Pad the device home-indicator zone so the sheet's last control is reachable
+          // on a phone. env() is 0 on desktop/non-notched, so centered modals are unaffected.
+          paddingBottom: "var(--safe-bottom)",
         }}
       >
+        {/* Mobile-only drag grabber — the native "this is a sheet" affordance. */}
+        <div className="sheet-grabber md:hidden" aria-hidden />
         {(title || showCloseButton) && (
           <div
             className="flex items-center justify-between px-5 py-4"
