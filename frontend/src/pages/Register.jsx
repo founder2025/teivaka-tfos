@@ -30,8 +30,8 @@ import {
 const T = {
   cream: "var(--cream)", cream2: "var(--line)", paper: "var(--paper)",
   green: "var(--green)", greenDk: "var(--green-dk)", greenTint: "var(--green-tint)",
-  soil: "var(--soil)", soil2: "#7A5C4E", amber: "var(--amber)",
-  line: "var(--line)", ink: "#2A2118", muted: "var(--muted)", red: "var(--red)",
+  soil: "var(--soil)", soil2: "var(--muted)", amber: "var(--amber)",
+  line: "var(--line)", ink: "var(--soil)", muted: "var(--muted)", red: "var(--red)",
 };
 const FONT = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif";
 
@@ -361,7 +361,7 @@ function RegistrationForm({ onSuccess }) {
 
   const pwStrength = passwordStrength(form.password);
   const STRENGTH_LABEL = ["", "Weak", "Fair", "Good", "Strong"][pwStrength];
-  const STRENGTH_COLOR = [T.line, "#C0392B", T.amber, "#7CA85A", T.green][pwStrength];
+  const STRENGTH_COLOR = [T.line, "var(--red)", T.amber, "var(--green)", T.green][pwStrength];
 
   function update(field, value) {
     setForm((f) => ({ ...f, [field]: value }));
@@ -569,7 +569,7 @@ function RegistrationForm({ onSuccess }) {
             <form onSubmit={onFormSubmit} className="space-y-4">
               {serverError && (
                 <div className="px-4 py-3 rounded-xl text-sm flex gap-2" role="alert"
-                  style={{ background: "#FBEAEA", border: `1px solid ${T.red}33`, color: T.red }}>
+                  style={{ background: "var(--danger-bg)", border: `1px solid ${T.red}33`, color: T.red }}>
                   <span>⚠</span><span>{serverError}</span>
                 </div>
               )}

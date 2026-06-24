@@ -25,6 +25,11 @@
   --soil:  #1F2937;
   --paper: #FFFFFF;
   --green-dk: #086456;
+  /* Core neutral tokens — defined globally (NOT just in prototype.css) so every
+     surface incl. public Login/Landing (which don't load prototype.css) and the
+     dark Tailwind-override layer can resolve them. */
+  --muted: #6B7280; --line: #E2E8F0; --ink: #1F2937; --cream-2: #EEF2F6;
+  --red: #DC2626; --amber: #BF9000; --green-tint: #E2F4F0; --danger-bg: #FBE6E2;
 }
 
 /* Dark mode: flip the global --color-* namespace (body bg/text + auth/marketing
@@ -42,6 +47,8 @@ html[data-theme="dark"] {
   --soil:  #F8FAFC;
   --paper: #1F2937;
   --green-dk: #34D3BF;
+  --muted: #94A3B8; --line: #2A3543; --ink: #F8FAFC; --cream-2: #27313D;
+  --red: #F87171; --amber: #E8BE48; --green-tint: #10342E; --danger-bg: #3A1E1B;
   color-scheme: dark;
 }
 

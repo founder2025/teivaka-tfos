@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 
-const C = { soil: "#2C1A0E", green: "var(--green)", cream: "var(--cream)", border: "var(--line)" };
+const C = { soil: "var(--soil)", green: "var(--green)", cream: "var(--cream)", border: "var(--line)" };
 
 export default function ForgotPassword() {
   const [email, setEmail] = useState("");

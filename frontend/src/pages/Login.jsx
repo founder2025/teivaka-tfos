@@ -15,7 +15,7 @@ import { useNavigate, useLocation, Link } from "react-router-dom";
 import { setStoredTokens, setOnboardingComplete, getOnboardingComplete } from "../utils/auth";
 
 const C = {
-  soil:   "#2C1A0E",
+  soil:   "var(--soil)",
   green:  "var(--green)",
   cream:  "var(--cream)",
   gold:   "var(--amber)",

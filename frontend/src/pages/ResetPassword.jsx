@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, useSearchParams, useNavigate } from "react-router-dom";
 
-const C = { soil: "#2C1A0E", green: "var(--green)", cream: "var(--cream)", border: "var(--line)" };
+const C = { soil: "var(--soil)", green: "var(--green)", cream: "var(--cream)", border: "var(--line)" };
 
 function EyeIcon({ open }) {
   return open ? (
