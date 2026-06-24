@@ -142,33 +142,47 @@ async def network_map(user: dict = Depends(get_current_user),
     if not verified:
         raise HTTPException(status_code=403, detail="VERIFICATION_REQUIRED")
 
-    # Viewer's own location (distance origin) — their first farm with coords.
+    # Probes (migration-tolerant): consent columns (164) + per-user geo (165).
+    cols = (await db.execute(text(
+        "SELECT column_name FROM information_schema.columns WHERE table_schema='tenant' "
+        "AND table_name='users' AND column_name IN "
+        "('share_location','location_share_ack_at','gps_lat','gps_lng')"
+    ))).scalars().all()
+    has_share = ("share_location" in cols) and ("location_share_ack_at" in cols)
+    has_user_geo = ("gps_lat" in cols) and ("gps_lng" in cols)
+
+    # Viewer's own location (distance origin): their farm coords, else — for a
+    # non-farm member who has no farm — their own user coords.
     origin = (await db.execute(
-        text("SELECT farm_name, gps_lat, gps_lng FROM tenant.farms "
+        text("SELECT farm_name AS name, gps_lat, gps_lng FROM tenant.farms "
              "WHERE tenant_id = :tid AND gps_lat IS NOT NULL AND gps_lng IS NOT NULL "
              "ORDER BY created_at LIMIT 1"),
         {"tid": viewer_tid},
     )).mappings().first()
+    if not origin and has_user_geo:
+        origin = (await db.execute(
+            text("SELECT full_name AS name, gps_lat, gps_lng FROM tenant.users "
+                 "WHERE user_id = :uid AND gps_lat IS NOT NULL AND gps_lng IS NOT NULL"),
+            {"uid": str(user["user_id"])},
+        )).mappings().first()
     o_lat = origin["gps_lat"] if origin else None
     o_lng = origin["gps_lng"] if origin else None
-    # The viewer's own pin (exact — it's their own farm), so a solo user still sees
-    # the map populate with "You are here" instead of a blank canvas.
-    you = ({"name": origin["farm_name"] or "Your farm",
+    # The viewer's own pin (exact — it's their own location), so a solo user still
+    # sees the map populate with "You are here" instead of a blank canvas.
+    you = ({"name": (origin["name"] if origin else None) or "You",
             "lat": float(o_lat), "lng": float(o_lng)} if o_lat is not None else None)
 
     # Migration-tolerant: if the 164 consent columns aren't in the DB yet, return
     # an honest-empty network instead of 500-ing (mirrors /me/prefs). degraded
     # flags it so the cause is visible, never masked.
-    has_share = (await db.execute(text(
-        "SELECT count(*) FROM information_schema.columns WHERE table_schema='tenant' "
-        "AND table_name='users' AND column_name IN ('share_location','location_share_ack_at')"
-    ))).scalar()
-    if int(has_share or 0) < 2:
+    if not has_share:
         return {"members": [], "count": 0, "has_origin": o_lat is not None, "you": you, "degraded": "share_columns_missing"}
 
-    # One pin per opted-in member farm (DISTINCT ON farm; representative = earliest
-    # opted-in user in that tenant). Excludes the viewer's own tenant.
-    rows = (await db.execute(text("""
+    members = []
+
+    # 1) Farmers — one pin per opted-in member farm with coords (representative =
+    #    earliest opted-in user in that tenant). Excludes the viewer's own tenant.
+    frows = (await db.execute(text("""
         SELECT DISTINCT ON (f.farm_id)
                f.farm_id, f.farm_name, f.gps_lat, f.gps_lng,
                u.account_type, u.kyc_verified
@@ -182,9 +196,7 @@ async def network_map(user: dict = Depends(get_current_user),
            AND f.tenant_id <> :viewer_tid
          ORDER BY f.farm_id, u.created_at
     """), {"viewer_tid": viewer_tid})).mappings().all()
-
-    members = []
-    for r in rows:
+    for r in frows:
         flat, flng = _fuzz(r["gps_lat"], r["gps_lng"], r["farm_id"])
         dist = _haversine_km(o_lat, o_lng, r["gps_lat"], r["gps_lng"])
         members.append({
@@ -195,6 +207,32 @@ async def network_map(user: dict = Depends(get_current_user),
             "lat": flat, "lng": flng,
             "distance_km": round(dist, 1) if dist is not None else None,
         })
+
+    # 2) Non-farm members — opted-in users with their own coords whose tenant has
+    #    NO mapped farm (so a farmer is never double-listed via their user row).
+    if has_user_geo:
+        urows = (await db.execute(text("""
+            SELECT u.user_id, u.full_name, u.account_type, u.kyc_verified, u.gps_lat, u.gps_lng
+              FROM tenant.users u
+             WHERE u.share_location = true AND u.location_share_ack_at IS NOT NULL
+               AND u.gps_lat IS NOT NULL AND u.gps_lng IS NOT NULL
+               AND u.tenant_id <> :viewer_tid
+               AND NOT EXISTS (SELECT 1 FROM tenant.farms f
+                                WHERE f.tenant_id = u.tenant_id
+                                  AND f.gps_lat IS NOT NULL AND f.is_active = true)
+        """), {"viewer_tid": viewer_tid})).mappings().all()
+        for r in urows:
+            flat, flng = _fuzz(r["gps_lat"], r["gps_lng"], str(r["user_id"]))
+            dist = _haversine_km(o_lat, o_lng, r["gps_lat"], r["gps_lng"])
+            members.append({
+                "id": hashlib.sha256(str(r["user_id"]).encode()).hexdigest()[:12],
+                "name": r["full_name"] or "Member",
+                "account_type": r["account_type"] or "MEMBER",
+                "verified": bool(r["kyc_verified"]),
+                "lat": flat, "lng": flng,
+                "distance_km": round(dist, 1) if dist is not None else None,
+            })
+
     members.sort(key=lambda m: (m["distance_km"] is None, m["distance_km"] or 0))
     return {"members": members, "count": len(members), "has_origin": o_lat is not None, "you": you}
 

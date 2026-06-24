@@ -107,7 +107,19 @@ export default function Members() {
   const setSharing = async (share) => {
     setSavingPref(true);
     try {
-      await fetch("/api/v1/me", { method: "PATCH", headers: authHeaders(), body: JSON.stringify({ share_location: share }) });
+      const body = { share_location: share };
+      // On opt-in, capture the member's current device location so non-farm
+      // members (no farm) still get a pin. Farmers still resolve via their farm;
+      // denied/unavailable just shares without coords (no error).
+      if (share && typeof navigator !== "undefined" && navigator.geolocation) {
+        try {
+          const pos = await new Promise((res, rej) =>
+            navigator.geolocation.getCurrentPosition(res, rej, { enableHighAccuracy: true, timeout: 8000 }));
+          body.gps_lat = Number(pos.coords.latitude.toFixed(6));
+          body.gps_lng = Number(pos.coords.longitude.toFixed(6));
+        } catch { /* permission denied / unavailable — share without coords */ }
+      }
+      await fetch("/api/v1/me", { method: "PATCH", headers: authHeaders(), body: JSON.stringify(body) });
       await loadPrefs();
       await loadNetwork();
     } catch { /* best effort */ } finally { setSavingPref(false); }

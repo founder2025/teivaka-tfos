@@ -324,11 +324,14 @@ class ProfilePatch(BaseModel):
     specialty: str | None = None
     also_account_types: list[str] | None = None
     share_location: bool | None = None
+    gps_lat: float | None = None
+    gps_lng: float | None = None
 
 
 _EDITABLE = ("full_name", "whatsapp_number", "country", "preferred_language", "account_type", "bio",
              "avatar_url", "cover_url", "unit_mode", "pref_currency", "pref_weight", "pref_area", "pref_temp",
-             "notify_whatsapp", "notify_tasks", "notify_weather", "specialty", "share_location")
+             "notify_whatsapp", "notify_tasks", "notify_weather", "specialty", "share_location",
+             "gps_lat", "gps_lng")
 _ACCOUNT_TYPES = {"FARMER", "BUYER", "SUPPLIER", "SERVICE_PROVIDER", "BANKER", "BUSINESS", "EXPORTER", "IMPORTER"}
 
 
