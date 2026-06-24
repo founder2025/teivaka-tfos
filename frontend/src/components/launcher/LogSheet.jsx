@@ -248,6 +248,25 @@ export default function LogSheet({ isOpen, onClose }) {
   // tile wall left (the (+) de-bloat is complete).
   const activeVertical = VERTICALS.find((v) => v.key === selectedVertical) || null;
 
+  // Enterprise-scoped (+): show only the verticals/sub-flows this farm actually
+  // runs (from farm_active_groups). WHOLE-farm (money/notes) is universal. Fail
+  // OPEN when groups are unknown (no farm / not yet configured) so nothing is ever
+  // hidden by accident.
+  const hasGroups = Array.isArray(activeGroups) && activeGroups.length > 0;
+  const visibleVerticals = hasGroups
+    ? VERTICALS.filter((v) => v.key === "WHOLE" || v.groups.some((g) => activeGroups.includes(g)))
+    : VERTICALS;
+  const showPoultry = !hasGroups || activeGroups.includes("POULTRY");
+  const showLivestock = !hasGroups || activeGroups.includes("LIVESTOCK");
+
+  // If a farm runs only ONE animal sub-flow, skip the Poultry/Livestock chooser.
+  useEffect(() => {
+    if (selectedVertical === "ANIMAL" && !animalSub) {
+      if (showPoultry && !showLivestock) setAnimalSub("POULTRY");
+      else if (showLivestock && !showPoultry) setAnimalSub("LIVESTOCK");
+    }
+  }, [selectedVertical, animalSub, showPoultry, showLivestock]);
+
   const isLevel2 = selectedVertical !== null;
   const isManage = viewMode === "manage";
   const headerTitle = isManage
@@ -288,7 +307,7 @@ export default function LogSheet({ isOpen, onClose }) {
         <div className="mb-3">
           <button
             type="button"
-            onClick={() => { if (selectedVertical === "ANIMAL" && animalSub) { setAnimalSub(null); } else { setSelectedVertical(null); } }}
+            onClick={() => { if (selectedVertical === "ANIMAL" && animalSub && showPoultry && showLivestock) { setAnimalSub(null); } else { setAnimalSub(null); setSelectedVertical(null); } }}
             aria-label="Back"
             className="inline-flex items-center gap-1 text-sm text-gray-600 hover:text-gray-900 transition"
           >
@@ -323,7 +342,7 @@ export default function LogSheet({ isOpen, onClose }) {
       {/* Level 1 — two production verticals + whole-farm (replaces the 11-pillar tile wall). */}
       {!isManage && !isLoading && !error && !isLevel2 && (
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-          {VERTICALS.map((v) => (
+          {visibleVerticals.map((v) => (
             <VerticalTile key={v.key} vertical={v} onClick={setSelectedVertical} />
           ))}
         </div>
@@ -336,20 +355,28 @@ export default function LogSheet({ isOpen, onClose }) {
 
       {/* ANIMAL splits: pick the sub-flow (different anchor models). */}
       {!isManage && !isLoading && !error && isLevel2 && selectedVertical === "ANIMAL" && !animalSub && (
-        <div className="grid grid-cols-2 gap-3">
-          <button type="button" onClick={() => setAnimalSub("POULTRY")}
-            className="flex flex-col items-center justify-center p-5 h-32 rounded-xl border bg-white border-gray-200 hover:border-[var(--green,var(--green))] hover:shadow-md active:scale-95 transition-all">
-            <Bird className="w-8 h-8 mb-2" style={{ color: C.green }} strokeWidth={1.75} />
-            <span className="text-base font-medium text-gray-900">Poultry</span>
-            <span className="text-xs text-gray-500 mt-0.5">Chickens · ducks · eggs</span>
-          </button>
-          <button type="button" onClick={() => setAnimalSub("LIVESTOCK")}
-            className="flex flex-col items-center justify-center p-5 h-32 rounded-xl border bg-white border-gray-200 hover:border-[var(--green,var(--green))] hover:shadow-md active:scale-95 transition-all">
-            <PawPrint className="w-8 h-8 mb-2" style={{ color: C.green }} strokeWidth={1.75} />
-            <span className="text-base font-medium text-gray-900">Other livestock</span>
-            <span className="text-xs text-gray-500 mt-0.5">Cattle · goats · pigs · bees</span>
-          </button>
-        </div>
+        (showPoultry || showLivestock) ? (
+          <div className="grid grid-cols-2 gap-3">
+            {showPoultry && (
+              <button type="button" onClick={() => setAnimalSub("POULTRY")}
+                className="flex flex-col items-center justify-center p-5 h-32 rounded-xl border bg-white border-gray-200 hover:border-[var(--green,var(--green))] hover:shadow-md active:scale-95 transition-all">
+                <Bird className="w-8 h-8 mb-2" style={{ color: C.green }} strokeWidth={1.75} />
+                <span className="text-base font-medium text-gray-900">Poultry</span>
+                <span className="text-xs text-gray-500 mt-0.5">Chickens · ducks · eggs</span>
+              </button>
+            )}
+            {showLivestock && (
+              <button type="button" onClick={() => setAnimalSub("LIVESTOCK")}
+                className="flex flex-col items-center justify-center p-5 h-32 rounded-xl border bg-white border-gray-200 hover:border-[var(--green,var(--green))] hover:shadow-md active:scale-95 transition-all">
+                <PawPrint className="w-8 h-8 mb-2" style={{ color: C.green }} strokeWidth={1.75} />
+                <span className="text-base font-medium text-gray-900">Other livestock</span>
+                <span className="text-xs text-gray-500 mt-0.5">Cattle · goats · pigs · bees</span>
+              </button>
+            )}
+          </div>
+        ) : (
+          <div className="text-center py-8 text-gray-500 text-sm">These animal types aren't available yet — they're on the roadmap.</div>
+        )
       )}
 
       {/* POULTRY + LIVESTOCK each drill into the Capture Engine (different anchor models). */}
