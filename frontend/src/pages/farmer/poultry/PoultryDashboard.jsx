@@ -114,7 +114,7 @@ function PoultryDashboardInner() {
             <button
               onClick={() => navigate('/farm/poultry/bank-evidence')}
               className="w-full px-3 py-3 rounded-md border text-sm flex items-center justify-between"
-              style={{ background: '#fff', borderColor: C.border, color: C.soil }}
+              style={{ background: "var(--paper)", borderColor: C.border, color: C.soil }}
             >
               <span>📄 Generate bank evidence PDF</span>
               <span style={{ color: C.muted }}>→</span>
@@ -124,25 +124,25 @@ function PoultryDashboardInner() {
             <section>
               <div className="text-xs font-medium uppercase tracking-wide mb-2" style={{ color: C.muted }}>This week</div>
               <div className="grid grid-cols-2 gap-2">
-                <div className="px-3 py-3 rounded-md border" style={{ background: '#fff', borderColor: C.border }}>
+                <div className="px-3 py-3 rounded-md border" style={{ background: "var(--paper)", borderColor: C.border }}>
                   <div className="text-xs" style={{ color: C.muted }}>Active flocks</div>
                   <div className="text-2xl font-semibold mt-1">{kpis.active_flocks}</div>
                 </div>
-                <div className="px-3 py-3 rounded-md border" style={{ background: '#fff', borderColor: C.border }}>
+                <div className="px-3 py-3 rounded-md border" style={{ background: "var(--paper)", borderColor: C.border }}>
                   <div className="text-xs" style={{ color: C.muted }}>Total birds</div>
                   <div className="text-2xl font-semibold mt-1">{kpis.total_birds}</div>
                 </div>
-                <div className="px-3 py-3 rounded-md border" style={{ background: '#fff', borderColor: C.border }}>
+                <div className="px-3 py-3 rounded-md border" style={{ background: "var(--paper)", borderColor: C.border }}>
                   <div className="text-xs" style={{ color: C.muted }}>Eggs (7d)</div>
                   <div className="text-2xl font-semibold mt-1">{kpis.eggs_this_week}</div>
                 </div>
-                <div className="px-3 py-3 rounded-md border" style={{ background: '#fff', borderColor: C.border }}>
+                <div className="px-3 py-3 rounded-md border" style={{ background: "var(--paper)", borderColor: C.border }}>
                   <div className="text-xs" style={{ color: C.muted }}>Mortality</div>
                   <div className="text-2xl font-semibold mt-1" style={{ color: kpis.mortality_rate_pct_7d > 5 ? C.red : C.soil }}>
                     {kpis.mortality_rate_pct_7d}%
                   </div>
                 </div>
-                <div className="col-span-2 px-3 py-3 rounded-md border" style={{ background: '#fff', borderColor: C.border }}>
+                <div className="col-span-2 px-3 py-3 rounded-md border" style={{ background: "var(--paper)", borderColor: C.border }}>
                   <div className="text-xs" style={{ color: C.muted }}>Revenue (7d)</div>
                   <div className="text-2xl font-semibold mt-1" style={{ color: C.green }}>FJD {kpis.revenue_fjd_this_week.toFixed(2)}</div>
                 </div>
@@ -159,7 +159,7 @@ function PoultryDashboardInner() {
               ) : (
                 <div className="space-y-2">
                   {flocks.map(f => (
-                    <div key={f.flock_id} className="px-3 py-3 rounded-md border" style={{ background: '#fff', borderColor: C.border }}>
+                    <div key={f.flock_id} className="px-3 py-3 rounded-md border" style={{ background: "var(--paper)", borderColor: C.border }}>
                       <div className="flex items-center justify-between">
                         <div className="flex-1 min-w-0">
                           <div className="text-sm font-medium truncate">{f.flock_label}</div>
@@ -202,7 +202,7 @@ function PoultryDashboardInner() {
               ) : (
                 <div className="space-y-1">
                   {events.map(ev => (
-                    <div key={ev.event_id} className="px-3 py-2 rounded-md border" style={{ background: '#fff', borderColor: C.border }}>
+                    <div key={ev.event_id} className="px-3 py-2 rounded-md border" style={{ background: "var(--paper)", borderColor: C.border }}>
                       <div className="flex items-center justify-between">
                         <div className="text-sm font-medium">{EVENT_LABELS[ev.event_type] || ev.event_type}</div>
                         <div className="text-xs" style={{ color: C.muted }}>{formatRelativeTime(ev.occurred_at)}</div>
@@ -243,7 +243,7 @@ function fmtDateShort(iso) {
 function FCRCard({ fcr }) {
   if (!fcr || fcr.current == null) {
     return (
-      <div className="rounded-md border p-4" style={{ background: '#fff', borderColor: C.border }}>
+      <div className="rounded-md border p-4" style={{ background: "var(--paper)", borderColor: C.border }}>
         <div className="text-xs uppercase tracking-wide mb-2" style={{ color: C.muted }}>Feed conversion ratio (30d)</div>
         <div className="text-sm" style={{ color: C.muted }}>
           Not enough data yet. Log eggs collected + feed used to see your efficiency.
@@ -255,7 +255,7 @@ function FCRCard({ fcr }) {
   const trendColor = trend?.direction === 'improving' ? C.green : (trend?.direction === 'worsening' ? C.red : C.muted);
   const trendArrow = trend?.direction === 'improving' ? '↓' : (trend?.direction === 'worsening' ? '↑' : '→');
   return (
-    <div className="rounded-md border p-4" style={{ background: '#fff', borderColor: C.border }}>
+    <div className="rounded-md border p-4" style={{ background: "var(--paper)", borderColor: C.border }}>
       <div className="text-xs uppercase tracking-wide mb-2" style={{ color: C.muted }}>Feed conversion ratio (30d)</div>
       <div className="flex items-baseline gap-3">
         <div className="text-3xl font-semibold" style={{ color: C.soil }}>{fcr.current.toFixed(2)}</div>
@@ -290,7 +290,7 @@ function TrendsSection({ trends }) {
     return (
       <section>
         <h2 className="text-xs font-medium uppercase tracking-wide mb-3" style={{ color: C.muted }}>Trends & efficiency</h2>
-        <div className="rounded-md border p-6 text-center" style={{ background: '#fff', borderColor: C.border }}>
+        <div className="rounded-md border p-6 text-center" style={{ background: "var(--paper)", borderColor: C.border }}>
           <div className="text-sm mb-2" style={{ color: C.soil }}>No trends data yet</div>
           <div className="text-xs mb-4" style={{ color: C.muted }}>Log eggs collected and feed used to see your operations chart up here.</div>
           <button onClick={() => openLauncher({ vertical: 'POULTRY', eventType: 'EGGS_COLLECTED' })} className="px-3 py-2 rounded-md text-sm font-medium" style={{ background: C.green, color: '#fff' }}>
@@ -306,7 +306,7 @@ function TrendsSection({ trends }) {
       <h2 className="text-xs font-medium uppercase tracking-wide" style={{ color: C.muted }}>Trends & efficiency · last 30 days</h2>
       <FCRCard fcr={trends.fcr} />
       {hasEggsData && (
-        <div className="rounded-md border p-4" style={{ background: '#fff', borderColor: C.border }}>
+        <div className="rounded-md border p-4" style={{ background: "var(--paper)", borderColor: C.border }}>
           <div className="text-xs uppercase tracking-wide mb-3" style={{ color: C.muted }}>Eggs collected per day</div>
           <ResponsiveContainer width="100%" height={200}>
             <LineChart data={eggsData} margin={{ top: 5, right: 5, bottom: 5, left: 0 }}>
@@ -320,7 +320,7 @@ function TrendsSection({ trends }) {
         </div>
       )}
       {hasMortalityData && (
-        <div className="rounded-md border p-4" style={{ background: '#fff', borderColor: C.border }}>
+        <div className="rounded-md border p-4" style={{ background: "var(--paper)", borderColor: C.border }}>
           <div className="text-xs uppercase tracking-wide mb-3" style={{ color: C.muted }}>Mortality per day</div>
           <ResponsiveContainer width="100%" height={200}>
             <LineChart data={mortalityData} margin={{ top: 5, right: 5, bottom: 5, left: 0 }}>

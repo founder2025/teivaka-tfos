@@ -32,7 +32,7 @@ import Modal from "../../components/ui/Modal";
 
 const C = {
   soil: "var(--soil)", cream: "var(--cream)", border: "#E6DED0", muted: "var(--muted)", ink: "#3A2E26",
-  green: "var(--green)", greenDk: "var(--green-dk)", amber: "var(--amber)", red: "var(--red)", greenTint: "#E9F2DD", paper: "#FCFAF5",
+  green: "var(--green)", greenDk: "var(--green-dk)", amber: "var(--amber)", red: "var(--red)", greenTint: "#E9F2DD", paper: "var(--cream-2)",
 };
 const FOCUS = "focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--green)] focus-visible:ring-offset-1 transition";
 
@@ -227,7 +227,7 @@ function Row({ l, v, vColor, onClick }) {
   return (
     <div onClick={onClick} role={onClick ? "button" : undefined} tabIndex={onClick ? 0 : undefined}
       onKeyDown={onClick ? (e) => { if (e.key === "Enter") onClick(); } : undefined}
-      className={`flex justify-between gap-3 py-1.5 text-sm ${onClick ? `cursor-pointer hover:bg-[#FCFAF5] -mx-1 px-1 rounded ${FOCUS}` : ""}`} style={{ borderBottom: `1px solid rgba(92,64,51,0.07)` }}>
+      className={`flex justify-between gap-3 py-1.5 text-sm ${onClick ? `cursor-pointer hover:bg-[var(--cream-2)] -mx-1 px-1 rounded ${FOCUS}` : ""}`} style={{ borderBottom: `1px solid rgba(92,64,51,0.07)` }}>
       <span style={{ color: C.muted }}>{l}</span><span style={{ color: vColor || C.soil, fontWeight: 600, textAlign: "right" }}>{v}</span>
     </div>
   );
@@ -435,7 +435,7 @@ function RankingsTab({ D, onOpen }) {
           <table className="w-full text-sm min-w-[460px]">
             <thead><tr className="text-xs" style={{ color: C.muted }}><th className="text-left p-1.5">Enterprise</th><th className="text-right p-1.5">Earned</th><th className="text-right p-1.5">Spent</th><th className="text-right p-1.5">Net</th><th className="text-right p-1.5">ROI</th></tr></thead>
             <tbody>{D.byNet.map((r) => (
-              <tr key={r.id} onClick={() => onOpen(r)} className={`cursor-pointer hover:bg-[#FCFAF5] ${FOCUS}`} tabIndex={0} onKeyDown={(e) => { if (e.key === "Enter") onOpen(r); }} style={{ borderTop: `1px solid rgba(92,64,51,0.07)` }}>
+              <tr key={r.id} onClick={() => onOpen(r)} className={`cursor-pointer hover:bg-[var(--cream-2)] ${FOCUS}`} tabIndex={0} onKeyDown={(e) => { if (e.key === "Enter") onOpen(r); }} style={{ borderTop: `1px solid rgba(92,64,51,0.07)` }}>
                 <td className="p-1.5" style={{ color: C.ink }}>{r.name}</td><td className="p-1.5 text-right">{n0(r.income)}</td><td className="p-1.5 text-right">{n0(r.costs)}</td>
                 <td className="p-1.5 text-right" style={{ color: r.net < 0 ? C.red : C.green }}>{r.net < 0 ? "−" : ""}{Math.abs(n0(r.net))}</td><td className="p-1.5 text-right">{roiTxt(r.roi)}</td>
               </tr>
@@ -476,7 +476,7 @@ function CashRiskTab({ D, onOpen }) {
       </Section>
       <Section title="Alerts" meta={`${alerts.length} need${alerts.length === 1 ? "s" : ""} a look`}>
         {alerts.length === 0 ? <span className="text-sm" style={{ color: C.muted }}>Nothing needs attention right now.</span> : alerts.slice(0, 20).map((a, i) => (
-          <div key={i} onClick={() => onOpen(a.ent)} className={`flex gap-2.5 py-1.5 text-sm cursor-pointer hover:bg-[#FCFAF5] -mx-1 px-1 rounded ${FOCUS}`} tabIndex={0} onKeyDown={(e) => { if (e.key === "Enter") onOpen(a.ent); }} style={{ borderBottom: `1px solid rgba(92,64,51,0.07)` }}>
+          <div key={i} onClick={() => onOpen(a.ent)} className={`flex gap-2.5 py-1.5 text-sm cursor-pointer hover:bg-[var(--cream-2)] -mx-1 px-1 rounded ${FOCUS}`} tabIndex={0} onKeyDown={(e) => { if (e.key === "Enter") onOpen(a.ent); }} style={{ borderBottom: `1px solid rgba(92,64,51,0.07)` }}>
             <span className="w-1.5 h-1.5 rounded-full mt-1.5 shrink-0" style={{ background: a.col }} /><span style={{ color: C.ink }}><strong style={{ fontWeight: 600 }}>{a.ent.name}</strong> — {a.txt}</span>
           </div>
         ))}
@@ -486,7 +486,7 @@ function CashRiskTab({ D, onOpen }) {
           const cash = r.net < -500 ? "HIGH" : r.net < 0 ? "WATCH" : "LOW";
           const cashCol = cash === "HIGH" ? C.red : cash === "WATCH" ? C.amber : C.green;
           return (
-            <div key={r.id} onClick={() => onOpen(r)} className={`py-2 text-xs cursor-pointer hover:bg-[#FCFAF5] -mx-1 px-1 rounded ${FOCUS}`} tabIndex={0} onKeyDown={(e) => { if (e.key === "Enter") onOpen(r); }} style={{ borderBottom: `1px solid rgba(92,64,51,0.07)` }}>
+            <div key={r.id} onClick={() => onOpen(r)} className={`py-2 text-xs cursor-pointer hover:bg-[var(--cream-2)] -mx-1 px-1 rounded ${FOCUS}`} tabIndex={0} onKeyDown={(e) => { if (e.key === "Enter") onOpen(r); }} style={{ borderBottom: `1px solid rgba(92,64,51,0.07)` }}>
               <div className="font-semibold mb-1" style={{ color: C.ink }}>{r.name}</div>
               <span className="mr-3" style={{ color: C.green }}>Compliance: <strong>Clear</strong></span>
               <span className="mr-3" style={{ color: cashCol }}>Cash: <strong>{cash}</strong></span>
@@ -536,7 +536,7 @@ function InvestorTab({ D, onOpen, navigate }) {
           <table className="w-full text-sm min-w-[420px]">
             <thead><tr className="text-xs" style={{ color: C.muted }}><th className="text-left p-1.5">Enterprise</th><th className="text-right p-1.5">Put in</th><th className="text-right p-1.5">Worth</th><th className="text-right p-1.5">ROI</th></tr></thead>
             <tbody>{D.byRoi.map((r) => (
-              <tr key={r.id} onClick={() => onOpen(r)} className={`cursor-pointer hover:bg-[#FCFAF5] ${FOCUS}`} tabIndex={0} onKeyDown={(e) => { if (e.key === "Enter") onOpen(r); }} style={{ borderTop: `1px solid rgba(92,64,51,0.07)` }}>
+              <tr key={r.id} onClick={() => onOpen(r)} className={`cursor-pointer hover:bg-[var(--cream-2)] ${FOCUS}`} tabIndex={0} onKeyDown={(e) => { if (e.key === "Enter") onOpen(r); }} style={{ borderTop: `1px solid rgba(92,64,51,0.07)` }}>
                 <td className="p-1.5" style={{ color: C.ink }}>{r.name}</td><td className="p-1.5 text-right">{n0(r.costs)}</td><td className="p-1.5 text-right">{r.worth > 0 ? n0(r.worth) : "—"}</td><td className="p-1.5 text-right">{roiTxt(r.roi)}</td>
               </tr>
             ))}</tbody>
@@ -623,7 +623,7 @@ function EnterpriseDetail({ e, farmId, onBack, go }) {
                   <table className="w-full text-sm">
                     <tbody>
                       {myCycles.map((c) => (
-                        <tr key={c.cycle_id} onClick={() => go(`cycles/${c.cycle_id}`)} className={`cursor-pointer hover:bg-[#FCFAF5] ${FOCUS}`} tabIndex={0} onKeyDown={(ev) => { if (ev.key === "Enter") go(`cycles/${c.cycle_id}`); }} style={{ borderTop: `1px solid rgba(92,64,51,0.07)` }}>
+                        <tr key={c.cycle_id} onClick={() => go(`cycles/${c.cycle_id}`)} className={`cursor-pointer hover:bg-[var(--cream-2)] ${FOCUS}`} tabIndex={0} onKeyDown={(ev) => { if (ev.key === "Enter") go(`cycles/${c.cycle_id}`); }} style={{ borderTop: `1px solid rgba(92,64,51,0.07)` }}>
                           <td className="py-1.5">{c.pu_farmer_label || c.pu_id || "—"}</td>
                           <td className="py-1.5"><span className="text-[11px] px-1.5 py-0.5 rounded" style={{ background: C.cream, color: C.soil }}>{(c.cycle_status || "").toUpperCase()}</span></td>
                           <td className="py-1.5" style={{ color: C.muted }}>{entFdate(c.planting_date)}</td>

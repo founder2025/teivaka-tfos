@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Lock, LogOut, Shield } from "lucide-react";
+import { Lock, LogOut, Shield, Sun, Moon } from "lucide-react";
 import { ME_MENU_ITEMS } from "./pillarSubNavMap";
 import { getCurrentUser } from "../../utils/auth";
 import { hasRole } from "../../utils/roles";
+import { getTheme, toggleTheme } from "../../utils/theme";
 import Avatar from "../ui/Avatar";
 
 const C = {
@@ -46,6 +47,7 @@ function tierLabel(tier, trialEndsAt) {
 
 export default function MeMenu({ onClose }) {
   const [me, setMe] = useState(null);
+  const [theme, setThemeState] = useState(getTheme());
   const rootRef = useRef(null);
   const navigate = useNavigate();
 
@@ -193,6 +195,21 @@ export default function MeMenu({ onClose }) {
           );
         })}
       </ul>
+
+      <div className="border-t" style={{ borderColor: C.border }}>
+        <button
+          type="button"
+          role="menuitem"
+          onClick={() => setThemeState(toggleTheme())}
+          className="w-full flex items-center gap-3 text-sm text-left"
+          style={{ height: 36, padding: "8px 12px", background: "transparent", color: C.soil }}
+          onMouseEnter={(e) => { e.currentTarget.style.background = C.hoverBg; }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+        >
+          {theme === "dark" ? <Sun size={16} strokeWidth={1.75} /> : <Moon size={16} strokeWidth={1.75} />}
+          <span className="flex-1">{theme === "dark" ? "Light mode" : "Dark mode"}</span>
+        </button>
+      </div>
 
       <div className="border-t" style={{ borderColor: C.border }}>
         <button

@@ -236,7 +236,7 @@ export default function LogSheet({ isOpen, onClose, target = null }) {
                     return (
                       <button key={d.key} type="button" onClick={() => { setExpanded(new Set()); setDoor(d.key); }}
                         style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6,
-                          padding: 18, minHeight: 116, borderRadius: 14, border: "1px solid var(--line)", background: "#fff", cursor: "pointer" }}>
+                          padding: 18, minHeight: 116, borderRadius: 14, border: "1px solid var(--line)", background: "var(--paper)", cursor: "pointer" }}>
                         <I size={30} strokeWidth={1.6} style={{ color: "var(--green-dk)" }} />
                         <span style={{ fontSize: 15, fontWeight: 700, color: "var(--soil)" }}>{d.label}</span>
                         <span style={{ fontSize: 11.5, color: "var(--muted)" }}>{d.sub}</span>

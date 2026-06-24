@@ -199,7 +199,7 @@ function EggsNewInner() {
           <div className="space-y-3">
             <div>
               <label className="block text-xs mb-1" style={{ color: C.muted }}>Farm</label>
-              <div className="px-3 py-2 rounded-md border text-sm" style={{ background: '#fff', borderColor: C.border }}>
+              <div className="px-3 py-2 rounded-md border text-sm" style={{ background: "var(--paper)", borderColor: C.border }}>
                 {loadingAnchors ? 'Loading…' : (farmId || '—')}
               </div>
             </div>
@@ -222,7 +222,7 @@ function EggsNewInner() {
                   onChange={(e) => setPuId(e.target.value)}
                   disabled={loadingAnchors}
                   className="w-full px-3 py-2 rounded-md border text-sm"
-                  style={{ background: '#fff', borderColor: C.border }}
+                  style={{ background: "var(--paper)", borderColor: C.border }}
                 >
                   <option value="">Pick a coop…</option>
                   {pus.map((pu) => (
@@ -243,7 +243,7 @@ function EggsNewInner() {
                 onChange={(e) => setFlockId(e.target.value)}
                 disabled={!anchorsReady || loadingAnchors}
                 className="w-full px-3 py-2 rounded-md border text-sm"
-                style={{ background: '#fff', borderColor: C.border }}
+                style={{ background: "var(--paper)", borderColor: C.border }}
               >
                 <option value="">— No specific flock —</option>
                 {visibleFlocks.map((f) => (
@@ -275,7 +275,7 @@ function EggsNewInner() {
                 min={0}
                 max={100000}
                 className="w-full px-3 py-3 rounded-md border text-lg"
-                style={{ background: '#fff', borderColor: fieldErrors.qty_eggs ? C.red : C.border }}
+                style={{ background: "var(--paper)", borderColor: fieldErrors.qty_eggs ? C.red : C.border }}
                 placeholder="e.g. 142"
               />
               {fieldErrors.qty_eggs && (
@@ -288,15 +288,15 @@ function EggsNewInner() {
               <div className="grid grid-cols-3 gap-2 mt-2">
                 <div>
                   <label className="block text-xs mb-1" style={{ color: C.muted }}>Medium</label>
-                  <input type="number" inputMode="numeric" value={gradeMedium} onChange={(e) => setGradeMedium(e.target.value)} min={0} className="w-full px-2 py-2 rounded-md border text-sm" style={{ background: '#fff', borderColor: C.border }} />
+                  <input type="number" inputMode="numeric" value={gradeMedium} onChange={(e) => setGradeMedium(e.target.value)} min={0} className="w-full px-2 py-2 rounded-md border text-sm" style={{ background: "var(--paper)", borderColor: C.border }} />
                 </div>
                 <div>
                   <label className="block text-xs mb-1" style={{ color: C.muted }}>Large</label>
-                  <input type="number" inputMode="numeric" value={gradeLarge} onChange={(e) => setGradeLarge(e.target.value)} min={0} className="w-full px-2 py-2 rounded-md border text-sm" style={{ background: '#fff', borderColor: C.border }} />
+                  <input type="number" inputMode="numeric" value={gradeLarge} onChange={(e) => setGradeLarge(e.target.value)} min={0} className="w-full px-2 py-2 rounded-md border text-sm" style={{ background: "var(--paper)", borderColor: C.border }} />
                 </div>
                 <div>
                   <label className="block text-xs mb-1" style={{ color: C.muted }}>Small</label>
-                  <input type="number" inputMode="numeric" value={gradeSmall} onChange={(e) => setGradeSmall(e.target.value)} min={0} className="w-full px-2 py-2 rounded-md border text-sm" style={{ background: '#fff', borderColor: C.border }} />
+                  <input type="number" inputMode="numeric" value={gradeSmall} onChange={(e) => setGradeSmall(e.target.value)} min={0} className="w-full px-2 py-2 rounded-md border text-sm" style={{ background: "var(--paper)", borderColor: C.border }} />
                 </div>
               </div>
             </details>
@@ -310,7 +310,7 @@ function EggsNewInner() {
                 onChange={(e) => setBrokenEggs(e.target.value)}
                 min={0}
                 className="w-full px-3 py-2 rounded-md border text-sm"
-                style={{ background: '#fff', borderColor: C.border }}
+                style={{ background: "var(--paper)", borderColor: C.border }}
               />
             </div>
 
@@ -322,7 +322,7 @@ function EggsNewInner() {
                 maxLength={500}
                 rows={2}
                 className="w-full px-3 py-2 rounded-md border text-sm"
-                style={{ background: '#fff', borderColor: C.border }}
+                style={{ background: "var(--paper)", borderColor: C.border }}
               />
             </div>
           </div>

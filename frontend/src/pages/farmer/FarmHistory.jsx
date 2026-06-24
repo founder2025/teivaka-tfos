@@ -25,7 +25,7 @@ import ModeDropdown from "../../components/farm/ModeDropdown";
 
 const C = {
   soil: "var(--soil)", cream: "var(--cream)", border: "#E6DED0", muted: "var(--muted)", ink: "#3A2E26",
-  green: "var(--green)", greenDk: "var(--green-dk)", amber: "var(--amber)", red: "var(--red)", greenTint: "#E9F2DD", paper: "#FCFAF5",
+  green: "var(--green)", greenDk: "var(--green-dk)", amber: "var(--amber)", red: "var(--red)", greenTint: "#E9F2DD", paper: "var(--cream-2)",
 };
 const FOCUS = "focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--green)] focus-visible:ring-offset-1 transition";
 const PAGE = 100;
@@ -368,7 +368,7 @@ function HistoryInner() {
                       const Icon = CAT_ICON[e.cat] || Sprout;
                       return (
                         <div key={e.id} role="button" tabIndex={0} onClick={() => go(e.route)} onKeyDown={(ev) => { if (ev.key === "Enter") go(e.route); }}
-                          className={`flex gap-3 py-2.5 cursor-pointer hover:bg-[#FCFAF5] -mx-1 px-1 rounded ${FOCUS}`} style={{ borderBottom: idx < evs.length - 1 ? `1px solid rgba(92,64,51,0.07)` : "none" }}>
+                          className={`flex gap-3 py-2.5 cursor-pointer hover:bg-[var(--cream-2)] -mx-1 px-1 rounded ${FOCUS}`} style={{ borderBottom: idx < evs.length - 1 ? `1px solid rgba(92,64,51,0.07)` : "none" }}>
                           <div className="w-10 shrink-0 text-xs font-semibold pt-0.5" style={{ color: C.muted }}>{e.time || "—"}</div>
                           <div className="shrink-0 mt-1 w-2 h-2 rounded-full" style={{ background: e.isPhoto ? C.amber : C.green }} />
                           <div className="flex-1 min-w-0">

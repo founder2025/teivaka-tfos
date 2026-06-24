@@ -23,21 +23,25 @@
   --green: #0A7D6F;
   --cream: #F8FAFC;
   --soil:  #1F2937;
+  --paper: #FFFFFF;
+  --green-dk: #086456;
 }
 
 /* Dark mode: flip the global --color-* namespace (body bg/text + auth/marketing
    surfaces). The .tfp token set (--cream/--soil/...) has its own dark override in
    prototype.css. data-theme is set by the no-flash boot script in index.html. */
 html[data-theme="dark"] {
-  --color-soil:   #EBDEC9;
-  --color-green:  #8FD06E;
-  --color-cream:  #16130E;
+  --color-soil:   #F8FAFC;
+  --color-green:  #0BAF9A;
+  --color-cream:  #0B1F33;
   --color-gold:   #E8BE48;
   --color-slate:  #0E1117;
-  --color-border: #4D4537;
-  --green: #8FD06E;
-  --cream: #16130E;
-  --soil:  #EBDEC9;
+  --color-border: #27313D;
+  --green: #0BAF9A;
+  --cream: #0B1F33;
+  --soil:  #F8FAFC;
+  --paper: #1F2937;
+  --green-dk: #34D3BF;
   color-scheme: dark;
 }
 

@@ -22,15 +22,16 @@
 }
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --cream: #16130E; --paper: #232019; --cream-2: #322D24;
-  --green: #8FD06E; --green-dk: #A8DD8C; --soil: #EBDEC9; --soil-2: #D2BFA6;
-  --amber: #E8BE48; --red: #ED6E68; --line: #4D4537; --ink: #F4EEE2; --muted: #C0B4A0;
-  --amber-bg: #3D3214; --green-tint: #1E2A1A; --danger-bg: #3A1E1B; --muted-bg: #2A2620; --topbar-bg: #232019; --amber-grad: linear-gradient(135deg, #3D3214, #2A2014);
-  --img-grad: linear-gradient(135deg, #2C2820, #1C1813);
+  /* Ocean Teal — dark */
+  --cream: #0B1F33; --paper: #1F2937; --cream-2: #27313D;
+  --green: #0BAF9A; --green-dk: #34D3BF; --soil: #F8FAFC; --soil-2: #CBD5E1;
+  --amber: #E8BE48; --red: #F87171; --line: #2A3543; --ink: #F8FAFC; --muted: #94A3B8;
+  --amber-bg: #3D3214; --green-tint: #10342E; --danger-bg: #3A1E1B; --muted-bg: #27313D; --topbar-bg: #1F2937; --amber-grad: linear-gradient(135deg, #3D3214, #2A2014);
+  --img-grad: linear-gradient(135deg, #16323A, #0E2630);
   --shadow: 0 1px 0 rgba(255,255,255,0.04), 0 2px 10px rgba(0,0,0,0.5);
   --shadow-lg: 0 1px 0 rgba(255,255,255,0.05), 0 10px 30px rgba(0,0,0,0.65);
-  --v-mixed: #C0B4A0; --v-crops: #8FD06E; --v-horticulture: #E8BE48; --v-livestock: #C49A78;
-  --v-aquaculture: #6BC4AC; --v-forestry: #6FB585; --v-floriculture: #E09DAE; --v-protected: #9DB0C4;
+  --v-mixed: #94A3B8; --v-crops: #34D3BF; --v-horticulture: #E8BE48; --v-livestock: #CBD5E1;
+  --v-aquaculture: #5EE0CE; --v-forestry: #6FB585; --v-floriculture: #E09DAE; --v-protected: #9DB0C4;
 }
 :root[data-theme="dark"] .card { border: 1px solid var(--line); box-shadow: var(--shadow); }
 .tfp * { box-sizing: border-box; }

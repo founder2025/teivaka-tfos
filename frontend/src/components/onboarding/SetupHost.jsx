@@ -217,7 +217,7 @@ export default function SetupHost() {
         <div className="flex items-start gap-3 p-4" style={{ background: C.cream }}>
           <span
             className="flex items-center justify-center rounded-full shrink-0"
-            style={{ width: 36, height: 36, background: "#fff", border: `1px solid ${C.line}` }}
+            style={{ width: 36, height: 36, background: "var(--paper)", border: `1px solid ${C.line}` }}
             aria-hidden="true"
           >
             <Hand size={18} style={{ color: C.green }} />
@@ -357,7 +357,7 @@ export default function SetupHost() {
                             className="px-2.5 py-1 rounded-full text-xs font-semibold"
                             style={on
                               ? { background: C.green, color: "#fff" }
-                              : { background: "#fff", color: C.soil, border: `1px solid ${C.line}` }}
+                              : { background: "var(--paper)", color: C.soil, border: `1px solid ${C.line}` }}
                           >
                             {e.label}
                           </button>

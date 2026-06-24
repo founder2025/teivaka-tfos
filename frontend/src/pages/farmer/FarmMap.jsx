@@ -628,15 +628,15 @@ export default function FarmMap({ farmId, onCountsChange, openRequest, onSaved }
                     <div className="fixed inset-0 z-[1090]" onClick={() => setAddMenu(false)} />
                     <div className="absolute left-0 top-full mt-1.5 z-[1100] rounded-xl shadow-xl overflow-hidden" style={{ width: 210, background: "var(--paper)", border: `1px solid ${C.border}` }}>
                       {[["BOUNDARY", "Farm boundary", C.soil], ["ZONE", "Zone", C.green], ["BLOCK", "Block", C.amber]].map(([k, label, dot]) => (
-                        <button key={k} onClick={() => addDraw(k)} className="w-full text-left flex items-center gap-2.5 px-3.5 py-2.5 text-sm font-semibold hover:bg-[#FCFAF5]" style={{ color: C.soil }}>
+                        <button key={k} onClick={() => addDraw(k)} className="w-full text-left flex items-center gap-2.5 px-3.5 py-2.5 text-sm font-semibold hover:bg-[var(--cream-2)]" style={{ color: C.soil }}>
                           <span className="w-2.5 h-2.5 rounded-full" style={{ background: dot }} />{label}
                         </button>
                       ))}
-                      <button onClick={addFacility} className="w-full text-left flex items-center gap-2.5 px-3.5 py-2.5 text-sm font-semibold hover:bg-[#FCFAF5]" style={{ color: C.soil }}>
+                      <button onClick={addFacility} className="w-full text-left flex items-center gap-2.5 px-3.5 py-2.5 text-sm font-semibold hover:bg-[var(--cream-2)]" style={{ color: C.soil }}>
                         <MapPin size={15} style={{ color: C.soil }} />Facility pin
                       </button>
                       <div style={{ borderTop: `1px solid ${C.border}` }} />
-                      <button onClick={addFarm} className="w-full text-left flex items-center gap-2.5 px-3.5 py-2.5 text-sm font-semibold hover:bg-[#FCFAF5]" style={{ color: C.greenDk }}>
+                      <button onClick={addFarm} className="w-full text-left flex items-center gap-2.5 px-3.5 py-2.5 text-sm font-semibold hover:bg-[var(--cream-2)]" style={{ color: C.greenDk }}>
                         <Sprout size={15} />New farm…
                       </button>
                     </div>
@@ -856,13 +856,13 @@ const THEME_CSS = `
 }
 /* Bigger, easier-to-tap zoom controls */
 .tfos-map .leaflet-bar a {
-  color: var(--soil) !important; background: #FCFAF5 !important;
+  color: var(--soil) !important; background: var(--cream-2) !important;
   width: 42px !important; height: 42px !important; line-height: 42px !important; font-size: 22px !important;
 }
 .tfos-map .leaflet-bar a:hover { background: var(--cream) !important; }
 /* Bigger Geoman draw toolbar + icons */
 .tfos-map .leaflet-pm-toolbar .leaflet-buttons-control-button {
-  background-color: #FCFAF5 !important; box-shadow: 0 1px 2px rgba(58,46,38,.12) !important;
+  background-color: var(--cream-2) !important; box-shadow: 0 1px 2px rgba(58,46,38,.12) !important;
   width: 44px !important; height: 44px !important; background-size: 24px 24px !important;
 }
 .tfos-map .leaflet-pm-toolbar .button-container { width: 44px !important; height: 44px !important; }

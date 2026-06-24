@@ -232,7 +232,7 @@ export default function Members() {
 
         {/* Verification gate */}
         {state === "forbidden" && (
-          <div className="rounded-2xl p-8 text-center" style={{ background: "#fff", border: `1px solid ${C.line}` }}>
+          <div className="rounded-2xl p-8 text-center" style={{ background: "var(--paper)", border: `1px solid ${C.line}` }}>
             <ShieldCheck size={32} style={{ color: C.greenDk, margin: "0 auto 10px" }} />
             <p className="font-semibold" style={{ color: C.soil }}>Verification required</p>
             <p className="text-sm mt-1 max-w-sm mx-auto" style={{ color: C.muted }}>
@@ -242,7 +242,7 @@ export default function Members() {
         )}
 
         {state === "error" && (
-          <div className="rounded-2xl p-6 text-center" style={{ background: "#fff", border: `1px solid ${C.line}` }}>
+          <div className="rounded-2xl p-6 text-center" style={{ background: "var(--paper)", border: `1px solid ${C.line}` }}>
             <p className="font-semibold" style={{ color: C.soil }}>Couldn't load the network</p>
             <button onClick={loadNetwork} className="mt-3 px-3 py-1.5 rounded-lg text-white text-xs font-semibold" style={{ background: C.green }}>Retry</button>
           </div>
@@ -274,7 +274,7 @@ export default function Members() {
               </div>
               <button type="button" onClick={useMyLocation} disabled={locating}
                 className="px-2.5 py-2 rounded-lg text-xs font-semibold inline-flex items-center gap-1.5 disabled:opacity-50"
-                style={{ border: `1px solid ${C.line}`, color: C.greenDk, background: "#fff", whiteSpace: "nowrap" }}>
+                style={{ border: `1px solid ${C.line}`, color: C.greenDk, background: "var(--paper)", whiteSpace: "nowrap" }}>
                 <Crosshair size={13} /> {locating ? "Locating…" : "My location"}
               </button>
             </div>
@@ -287,7 +287,7 @@ export default function Members() {
                   className="px-2.5 py-1 rounded-full text-xs font-semibold"
                   style={radius === km
                     ? { background: C.green, color: "#fff" }
-                    : { background: "#fff", color: C.soil, border: `1px solid ${C.line}` }}>
+                    : { background: "var(--paper)", color: C.soil, border: `1px solid ${C.line}` }}>
                   {km ? `${km} km` : "Any"}
                 </button>
               ))}
@@ -300,7 +300,7 @@ export default function Members() {
                   className="px-2.5 py-1 rounded-full text-xs font-semibold"
                   style={cats.length === 0
                     ? { background: C.greenDk, color: "#fff" }
-                    : { background: "#fff", color: C.soil, border: `1px solid ${C.line}` }}>
+                    : { background: "var(--paper)", color: C.soil, border: `1px solid ${C.line}` }}>
                   All
                 </button>
                 {Object.entries(data.category_counts).sort((a, b) => b[1] - a[1]).map(([cat, n]) => {
@@ -311,7 +311,7 @@ export default function Members() {
                       className="px-2.5 py-1 rounded-full text-xs font-semibold"
                       style={on
                         ? { background: C.greenDk, color: "#fff" }
-                        : { background: "#fff", color: C.soil, border: `1px solid ${C.line}` }}>
+                        : { background: "var(--paper)", color: C.soil, border: `1px solid ${C.line}` }}>
                       {(TYPE_LABEL[cat] || cat)} · {n}
                     </button>
                   );
@@ -348,7 +348,7 @@ export default function Members() {
                 </p>
                 <div className="grid gap-2">
                   {nearest.map((m) => (
-                    <div key={m.id} className="flex items-center gap-2 rounded-xl px-3 py-2.5" style={{ background: "#fff", border: `1px solid ${C.line}` }}>
+                    <div key={m.id} className="flex items-center gap-2 rounded-xl px-3 py-2.5" style={{ background: "var(--paper)", border: `1px solid ${C.line}` }}>
                       <button type="button" onClick={() => focusMember(m.id)}
                         className="flex items-center gap-3 flex-1 min-w-0 text-left" style={{ background: "transparent", border: 0, padding: 0, cursor: "pointer" }}
                         title="Show on map">

@@ -41,7 +41,7 @@ const STATE_STYLE = {
 
 const C = {
   soil: "var(--soil)", cream: "var(--cream)", border: "#E6DED0", muted: "var(--muted)", ink: "#3A2E26",
-  green: "var(--green)", greenDk: "var(--green-dk)", amber: "var(--amber)", red: "var(--red)", greenTint: "#E9F2DD", paper: "#FCFAF5",
+  green: "var(--green)", greenDk: "var(--green-dk)", amber: "var(--amber)", red: "var(--red)", greenTint: "#E9F2DD", paper: "var(--cream-2)",
 };
 const FOCUS = "focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--green)] focus-visible:ring-offset-1 transition";
 
@@ -247,7 +247,7 @@ function LocationsInner() {
                     const sty = st ? (STATE_STYLE[st.state] || STATE_STYLE.EMPTY) : null;
                     return (
                       <div key={p.pu_id} role="button" tabIndex={0} onClick={() => setSelected(p.pu_id)} onKeyDown={(e) => { if (e.key === "Enter") setSelected(p.pu_id); }}
-                        className={`flex items-center gap-2 rounded-lg p-2 cursor-pointer hover:bg-[#FCFAF5] ${FOCUS}`} style={{ border: `1px solid ${selected === p.pu_id ? C.green : "transparent"}` }}>
+                        className={`flex items-center gap-2 rounded-lg p-2 cursor-pointer hover:bg-[var(--cream-2)] ${FOCUS}`} style={{ border: `1px solid ${selected === p.pu_id ? C.green : "transparent"}` }}>
                         <span className="text-xs font-semibold shrink-0" style={{ color: C.soil }}>{puCode(p)}</span>
                         <span className="text-[11px] flex-1 min-w-0 truncate" style={{ color: C.muted }}>{st?.crop || p.production_name || zName(zoneById[p.zone_id] || {})}</span>
                         {sty && <span className="text-[10px] px-1.5 py-0.5 rounded-full shrink-0 font-semibold" style={{ color: sty.fg, background: sty.bg }}>{st.label}</span>}

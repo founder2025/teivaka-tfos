@@ -124,14 +124,14 @@ function Inner() {
           <div className="text-xs font-medium uppercase tracking-wide mb-2" style={{ color: C.muted }}>Where</div>
           <div className="space-y-3">
             <div><label className="block text-xs mb-1" style={{ color: C.muted }}>Farm</label>
-              <div className="px-3 py-2 rounded-md border text-sm" style={{ background: '#fff', borderColor: C.border }}>{loading ? 'Loading...' : (farmId || '—')}</div></div>
+              <div className="px-3 py-2 rounded-md border text-sm" style={{ background: "var(--paper)", borderColor: C.border }}>{loading ? 'Loading...' : (farmId || '—')}</div></div>
             <div><label className="block text-xs mb-1" style={{ color: C.muted }}>Coop (optional)</label>
-              <select value={puId} onChange={e => setPuId(e.target.value)} disabled={loading} className="w-full px-3 py-2 rounded-md border text-sm" style={{ background: '#fff', borderColor: C.border }}>
+              <select value={puId} onChange={e => setPuId(e.target.value)} disabled={loading} className="w-full px-3 py-2 rounded-md border text-sm" style={{ background: "var(--paper)", borderColor: C.border }}>
                 <option value="">— Whole farm —</option>
                 {pus.map(pu => <option key={pu.pu_id} value={pu.pu_id}>{pu.farmer_label || pu.pu_name || pu.pu_id}</option>)}
               </select></div>
             <div><label className="block text-xs mb-1" style={{ color: C.muted }}>Flock (optional)</label>
-              <select value={flockId} onChange={e => setFlockId(e.target.value)} disabled={loading} className="w-full px-3 py-2 rounded-md border text-sm" style={{ background: '#fff', borderColor: C.border }}>
+              <select value={flockId} onChange={e => setFlockId(e.target.value)} disabled={loading} className="w-full px-3 py-2 rounded-md border text-sm" style={{ background: "var(--paper)", borderColor: C.border }}>
                 <option value="">— No specific flock —</option>
                 {visibleFlocks.map(f => <option key={f.flock_id} value={f.flock_id}>{f.flock_label} ({f.current_count} birds)</option>)}
               </select></div>
@@ -148,28 +148,28 @@ function Inner() {
             </div>
             <div><label className="block text-xs mb-1" style={{ color: C.muted }}>How many eggs *</label>
               <input type="number" inputMode="numeric" value={qtyEggs} onChange={e => setQtyEggs(e.target.value)} min={1} placeholder="e.g. 120"
-                className="w-full px-3 py-3 rounded-md border text-lg" style={{ background: '#fff', borderColor: errs.qty_eggs ? C.red : C.border }} />
+                className="w-full px-3 py-3 rounded-md border text-lg" style={{ background: "var(--paper)", borderColor: errs.qty_eggs ? C.red : C.border }} />
               {errs.qty_eggs && <div className="text-xs mt-1" style={{ color: C.red }}>{errs.qty_eggs}</div>}</div>
             {disposition === 'SOLD' && (
               <div><label className="block text-xs mb-1" style={{ color: C.muted }}>Total revenue (FJD) *</label>
                 <input type="text" inputMode="decimal" value={totalRevenue} onChange={e => setTotalRevenue(e.target.value)} placeholder="e.g. 30.00"
-                  className="w-full px-3 py-3 rounded-md border text-lg" style={{ background: '#fff', borderColor: errs.total_revenue_fjd ? C.red : C.border }} />
+                  className="w-full px-3 py-3 rounded-md border text-lg" style={{ background: "var(--paper)", borderColor: errs.total_revenue_fjd ? C.red : C.border }} />
                 {errs.total_revenue_fjd && <div className="text-xs mt-1" style={{ color: C.red }}>{errs.total_revenue_fjd}</div>}</div>
             )}
             <div><label className="block text-xs mb-1" style={{ color: C.muted }}>Date sold *</label>
-              <input type="date" value={saleDate} onChange={e => setSaleDate(e.target.value)} className="w-full px-3 py-2 rounded-md border text-sm" style={{ background: '#fff', borderColor: C.border }} /></div>
+              <input type="date" value={saleDate} onChange={e => setSaleDate(e.target.value)} className="w-full px-3 py-2 rounded-md border text-sm" style={{ background: "var(--paper)", borderColor: C.border }} /></div>
             {disposition === 'SOLD' && (<>
               <div><label className="block text-xs mb-1" style={{ color: C.muted }}>Buyer (optional)</label>
-                <select value={buyerId} onChange={e => setBuyerId(e.target.value)} className="w-full px-3 py-2 rounded-md border text-sm" style={{ background: '#fff', borderColor: C.border }}>
+                <select value={buyerId} onChange={e => setBuyerId(e.target.value)} className="w-full px-3 py-2 rounded-md border text-sm" style={{ background: "var(--paper)", borderColor: C.border }}>
                   <option value="">— Not specified —</option>
                   {buyers.map(b => <option key={b.library_id} value={b.library_id}>{b.name}</option>)}
                 </select></div>
               <div><label className="block text-xs mb-1" style={{ color: C.muted }}>Price per dozen (FJD, optional)</label>
                 <input type="text" inputMode="decimal" value={pricePerDozen} onChange={e => setPricePerDozen(e.target.value)} placeholder="e.g. 3.00"
-                  className="w-full px-3 py-2 rounded-md border text-sm" style={{ background: '#fff', borderColor: C.border }} /></div>
+                  className="w-full px-3 py-2 rounded-md border text-sm" style={{ background: "var(--paper)", borderColor: C.border }} /></div>
             </>)}
             <div><label className="block text-xs mb-1" style={{ color: C.muted }}>Notes (optional)</label>
-              <textarea value={notes} onChange={e => setNotes(e.target.value)} maxLength={500} rows={2} className="w-full px-3 py-2 rounded-md border text-sm" style={{ background: '#fff', borderColor: C.border }} /></div>
+              <textarea value={notes} onChange={e => setNotes(e.target.value)} maxLength={500} rows={2} className="w-full px-3 py-2 rounded-md border text-sm" style={{ background: "var(--paper)", borderColor: C.border }} /></div>
           </div>
         </section>
         {anchorError && <div className="text-sm px-3 py-2 rounded-md" style={{ background: '#FDECEA', color: C.red, border: `1px solid ${C.red}` }}>{anchorError}</div>}

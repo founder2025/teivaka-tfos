@@ -4,11 +4,9 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#0BAF9A" />
-    <!-- Light-only: opt out of browser/OS auto-dark so dark-mode devices don't
-         dim/invert the UI (the washed-out cards + near-invisible text). -->
-    <meta name="color-scheme" content="light" />
-    <!-- Single light theme only (dark/system mode retired). Force light before first paint. -->
-    <script>(function(){try{var r=document.documentElement;r.setAttribute('data-theme','light');var m=document.querySelector('meta[name=theme-color]');if(m)m.setAttribute('content','#0BAF9A');}catch(e){}})();</script>
+    <!-- Ocean Teal supports light + dark. Theme = saved choice → else OS preference. -->
+    <meta name="color-scheme" content="light dark" />
+    <script>(function(){try{var s=localStorage.getItem('teivaka-theme');var d=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches;var t=s||(d?'dark':'light');var r=document.documentElement;r.setAttribute('data-theme',t);var m=document.querySelector('meta[name=theme-color]');if(m)m.setAttribute('content',t==='dark'?'#0B1F33':'#0BAF9A');}catch(e){document.documentElement.setAttribute('data-theme','light');}})();</script>
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />

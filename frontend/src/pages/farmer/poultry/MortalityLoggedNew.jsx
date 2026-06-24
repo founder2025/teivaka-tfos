@@ -194,7 +194,7 @@ function MortalityLoggedNewInner() {
           <div className="space-y-3">
             <div>
               <label className="block text-xs mb-1" style={{ color: C.muted }}>Farm</label>
-              <div className="px-3 py-2 rounded-md border text-sm" style={{ background: '#fff', borderColor: C.border }}>
+              <div className="px-3 py-2 rounded-md border text-sm" style={{ background: "var(--paper)", borderColor: C.border }}>
                 {loadingAnchors ? 'Loading...' : (farmId || '—')}
               </div>
             </div>
@@ -206,7 +206,7 @@ function MortalityLoggedNewInner() {
                 onChange={(e) => setPuId(e.target.value)}
                 disabled={loadingAnchors}
                 className="w-full px-3 py-2 rounded-md border text-sm"
-                style={{ background: '#fff', borderColor: C.border }}
+                style={{ background: "var(--paper)", borderColor: C.border }}
               >
                 <option value="">— Show all flocks —</option>
                 {pus.map((pu) => (
@@ -224,7 +224,7 @@ function MortalityLoggedNewInner() {
                 onChange={(e) => setFlockId(e.target.value)}
                 disabled={loadingAnchors}
                 className="w-full px-3 py-3 rounded-md border text-base"
-                style={{ background: '#fff', borderColor: !flockId && farmId ? C.amber : C.border }}
+                style={{ background: "var(--paper)", borderColor: !flockId && farmId ? C.amber : C.border }}
               >
                 <option value="">Pick a flock…</option>
                 {visibleFlocks.map((f) => (
@@ -257,7 +257,7 @@ function MortalityLoggedNewInner() {
                 max={selectedFlock?.current_count || 1000000}
                 placeholder="e.g. 3"
                 className="w-full px-3 py-3 rounded-md border text-lg"
-                style={{ background: '#fff', borderColor: fieldErrors.qty_dead ? C.red : C.border }}
+                style={{ background: "var(--paper)", borderColor: fieldErrors.qty_dead ? C.red : C.border }}
               />
               {selectedFlock && (
                 <div className="text-xs mt-1" style={{ color: C.muted }}>
@@ -275,7 +275,7 @@ function MortalityLoggedNewInner() {
                 value={cause}
                 onChange={(e) => setCause(e.target.value)}
                 className="w-full px-3 py-3 rounded-md border text-base"
-                style={{ background: '#fff', borderColor: fieldErrors.cause ? C.red : C.border }}
+                style={{ background: "var(--paper)", borderColor: fieldErrors.cause ? C.red : C.border }}
               >
                 <option value="">Pick a cause…</option>
                 {CAUSES.map((c) => (
@@ -295,7 +295,7 @@ function MortalityLoggedNewInner() {
                 maxLength={500}
                 rows={2}
                 className="w-full px-3 py-2 rounded-md border text-sm"
-                style={{ background: '#fff', borderColor: C.border }}
+                style={{ background: "var(--paper)", borderColor: C.border }}
               />
             </div>
           </div>

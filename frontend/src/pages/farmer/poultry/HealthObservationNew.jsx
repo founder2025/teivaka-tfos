@@ -147,14 +147,14 @@ function Inner() {
           <div className="text-xs font-medium uppercase tracking-wide mb-2" style={{ color: C.muted }}>Where</div>
           <div className="space-y-3">
             <div><label className="block text-xs mb-1" style={{ color: C.muted }}>Farm</label>
-              <div className="px-3 py-2 rounded-md border text-sm" style={{ background: '#fff', borderColor: C.border }}>{loading ? 'Loading...' : (farmId || '—')}</div></div>
+              <div className="px-3 py-2 rounded-md border text-sm" style={{ background: "var(--paper)", borderColor: C.border }}>{loading ? 'Loading...' : (farmId || '—')}</div></div>
             <div><label className="block text-xs mb-1" style={{ color: C.muted }}>Coop (filter)</label>
-              <select value={puId} onChange={e => setPuId(e.target.value)} disabled={loading} className="w-full px-3 py-2 rounded-md border text-sm" style={{ background: '#fff', borderColor: C.border }}>
+              <select value={puId} onChange={e => setPuId(e.target.value)} disabled={loading} className="w-full px-3 py-2 rounded-md border text-sm" style={{ background: "var(--paper)", borderColor: C.border }}>
                 <option value="">— Show all —</option>
                 {pus.map(pu => <option key={pu.pu_id} value={pu.pu_id}>{pu.farmer_label || pu.pu_name || pu.pu_id}</option>)}
               </select></div>
             <div><label className="block text-xs mb-1" style={{ color: C.muted }}>Flock *</label>
-              <select value={flockId} onChange={e => setFlockId(e.target.value)} disabled={loading} className="w-full px-3 py-3 rounded-md border text-base" style={{ background: '#fff', borderColor: !flockId && farmId ? C.amber : C.border }}>
+              <select value={flockId} onChange={e => setFlockId(e.target.value)} disabled={loading} className="w-full px-3 py-3 rounded-md border text-base" style={{ background: "var(--paper)", borderColor: !flockId && farmId ? C.amber : C.border }}>
                 <option value="">Pick a flock…</option>
                 {visibleFlocks.map(f => <option key={f.flock_id} value={f.flock_id}>{f.flock_label} ({f.current_count} birds)</option>)}
               </select></div>
@@ -190,13 +190,13 @@ function Inner() {
             <div>
               <label className="block text-xs mb-1" style={{ color: C.muted }}>How many birds affected? *</label>
               <input type="number" inputMode="numeric" value={qtyAffected} onChange={e => setQtyAffected(e.target.value)} min={1} placeholder="e.g. 3"
-                className="w-full px-3 py-3 rounded-md border text-lg" style={{ background: '#fff', borderColor: errs.qty_affected ? C.red : C.border }} />
+                className="w-full px-3 py-3 rounded-md border text-lg" style={{ background: "var(--paper)", borderColor: errs.qty_affected ? C.red : C.border }} />
               {selectedFlock && <div className="text-xs mt-1" style={{ color: C.muted }}>Flock has {selectedFlock.current_count} birds.</div>}
               {errs.qty_affected && <div className="text-xs mt-1" style={{ color: C.red }}>{errs.qty_affected}</div>}
             </div>
             <div>
               <label className="block text-xs mb-1" style={{ color: C.muted }}>Notes (optional)</label>
-              <textarea value={notes} onChange={e => setNotes(e.target.value)} maxLength={500} rows={2} className="w-full px-3 py-2 rounded-md border text-sm" style={{ background: '#fff', borderColor: C.border }} placeholder="When did it start? Any other details?" />
+              <textarea value={notes} onChange={e => setNotes(e.target.value)} maxLength={500} rows={2} className="w-full px-3 py-2 rounded-md border text-sm" style={{ background: "var(--paper)", borderColor: C.border }} placeholder="When did it start? Any other details?" />
             </div>
           </div>
         </section>

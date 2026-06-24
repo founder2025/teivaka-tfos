@@ -195,7 +195,7 @@ function FeedReceivedNewInner() {
           <div className="space-y-3">
             <div>
               <label className="block text-xs mb-1" style={{ color: C.muted }}>Farm</label>
-              <div className="px-3 py-2 rounded-md border text-sm" style={{ background: '#fff', borderColor: C.border }}>
+              <div className="px-3 py-2 rounded-md border text-sm" style={{ background: "var(--paper)", borderColor: C.border }}>
                 {loadingAnchors ? 'Loading...' : (farmId || '—')}
               </div>
             </div>
@@ -204,7 +204,7 @@ function FeedReceivedNewInner() {
               <label className="block text-xs mb-1" style={{ color: C.muted }}>Coop (optional)</label>
               <select value={puId} onChange={(e) => setPuId(e.target.value)} disabled={loadingAnchors}
                 className="w-full px-3 py-2 rounded-md border text-sm"
-                style={{ background: '#fff', borderColor: C.border }}>
+                style={{ background: "var(--paper)", borderColor: C.border }}>
                 <option value="">— Whole farm —</option>
                 {pus.map((pu) => (
                   <option key={pu.pu_id} value={pu.pu_id}>{pu.farmer_label || pu.pu_name || pu.pu_id}</option>
@@ -216,7 +216,7 @@ function FeedReceivedNewInner() {
               <label className="block text-xs mb-1" style={{ color: C.muted }}>Flock (optional)</label>
               <select value={flockId} onChange={(e) => setFlockId(e.target.value)} disabled={loadingAnchors}
                 className="w-full px-3 py-2 rounded-md border text-sm"
-                style={{ background: '#fff', borderColor: C.border }}>
+                style={{ background: "var(--paper)", borderColor: C.border }}>
                 <option value="">— No specific flock —</option>
                 {visibleFlocks.map((f) => (
                   <option key={f.flock_id} value={f.flock_id}>
@@ -236,7 +236,7 @@ function FeedReceivedNewInner() {
               <label className="block text-xs mb-1" style={{ color: C.muted }}>Feed type *</label>
               <select value={feedTypeId} onChange={(e) => setFeedTypeId(e.target.value)}
                 className="w-full px-3 py-3 rounded-md border text-base"
-                style={{ background: '#fff', borderColor: fieldErrors.feed_type_id ? C.red : C.border }}>
+                style={{ background: "var(--paper)", borderColor: fieldErrors.feed_type_id ? C.red : C.border }}>
                 <option value="">Pick a feed type…</option>
                 {feedTypes.map((f) => (
                   <option key={f.library_id} value={f.library_id}>{f.name}</option>
@@ -253,7 +253,7 @@ function FeedReceivedNewInner() {
               <input type="text" inputMode="decimal" value={qtyKg} onChange={(e) => setQtyKg(e.target.value)}
                 placeholder="e.g. 50.5"
                 className="w-full px-3 py-3 rounded-md border text-lg"
-                style={{ background: '#fff', borderColor: fieldErrors.qty_kg ? C.red : C.border }} />
+                style={{ background: "var(--paper)", borderColor: fieldErrors.qty_kg ? C.red : C.border }} />
               {fieldErrors.qty_kg && <div className="text-xs mt-1" style={{ color: C.red }}>{fieldErrors.qty_kg}</div>}
             </div>
 
@@ -261,14 +261,14 @@ function FeedReceivedNewInner() {
               <label className="block text-xs mb-1" style={{ color: C.muted }}>Date received *</label>
               <input type="date" value={deliveryDate} onChange={(e) => setDeliveryDate(e.target.value)}
                 className="w-full px-3 py-2 rounded-md border text-sm"
-                style={{ background: '#fff', borderColor: fieldErrors.delivery_date ? C.red : C.border }} />
+                style={{ background: "var(--paper)", borderColor: fieldErrors.delivery_date ? C.red : C.border }} />
             </div>
 
             <div>
               <label className="block text-xs mb-1" style={{ color: C.muted }}>Supplier (optional)</label>
               <select value={supplierId} onChange={(e) => setSupplierId(e.target.value)}
                 className="w-full px-3 py-2 rounded-md border text-sm"
-                style={{ background: '#fff', borderColor: C.border }}>
+                style={{ background: "var(--paper)", borderColor: C.border }}>
                 <option value="">— Not specified —</option>
                 {suppliers.map((s) => (
                   <option key={s.library_id} value={s.library_id}>{s.name}</option>
@@ -281,7 +281,7 @@ function FeedReceivedNewInner() {
               <input type="text" inputMode="decimal" value={costFjd} onChange={(e) => setCostFjd(e.target.value)}
                 placeholder="e.g. 125.75"
                 className="w-full px-3 py-2 rounded-md border text-sm"
-                style={{ background: '#fff', borderColor: fieldErrors.cost_fjd ? C.red : C.border }} />
+                style={{ background: "var(--paper)", borderColor: fieldErrors.cost_fjd ? C.red : C.border }} />
               {fieldErrors.cost_fjd && <div className="text-xs mt-1" style={{ color: C.red }}>{fieldErrors.cost_fjd}</div>}
             </div>
 
@@ -289,14 +289,14 @@ function FeedReceivedNewInner() {
               <label className="block text-xs mb-1" style={{ color: C.muted }}>Batch number (optional)</label>
               <input type="text" value={batchNumber} onChange={(e) => setBatchNumber(e.target.value)} maxLength={100}
                 className="w-full px-3 py-2 rounded-md border text-sm"
-                style={{ background: '#fff', borderColor: C.border }} />
+                style={{ background: "var(--paper)", borderColor: C.border }} />
             </div>
 
             <div>
               <label className="block text-xs mb-1" style={{ color: C.muted }}>Notes (optional)</label>
               <textarea value={notes} onChange={(e) => setNotes(e.target.value)} maxLength={500} rows={2}
                 className="w-full px-3 py-2 rounded-md border text-sm"
-                style={{ background: '#fff', borderColor: C.border }} />
+                style={{ background: "var(--paper)", borderColor: C.border }} />
             </div>
           </div>
         </section>

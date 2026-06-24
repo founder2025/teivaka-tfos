@@ -31,7 +31,7 @@ function ActiveBlockCard({ block, navigate }) {
   const isHealth = block.block_type === 'severe_health';
   const accentColor = isHealth ? C.red : C.amber;
   return (
-    <div className="rounded-md border p-4" style={{ background: '#fff', borderColor: accentColor, borderLeftWidth: 4 }}>
+    <div className="rounded-md border p-4" style={{ background: "var(--paper)", borderColor: accentColor, borderLeftWidth: 4 }}>
       <div className="flex items-start justify-between mb-2">
         <div>
           <div className="text-sm font-semibold" style={{ color: C.soil }}>{block.flock_id}</div>
@@ -123,7 +123,7 @@ function Inner() {
             {upcoming.length > 0 && (
               <section>
                 <h2 className="text-xs font-medium uppercase tracking-wide mb-3" style={{ color: C.muted }}>Clearing within 14 days</h2>
-                <div className="rounded-md border" style={{ background: '#fff', borderColor: C.border }}>
+                <div className="rounded-md border" style={{ background: "var(--paper)", borderColor: C.border }}>
                   {upcoming.map((u, i) => (
                     <div key={i} className={`px-4 py-3 ${i < upcoming.length - 1 ? 'border-b' : ''}`} style={{ borderColor: C.border }}>
                       <div className="flex items-center justify-between text-sm">
@@ -145,7 +145,7 @@ function Inner() {
             {recentAudit.length > 0 && (
               <section>
                 <h2 className="text-xs font-medium uppercase tracking-wide mb-3" style={{ color: C.muted }}>Recent block attempts</h2>
-                <div className="rounded-md border" style={{ background: '#fff', borderColor: C.border }}>
+                <div className="rounded-md border" style={{ background: "var(--paper)", borderColor: C.border }}>
                   {recentAudit.map((a, i) => (
                     <div key={i} className={`px-4 py-3 ${i < recentAudit.length - 1 ? 'border-b' : ''}`} style={{ borderColor: C.border }}>
                       <div className="flex items-start justify-between text-sm">

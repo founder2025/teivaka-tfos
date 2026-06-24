@@ -201,7 +201,7 @@ function VaccinationGivenNewInner() {
           <div className="space-y-3">
             <div>
               <label className="block text-xs mb-1" style={{ color: C.muted }}>Farm</label>
-              <div className="px-3 py-2 rounded-md border text-sm" style={{ background: '#fff', borderColor: C.border }}>
+              <div className="px-3 py-2 rounded-md border text-sm" style={{ background: "var(--paper)", borderColor: C.border }}>
                 {loadingAnchors ? 'Loading...' : (farmId || '—')}
               </div>
             </div>
@@ -213,7 +213,7 @@ function VaccinationGivenNewInner() {
                 onChange={(e) => setPuId(e.target.value)}
                 disabled={loadingAnchors}
                 className="w-full px-3 py-2 rounded-md border text-sm"
-                style={{ background: '#fff', borderColor: C.border }}
+                style={{ background: "var(--paper)", borderColor: C.border }}
               >
                 <option value="">— Show all flocks —</option>
                 {pus.map((pu) => (
@@ -231,7 +231,7 @@ function VaccinationGivenNewInner() {
                 onChange={(e) => setFlockId(e.target.value)}
                 disabled={loadingAnchors}
                 className="w-full px-3 py-3 rounded-md border text-base"
-                style={{ background: '#fff', borderColor: !flockId && farmId ? C.amber : C.border }}
+                style={{ background: "var(--paper)", borderColor: !flockId && farmId ? C.amber : C.border }}
               >
                 <option value="">Pick a flock…</option>
                 {visibleFlocks.map((f) => (
@@ -259,7 +259,7 @@ function VaccinationGivenNewInner() {
                 value={vaccineId}
                 onChange={(e) => setVaccineId(e.target.value)}
                 className="w-full px-3 py-3 rounded-md border text-base"
-                style={{ background: '#fff', borderColor: fieldErrors.vaccine_id ? C.red : C.border }}
+                style={{ background: "var(--paper)", borderColor: fieldErrors.vaccine_id ? C.red : C.border }}
               >
                 <option value="">Pick a vaccine…</option>
                 {vaccines.map((v) => (
@@ -284,7 +284,7 @@ function VaccinationGivenNewInner() {
                 value={route}
                 onChange={(e) => setRoute(e.target.value)}
                 className="w-full px-3 py-3 rounded-md border text-base"
-                style={{ background: '#fff', borderColor: fieldErrors.route ? C.red : C.border }}
+                style={{ background: "var(--paper)", borderColor: fieldErrors.route ? C.red : C.border }}
               >
                 <option value="">Pick a method…</option>
                 {ROUTES.map((r) => (
@@ -307,7 +307,7 @@ function VaccinationGivenNewInner() {
                 max={1000000}
                 placeholder={selectedFlock ? `Default: ${selectedFlock.current_count}` : ''}
                 className="w-full px-3 py-3 rounded-md border text-base"
-                style={{ background: '#fff', borderColor: fieldErrors.qty_doses ? C.red : C.border }}
+                style={{ background: "var(--paper)", borderColor: fieldErrors.qty_doses ? C.red : C.border }}
               />
               <div className="text-xs mt-1" style={{ color: C.muted }}>
                 Auto-filled from flock size. Override if different.
@@ -321,7 +321,7 @@ function VaccinationGivenNewInner() {
                 value={nextDueDate}
                 onChange={(e) => setNextDueDate(e.target.value)}
                 className="w-full px-3 py-2 rounded-md border text-sm"
-                style={{ background: '#fff', borderColor: C.border }}
+                style={{ background: "var(--paper)", borderColor: C.border }}
               />
             </div>
 
@@ -333,7 +333,7 @@ function VaccinationGivenNewInner() {
                 maxLength={500}
                 rows={2}
                 className="w-full px-3 py-2 rounded-md border text-sm"
-                style={{ background: '#fff', borderColor: C.border }}
+                style={{ background: "var(--paper)", borderColor: C.border }}
               />
             </div>
           </div>

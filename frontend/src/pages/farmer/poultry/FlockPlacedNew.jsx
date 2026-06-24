@@ -208,7 +208,7 @@ function FlockPlacedNewInner() {
           <div className="space-y-3">
             <div>
               <label className="block text-xs mb-1" style={{ color: C.muted }}>Farm</label>
-              <div className="px-3 py-2 rounded-md border text-sm" style={{ background: '#fff', borderColor: C.border }}>
+              <div className="px-3 py-2 rounded-md border text-sm" style={{ background: "var(--paper)", borderColor: C.border }}>
                 {loadingAnchors ? 'Loading…' : (farmId || '—')}
               </div>
             </div>
@@ -220,7 +220,7 @@ function FlockPlacedNewInner() {
                 onChange={(e) => setPuId(e.target.value)}
                 disabled={loadingAnchors}
                 className="w-full px-3 py-2 rounded-md border text-sm"
-                style={{ background: '#fff', borderColor: C.border }}
+                style={{ background: "var(--paper)", borderColor: C.border }}
               >
                 <option value="">— Not assigned to a coop yet —</option>
                 {pus.map((pu) => (
@@ -235,7 +235,7 @@ function FlockPlacedNewInner() {
               const aha = selPu?.area_sqm ? Number(selPu.area_sqm) / 10000 : null;
               if (!aha) return null;
               return (
-                <div style={{ border: `1px solid ${C.border}`, borderRadius: 12, padding: 12, background: '#FCFAF5' }}>
+                <div style={{ border: `1px solid ${C.border}`, borderRadius: 12, padding: 12, background: 'var(--cream-2)' }}>
                   <CapacityCalc areaHa={aha} unit="m2" compact />
                 </div>
               );
@@ -256,7 +256,7 @@ function FlockPlacedNewInner() {
                 maxLength={255}
                 placeholder="e.g. Layer batch May 2026"
                 className="w-full px-3 py-3 rounded-md border text-base"
-                style={{ background: '#fff', borderColor: fieldErrors.flock_label ? C.red : C.border }}
+                style={{ background: "var(--paper)", borderColor: fieldErrors.flock_label ? C.red : C.border }}
               />
               {fieldErrors.flock_label && (
                 <div className="text-xs mt-1" style={{ color: C.red }}>{fieldErrors.flock_label}</div>
@@ -269,7 +269,7 @@ function FlockPlacedNewInner() {
                 value={breedId}
                 onChange={(e) => setBreedId(e.target.value)}
                 className="w-full px-3 py-3 rounded-md border text-base"
-                style={{ background: '#fff', borderColor: fieldErrors.breed_id ? C.red : C.border }}
+                style={{ background: "var(--paper)", borderColor: fieldErrors.breed_id ? C.red : C.border }}
               >
                 <option value="">Pick a breed…</option>
                 {breeds.map((b) => (
@@ -294,7 +294,7 @@ function FlockPlacedNewInner() {
                 value={flockType}
                 onChange={(e) => setFlockType(e.target.value)}
                 className="w-full px-3 py-3 rounded-md border text-base"
-                style={{ background: '#fff', borderColor: C.border }}
+                style={{ background: "var(--paper)", borderColor: C.border }}
               >
                 {FLOCK_TYPES.map((t) => (
                   <option key={t.value} value={t.value}>{t.label}</option>
@@ -309,7 +309,7 @@ function FlockPlacedNewInner() {
                 value={placedDate}
                 onChange={(e) => setPlacedDate(e.target.value)}
                 className="w-full px-3 py-3 rounded-md border text-base"
-                style={{ background: '#fff', borderColor: fieldErrors.placed_date ? C.red : C.border }}
+                style={{ background: "var(--paper)", borderColor: fieldErrors.placed_date ? C.red : C.border }}
               />
               {fieldErrors.placed_date && (
                 <div className="text-xs mt-1" style={{ color: C.red }}>{fieldErrors.placed_date}</div>
@@ -327,7 +327,7 @@ function FlockPlacedNewInner() {
                 max={1000000}
                 placeholder="e.g. 250"
                 className="w-full px-3 py-3 rounded-md border text-lg"
-                style={{ background: '#fff', borderColor: fieldErrors.placed_count ? C.red : C.border }}
+                style={{ background: "var(--paper)", borderColor: fieldErrors.placed_count ? C.red : C.border }}
               />
               {fieldErrors.placed_count && (
                 <div className="text-xs mt-1" style={{ color: C.red }}>{fieldErrors.placed_count}</div>
@@ -342,7 +342,7 @@ function FlockPlacedNewInner() {
                 maxLength={500}
                 rows={2}
                 className="w-full px-3 py-2 rounded-md border text-sm"
-                style={{ background: '#fff', borderColor: C.border }}
+                style={{ background: "var(--paper)", borderColor: C.border }}
               />
             </div>
           </div>

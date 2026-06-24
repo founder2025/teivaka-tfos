@@ -18,8 +18,8 @@ import { Facebook, Instagram, Youtube } from "lucide-react";
 
 // ── Design tokens (matches Landing.l3.html) ───────────────────────────────────
 const COLORS = {
-  cream:    "#F8F3E9",
-  cream2:   "#EFE8D8",
+  cream:    "var(--cream)",
+  cream2:   "var(--cream-2)",
   paper:    "#FFFFFF",
   green:    "var(--green)",
   greenDk:  "var(--green-dk)",
@@ -30,7 +30,7 @@ const COLORS = {
   line:     "#E2D8C3",
   ink:      "#2A2118",
   muted:    "var(--muted)",
-  inkOnDark:"#F8F3E9",
+  inkOnDark:"var(--cream)",
 };
 
 const FONTS = {
@@ -628,7 +628,7 @@ function Icon({ name, style, className }) {
 // inline-styled marketing shell. Tokens declared once as CSS custom properties.
 const OFP_CSS = `
 .ofp{
-  --cream:#F8F3E9;--green:var(--green);--green-deep:#3F6B2C;
+  --cream:var(--cream);--green:var(--green);--green-deep:#3F6B2C;
   --soil:#5C4033;--soil-ink:#3A2820;--cream-deep:#EFE6D4;--sand:#C2A878;
   --serif:'DM Serif Display','IBM Plex Serif',Georgia,serif;
   --mono:'IBM Plex Mono','SF Mono',Menlo,monospace;
@@ -858,7 +858,7 @@ function OurFarmsPage({ navigate }) {
 
 const TVM_CSS = `
 .tvm{
-  --cream:#F8F3E9;--green:var(--green);--green-deep:#3F6B2C;--soil:#5C4033;
+  --cream:var(--cream);--green:var(--green);--green-deep:#3F6B2C;--soil:#5C4033;
   --soil-ink:#3A2820;--cream-deep:#EFE6D4;--green-mist:#C9DFB0;--amber:#BF9000;
   --serif:'DM Serif Display','IBM Plex Serif',Georgia,serif;
   --mono:'IBM Plex Mono','SF Mono',Menlo,monospace;
@@ -1139,9 +1139,9 @@ const NSG_CSS = `
   background:
     radial-gradient(circle at 12% 18%, rgba(106,168,79,0.16), transparent 42%),
     radial-gradient(circle at 88% 82%, rgba(191,144,0,0.14), transparent 44%),
-    #F8F3E9;
+    var(--cream);
   font-family:'IBM Plex Sans',-apple-system,BlinkMacSystemFont,sans-serif;
-  --cream:#F8F3E9;--green:var(--green);--green-deep:#3F6B2C;--soil:#5C4033;
+  --cream:var(--cream);--green:var(--green);--green-deep:#3F6B2C;--soil:#5C4033;
   --soil-ink:#3A2820;--cream-deep:#EFE6D4;--green-mist:#C9DFB0;--amber:#BF9000;
   --serif:'DM Serif Display','IBM Plex Serif',Georgia,serif;
   --mono:'IBM Plex Mono','SF Mono',Menlo,monospace;
@@ -2039,7 +2039,7 @@ export default function MarketingPage({ pageKey }) {
     padding: "8px 14px",
     borderRadius: 6,
     border: "1px solid var(--green)",
-    background: "#fff",
+    background: "var(--paper)",
     color: "var(--green)",
     fontSize: 13,
     fontWeight: 600,
@@ -2149,7 +2149,7 @@ export default function MarketingPage({ pageKey }) {
         {pageKey === "about" && (
           <section className="fdr-quote">
             <style>{`
-.fdr-quote{max-width:760px;margin:0 auto;padding:48px 0 40px;border-bottom:1px solid rgba(92,64,51,0.12);background:#F8F3E9}
+.fdr-quote{max-width:760px;margin:0 auto;padding:48px 0 40px;border-bottom:1px solid rgba(92,64,51,0.12);background:var(--cream)}
 .fdr-quote .fdr-label{font-family:'IBM Plex Mono','SF Mono',Menlo,monospace;font-size:11px;letter-spacing:0.13em;text-transform:uppercase;color:var(--green);margin:0 0 18px}
 .fdr-quote .fdr-bq{font-family:'IBM Plex Serif',Georgia,serif;font-style:italic;font-size:19px;line-height:1.65;color:#5C4033;margin:0;border-left:3px solid var(--green);padding-left:24px}
 .fdr-quote .fdr-attr{font-family:'IBM Plex Sans',-apple-system,BlinkMacSystemFont,sans-serif;font-size:14px;font-weight:600;color:#5C4033;margin-top:24px;padding-left:24px;text-align:left}
@@ -2346,7 +2346,7 @@ const TVF_CSS = `
 .tvf-footer .tvf-tagline{max-width:300px;line-height:1.6;margin:0;color:rgba(248,243,233,0.6)}
 .tvf-footer .tvf-col h4{font-family:'IBM Plex Mono','SF Mono',Menlo,monospace;font-size:11px;letter-spacing:0.13em;text-transform:uppercase;color:var(--green);margin:0 0 16px;font-weight:500}
 .tvf-footer .tvf-col a{display:block;color:rgba(248,243,233,0.6);padding:5px 0;font-size:14px;cursor:pointer;text-decoration:none}
-.tvf-footer .tvf-col a:hover{color:#F8F3E9}
+.tvf-footer .tvf-col a:hover{color:var(--cream)}
 .tvf-footer .tvf-col a.tvf-thework{color:#C9DFB0;font-weight:500}
 .tvf-footer .tvf-col a.tvf-thework:hover{color:#E0EFCB}
 .tvf-footer .tvf-legal{display:flex;flex-wrap:wrap;gap:24px;padding-top:26px;font-family:'IBM Plex Mono','SF Mono',Menlo,monospace;font-size:12px}

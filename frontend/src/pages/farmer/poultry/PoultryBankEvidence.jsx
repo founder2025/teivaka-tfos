@@ -91,11 +91,11 @@ export default function PoultryBankEvidence() {
       </div>
 
       <div className="px-4 py-4 max-w-md mx-auto space-y-4">
-        <div className="px-3 py-3 rounded-md border text-sm" style={{ background: '#fff', borderColor: C.border }}>
+        <div className="px-3 py-3 rounded-md border text-sm" style={{ background: "var(--paper)", borderColor: C.border }}>
           Generate a verifiable monthly PDF of your poultry activity. Each export is anchored to your tenant audit chain — banks and buyers can verify the document hasn't been altered.
         </div>
 
-        <div className="px-3 py-3 rounded-md border" style={{ background: '#fff', borderColor: C.border }}>
+        <div className="px-3 py-3 rounded-md border" style={{ background: "var(--paper)", borderColor: C.border }}>
           <label className="block text-xs uppercase tracking-wide mb-2" style={{ color: C.muted }}>
             Period
           </label>
@@ -130,7 +130,7 @@ export default function PoultryBankEvidence() {
         </button>
 
         {lastDownload && (
-          <div className="px-3 py-3 rounded-md border space-y-1" style={{ background: '#fff', borderColor: C.border }}>
+          <div className="px-3 py-3 rounded-md border space-y-1" style={{ background: "var(--paper)", borderColor: C.border }}>
             <div className="text-xs uppercase tracking-wide" style={{ color: C.muted }}>Last generated</div>
             <div className="text-sm font-medium">{lastDownload.period}</div>
             <div className="text-xs" style={{ color: C.muted }}>
@@ -143,7 +143,7 @@ export default function PoultryBankEvidence() {
         )}
 
         <div className="px-3 py-3 rounded-md border text-xs space-y-1"
-             style={{ background: '#fff', borderColor: C.border, color: C.muted }}>
+             style={{ background: "var(--paper)", borderColor: C.border, color: C.muted }}>
           <div className="font-semibold" style={{ color: C.soil }}>What's in the PDF</div>
           <div>· Period summary (8 KPIs: flocks, birds, eggs, mortality, revenue, feed cost)</div>
           <div>· Active flock list with placement + current counts</div>

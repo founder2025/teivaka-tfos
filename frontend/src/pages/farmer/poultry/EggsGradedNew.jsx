@@ -145,14 +145,14 @@ function Inner() {
           <div className="text-xs font-medium uppercase tracking-wide mb-2" style={{ color: C.muted }}>Where</div>
           <div className="space-y-3">
             <div><label className="block text-xs mb-1" style={{ color: C.muted }}>Farm</label>
-              <div className="px-3 py-2 rounded-md border text-sm" style={{ background: '#fff', borderColor: C.border }}>{loading ? 'Loading...' : (farmId || '—')}</div></div>
+              <div className="px-3 py-2 rounded-md border text-sm" style={{ background: "var(--paper)", borderColor: C.border }}>{loading ? 'Loading...' : (farmId || '—')}</div></div>
             <div><label className="block text-xs mb-1" style={{ color: C.muted }}>Coop (filter)</label>
-              <select value={puId} onChange={e => setPuId(e.target.value)} disabled={loading} className="w-full px-3 py-2 rounded-md border text-sm" style={{ background: '#fff', borderColor: C.border }}>
+              <select value={puId} onChange={e => setPuId(e.target.value)} disabled={loading} className="w-full px-3 py-2 rounded-md border text-sm" style={{ background: "var(--paper)", borderColor: C.border }}>
                 <option value="">— Show all —</option>
                 {pus.map(pu => <option key={pu.pu_id} value={pu.pu_id}>{pu.farmer_label || pu.pu_name || pu.pu_id}</option>)}
               </select></div>
             <div><label className="block text-xs mb-1" style={{ color: C.muted }}>Flock *</label>
-              <select value={flockId} onChange={e => setFlockId(e.target.value)} disabled={loading} className="w-full px-3 py-3 rounded-md border text-base" style={{ background: '#fff', borderColor: !flockId && farmId ? C.amber : C.border }}>
+              <select value={flockId} onChange={e => setFlockId(e.target.value)} disabled={loading} className="w-full px-3 py-3 rounded-md border text-base" style={{ background: "var(--paper)", borderColor: !flockId && farmId ? C.amber : C.border }}>
                 <option value="">Pick a flock…</option>
                 {visibleFlocks.map(f => <option key={f.flock_id} value={f.flock_id}>{f.flock_label} ({f.current_count} birds)</option>)}
               </select></div>
@@ -164,29 +164,29 @@ function Inner() {
             <div>
               <label className="block text-xs mb-1" style={{ color: C.muted }}>Total eggs graded *</label>
               <input type="number" inputMode="numeric" min="1" step="1" value={totalQty} onChange={e => setTotalQty(e.target.value)} placeholder="100"
-                className="w-full px-3 py-3 rounded-md border text-base" style={{ background: '#fff', borderColor: errs.total_qty ? C.red : C.border }} />
+                className="w-full px-3 py-3 rounded-md border text-base" style={{ background: "var(--paper)", borderColor: errs.total_qty ? C.red : C.border }} />
               {errs.total_qty && <div className="text-xs mt-1" style={{ color: C.red }}>{errs.total_qty}</div>}
             </div>
             <div className="grid grid-cols-2 gap-2">
               <div>
                 <label className="block text-xs mb-1" style={{ color: C.muted }}>Grade A *</label>
                 <input type="number" inputMode="numeric" min="0" step="1" value={gradeAQty} onChange={e => setGradeAQty(e.target.value)} placeholder="0"
-                  className="w-full px-3 py-3 rounded-md border text-base" style={{ background: '#fff', borderColor: errs.grade_a_qty ? C.red : C.border }} />
+                  className="w-full px-3 py-3 rounded-md border text-base" style={{ background: "var(--paper)", borderColor: errs.grade_a_qty ? C.red : C.border }} />
               </div>
               <div>
                 <label className="block text-xs mb-1" style={{ color: C.muted }}>Grade B *</label>
                 <input type="number" inputMode="numeric" min="0" step="1" value={gradeBQty} onChange={e => setGradeBQty(e.target.value)} placeholder="0"
-                  className="w-full px-3 py-3 rounded-md border text-base" style={{ background: '#fff', borderColor: errs.grade_b_qty ? C.red : C.border }} />
+                  className="w-full px-3 py-3 rounded-md border text-base" style={{ background: "var(--paper)", borderColor: errs.grade_b_qty ? C.red : C.border }} />
               </div>
               <div>
                 <label className="block text-xs mb-1" style={{ color: C.muted }}>Cracked *</label>
                 <input type="number" inputMode="numeric" min="0" step="1" value={crackedQty} onChange={e => setCrackedQty(e.target.value)} placeholder="0"
-                  className="w-full px-3 py-3 rounded-md border text-base" style={{ background: '#fff', borderColor: errs.cracked_qty ? C.red : C.border }} />
+                  className="w-full px-3 py-3 rounded-md border text-base" style={{ background: "var(--paper)", borderColor: errs.cracked_qty ? C.red : C.border }} />
               </div>
               <div>
                 <label className="block text-xs mb-1" style={{ color: C.muted }}>Dirty *</label>
                 <input type="number" inputMode="numeric" min="0" step="1" value={dirtyQty} onChange={e => setDirtyQty(e.target.value)} placeholder="0"
-                  className="w-full px-3 py-3 rounded-md border text-base" style={{ background: '#fff', borderColor: errs.dirty_qty ? C.red : C.border }} />
+                  className="w-full px-3 py-3 rounded-md border text-base" style={{ background: "var(--paper)", borderColor: errs.dirty_qty ? C.red : C.border }} />
               </div>
             </div>
             <div className="px-3 py-2 rounded-md border text-sm font-mono" style={{ background: subtotalsMatch ? '#EAF6E2' : '#FDECEA', borderColor: subtotalsMatch ? C.green : C.red, color: subtotalsMatch ? C.green : C.red }}>
@@ -200,16 +200,16 @@ function Inner() {
             <div>
               <label className="block text-xs mb-1" style={{ color: C.muted }}>Price per Grade A egg (FJD)</label>
               <input type="number" inputMode="decimal" step="0.01" min="0" value={priceA} onChange={e => setPriceA(e.target.value)} placeholder="0.65"
-                className="w-full px-3 py-3 rounded-md border text-base" style={{ background: '#fff', borderColor: errs.unit_price_fjd_grade_a ? C.red : C.border }} />
+                className="w-full px-3 py-3 rounded-md border text-base" style={{ background: "var(--paper)", borderColor: errs.unit_price_fjd_grade_a ? C.red : C.border }} />
             </div>
             <div>
               <label className="block text-xs mb-1" style={{ color: C.muted }}>Price per Grade B egg (FJD)</label>
               <input type="number" inputMode="decimal" step="0.01" min="0" value={priceB} onChange={e => setPriceB(e.target.value)} placeholder="0.45"
-                className="w-full px-3 py-3 rounded-md border text-base" style={{ background: '#fff', borderColor: errs.unit_price_fjd_grade_b ? C.red : C.border }} />
+                className="w-full px-3 py-3 rounded-md border text-base" style={{ background: "var(--paper)", borderColor: errs.unit_price_fjd_grade_b ? C.red : C.border }} />
             </div>
             <div>
               <label className="block text-xs mb-1" style={{ color: C.muted }}>Notes (optional)</label>
-              <textarea value={notes} onChange={e => setNotes(e.target.value)} maxLength={500} rows={2} className="w-full px-3 py-2 rounded-md border text-sm" style={{ background: '#fff', borderColor: C.border }} placeholder="Anything worth noting?" />
+              <textarea value={notes} onChange={e => setNotes(e.target.value)} maxLength={500} rows={2} className="w-full px-3 py-2 rounded-md border text-sm" style={{ background: "var(--paper)", borderColor: C.border }} placeholder="Anything worth noting?" />
             </div>
           </div>
         </section>

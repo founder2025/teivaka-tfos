@@ -307,10 +307,10 @@ export default function HarvestNew() {
 
   // ── Engine card style language (mirrors capture/CaptureEngine.jsx) ──
   const wrap = { maxWidth: 460, margin: "0 auto", padding: 16, color: "#3a3527" };
-  const card = { border: "1px solid #e6ded0", borderRadius: 14, padding: 14, marginBottom: 16, background: "#faf8f3" };
+  const card = { border: "1px solid #e6ded0", borderRadius: 14, padding: 14, marginBottom: 16, background: "var(--cream-2)" };
   const cardHead = { fontSize: 11, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase", color: "#9a917c", marginBottom: 10 };
   const fieldLabel = { display: "block", fontSize: 13, fontWeight: 600, marginBottom: 6, color: "#5a5a4a" };
-  const inputBox = { width: "100%", padding: 11, borderRadius: 10, border: "1px solid #d8d4c8", fontSize: 14, boxSizing: "border-box", background: "#fff" };
+  const inputBox = { width: "100%", padding: 11, borderRadius: 10, border: "1px solid #d8d4c8", fontSize: 14, boxSizing: "border-box", background: "var(--paper)" };
   const backBtn = { display: "flex", alignItems: "center", gap: 4, background: "none", border: "none", color: "#6b6b6b", cursor: "pointer", marginBottom: 12 };
 
   const cropName = productions.find((p) => p.production_id === cropId)?.production_name;

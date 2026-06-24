@@ -124,7 +124,7 @@ function Inner() {
       <div className="px-4 py-4 max-w-md mx-auto space-y-5">
         <section>
           <div className="text-xs font-medium uppercase tracking-wide mb-2" style={{ color: C.muted }}>Which birds</div>
-          <select value={flockId} onChange={e => setFlockId(e.target.value)} disabled={loading} className="w-full px-3 py-3 rounded-md border text-base" style={{ background: '#fff', borderColor: !flockId && farmId ? C.amber : C.border }}>
+          <select value={flockId} onChange={e => setFlockId(e.target.value)} disabled={loading} className="w-full px-3 py-3 rounded-md border text-base" style={{ background: "var(--paper)", borderColor: !flockId && farmId ? C.amber : C.border }}>
             <option value="">Pick a flock…</option>
             {flocks.map(f => <option key={f.flock_id} value={f.flock_id}>{f.flock_label} ({f.current_count} birds)</option>)}
           </select>
@@ -135,18 +135,18 @@ function Inner() {
             <div>
               <label className="block text-xs mb-1" style={{ color: C.muted }}>What did you give? *</label>
               <input value={name} onChange={e => setName(e.target.value)} maxLength={120} placeholder="e.g. Amprolium, dewormer"
-                className="w-full px-3 py-3 rounded-md border text-base" style={{ background: '#fff', borderColor: errs.medication_name ? C.red : C.border }} />
+                className="w-full px-3 py-3 rounded-md border text-base" style={{ background: "var(--paper)", borderColor: errs.medication_name ? C.red : C.border }} />
               {errs.medication_name && <div className="text-xs mt-1" style={{ color: C.red }}>{errs.medication_name}</div>}
             </div>
             <div>
               <label className="block text-xs mb-1" style={{ color: C.muted }}>How was it given? *</label>
-              <select value={route} onChange={e => setRoute(e.target.value)} className="w-full px-3 py-3 rounded-md border text-base" style={{ background: '#fff', borderColor: C.border }}>
+              <select value={route} onChange={e => setRoute(e.target.value)} className="w-full px-3 py-3 rounded-md border text-base" style={{ background: "var(--paper)", borderColor: C.border }}>
                 {ROUTES.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
               </select>
             </div>
             <div>
               <label className="block text-xs mb-1" style={{ color: C.muted }}>Date *</label>
-              <input type="date" value={givenDate} onChange={e => setGivenDate(e.target.value)} className="w-full px-3 py-3 rounded-md border text-base" style={{ background: '#fff', borderColor: C.border }} />
+              <input type="date" value={givenDate} onChange={e => setGivenDate(e.target.value)} className="w-full px-3 py-3 rounded-md border text-base" style={{ background: "var(--paper)", borderColor: C.border }} />
             </div>
             <button type="button" onClick={() => setMore(m => !m)} className="text-sm font-medium" style={{ color: C.green }}>
               {more ? '− Less detail' : '+ More detail (dose, hold days, notes)'}
@@ -155,25 +155,25 @@ function Inner() {
               <div className="space-y-3">
                 <div>
                   <label className="block text-xs mb-1" style={{ color: C.muted }}>What it treats</label>
-                  <input value={reason} onChange={e => setReason(e.target.value)} maxLength={200} placeholder="e.g. worms, coccidiosis" className="w-full px-3 py-2 rounded-md border text-sm" style={{ background: '#fff', borderColor: C.border }} />
+                  <input value={reason} onChange={e => setReason(e.target.value)} maxLength={200} placeholder="e.g. worms, coccidiosis" className="w-full px-3 py-2 rounded-md border text-sm" style={{ background: "var(--paper)", borderColor: C.border }} />
                 </div>
                 <div>
                   <label className="block text-xs mb-1" style={{ color: C.muted }}>Dose (as on the label)</label>
-                  <input value={dose} onChange={e => setDose(e.target.value)} maxLength={80} placeholder="e.g. 5ml per litre, 3 days" className="w-full px-3 py-2 rounded-md border text-sm" style={{ background: '#fff', borderColor: C.border }} />
+                  <input value={dose} onChange={e => setDose(e.target.value)} maxLength={80} placeholder="e.g. 5ml per litre, 3 days" className="w-full px-3 py-2 rounded-md border text-sm" style={{ background: "var(--paper)", borderColor: C.border }} />
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs mb-1" style={{ color: C.muted }}>Hold days — meat</label>
-                    <input type="number" inputMode="numeric" min={0} max={365} value={whdMeat} onChange={e => setWhdMeat(e.target.value)} placeholder="days" className="w-full px-3 py-2 rounded-md border text-sm" style={{ background: '#fff', borderColor: C.border }} />
+                    <input type="number" inputMode="numeric" min={0} max={365} value={whdMeat} onChange={e => setWhdMeat(e.target.value)} placeholder="days" className="w-full px-3 py-2 rounded-md border text-sm" style={{ background: "var(--paper)", borderColor: C.border }} />
                   </div>
                   <div>
                     <label className="block text-xs mb-1" style={{ color: C.muted }}>Hold days — eggs</label>
-                    <input type="number" inputMode="numeric" min={0} max={365} value={whdEggs} onChange={e => setWhdEggs(e.target.value)} placeholder="days" className="w-full px-3 py-2 rounded-md border text-sm" style={{ background: '#fff', borderColor: C.border }} />
+                    <input type="number" inputMode="numeric" min={0} max={365} value={whdEggs} onChange={e => setWhdEggs(e.target.value)} placeholder="days" className="w-full px-3 py-2 rounded-md border text-sm" style={{ background: "var(--paper)", borderColor: C.border }} />
                   </div>
                 </div>
                 <div>
                   <label className="block text-xs mb-1" style={{ color: C.muted }}>Notes</label>
-                  <textarea value={notes} onChange={e => setNotes(e.target.value)} maxLength={500} rows={2} className="w-full px-3 py-2 rounded-md border text-sm" style={{ background: '#fff', borderColor: C.border }} />
+                  <textarea value={notes} onChange={e => setNotes(e.target.value)} maxLength={500} rows={2} className="w-full px-3 py-2 rounded-md border text-sm" style={{ background: "var(--paper)", borderColor: C.border }} />
                 </div>
               </div>
             )}

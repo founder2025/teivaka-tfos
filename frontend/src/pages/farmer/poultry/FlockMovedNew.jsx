@@ -138,14 +138,14 @@ function Inner() {
           <div className="text-xs font-medium uppercase tracking-wide mb-2" style={{ color: C.muted }}>Where</div>
           <div className="space-y-3">
             <div><label className="block text-xs mb-1" style={{ color: C.muted }}>Farm</label>
-              <div className="px-3 py-2 rounded-md border text-sm" style={{ background: '#fff', borderColor: C.border }}>{loading ? 'Loading...' : (farmId || '—')}</div></div>
+              <div className="px-3 py-2 rounded-md border text-sm" style={{ background: "var(--paper)", borderColor: C.border }}>{loading ? 'Loading...' : (farmId || '—')}</div></div>
             <div><label className="block text-xs mb-1" style={{ color: C.muted }}>Coop (filter)</label>
-              <select value={puId} onChange={e => setPuId(e.target.value)} disabled={loading} className="w-full px-3 py-2 rounded-md border text-sm" style={{ background: '#fff', borderColor: C.border }}>
+              <select value={puId} onChange={e => setPuId(e.target.value)} disabled={loading} className="w-full px-3 py-2 rounded-md border text-sm" style={{ background: "var(--paper)", borderColor: C.border }}>
                 <option value="">— Show all —</option>
                 {pus.map(pu => <option key={pu.pu_id} value={pu.pu_id}>{pu.farmer_label || pu.pu_name || pu.pu_id}</option>)}
               </select></div>
             <div><label className="block text-xs mb-1" style={{ color: C.muted }}>Flock *</label>
-              <select value={flockId} onChange={e => setFlockId(e.target.value)} disabled={loading} className="w-full px-3 py-3 rounded-md border text-base" style={{ background: '#fff', borderColor: !flockId && farmId ? C.amber : C.border }}>
+              <select value={flockId} onChange={e => setFlockId(e.target.value)} disabled={loading} className="w-full px-3 py-3 rounded-md border text-base" style={{ background: "var(--paper)", borderColor: !flockId && farmId ? C.amber : C.border }}>
                 <option value="">Pick a flock…</option>
                 {visibleFlocks.map(f => <option key={f.flock_id} value={f.flock_id}>{f.flock_label} ({f.current_count} birds)</option>)}
               </select></div>
@@ -157,24 +157,24 @@ function Inner() {
             <div>
               <label className="block text-xs mb-1" style={{ color: C.muted }}>From location *</label>
               <input type="text" value={fromLocation} onChange={e => setFromLocation(e.target.value)} maxLength={100} placeholder="e.g. Coop A"
-                className="w-full px-3 py-3 rounded-md border text-base" style={{ background: '#fff', borderColor: errs.from_location ? C.red : C.border }} />
+                className="w-full px-3 py-3 rounded-md border text-base" style={{ background: "var(--paper)", borderColor: errs.from_location ? C.red : C.border }} />
               {errs.from_location && <div className="text-xs mt-1" style={{ color: C.red }}>{errs.from_location}</div>}
             </div>
             <div>
               <label className="block text-xs mb-1" style={{ color: C.muted }}>To location *</label>
               <input type="text" value={toLocation} onChange={e => setToLocation(e.target.value)} maxLength={100} placeholder="e.g. Coop B (quarantine)"
-                className="w-full px-3 py-3 rounded-md border text-base" style={{ background: '#fff', borderColor: errs.to_location ? C.red : C.border }} />
+                className="w-full px-3 py-3 rounded-md border text-base" style={{ background: "var(--paper)", borderColor: errs.to_location ? C.red : C.border }} />
               {errs.to_location && <div className="text-xs mt-1" style={{ color: C.red }}>{errs.to_location}</div>}
             </div>
             <div>
               <label className="block text-xs mb-1" style={{ color: C.muted }}>Birds moved *</label>
               <input type="number" inputMode="numeric" min="1" step="1" value={qtyMoved} onChange={e => setQtyMoved(e.target.value)} placeholder="12"
-                className="w-full px-3 py-3 rounded-md border text-base" style={{ background: '#fff', borderColor: errs.qty_moved ? C.red : C.border }} />
+                className="w-full px-3 py-3 rounded-md border text-base" style={{ background: "var(--paper)", borderColor: errs.qty_moved ? C.red : C.border }} />
               {errs.qty_moved && <div className="text-xs mt-1" style={{ color: C.red }}>{errs.qty_moved}</div>}
             </div>
             <div>
               <label className="block text-xs mb-1" style={{ color: C.muted }}>Reason *</label>
-              <select value={reason} onChange={e => setReason(e.target.value)} className="w-full px-3 py-3 rounded-md border text-base" style={{ background: '#fff', borderColor: errs.reason ? C.red : C.border }}>
+              <select value={reason} onChange={e => setReason(e.target.value)} className="w-full px-3 py-3 rounded-md border text-base" style={{ background: "var(--paper)", borderColor: errs.reason ? C.red : C.border }}>
                 <option value="">Pick a reason…</option>
                 {REASONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
               </select>
@@ -182,7 +182,7 @@ function Inner() {
             </div>
             <div>
               <label className="block text-xs mb-1" style={{ color: C.muted }}>Move method *</label>
-              <select value={moveMethod} onChange={e => setMoveMethod(e.target.value)} className="w-full px-3 py-3 rounded-md border text-base" style={{ background: '#fff', borderColor: errs.move_method ? C.red : C.border }}>
+              <select value={moveMethod} onChange={e => setMoveMethod(e.target.value)} className="w-full px-3 py-3 rounded-md border text-base" style={{ background: "var(--paper)", borderColor: errs.move_method ? C.red : C.border }}>
                 <option value="">Pick a method…</option>
                 {MOVE_METHODS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
               </select>
@@ -190,7 +190,7 @@ function Inner() {
             </div>
             <div>
               <label className="block text-xs mb-1" style={{ color: C.muted }}>Notes (optional)</label>
-              <textarea value={notes} onChange={e => setNotes(e.target.value)} maxLength={500} rows={2} className="w-full px-3 py-2 rounded-md border text-sm" style={{ background: '#fff', borderColor: C.border }} placeholder="Anything worth noting?" />
+              <textarea value={notes} onChange={e => setNotes(e.target.value)} maxLength={500} rows={2} className="w-full px-3 py-2 rounded-md border text-sm" style={{ background: "var(--paper)", borderColor: C.border }} placeholder="Anything worth noting?" />
             </div>
           </div>
         </section>

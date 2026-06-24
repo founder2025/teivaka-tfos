@@ -144,14 +144,14 @@ function Inner() {
           <div className="text-xs font-medium uppercase tracking-wide mb-2" style={{ color: C.muted }}>Where</div>
           <div className="space-y-3">
             <div><label className="block text-xs mb-1" style={{ color: C.muted }}>Farm</label>
-              <div className="px-3 py-2 rounded-md border text-sm" style={{ background: '#fff', borderColor: C.border }}>{loading ? 'Loading...' : (farmId || '—')}</div></div>
+              <div className="px-3 py-2 rounded-md border text-sm" style={{ background: "var(--paper)", borderColor: C.border }}>{loading ? 'Loading...' : (farmId || '—')}</div></div>
             <div><label className="block text-xs mb-1" style={{ color: C.muted }}>Coop (filter)</label>
-              <select value={puId} onChange={e => setPuId(e.target.value)} disabled={loading} className="w-full px-3 py-2 rounded-md border text-sm" style={{ background: '#fff', borderColor: C.border }}>
+              <select value={puId} onChange={e => setPuId(e.target.value)} disabled={loading} className="w-full px-3 py-2 rounded-md border text-sm" style={{ background: "var(--paper)", borderColor: C.border }}>
                 <option value="">— Show all —</option>
                 {pus.map(pu => <option key={pu.pu_id} value={pu.pu_id}>{pu.farmer_label || pu.pu_name || pu.pu_id}</option>)}
               </select></div>
             <div><label className="block text-xs mb-1" style={{ color: C.muted }}>Flock *</label>
-              <select value={flockId} onChange={e => setFlockId(e.target.value)} disabled={loading} className="w-full px-3 py-3 rounded-md border text-base" style={{ background: '#fff', borderColor: !flockId && farmId ? C.amber : C.border }}>
+              <select value={flockId} onChange={e => setFlockId(e.target.value)} disabled={loading} className="w-full px-3 py-3 rounded-md border text-base" style={{ background: "var(--paper)", borderColor: !flockId && farmId ? C.amber : C.border }}>
                 <option value="">Pick a flock…</option>
                 {visibleFlocks.map(f => <option key={f.flock_id} value={f.flock_id}>{f.flock_label} ({f.current_count} birds)</option>)}
               </select></div>
@@ -162,7 +162,7 @@ function Inner() {
           <div className="space-y-3">
             <div>
               <label className="block text-xs mb-1" style={{ color: C.muted }}>Suspected cause *</label>
-              <select value={suspectedCause} onChange={e => setSuspectedCause(e.target.value)} className="w-full px-3 py-3 rounded-md border text-base" style={{ background: '#fff', borderColor: errs.suspected_cause ? C.red : C.border }}>
+              <select value={suspectedCause} onChange={e => setSuspectedCause(e.target.value)} className="w-full px-3 py-3 rounded-md border text-base" style={{ background: "var(--paper)", borderColor: errs.suspected_cause ? C.red : C.border }}>
                 <option value="">Pick a cause…</option>
                 {SUSPECTED_CAUSES.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
               </select>
@@ -170,7 +170,7 @@ function Inner() {
             </div>
             <div>
               <label className="block text-xs mb-1" style={{ color: C.muted }}>Investigation method *</label>
-              <select value={investigationMethod} onChange={e => setInvestigationMethod(e.target.value)} className="w-full px-3 py-3 rounded-md border text-base" style={{ background: '#fff', borderColor: errs.investigation_method ? C.red : C.border }}>
+              <select value={investigationMethod} onChange={e => setInvestigationMethod(e.target.value)} className="w-full px-3 py-3 rounded-md border text-base" style={{ background: "var(--paper)", borderColor: errs.investigation_method ? C.red : C.border }}>
                 <option value="">Pick a method…</option>
                 {INVESTIGATION_METHODS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
               </select>
@@ -178,23 +178,23 @@ function Inner() {
             </div>
             <div>
               <label className="block text-xs mb-1" style={{ color: C.muted }}>Findings *</label>
-              <textarea value={findings} onChange={e => setFindings(e.target.value)} maxLength={500} rows={3} className="w-full px-3 py-2 rounded-md border text-sm" style={{ background: '#fff', borderColor: errs.findings ? C.red : C.border }} placeholder="What did you observe?" />
+              <textarea value={findings} onChange={e => setFindings(e.target.value)} maxLength={500} rows={3} className="w-full px-3 py-2 rounded-md border text-sm" style={{ background: "var(--paper)", borderColor: errs.findings ? C.red : C.border }} placeholder="What did you observe?" />
               {errs.findings && <div className="text-xs mt-1" style={{ color: C.red }}>{errs.findings}</div>}
             </div>
             <div>
               <label className="block text-xs mb-1" style={{ color: C.muted }}>Action taken (optional)</label>
-              <textarea value={actionTaken} onChange={e => setActionTaken(e.target.value)} maxLength={300} rows={2} className="w-full px-3 py-2 rounded-md border text-sm" style={{ background: '#fff', borderColor: errs.action_taken ? C.red : C.border }} placeholder="What did you do in response?" />
+              <textarea value={actionTaken} onChange={e => setActionTaken(e.target.value)} maxLength={300} rows={2} className="w-full px-3 py-2 rounded-md border text-sm" style={{ background: "var(--paper)", borderColor: errs.action_taken ? C.red : C.border }} placeholder="What did you do in response?" />
               {errs.action_taken && <div className="text-xs mt-1" style={{ color: C.red }}>{errs.action_taken}</div>}
             </div>
             <div>
               <label className="block text-xs mb-1" style={{ color: C.muted }}>Linked mortality event ID (optional, UUID)</label>
               <input type="text" value={mortalityEventId} onChange={e => setMortalityEventId(e.target.value)} placeholder="e.g. 951f6638-2cb4-4d11-..."
-                className="w-full px-3 py-2 rounded-md border text-sm font-mono" style={{ background: '#fff', borderColor: errs.mortality_event_id ? C.red : C.border }} />
+                className="w-full px-3 py-2 rounded-md border text-sm font-mono" style={{ background: "var(--paper)", borderColor: errs.mortality_event_id ? C.red : C.border }} />
               {errs.mortality_event_id && <div className="text-xs mt-1" style={{ color: C.red }}>{errs.mortality_event_id}</div>}
             </div>
             <div>
               <label className="block text-xs mb-1" style={{ color: C.muted }}>Notes (optional)</label>
-              <textarea value={notes} onChange={e => setNotes(e.target.value)} maxLength={500} rows={2} className="w-full px-3 py-2 rounded-md border text-sm" style={{ background: '#fff', borderColor: C.border }} placeholder="Anything else worth noting?" />
+              <textarea value={notes} onChange={e => setNotes(e.target.value)} maxLength={500} rows={2} className="w-full px-3 py-2 rounded-md border text-sm" style={{ background: "var(--paper)", borderColor: C.border }} placeholder="Anything else worth noting?" />
             </div>
           </div>
         </section>

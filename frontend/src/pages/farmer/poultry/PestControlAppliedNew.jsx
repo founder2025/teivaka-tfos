@@ -179,7 +179,7 @@ function Inner() {
           <div className="text-xs font-medium uppercase tracking-wide mb-2" style={{ color: C.muted }}>Where</div>
           <div className="space-y-3">
             <div><label className="block text-xs mb-1" style={{ color: C.muted }}>Farm</label>
-              <div className="px-3 py-2 rounded-md border text-sm" style={{ background: '#fff', borderColor: C.border }}>{loading ? 'Loading...' : (farmId || '—')}</div></div>
+              <div className="px-3 py-2 rounded-md border text-sm" style={{ background: "var(--paper)", borderColor: C.border }}>{loading ? 'Loading...' : (farmId || '—')}</div></div>
             <label className="flex items-center gap-2 text-sm cursor-pointer">
               <input type="checkbox" checked={wholeFarm} onChange={e => setWholeFarm(e.target.checked)} />
               <span>Whole-farm pest control (no specific flock)</span>
@@ -187,12 +187,12 @@ function Inner() {
             {!wholeFarm && (
               <>
                 <div><label className="block text-xs mb-1" style={{ color: C.muted }}>Coop (filter)</label>
-                  <select value={puId} onChange={e => setPuId(e.target.value)} disabled={loading} className="w-full px-3 py-2 rounded-md border text-sm" style={{ background: '#fff', borderColor: C.border }}>
+                  <select value={puId} onChange={e => setPuId(e.target.value)} disabled={loading} className="w-full px-3 py-2 rounded-md border text-sm" style={{ background: "var(--paper)", borderColor: C.border }}>
                     <option value="">— Show all —</option>
                     {pus.map(pu => <option key={pu.pu_id} value={pu.pu_id}>{pu.farmer_label || pu.pu_name || pu.pu_id}</option>)}
                   </select></div>
                 <div><label className="block text-xs mb-1" style={{ color: C.muted }}>Flock *</label>
-                  <select value={flockId} onChange={e => setFlockId(e.target.value)} disabled={loading} className="w-full px-3 py-3 rounded-md border text-base" style={{ background: '#fff', borderColor: !flockId && farmId ? C.amber : C.border }}>
+                  <select value={flockId} onChange={e => setFlockId(e.target.value)} disabled={loading} className="w-full px-3 py-3 rounded-md border text-base" style={{ background: "var(--paper)", borderColor: !flockId && farmId ? C.amber : C.border }}>
                     <option value="">Pick a flock…</option>
                     {visibleFlocks.map(f => <option key={f.flock_id} value={f.flock_id}>{f.flock_label} ({f.current_count} birds)</option>)}
                   </select></div>
@@ -205,7 +205,7 @@ function Inner() {
           <div className="space-y-3">
             <div>
               <label className="block text-xs mb-1" style={{ color: C.muted }}>Target pest *</label>
-              <select value={pestTarget} onChange={e => setPestTarget(e.target.value)} className="w-full px-3 py-3 rounded-md border text-base" style={{ background: '#fff', borderColor: errs.pest_target ? C.red : C.border }}>
+              <select value={pestTarget} onChange={e => setPestTarget(e.target.value)} className="w-full px-3 py-3 rounded-md border text-base" style={{ background: "var(--paper)", borderColor: errs.pest_target ? C.red : C.border }}>
                 <option value="">Pick a target…</option>
                 {PEST_TARGETS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
               </select>
@@ -229,7 +229,7 @@ function Inner() {
             {showChemical && (
               <div>
                 <label className="block text-xs mb-1" style={{ color: C.muted }}>Chemical {methodKind === 'CHEMICAL' ? '*' : '(optional)'}</label>
-                <select value={chemicalId} onChange={e => setChemicalId(e.target.value)} className="w-full px-3 py-3 rounded-md border text-base" style={{ background: '#fff', borderColor: errs.chemical_id ? C.red : C.border }}>
+                <select value={chemicalId} onChange={e => setChemicalId(e.target.value)} className="w-full px-3 py-3 rounded-md border text-base" style={{ background: "var(--paper)", borderColor: errs.chemical_id ? C.red : C.border }}>
                   <option value="">— Pick a chemical —</option>
                   {chemicals.map(ch => <option key={ch.chemical_id} value={ch.chemical_id}>{ch.chem_name || ch.chemical_id} ({ch.chemical_id})</option>)}
                 </select>
@@ -239,7 +239,7 @@ function Inner() {
             {showNonChemical && (
               <div>
                 <label className="block text-xs mb-1" style={{ color: C.muted }}>Non-chemical method {methodKind === 'NON_CHEMICAL' ? '*' : '(optional)'}</label>
-                <select value={nonChemicalMethod} onChange={e => setNonChemicalMethod(e.target.value)} className="w-full px-3 py-3 rounded-md border text-base" style={{ background: '#fff', borderColor: errs.non_chemical_method ? C.red : C.border }}>
+                <select value={nonChemicalMethod} onChange={e => setNonChemicalMethod(e.target.value)} className="w-full px-3 py-3 rounded-md border text-base" style={{ background: "var(--paper)", borderColor: errs.non_chemical_method ? C.red : C.border }}>
                   <option value="">— Pick a method —</option>
                   {NON_CHEMICAL_METHODS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                 </select>
@@ -256,13 +256,13 @@ function Inner() {
                   <div>
                     <label className="block text-xs mb-1" style={{ color: C.muted }}>Quantity used (optional)</label>
                     <input type="number" inputMode="decimal" value={qtyUsed} onChange={e => setQtyUsed(e.target.value)} min={0.001} step={0.001} placeholder="e.g. 50"
-                      className="w-full px-3 py-3 rounded-md border text-lg" style={{ background: '#fff', borderColor: errs.qty_used ? C.red : C.border }} />
+                      className="w-full px-3 py-3 rounded-md border text-lg" style={{ background: "var(--paper)", borderColor: errs.qty_used ? C.red : C.border }} />
                     {errs.qty_used && <div className="text-xs mt-1" style={{ color: C.red }}>{errs.qty_used}</div>}
                   </div>
                   {qtyUsed !== '' && (
                     <div>
                       <label className="block text-xs mb-1" style={{ color: C.muted }}>Unit</label>
-                      <select value={unit} onChange={e => setUnit(e.target.value)} className="w-full px-3 py-3 rounded-md border text-base" style={{ background: '#fff', borderColor: errs.unit ? C.red : C.border }}>
+                      <select value={unit} onChange={e => setUnit(e.target.value)} className="w-full px-3 py-3 rounded-md border text-base" style={{ background: "var(--paper)", borderColor: errs.unit ? C.red : C.border }}>
                         <option value="">— Pick a unit —</option>
                         {UNITS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                       </select>
@@ -273,19 +273,19 @@ function Inner() {
               <div>
                 <label className="block text-xs mb-1" style={{ color: C.muted }}>Area treated (m²) — optional</label>
                 <input type="number" inputMode="decimal" value={areaM2} onChange={e => setAreaM2(e.target.value)} min={0.01} step={0.01} placeholder="e.g. 40"
-                  className="w-full px-3 py-3 rounded-md border text-lg" style={{ background: '#fff', borderColor: errs.area_treated_m2 ? C.red : C.border }} />
+                  className="w-full px-3 py-3 rounded-md border text-lg" style={{ background: "var(--paper)", borderColor: errs.area_treated_m2 ? C.red : C.border }} />
                 {errs.area_treated_m2 && <div className="text-xs mt-1" style={{ color: C.red }}>{errs.area_treated_m2}</div>}
               </div>
               <div>
                 <label className="block text-xs mb-1" style={{ color: C.muted }}>Who applied it</label>
-                <select value={applicatorRole} onChange={e => setApplicatorRole(e.target.value)} className="w-full px-3 py-3 rounded-md border text-base" style={{ background: '#fff', borderColor: errs.applicator_role ? C.red : C.border }}>
+                <select value={applicatorRole} onChange={e => setApplicatorRole(e.target.value)} className="w-full px-3 py-3 rounded-md border text-base" style={{ background: "var(--paper)", borderColor: errs.applicator_role ? C.red : C.border }}>
                   {APPLICATOR_ROLES.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                 </select>
                 {errs.applicator_role && <div className="text-xs mt-1" style={{ color: C.red }}>{errs.applicator_role}</div>}
               </div>
               <div>
                 <label className="block text-xs mb-1" style={{ color: C.muted }}>Notes (optional)</label>
-                <textarea value={notes} onChange={e => setNotes(e.target.value)} maxLength={500} rows={2} className="w-full px-3 py-2 rounded-md border text-sm" style={{ background: '#fff', borderColor: C.border }} placeholder="Anything else worth noting?" />
+                <textarea value={notes} onChange={e => setNotes(e.target.value)} maxLength={500} rows={2} className="w-full px-3 py-2 rounded-md border text-sm" style={{ background: "var(--paper)", borderColor: C.border }} placeholder="Anything else worth noting?" />
               </div>
             </>)}
           </div>

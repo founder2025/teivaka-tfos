@@ -106,7 +106,7 @@ function extractList(res, ...paths) {
 const todayISO = () => new Date().toISOString().slice(0, 10);
 
 function Field({ f, val, onChange, err }) {
-  const base = { background: '#fff', borderColor: err ? C.red : C.border };
+  const base = { background: "var(--paper)", borderColor: err ? C.red : C.border };
   return (
     <div>
       <label className="block text-xs mb-1" style={{ color: C.muted }}>{f.label}</label>
@@ -208,7 +208,7 @@ function Inner() {
           <div className="space-y-3">
             <div>
               <label className="block text-xs mb-1" style={{ color: C.muted }}>Animal type *</label>
-              <select value={species} onChange={e => setSpecies(e.target.value)} className="w-full px-3 py-3 rounded-md border text-base" style={{ background: '#fff', borderColor: errs.species ? C.red : (!species ? C.amber : C.border) }}>
+              <select value={species} onChange={e => setSpecies(e.target.value)} className="w-full px-3 py-3 rounded-md border text-base" style={{ background: "var(--paper)", borderColor: errs.species ? C.red : (!species ? C.amber : C.border) }}>
                 <option value="">Pick…</option>
                 {SPECIES.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
               </select>
@@ -217,7 +217,7 @@ function Inner() {
             <div>
               <label className="block text-xs mb-1" style={{ color: C.muted }}>Tag / name / group (optional)</label>
               <input value={animalRef} onChange={e => setAnimalRef(e.target.value)} maxLength={80} placeholder="e.g. Brown cow, Pen 2"
-                className="w-full px-3 py-2 rounded-md border text-sm" style={{ background: '#fff', borderColor: C.border }} />
+                className="w-full px-3 py-2 rounded-md border text-sm" style={{ background: "var(--paper)", borderColor: C.border }} />
             </div>
           </div>
         </section>
@@ -227,7 +227,7 @@ function Inner() {
             {cfg.fields.map(f => <Field key={f.k} f={f} val={vals[f.k] ?? ''} onChange={(v) => setV(f.k, v)} err={errs[f.k]} />)}
             <div>
               <label className="block text-xs mb-1" style={{ color: C.muted }}>Date *</label>
-              <input type="date" value={date} onChange={e => setDate(e.target.value)} className="w-full px-3 py-3 rounded-md border text-base" style={{ background: '#fff', borderColor: errs.date ? C.red : C.border }} />
+              <input type="date" value={date} onChange={e => setDate(e.target.value)} className="w-full px-3 py-3 rounded-md border text-base" style={{ background: "var(--paper)", borderColor: errs.date ? C.red : C.border }} />
             </div>
             {(cfg.more.length > 0 || true) && (
               <button type="button" onClick={() => setMore(m => !m)} className="text-sm font-medium" style={{ color: C.green }}>
@@ -239,7 +239,7 @@ function Inner() {
                 {cfg.more.map(f => <Field key={f.k} f={f} val={vals[f.k] ?? ''} onChange={(v) => setV(f.k, v)} err={errs[f.k]} />)}
                 <div>
                   <label className="block text-xs mb-1" style={{ color: C.muted }}>Notes</label>
-                  <textarea value={notes} onChange={e => setNotes(e.target.value)} maxLength={500} rows={2} className="w-full px-3 py-2 rounded-md border text-sm" style={{ background: '#fff', borderColor: C.border }} />
+                  <textarea value={notes} onChange={e => setNotes(e.target.value)} maxLength={500} rows={2} className="w-full px-3 py-2 rounded-md border text-sm" style={{ background: "var(--paper)", borderColor: C.border }} />
                 </div>
               </div>
             )}

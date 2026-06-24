@@ -430,10 +430,10 @@ export default function CaptureEngine({ config = cropsConfig, onDone, onBack, pr
 
   const wrap = { maxWidth: 460, margin: "0 auto", padding: 16 };
   const tile = { display: "flex", alignItems: "center", gap: 14, width: "100%", padding: 18,
-    borderRadius: 16, border: "1px solid #e5e1d8", background: "#fff", cursor: "pointer", textAlign: "left", marginBottom: 12 };
-  const iconBox = { width: 44, height: 44, borderRadius: 12, background: "#f1efe8", display: "grid", placeItems: "center", flexShrink: 0 };
+    borderRadius: 16, border: "1px solid #e5e1d8", background: "var(--paper)", cursor: "pointer", textAlign: "left", marginBottom: 12 };
+  const iconBox = { width: 44, height: 44, borderRadius: 12, background: "var(--cream-2)", display: "grid", placeItems: "center", flexShrink: 0 };
   const backBtn = { display: "flex", alignItems: "center", gap: 4, background: "none", border: "none", color: "#6b6b6b", cursor: "pointer", marginBottom: 12 };
-  const card = { border: "1px solid #e6ded0", borderRadius: 14, padding: 14, marginBottom: 16, background: "#faf8f3" };
+  const card = { border: "1px solid #e6ded0", borderRadius: 14, padding: 14, marginBottom: 16, background: "var(--cream-2)" };
   const cardHead = { fontSize: 11, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase", color: "#9a917c", marginBottom: 10 };
   const fieldLabel = { display: "block", fontSize: 13, fontWeight: 600, marginBottom: 6, color: "#5a5a4a" };
   const inputBox = { width: "100%", padding: 11, borderRadius: 10, border: "1px solid #d8d4c8", fontSize: 14 };
@@ -477,7 +477,7 @@ export default function CaptureEngine({ config = cropsConfig, onDone, onBack, pr
           )}
           {error && <p style={{ color: "#9a3b3b", fontSize: 13, marginBottom: 10 }}>{error}</p>}
           <div style={{ display: "flex", gap: 10 }}>
-            <button onClick={() => setEditOpen(false)} style={{ flex: 1, padding: 12, borderRadius: 12, border: "1px solid #d8d4c8", background: "#fff", cursor: "pointer" }}>Cancel</button>
+            <button onClick={() => setEditOpen(false)} style={{ flex: 1, padding: 12, borderRadius: 12, border: "1px solid #d8d4c8", background: "var(--paper)", cursor: "pointer" }}>Cancel</button>
             <button onClick={saveEdit} disabled={editBusy || editPhotoUploading} style={{ flex: 1, padding: 12, borderRadius: 12, border: "none", background: "var(--green)", color: "#fff", fontWeight: 700, cursor: "pointer" }}>{editBusy ? "Saving…" : "Save changes"}</button>
           </div>
         </div>
@@ -621,10 +621,10 @@ export default function CaptureEngine({ config = cropsConfig, onDone, onBack, pr
     );
     if (f.input === "number") { const n = Number(v) || 0; return (
       <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-        <button onClick={() => setVal(f.name, Math.max(0, n - 1))} style={{ width: 48, height: 48, borderRadius: 12, border: "1px solid #d8d4c8", background: "#fff", fontSize: 22, cursor: "pointer" }}>−</button>
+        <button onClick={() => setVal(f.name, Math.max(0, n - 1))} style={{ width: 48, height: 48, borderRadius: 12, border: "1px solid #d8d4c8", background: "var(--paper)", fontSize: 22, cursor: "pointer" }}>−</button>
         <input type="number" value={v} onChange={(e) => setVal(f.name, e.target.value)} inputMode="numeric"
           style={{ width: 90, textAlign: "center", padding: 12, borderRadius: 12, border: "1px solid #d8d4c8", fontSize: 18, fontWeight: 700 }} />
-        <button onClick={() => setVal(f.name, n + 1)} style={{ width: 48, height: 48, borderRadius: 12, border: "1px solid #d8d4c8", background: "#fff", fontSize: 22, cursor: "pointer" }}>+</button>
+        <button onClick={() => setVal(f.name, n + 1)} style={{ width: 48, height: 48, borderRadius: 12, border: "1px solid #d8d4c8", background: "var(--paper)", fontSize: 22, cursor: "pointer" }}>+</button>
       </div>
     ); }
     return <input value={v} onChange={(e) => setVal(f.name, e.target.value)}
