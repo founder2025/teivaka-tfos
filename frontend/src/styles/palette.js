@@ -25,15 +25,15 @@ export const PALETTE_FARM = {
   bg:         "var(--cream)",
   text:       "var(--soil)",
   textMuted:  "var(--muted)",
-  border:     "#E6DED0",
+  border:     "var(--line)",
   accent:     "var(--green)",
-  accentTint: "#E9F2DD",
+  accentTint: "var(--green-tint)",
   warn:       "var(--amber)",
 };
 
 export const PALETTE_DARK = {
   bg:         "var(--cream)",
-  text:       "#2C1A0E",
+  text:       "var(--soil)",
   textMuted:  "var(--muted)",
   border:     "var(--line)",
   accent:     "var(--green)",

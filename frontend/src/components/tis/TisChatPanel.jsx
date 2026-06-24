@@ -23,11 +23,11 @@ const C = {
   cream:    "var(--cream)",
   white:    "var(--paper)",
   soil:     "var(--soil)",
-  soilDk:   "#2D2016",
+  soilDk:   "var(--soil)",
   green:    "var(--green)",
   greenDk:  "var(--green-dk)",
   borderLt: "var(--line)",
-  borderMd: "#D4CFC3",
+  borderMd: "var(--line)",
   muted:    "var(--muted)",
 };
 

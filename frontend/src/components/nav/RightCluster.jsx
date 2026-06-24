@@ -10,7 +10,7 @@ import Avatar from "../ui/Avatar";
 const C = {
   soil:    "var(--soil)",
   cream:   "var(--cream)",
-  border:  "#D4CFC3",
+  border:  "var(--line)",
   green:   "var(--green)",
   amber:   "var(--amber)",
   hoverBg: "rgba(92, 64, 51, 0.06)",

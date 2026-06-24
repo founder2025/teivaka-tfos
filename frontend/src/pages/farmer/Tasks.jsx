@@ -23,7 +23,7 @@ import { CheckCircle2, SkipForward, AlertTriangle } from "lucide-react";
 
 const C = {
   soil: "var(--soil)", green: "var(--green)", greenDk: "#4F8138", amber: "var(--amber)",
-  red: "#B00020", cream: "var(--cream)", border: "#E6DED0", muted: "var(--muted)", panel: "var(--paper)",
+  red: "#B00020", cream: "var(--cream)", border: "var(--line)", muted: "var(--muted)", panel: "var(--paper)",
 };
 
 const TABS = [
@@ -43,7 +43,7 @@ function sevFromRank(rank) {
   if (rank == null) return { label: "—", bg: C.cream, fg: C.muted };
   if (rank <= 20) return { label: "URGENT", bg: C.red, fg: "var(--paper)" };
   if (rank <= 50) return { label: "MED", bg: C.amber, fg: "var(--paper)" };
-  return { label: "LOW", bg: "#E9F2DD", fg: C.greenDk };
+  return { label: "LOW", bg: "var(--green-tint)", fg: C.greenDk };
 }
 
 function dueLabel(iso) {

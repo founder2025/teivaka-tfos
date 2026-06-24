@@ -16,7 +16,7 @@ const GREETING = {
   timestamp: Date.now(),
 };
 
-const C = { green: "var(--green)", soil: "#2C1A0E", cream: "var(--cream)", border: "var(--line)" };
+const C = { green: "var(--green)", soil: "var(--soil)", cream: "var(--cream)", border: "var(--line)" };
 
 function loadState() {
   try {

@@ -7,7 +7,7 @@
  *   - Page content slot
  *
  * Design system:
- *   Primary dark:    #2C1A0E  (deep soil brown)
+ *   Primary dark:    var(--soil)  (deep soil brown)
  *   Primary accent:  var(--green)  (Teivaka green)
  *   Background:      var(--cream)  (warm cream)
  *   Gold:            var(--amber)
@@ -34,7 +34,7 @@ const TABS = [
 
 // Brand colours as CSS custom properties (Tailwind base doesn't have these)
 const C = {
-  soil:   "#2C1A0E",
+  soil:   "var(--soil)",
   green:  "var(--green)",
   cream:  "var(--cream)",
   gold:   "var(--amber)",

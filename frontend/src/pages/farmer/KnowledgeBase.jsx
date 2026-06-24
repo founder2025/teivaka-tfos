@@ -3,7 +3,7 @@
  * Full build: searchable articles, crop guides, video library.
  */
 import FarmerLayout from "../../components/farmer/FarmerLayout";
-const C = { soil: "#2C1A0E", green: "var(--green)", cream: "var(--cream)", border: "var(--line)", gold: "var(--amber)" };
+const C = { soil: "var(--soil)", green: "var(--green)", cream: "var(--cream)", border: "var(--line)", gold: "var(--amber)" };
 export default function KnowledgeBase() {
   return (
     <FarmerLayout>

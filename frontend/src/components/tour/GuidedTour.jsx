@@ -74,7 +74,7 @@ export function GuidedTour({ tour, steps }) {
   if (!tour.open || !steps?.length) return null;
   const step = steps[Math.min(i, steps.length - 1)];
   const last = i >= steps.length - 1;
-  const C = { soil: "var(--soil)", green: "var(--green)", greenDk: "var(--green-dk)", cream: "var(--cream)", border: "#E6DED0", muted: "var(--muted)" };
+  const C = { soil: "var(--soil)", green: "var(--green)", greenDk: "var(--green-dk)", cream: "var(--cream)", border: "var(--line)", muted: "var(--muted)" };
   const Icon = step.Icon;
 
   const finish = () => { const act = step.action; tour.markSeen(); if (act) setTimeout(act, 250); };
@@ -118,7 +118,7 @@ export function GuidedTour({ tour, steps }) {
 export function TourReplayButton({ onReplay, label = "Replay tour" }) {
   return (
     <button onClick={onReplay} title={label}
-      style={{ display: "inline-flex", alignItems: "center", gap: 5, background: "transparent", border: "1px solid #E6DED0", color: "var(--muted)", borderRadius: 9, padding: "5px 10px", fontSize: 12, cursor: "pointer" }}>
+      style={{ display: "inline-flex", alignItems: "center", gap: 5, background: "transparent", border: "1px solid var(--line)", color: "var(--muted)", borderRadius: 9, padding: "5px 10px", fontSize: 12, cursor: "pointer" }}>
       <RotateCcw size={13} />{label}
     </button>
   );

@@ -21,9 +21,9 @@ import { useParams, Link, useNavigate } from "react-router-dom";
 import { useFormModal } from "../../context/FormModalContext";
 
 const C = {
-  soil: "var(--soil)", green: "var(--green)", greenDk: "var(--green-dk)", greenTint: "#E9F2DD",
+  soil: "var(--soil)", green: "var(--green)", greenDk: "var(--green-dk)", greenTint: "var(--green-tint)",
   amber: "var(--amber)", amberTint: "#FBF1D6", red: "#B00020", redTint: "#FBEAE6",
-  cream: "var(--cream)", border: "#E6DED0", muted: "var(--muted)", ink: "#3A2E26", panel: "var(--paper)",
+  cream: "var(--cream)", border: "var(--line)", muted: "var(--muted)", ink: "var(--soil)", panel: "var(--paper)",
 };
 function authHeaders() {
   const t = localStorage.getItem("tfos_access_token");
@@ -334,7 +334,7 @@ function ActionBtn({ children, onClick, disabled, danger }) {
   return (
     <button onClick={onClick} disabled={disabled}
       className="text-sm font-semibold px-3 py-1.5 rounded-lg disabled:opacity-50"
-      style={{ background: "var(--paper)", border: `1px solid ${"#E6DED0"}`, color: danger ? "#B00020" : "var(--soil)" }}>
+      style={{ background: "var(--paper)", border: `1px solid ${"var(--line)"}`, color: danger ? "#B00020" : "var(--soil)" }}>
       {children}
     </button>
   );

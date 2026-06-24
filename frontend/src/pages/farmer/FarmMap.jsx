@@ -22,7 +22,7 @@ import CapacityCalc from "../../components/farm/CapacityCalc";
 
 L.Icon.Default.mergeOptions({ iconRetinaUrl: iconRetina, iconUrl: icon, shadowUrl: shadow });
 
-const C = { soil: "var(--soil)", cream: "var(--cream)", border: "#E6DED0", muted: "var(--muted)", green: "var(--green)", greenDk: "var(--green-dk)", amber: "var(--amber)", red: "var(--red)" };
+const C = { soil: "var(--soil)", cream: "var(--cream)", border: "var(--line)", muted: "var(--muted)", green: "var(--green)", greenDk: "var(--green-dk)", amber: "var(--amber)", red: "var(--red)" };
 const FIJI = [-17.8, 178.0];
 const KIND_STYLE = {
   BOUNDARY: { color: "var(--cream)", weight: 3, fill: false, dashArray: "6 6" },
@@ -724,7 +724,7 @@ export default function FarmMap({ farmId, onCountsChange, openRequest, onSaved }
                 <div className="flex items-center gap-2"><Ruler size={16} style={{ color: C.soil }} /><span className="text-sm font-bold" style={{ color: C.soil }}>Measure distance</span></div>
                 <button onClick={() => setDistFt((v) => !v)} className="text-[11px] px-2 py-0.5 rounded-full font-semibold" style={{ color: C.soil, border: `1px solid ${C.border}` }}>{distFt ? "feet/mi" : "metres/km"}</button>
               </div>
-              <div className="rounded-xl p-2.5 mb-2 flex items-baseline gap-2" style={{ background: "#E9F2DD" }}>
+              <div className="rounded-xl p-2.5 mb-2 flex items-baseline gap-2" style={{ background: "var(--green-tint)" }}>
                 <span className="text-2xl font-bold" style={{ color: C.greenDk }}>{fmtDist(measureDist, distFt)}</span>
                 <span className="text-xs" style={{ color: C.muted }}>{measurePtsRef.current.length} point{measurePtsRef.current.length === 1 ? "" : "s"}</span>
               </div>
@@ -852,7 +852,7 @@ export default function FarmMap({ farmId, onCountsChange, openRequest, onSaved }
 // Scoped overrides so Leaflet + Geoman controls match the cream/soil theme.
 const THEME_CSS = `
 .tfos-map .leaflet-bar, .tfos-map .leaflet-pm-toolbar .leaflet-buttons-control-button {
-  border-color: #E6DED0 !important; border-radius: 10px !important;
+  border-color: var(--line) !important; border-radius: 10px !important;
 }
 /* Bigger, easier-to-tap zoom controls */
 .tfos-map .leaflet-bar a {
@@ -868,15 +868,15 @@ const THEME_CSS = `
 .tfos-map .leaflet-pm-toolbar .button-container { width: 44px !important; height: 44px !important; }
 .tfos-map .leaflet-pm-actions-container .leaflet-pm-action { font-size: 13px !important; }
 .tfos-map .leaflet-pm-toolbar .button-container.active .leaflet-buttons-control-button,
-.tfos-map .leaflet-pm-toolbar .leaflet-buttons-control-button:hover { background-color: #E9F2DD !important; }
+.tfos-map .leaflet-pm-toolbar .leaflet-buttons-control-button:hover { background-color: var(--green-tint) !important; }
 .tfos-map .leaflet-pm-actions-container .leaflet-pm-action {
   background: var(--soil) !important; color: var(--cream) !important; border: none !important;
   font-weight: 600 !important; padding: 4px 8px !important;
 }
-.tfos-map .leaflet-pm-actions-container .leaflet-pm-action:hover { background: #3A2E26 !important; }
+.tfos-map .leaflet-pm-actions-container .leaflet-pm-action:hover { background: var(--soil) !important; }
 .tfos-map .leaflet-pm-actions-container .leaflet-pm-action.action-cancel { background: var(--red) !important; }
 .tfos-map .leaflet-tooltip {
-  background: var(--cream) !important; border: 1px solid #E6DED0 !important; color: #3A2E26 !important;
+  background: var(--cream) !important; border: 1px solid var(--line) !important; color: var(--soil) !important;
   font-weight: 600 !important; border-radius: 8px !important; box-shadow: 0 1px 3px rgba(58,46,38,.15) !important;
 }
 .tfos-map .leaflet-tooltip-top:before, .tfos-map .leaflet-tooltip-bottom:before,

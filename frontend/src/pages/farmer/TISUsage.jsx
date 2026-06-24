@@ -7,7 +7,7 @@ import { useEffect, useState } from "react";
 import { Activity, Zap } from "lucide-react";
 
 const C = {
-  cream: "var(--cream)", paper: "var(--paper)", soil: "var(--soil)", soilDk: "#2D2016",
+  cream: "var(--cream)", paper: "var(--paper)", soil: "var(--soil)", soilDk: "var(--soil)",
   green: "var(--green)", greenDk: "var(--green-dk)", line: "var(--line)", muted: "var(--muted)",
   greenTint: "var(--green-tint)", amber: "var(--amber)",
 };

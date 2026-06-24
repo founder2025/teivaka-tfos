@@ -14,12 +14,12 @@ import { Sprout, MapPin, ChevronDown, Check, AlertTriangle } from "lucide-react"
 
 const C = {
   soil: "var(--soil)", green: "var(--green)", greenDk: "#4F8138", amber: "var(--amber)",
-  cream: "var(--cream)", border: "#E6DED0", muted: "var(--muted)", panel: "var(--paper)", red: "var(--red)",
+  cream: "var(--cream)", border: "var(--line)", muted: "var(--muted)", panel: "var(--paper)", red: "var(--red)",
 };
 
 const BATCH_STATUS = {
   SOWN: { label: "Sown", bg: C.cream, fg: C.soil },
-  GERMINATING: { label: "Germinating", bg: "#E9F2DD", fg: C.greenDk },
+  GERMINATING: { label: "Germinating", bg: "var(--green-tint)", fg: C.greenDk },
   READY: { label: "Ready", bg: C.green, fg: "var(--paper)" },
   TRANSPLANTED: { label: "Transplanted", bg: C.soil, fg: "var(--paper)" },
 };
@@ -99,7 +99,7 @@ function BatchRow({ b }) {
                       <div className="text-[11px]" style={{ color: C.muted }}>{c.state.toLowerCase()} · {fmtHa(c.area_sqm)}{c.last_crop ? ` · was ${c.last_crop}` : ""}</div>
                     </div>
                     {c.rotation_ok
-                      ? <span className="text-[10px] px-1.5 py-0.5 rounded-full flex items-center gap-1" style={{ background: "#E9F2DD", color: C.greenDk }}><Check size={10} />rotation OK</span>
+                      ? <span className="text-[10px] px-1.5 py-0.5 rounded-full flex items-center gap-1" style={{ background: "var(--green-tint)", color: C.greenDk }}><Check size={10} />rotation OK</span>
                       : <span className="text-[10px] px-1.5 py-0.5 rounded-full flex items-center gap-1" style={{ background: "#FBEAE7", color: C.red }}><AlertTriangle size={10} />rest {c.rest_remaining_days}d</span>}
                     <button onClick={() => prepare(c.pu_id)} className="text-[11px] px-2.5 py-1 rounded-lg text-white font-semibold" style={{ background: C.greenDk }}>Prepare</button>
                   </div>

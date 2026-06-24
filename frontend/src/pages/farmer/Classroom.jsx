@@ -10,7 +10,7 @@
 const C = {
   soil:   "var(--soil)",
   cream:  "var(--cream)",
-  border: "#E6DED0",
+  border: "var(--line)",
   muted:  "var(--muted)",
 };
 

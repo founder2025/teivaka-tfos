@@ -24,7 +24,7 @@ const C = {
   amber:   "var(--amber)",
   red:     "var(--red)",
   cream:   "var(--cream)",
-  border:  "#E6DED0",
+  border:  "var(--line)",
   muted:   "var(--muted)",
   blue:    "#2E6BB8",
 };

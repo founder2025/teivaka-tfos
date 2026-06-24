@@ -31,7 +31,7 @@ const C = {
   green:  'var(--green)',
   amber:  'var(--amber)',
   red:    'var(--red)',
-  border: '#E6DED0',
+  border: 'var(--line)',
   muted:  'var(--muted)',
   white:  '#FFFFFF',
   globalBg: '#F4EFE3',

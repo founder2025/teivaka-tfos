@@ -33,15 +33,15 @@ const useBlockStatus = (id) => useQuery({ queryKey: ["loc-status", id], queryFn:
 const STATE_STYLE = {
   EMPTY:      { bg: "#EFEAE0", fg: "var(--muted)", label: "Empty" },
   PREPARING:  { bg: "#EFE6D6", fg: "var(--soil)", label: "Preparing" },
-  ACTIVE:     { bg: "#E9F2DD", fg: "var(--green-dk)", label: "Growing" },
+  ACTIVE:     { bg: "var(--green-tint)", fg: "var(--green-dk)", label: "Growing" },
   HARVESTING: { bg: "#FBF0D8", fg: "var(--amber)", label: "Harvesting" },
   RESTING:    { bg: "#E6EEF6", fg: "#2D6CDF", label: "Resting" },
   IDLE:       { bg: "#FBEAE7", fg: "var(--red)", label: "Idle" },
 };
 
 const C = {
-  soil: "var(--soil)", cream: "var(--cream)", border: "#E6DED0", muted: "var(--muted)", ink: "#3A2E26",
-  green: "var(--green)", greenDk: "var(--green-dk)", amber: "var(--amber)", red: "var(--red)", greenTint: "#E9F2DD", paper: "var(--cream-2)",
+  soil: "var(--soil)", cream: "var(--cream)", border: "var(--line)", muted: "var(--muted)", ink: "var(--soil)",
+  green: "var(--green)", greenDk: "var(--green-dk)", amber: "var(--amber)", red: "var(--red)", greenTint: "var(--green-tint)", paper: "var(--cream-2)",
 };
 const FOCUS = "focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--green)] focus-visible:ring-offset-1 transition";
 

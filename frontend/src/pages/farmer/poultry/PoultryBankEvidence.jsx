@@ -11,7 +11,7 @@ import { useNavigate } from 'react-router-dom';
 
 const C = {
   soil: 'var(--soil)', cream: 'var(--cream)', green: 'var(--green)', amber: 'var(--amber)',
-  red: 'var(--red)', border: '#E6DED0', muted: 'var(--muted)',
+  red: 'var(--red)', border: 'var(--line)', muted: 'var(--muted)',
 };
 
 function thisMonth() {

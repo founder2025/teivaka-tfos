@@ -9,7 +9,7 @@
 import { useState } from "react";
 import { Calculator, Sprout, Beef } from "lucide-react";
 
-const C = { soil: "var(--soil)", cream: "var(--cream)", border: "#E6DED0", muted: "var(--muted)", green: "var(--green)", greenDk: "var(--green-dk)", paper: "var(--cream-2)" };
+const C = { soil: "var(--soil)", cream: "var(--cream)", border: "var(--line)", muted: "var(--muted)", green: "var(--green)", greenDk: "var(--green-dk)", paper: "var(--cream-2)" };
 const HA_TO = { acres: 2.47105, ha: 1, m2: 10000 };
 const PER_ANIMAL_TO_M2 = { acres: 4046.86, ha: 10000, m2: 1 };
 
@@ -93,7 +93,7 @@ export default function CapacityCalc({ areaHa, unit = "acres", compact = false }
         </div>
       )}
 
-      <div className="mt-3 rounded-xl p-3 flex items-baseline gap-2" style={{ background: count != null ? "#E9F2DD" : C.paper }}>
+      <div className="mt-3 rounded-xl p-3 flex items-baseline gap-2" style={{ background: count != null ? "var(--green-tint)" : C.paper }}>
         {count != null ? (
           <>
             <span className="text-2xl font-bold" style={{ color: C.greenDk }}>≈ {count.toLocaleString()}</span>

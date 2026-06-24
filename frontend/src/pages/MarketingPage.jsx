@@ -23,11 +23,11 @@ const COLORS = {
   paper:    "#FFFFFF",
   green:    "var(--green)",
   greenDk:  "var(--green-dk)",
-  soil:     "#5C4033",
+  soil:     "var(--soil)",
   soil2:    "#7A5C4E",
   amber:    "#BF9000",
   red:      "#A32D2D",
-  line:     "#E2D8C3",
+  line:     "var(--line)",
   ink:      "#2A2118",
   muted:    "var(--muted)",
   inkOnDark:"var(--cream)",
@@ -629,7 +629,7 @@ function Icon({ name, style, className }) {
 const OFP_CSS = `
 .ofp{
   --cream:var(--cream);--green:var(--green);--green-deep:#3F6B2C;
-  --soil:#5C4033;--soil-ink:#3A2820;--cream-deep:#EFE6D4;--sand:#C2A878;
+  --soil:var(--soil);--soil-ink:#3A2820;--cream-deep:#EFE6D4;--sand:#C2A878;
   --serif:'DM Serif Display','IBM Plex Serif',Georgia,serif;
   --mono:'IBM Plex Mono','SF Mono',Menlo,monospace;
   flex:1;width:100%;
@@ -858,7 +858,7 @@ function OurFarmsPage({ navigate }) {
 
 const TVM_CSS = `
 .tvm{
-  --cream:var(--cream);--green:var(--green);--green-deep:#3F6B2C;--soil:#5C4033;
+  --cream:var(--cream);--green:var(--green);--green-deep:#3F6B2C;--soil:var(--soil);
   --soil-ink:#3A2820;--cream-deep:#EFE6D4;--green-mist:#C9DFB0;--amber:#BF9000;
   --serif:'DM Serif Display','IBM Plex Serif',Georgia,serif;
   --mono:'IBM Plex Mono','SF Mono',Menlo,monospace;
@@ -1141,7 +1141,7 @@ const NSG_CSS = `
     radial-gradient(circle at 88% 82%, rgba(191,144,0,0.14), transparent 44%),
     var(--cream);
   font-family:'IBM Plex Sans',-apple-system,BlinkMacSystemFont,sans-serif;
-  --cream:var(--cream);--green:var(--green);--green-deep:#3F6B2C;--soil:#5C4033;
+  --cream:var(--cream);--green:var(--green);--green-deep:#3F6B2C;--soil:var(--soil);
   --soil-ink:#3A2820;--cream-deep:#EFE6D4;--green-mist:#C9DFB0;--amber:#BF9000;
   --serif:'DM Serif Display','IBM Plex Serif',Georgia,serif;
   --mono:'IBM Plex Mono','SF Mono',Menlo,monospace;
@@ -1401,7 +1401,7 @@ function NetworkSignup() {
 // COMPONENT 2 — <AboutPage />
 // ══════════════════════════════════════════════════════════════════════════════
 function AboutPage({ navigate }) {
-  const listStyle = { margin: "16px 0 0", paddingLeft: 20, color: "#5C4033", lineHeight: 1.8, fontSize: 16 };
+  const listStyle = { margin: "16px 0 0", paddingLeft: 20, color: "var(--soil)", lineHeight: 1.8, fontSize: 16 };
   return (
     <main className="tvm">
       <style>{TVM_CSS}</style>
@@ -1594,7 +1594,7 @@ function TFOSPage({ navigate }) {
               <p style={{ color: "var(--green-dk)", fontWeight: 600, margin: "2px 0 12px" }}>{p.subtitle}</p>
               <p><strong>The problem.</strong> {p.problem}</p>
               <p style={{ marginTop: 10 }}><strong>What it does</strong></p>
-              <ul style={{ margin: "12px 0 0", paddingLeft: 20, color: "#5C4033", lineHeight: 1.75, fontSize: 15.5 }}>
+              <ul style={{ margin: "12px 0 0", paddingLeft: 20, color: "var(--soil)", lineHeight: 1.75, fontSize: 15.5 }}>
                 {p.does.map((d, i) => <li key={i}>{d}</li>)}
               </ul>
               <p style={{ marginTop: 12 }}><strong>The outcome.</strong> {p.outcome}</p>
@@ -1622,7 +1622,7 @@ function TFOSPage({ navigate }) {
         <div className="tvm-narrow">
           <p className="tvm-eyebrow">Our purpose</p>
           <h2 className="tvm-h2">Turn idle land into productive wealth.</h2>
-          <ul style={{ margin: "16px 0 0", paddingLeft: 20, color: "#5C4033", lineHeight: 1.8, fontSize: 16 }}>
+          <ul style={{ margin: "16px 0 0", paddingLeft: 20, color: "var(--soil)", lineHeight: 1.8, fontSize: 16 }}>
             <li>To turn idle land into productive wealth.</li>
             <li>To make invisible farmers visible.</li>
             <li>To make productive farmers bankable.</li>
@@ -1668,7 +1668,7 @@ function TFOSPage({ navigate }) {
 // ══════════════════════════════════════════════════════════════════════════════
 function TISPage({ navigate }) {
   const tisLink = wa(WA_TIS, "Bula, I want to get connected to TIS.");
-  const listStyle = { margin: "16px 0 0", paddingLeft: 20, color: "#5C4033", lineHeight: 1.75, fontSize: 15.5 };
+  const listStyle = { margin: "16px 0 0", paddingLeft: 20, color: "var(--soil)", lineHeight: 1.75, fontSize: 15.5 };
   const examples = [
     "How far apart should I plant watermelon?",
     "My cassava leaves are turning yellow.",
@@ -2151,8 +2151,8 @@ export default function MarketingPage({ pageKey }) {
             <style>{`
 .fdr-quote{max-width:760px;margin:0 auto;padding:48px 0 40px;border-bottom:1px solid rgba(92,64,51,0.12);background:var(--cream)}
 .fdr-quote .fdr-label{font-family:'IBM Plex Mono','SF Mono',Menlo,monospace;font-size:11px;letter-spacing:0.13em;text-transform:uppercase;color:var(--green);margin:0 0 18px}
-.fdr-quote .fdr-bq{font-family:'IBM Plex Serif',Georgia,serif;font-style:italic;font-size:19px;line-height:1.65;color:#5C4033;margin:0;border-left:3px solid var(--green);padding-left:24px}
-.fdr-quote .fdr-attr{font-family:'IBM Plex Sans',-apple-system,BlinkMacSystemFont,sans-serif;font-size:14px;font-weight:600;color:#5C4033;margin-top:24px;padding-left:24px;text-align:left}
+.fdr-quote .fdr-bq{font-family:'IBM Plex Serif',Georgia,serif;font-style:italic;font-size:19px;line-height:1.65;color:var(--soil);margin:0;border-left:3px solid var(--green);padding-left:24px}
+.fdr-quote .fdr-attr{font-family:'IBM Plex Sans',-apple-system,BlinkMacSystemFont,sans-serif;font-size:14px;font-weight:600;color:var(--soil);margin-top:24px;padding-left:24px;text-align:left}
 @media (max-width:640px){
   .fdr-quote .fdr-bq{font-size:17px}
 }
@@ -2168,18 +2168,18 @@ export default function MarketingPage({ pageKey }) {
         {pageKey === "what-we-do" && (
           <div className="wwd">
             <style>{`
-.wwd .wwd-lead{max-width:820px;margin:0 0 8px;font-family:'IBM Plex Sans',-apple-system,BlinkMacSystemFont,sans-serif;font-size:18px;line-height:1.6;color:#5C4033}
+.wwd .wwd-lead{max-width:820px;margin:0 0 8px;font-family:'IBM Plex Sans',-apple-system,BlinkMacSystemFont,sans-serif;font-size:18px;line-height:1.6;color:var(--soil)}
 .wwd .wwd-cards{display:grid;grid-template-columns:repeat(2,1fr);gap:22px;margin:30px 0 8px}
 .wwd .wwd-card{background:#FBF8F1;border:1px solid rgba(92,64,51,0.16);border-radius:10px;padding:30px 28px}
 .wwd .wwd-card .wwd-lt{font-family:'IBM Plex Mono','SF Mono',Menlo,monospace;font-size:11px;color:var(--green-dk);letter-spacing:0.12em;text-transform:uppercase;font-weight:600}
 .wwd .wwd-card h3{font-family:'IBM Plex Serif',Georgia,serif;font-size:22px;font-weight:600;line-height:1.1;margin:10px 0 2px;color:#241910}
 .wwd .wwd-card .wwd-st{color:var(--green-dk);font-weight:600;font-size:14px;margin:0 0 12px}
-.wwd .wwd-card p{font-size:14.5px;color:#5C4033;line-height:1.6;margin:0}
-.wwd .wwd-card ul{margin:12px 0 0;padding-left:18px;color:#5C4033;line-height:1.7;font-size:14px}
+.wwd .wwd-card p{font-size:14.5px;color:var(--soil);line-height:1.6;margin:0}
+.wwd .wwd-card ul{margin:12px 0 0;padding-left:18px;color:var(--soil);line-height:1.7;font-size:14px}
 .wwd .wwd-h2{font-family:'IBM Plex Serif',Georgia,serif;font-size:24px;font-weight:600;color:#241910;margin:42px 0 10px}
-.wwd .wwd-body{max-width:820px;font-size:16px;line-height:1.65;color:#5C4033;margin:0}
+.wwd .wwd-body{max-width:820px;font-size:16px;line-height:1.65;color:var(--soil);margin:0}
 .wwd .wwd-checks{list-style:none;margin:16px 0 0;padding:0;display:flex;flex-wrap:wrap;gap:10px}
-.wwd .wwd-checks li{display:inline-flex;align-items:center;gap:8px;background:#E8F0E0;color:#3F6B2E;border-radius:999px;padding:8px 16px;font-size:14px;font-weight:600}
+.wwd .wwd-checks li{display:inline-flex;align-items:center;gap:8px;background:var(--green-tint);color:#3F6B2E;border-radius:999px;padding:8px 16px;font-size:14px;font-weight:600}
 @media (max-width:768px){.wwd .wwd-cards{grid-template-columns:1fr}}
 `}</style>
             <p className="wwd-lead">Teivaka brings together everything a farmer needs to succeed into one connected ecosystem. Instead of using multiple disconnected tools, farmers access knowledge, records, markets, and support from a single platform. Our ecosystem is built around four connected pillars.</p>
@@ -2233,7 +2233,7 @@ export default function MarketingPage({ pageKey }) {
           <div className="tm">
             <style>{`
 .tm .tm-sec{margin-bottom:40px}
-.tm .tm-h2{font-family:'IBM Plex Serif',Georgia,serif;font-weight:600;font-size:22px;color:#5C4033;margin:0 0 14px}
+.tm .tm-h2{font-family:'IBM Plex Serif',Georgia,serif;font-weight:600;font-size:22px;color:var(--soil);margin:0 0 14px}
 .tm .tm-name{font-family:'IBM Plex Serif',Georgia,serif;font-weight:600;font-size:20px;color:#241910;margin:0 0 2px}
 .tm .tm-role{font-family:'IBM Plex Mono','SF Mono',Menlo,monospace;font-size:12px;letter-spacing:0.04em;color:var(--green);margin:0 0 12px}
 .tm .tm-bio{margin:0 0 14px;color:#2A2118;line-height:1.6}
@@ -2261,7 +2261,7 @@ export default function MarketingPage({ pageKey }) {
           <section style={sectionStyle} className="ct-social">
             <style>{`
 .ct-social .ct-social-row{display:flex;align-items:center;gap:18px;margin-top:14px}
-.ct-social .ct-social-row a{display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;color:#5C4033;transition:color .2s;text-decoration:none}
+.ct-social .ct-social-row a{display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;color:var(--soil);transition:color .2s;text-decoration:none}
 .ct-social .ct-social-row a:hover{color:var(--green)}
 .ct-social .ct-social-row svg{width:24px;height:24px;display:block}
 `}</style>

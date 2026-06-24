@@ -262,16 +262,16 @@ export default function CycleNew() {
   }
 
   // ── Engine card style language (mirrors capture/CaptureEngine.jsx) ──
-  const wrap = { maxWidth: 460, margin: "0 auto", padding: 16, color: "#3a3527" };
-  const card = { border: "1px solid #e6ded0", borderRadius: 14, padding: 14, marginBottom: 16, background: "var(--cream-2)" };
-  const cardHead = { fontSize: 11, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase", color: "#9a917c", marginBottom: 10 };
-  const fieldLabel = { display: "block", fontSize: 13, fontWeight: 600, marginBottom: 6, color: "#5a5a4a" };
-  const inputBox = { width: "100%", padding: 11, borderRadius: 10, border: "1px solid #d8d4c8", fontSize: 14, boxSizing: "border-box", background: "var(--paper)" };
-  const backBtn = { display: "flex", alignItems: "center", gap: 4, background: "none", border: "none", color: "#6b6b6b", cursor: "pointer", marginBottom: 12 };
+  const wrap = { maxWidth: 460, margin: "0 auto", padding: 16, color: "var(--soil)" };
+  const card = { border: "1px solid var(--line)", borderRadius: 14, padding: 14, marginBottom: 16, background: "var(--cream-2)" };
+  const cardHead = { fontSize: 11, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase", color: "var(--muted)", marginBottom: 10 };
+  const fieldLabel = { display: "block", fontSize: 13, fontWeight: 600, marginBottom: 6, color: "var(--soil)" };
+  const inputBox = { width: "100%", padding: 11, borderRadius: 10, border: "1px solid var(--line)", fontSize: 14, boxSizing: "border-box", background: "var(--paper)" };
+  const backBtn = { display: "flex", alignItems: "center", gap: 4, background: "none", border: "none", color: "var(--muted)", cursor: "pointer", marginBottom: 12 };
 
   // ── Render ────────────────────────────────────────────────────────
   if (loading) {
-    return <div style={{ ...wrap, padding: 32, color: "#6b6b6b" }}>Loading…</div>;
+    return <div style={{ ...wrap, padding: 32, color: "var(--muted)" }}>Loading…</div>;
   }
 
   const cropName = productions.find((p) => p.production_id === productionId)?.production_name;
@@ -287,7 +287,7 @@ export default function CycleNew() {
 
       <button onClick={() => navigate("/farm/cycles")} style={backBtn}><ChevronLeft size={18} /> Back</button>
       <h1 style={{ fontSize: 22, fontWeight: 800, marginBottom: 4 }}>Start a crop run</h1>
-      <p style={{ color: "#6b6b6b", fontSize: 13, marginBottom: 18 }}>Begin a new production cycle on a block.</p>
+      <p style={{ color: "var(--muted)", fontSize: 13, marginBottom: 18 }}>Begin a new production cycle on a block.</p>
 
       {formError && (
         <div role="alert" style={{ background: "#fbe5e5", border: "1px solid #c98b8b", color: "#9a3b3b", padding: "10px 12px", borderRadius: 12, marginBottom: 14, fontSize: 13 }}>
@@ -299,10 +299,10 @@ export default function CycleNew() {
       <div style={card}>
         <div style={cardHead}>Anchors · farm · block · crop · operator</div>
         <div style={{ display: "grid", gridTemplateColumns: "64px 1fr", rowGap: 10, alignItems: "center", fontSize: 14 }}>
-          <span style={{ color: "#9a917c" }}>Farm</span>
+          <span style={{ color: "var(--muted)" }}>Farm</span>
           <span style={{ fontWeight: 600 }}>{farmName || farmId || "—"}</span>
 
-          <span style={{ color: "#9a917c" }}>Block</span>
+          <span style={{ color: "var(--muted)" }}>Block</span>
           <div>
             <select value={puId} onChange={(e) => setPuId(e.target.value)} style={inputBox}>
               <option value="">Select a block…</option>
@@ -312,11 +312,11 @@ export default function CycleNew() {
             </select>
             {fieldErrors.puId && <div style={{ color: "#9a3b3b", fontSize: 12, marginTop: 4 }}>{fieldErrors.puId}</div>}
             {availablePUs.length === 0 && (
-              <div style={{ fontSize: 12, color: "#9a917c", marginTop: 4 }}>All blocks have active cycles. Close one first.</div>
+              <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 4 }}>All blocks have active cycles. Close one first.</div>
             )}
           </div>
 
-          <span style={{ color: "#9a917c" }}>Crop</span>
+          <span style={{ color: "var(--muted)" }}>Crop</span>
           <div>
             <select value={productionId} onChange={(e) => setProductionId(e.target.value)} style={inputBox}>
               <option value="">Select a crop…</option>
@@ -327,7 +327,7 @@ export default function CycleNew() {
             {fieldErrors.productionId && <div style={{ color: "#9a3b3b", fontSize: 12, marginTop: 4 }}>{fieldErrors.productionId}</div>}
           </div>
 
-          <span style={{ color: "#9a917c" }}>Operator</span>
+          <span style={{ color: "var(--muted)" }}>Operator</span>
           <span style={{ fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}><User size={14} />You</span>
         </div>
       </div>
@@ -351,7 +351,7 @@ export default function CycleNew() {
         <label style={fieldLabel}>Planned area (m²)</label>
         <input type="number" value={plannedAreaSqm} onChange={(e) => setPlannedAreaSqm(e.target.value)} min="0" step="0.01" style={{ ...inputBox, marginBottom: areaHa ? 8 : 14 }} />
         {areaHa && (
-          <div style={{ margin: "0 0 14px", border: "1px solid #e6ded0", borderRadius: 12, padding: 12, background: "var(--cream-2)" }}>
+          <div style={{ margin: "0 0 14px", border: "1px solid var(--line)", borderRadius: 12, padding: 12, background: "var(--cream-2)" }}>
             <CapacityCalc areaHa={areaHa} unit="acres" compact />
           </div>
         )}

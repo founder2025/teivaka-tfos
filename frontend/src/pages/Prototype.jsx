@@ -55,7 +55,7 @@ export default function Prototype() {
 
   if (err) {
     return (
-      <div style={{ padding: 24, fontFamily: "system-ui", color: "#3A2E26" }}>
+      <div style={{ padding: 24, fontFamily: "system-ui", color: "var(--soil)" }}>
         <h1 style={{ fontSize: 18, fontWeight: 700, marginBottom: 8 }}>Prototype reference</h1>
         <p style={{ color: "var(--muted)" }}>{err}</p>
       </div>

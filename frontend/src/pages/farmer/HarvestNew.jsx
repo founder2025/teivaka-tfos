@@ -40,7 +40,7 @@ const C = {
   amber:   "var(--amber)",
   red:     "#B00020",
   cream:   "var(--cream)",
-  border:  "#E6DED0",
+  border:  "var(--line)",
   muted:   "var(--muted)",
   panel:   "var(--paper)",
 };
@@ -306,12 +306,12 @@ export default function HarvestNew() {
       : "Select a cycle…";
 
   // ── Engine card style language (mirrors capture/CaptureEngine.jsx) ──
-  const wrap = { maxWidth: 460, margin: "0 auto", padding: 16, color: "#3a3527" };
-  const card = { border: "1px solid #e6ded0", borderRadius: 14, padding: 14, marginBottom: 16, background: "var(--cream-2)" };
-  const cardHead = { fontSize: 11, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase", color: "#9a917c", marginBottom: 10 };
-  const fieldLabel = { display: "block", fontSize: 13, fontWeight: 600, marginBottom: 6, color: "#5a5a4a" };
-  const inputBox = { width: "100%", padding: 11, borderRadius: 10, border: "1px solid #d8d4c8", fontSize: 14, boxSizing: "border-box", background: "var(--paper)" };
-  const backBtn = { display: "flex", alignItems: "center", gap: 4, background: "none", border: "none", color: "#6b6b6b", cursor: "pointer", marginBottom: 12 };
+  const wrap = { maxWidth: 460, margin: "0 auto", padding: 16, color: "var(--soil)" };
+  const card = { border: "1px solid var(--line)", borderRadius: 14, padding: 14, marginBottom: 16, background: "var(--cream-2)" };
+  const cardHead = { fontSize: 11, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase", color: "var(--muted)", marginBottom: 10 };
+  const fieldLabel = { display: "block", fontSize: 13, fontWeight: 600, marginBottom: 6, color: "var(--soil)" };
+  const inputBox = { width: "100%", padding: 11, borderRadius: 10, border: "1px solid var(--line)", fontSize: 14, boxSizing: "border-box", background: "var(--paper)" };
+  const backBtn = { display: "flex", alignItems: "center", gap: 4, background: "none", border: "none", color: "var(--muted)", cursor: "pointer", marginBottom: 12 };
 
   const cropName = productions.find((p) => p.production_id === cropId)?.production_name;
 
@@ -321,15 +321,15 @@ export default function HarvestNew() {
 
       <button onClick={() => navigate("/farm")} style={backBtn}><ChevronLeft size={18} /> Back</button>
       <h1 style={{ fontSize: 22, fontWeight: 800, marginBottom: 4 }}>Record harvest</h1>
-      <p style={{ color: "#6b6b6b", fontSize: 13, marginBottom: 18 }}>Chemical withholding is enforced at submit. No override here.</p>
+      <p style={{ color: "var(--muted)", fontSize: 13, marginBottom: 18 }}>Chemical withholding is enforced at submit. No override here.</p>
 
       {/* Anchors — Crop · Cycle · Block · Operator */}
       <div style={card}>
         <div style={cardHead}>Anchors · crop · cycle · operator</div>
         <div style={{ display: "grid", gridTemplateColumns: "64px 1fr", rowGap: 10, alignItems: "center", fontSize: 14 }}>
-          <span style={{ color: "#9a917c" }}>Crop</span>
+          <span style={{ color: "var(--muted)" }}>Crop</span>
           {productionsLoading
-            ? <span style={{ color: "#9a917c" }}>Loading crops…</span>
+            ? <span style={{ color: "var(--muted)" }}>Loading crops…</span>
             : productionsError
               ? <span style={{ color: "#9a3b3b", fontSize: 12 }}>Could not load crops: {productionsError}</span>
               : <select value={cropId} onChange={(e) => setCropId(e.target.value)} style={inputBox}>
@@ -337,9 +337,9 @@ export default function HarvestNew() {
                   {productions.map((p) => <option key={p.production_id} value={p.production_id}>{p.production_name}</option>)}
                 </select>}
 
-          <span style={{ color: "#9a917c" }}>Cycle</span>
+          <span style={{ color: "var(--muted)" }}>Cycle</span>
           {cyclesLoading
-            ? <span style={{ color: "#9a917c" }}>Loading cycles…</span>
+            ? <span style={{ color: "var(--muted)" }}>Loading cycles…</span>
             : cyclesError
               ? <span style={{ color: "#9a3b3b", fontSize: 12 }}>Could not load cycles: {cyclesError}</span>
               : <select value={cycleId} onChange={(e) => setCycleId(e.target.value)} disabled={!cropId} style={inputBox}>
@@ -347,9 +347,9 @@ export default function HarvestNew() {
                   {filteredCycles.map((c) => <option key={c.cycle_id} value={c.cycle_id}>Cycle {c.block_sequence ?? c.cycle_id}</option>)}
                 </select>}
 
-          {selectedCycle?.pu_id && <><span style={{ color: "#9a917c" }}>Block</span><span style={{ fontWeight: 600 }}>{selectedCycle.pu_farmer_label || selectedCycle.pu_name || selectedCycle.pu_id}</span></>}
+          {selectedCycle?.pu_id && <><span style={{ color: "var(--muted)" }}>Block</span><span style={{ fontWeight: 600 }}>{selectedCycle.pu_farmer_label || selectedCycle.pu_name || selectedCycle.pu_id}</span></>}
 
-          <span style={{ color: "#9a917c" }}>Operator</span>
+          <span style={{ color: "var(--muted)" }}>Operator</span>
           <span style={{ fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}><User size={14} />You</span>
         </div>
       </div>

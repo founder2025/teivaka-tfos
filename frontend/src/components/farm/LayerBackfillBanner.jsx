@@ -23,7 +23,7 @@ const C = {
   amber:   "var(--amber)",
   red:     "var(--red)",
   cream:   "var(--cream)",
-  border:  "#E6DED0",
+  border:  "var(--line)",
   muted:   "var(--muted)",
   bannerBg:     "#FFF5D6",
   bannerBorder: "#E8C77A",

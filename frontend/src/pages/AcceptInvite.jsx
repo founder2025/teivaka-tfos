@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Shield, Check } from "lucide-react";
 
-const C = { soil: "var(--soil)", cream: "var(--cream)", green: "var(--green)", greenDk: "var(--green-dk)", line: "#E6DED0", muted: "var(--muted)", red: "var(--red)" };
+const C = { soil: "var(--soil)", cream: "var(--cream)", green: "var(--green)", greenDk: "var(--green-dk)", line: "var(--line)", muted: "var(--muted)", red: "var(--red)" };
 
 export default function AcceptInvite() {
   const { token } = useParams();

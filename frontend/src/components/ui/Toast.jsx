@@ -21,7 +21,7 @@ import { useEffect, useState } from "react";
 const C = {
   soil:    "var(--soil)",
   cream:   "var(--cream)",
-  border:  "#E6DED0",
+  border:  "var(--line)",
   green:   "var(--green-dk)",
   greenBg: "#EAF3E0",
   red:     "var(--red)",

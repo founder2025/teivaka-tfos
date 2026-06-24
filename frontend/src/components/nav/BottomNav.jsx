@@ -13,7 +13,7 @@ import { useCapabilities } from "../../utils/capabilities";
 const C = {
   soil:   "var(--soil)",
   green:  "var(--green)",
-  border: "#E6DED0",
+  border: "var(--line)",
   cream:  "var(--cream)",
 };
 

@@ -126,7 +126,7 @@ export default function EventCorrectModal({ event, onClose, onSaved }) {
                     : vaccines.map((x) => (
                       <button key={x.library_id} onClick={() => setVaxId(x.library_id)}
                         className="w-full text-left px-3 py-2 rounded-lg border text-sm"
-                        style={{ borderColor: vaxId === x.library_id ? "var(--green)" : "#E6DED0", background: vaxId === x.library_id ? "#eaf3ea" : "#fff" }}>
+                        style={{ borderColor: vaxId === x.library_id ? "var(--green)" : "var(--line)", background: vaxId === x.library_id ? "#eaf3ea" : "#fff" }}>
                         <span className="font-semibold block">{x.name}</span>
                         <span className="text-xs" style={{ color: "var(--muted)" }}>
                           WHD eggs {x.attributes?.withholding_eggs_days ?? 0}d · meat {x.attributes?.withholding_meat_days ?? 0}d
@@ -136,7 +136,7 @@ export default function EventCorrectModal({ event, onClose, onSaved }) {
                 </div>
                 <label className="text-[11px]" style={{ color: "var(--muted)" }}>Vaccination date</label>
                 <input type="date" value={vaxDate} onChange={(e) => setVaxDate(e.target.value)}
-                  className="w-full mt-0.5 mb-2 rounded-lg border px-3 py-2 text-sm" style={{ borderColor: "#E6DED0" }} />
+                  className="w-full mt-0.5 mb-2 rounded-lg border px-3 py-2 text-sm" style={{ borderColor: "var(--line)" }} />
                 <div className="text-xs rounded-lg px-3 py-2" style={{ background: "#fff7e6", color: "#7a5b14", border: "1px solid #f0d9a0" }}>
                   {selectedVax
                     ? (vaxDays > 0
@@ -158,7 +158,7 @@ export default function EventCorrectModal({ event, onClose, onSaved }) {
                       <div key={k}>
                         <label className="text-[11px]" style={{ color: "var(--muted)" }}>{label(k)}</label>
                         <input value={v} type={isNum ? "number" : "text"} onChange={(e) => setField(k, e.target.value, isNum)}
-                          className="w-full mt-0.5 rounded-lg border px-3 py-2 text-sm" style={{ borderColor: "#E6DED0" }} />
+                          className="w-full mt-0.5 rounded-lg border px-3 py-2 text-sm" style={{ borderColor: "var(--line)" }} />
                       </div>
                     );
                   })}
@@ -174,7 +174,7 @@ export default function EventCorrectModal({ event, onClose, onSaved }) {
 
         {err && <div className="text-xs mb-2" style={{ color: "#9a3b3b" }}>{err}</div>}
         <div className="flex gap-2">
-          <button onClick={onClose} className="flex-1 py-2 rounded-lg border text-sm" style={{ borderColor: "#E6DED0" }}>
+          <button onClick={onClose} className="flex-1 py-2 rounded-lg border text-sm" style={{ borderColor: "var(--line)" }}>
             {canSave ? "Cancel" : "Close"}
           </button>
           {canSave && (

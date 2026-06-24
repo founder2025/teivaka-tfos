@@ -415,7 +415,7 @@ function ActiveTour({ cfg }) {
           style={{
             left: 16, bottom: 84, zIndex: 45,
             background: "var(--paper)", color: "var(--soil)",
-            border: "1px solid #E6DED0", borderRadius: 999,
+            border: "1px solid var(--line)", borderRadius: 999,
             padding: "7px 12px", fontSize: 12.5, fontWeight: 600,
             boxShadow: "0 3px 10px rgba(44,26,14,0.12)", cursor: "pointer",
           }}

@@ -11,7 +11,7 @@ import { apiClient } from '../../../utils/apiClient';
 import { useEventMutation } from '../../../utils/useEventMutation';
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false, staleTime: 30_000 } } });
-const C = { soil: 'var(--soil)', cream: 'var(--cream)', green: 'var(--green)', amber: 'var(--amber)', red: 'var(--red)', border: '#E6DED0', muted: 'var(--muted)' };
+const C = { soil: 'var(--soil)', cream: 'var(--cream)', green: 'var(--green)', amber: 'var(--amber)', red: 'var(--red)', border: 'var(--line)', muted: 'var(--muted)' };
 
 const SUSPECTED_CAUSES = [
   { value: 'DISEASE',       label: 'Disease' },

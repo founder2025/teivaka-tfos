@@ -14,7 +14,7 @@ import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { apiClient } from "../../utils/apiClient";
 
-const C = { soil: "var(--soil)", cream: "var(--cream)", green: "var(--green)", amber: "var(--amber)", red: "var(--red)", border: "#E6DED0", muted: "var(--muted)" };
+const C = { soil: "var(--soil)", cream: "var(--cream)", green: "var(--green)", amber: "var(--amber)", red: "var(--red)", border: "var(--line)", muted: "var(--muted)" };
 
 const ENT_LABEL = {
   CROPS: "Crops", PERENNIALS: "Trees & vines", AQUACULTURE: "Fish & sea",

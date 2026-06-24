@@ -16,7 +16,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import ThemedSelect from "../../components/inputs/ThemedSelect.jsx";
 
-const C = { soil: "#2C1A0E", green: "var(--green)", cream: "var(--cream)", gold: "var(--amber)", border: "var(--line)", red: "#B91C1C" };
+const C = { soil: "var(--soil)", green: "var(--green)", cream: "var(--cream)", gold: "var(--amber)", border: "var(--line)", red: "#B91C1C" };
 
 const GRADES = ["A", "B", "C"];
 const DESTINATIONS = ["NAYANS", "MARKET", "WASTE", "OTHER"];

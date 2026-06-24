@@ -430,15 +430,15 @@ export default function CaptureEngine({ config = cropsConfig, onDone, onBack, pr
 
   const wrap = { maxWidth: 460, margin: "0 auto", padding: 16 };
   const tile = { display: "flex", alignItems: "center", gap: 14, width: "100%", padding: 18,
-    borderRadius: 16, border: "1px solid #e5e1d8", background: "var(--paper)", cursor: "pointer", textAlign: "left", marginBottom: 12 };
+    borderRadius: 16, border: "1px solid var(--line)", background: "var(--paper)", cursor: "pointer", textAlign: "left", marginBottom: 12 };
   const iconBox = { width: 44, height: 44, borderRadius: 12, background: "var(--cream-2)", display: "grid", placeItems: "center", flexShrink: 0 };
-  const backBtn = { display: "flex", alignItems: "center", gap: 4, background: "none", border: "none", color: "#6b6b6b", cursor: "pointer", marginBottom: 12 };
-  const card = { border: "1px solid #e6ded0", borderRadius: 14, padding: 14, marginBottom: 16, background: "var(--cream-2)" };
-  const cardHead = { fontSize: 11, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase", color: "#9a917c", marginBottom: 10 };
-  const fieldLabel = { display: "block", fontSize: 13, fontWeight: 600, marginBottom: 6, color: "#5a5a4a" };
-  const inputBox = { width: "100%", padding: 11, borderRadius: 10, border: "1px solid #d8d4c8", fontSize: 14 };
+  const backBtn = { display: "flex", alignItems: "center", gap: 4, background: "none", border: "none", color: "var(--muted)", cursor: "pointer", marginBottom: 12 };
+  const card = { border: "1px solid var(--line)", borderRadius: 14, padding: 14, marginBottom: 16, background: "var(--cream-2)" };
+  const cardHead = { fontSize: 11, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase", color: "var(--muted)", marginBottom: 10 };
+  const fieldLabel = { display: "block", fontSize: 13, fontWeight: 600, marginBottom: 6, color: "var(--soil)" };
+  const inputBox = { width: "100%", padding: 11, borderRadius: 10, border: "1px solid var(--line)", fontSize: 14 };
   const evBtn = (active) => ({ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4,
-    padding: "12px 6px", borderRadius: 12, border: active ? "2px solid var(--green)" : "1px dashed #cfc7b5",
+    padding: "12px 6px", borderRadius: 12, border: active ? "2px solid var(--green)" : "1px dashed var(--line)",
     background: active ? "#eaf3ea" : "#fff", cursor: "pointer", fontSize: 12 });
 
   // --- success ---
@@ -447,14 +447,14 @@ export default function CaptureEngine({ config = cropsConfig, onDone, onBack, pr
       <div style={{ textAlign: "center", padding: "24px 0 8px" }}>
         <Check size={56} style={{ color: "var(--green)" }} />
         <h2 style={{ fontSize: 20, fontWeight: 700, marginTop: 12 }}>{editSaved ? "Correction saved" : "Saved"}</h2>
-        <p style={{ color: "#6b6b6b", fontSize: 13, marginTop: 6 }}>
+        <p style={{ color: "var(--muted)", fontSize: 13, marginTop: 6 }}>
           Recorded {result.event_id}{result.audit_hash ? ` · ${result.audit_hash.slice(0, 12)}…` : ""}</p>
       </div>
 
       {canEditResult && !editOpen && (
         <div style={{ ...card, textAlign: "center" }}>
-          <p style={{ fontSize: 12.5, color: "#7a7363", marginBottom: 10 }}>Made a mistake? You can fix this for 48 hours — every change is logged.</p>
-          <button onClick={openEdit} style={{ background: "none", border: "1px solid #d8d4c8", borderRadius: 12, padding: "10px 16px", fontWeight: 600, cursor: "pointer", color: "var(--green-dk)" }}>Edit note / photo</button>
+          <p style={{ fontSize: 12.5, color: "var(--muted)", marginBottom: 10 }}>Made a mistake? You can fix this for 48 hours — every change is logged.</p>
+          <button onClick={openEdit} style={{ background: "none", border: "1px solid var(--line)", borderRadius: 12, padding: "10px 16px", fontWeight: 600, cursor: "pointer", color: "var(--green-dk)" }}>Edit note / photo</button>
         </div>
       )}
 
@@ -470,14 +470,14 @@ export default function CaptureEngine({ config = cropsConfig, onDone, onBack, pr
               <button onClick={() => setEditPhoto(null)} style={{ background: "none", border: "none", color: "#9a3b3b", cursor: "pointer", fontSize: 13 }}>Remove photo</button>
             </div>
           ) : (
-            <label style={{ display: "inline-block", border: "1px dashed #cfc7b5", borderRadius: 10, padding: "8px 12px", cursor: "pointer", fontSize: 13, marginBottom: 12 }}>
+            <label style={{ display: "inline-block", border: "1px dashed var(--line)", borderRadius: 10, padding: "8px 12px", cursor: "pointer", fontSize: 13, marginBottom: 12 }}>
               {editPhotoUploading ? "Uploading…" : "Add / change photo"}
               <input type="file" accept="image/*" capture="environment" style={{ display: "none" }} onChange={(e) => uploadEditPhoto(e.target.files?.[0])} />
             </label>
           )}
           {error && <p style={{ color: "#9a3b3b", fontSize: 13, marginBottom: 10 }}>{error}</p>}
           <div style={{ display: "flex", gap: 10 }}>
-            <button onClick={() => setEditOpen(false)} style={{ flex: 1, padding: 12, borderRadius: 12, border: "1px solid #d8d4c8", background: "var(--paper)", cursor: "pointer" }}>Cancel</button>
+            <button onClick={() => setEditOpen(false)} style={{ flex: 1, padding: 12, borderRadius: 12, border: "1px solid var(--line)", background: "var(--paper)", cursor: "pointer" }}>Cancel</button>
             <button onClick={saveEdit} disabled={editBusy || editPhotoUploading} style={{ flex: 1, padding: 12, borderRadius: 12, border: "none", background: "var(--green)", color: "#fff", fontWeight: 700, cursor: "pointer" }}>{editBusy ? "Saving…" : "Save changes"}</button>
           </div>
         </div>
@@ -496,12 +496,12 @@ export default function CaptureEngine({ config = cropsConfig, onDone, onBack, pr
   if (!verb) return (
     <div style={wrap}>
       <h1 style={{ fontSize: 22, fontWeight: 800, marginBottom: 4 }}>What did you do?</h1>
-      <p style={{ color: "#6b6b6b", fontSize: 13, marginBottom: 18 }}>Tap one.</p>
+      <p style={{ color: "var(--muted)", fontSize: 13, marginBottom: 18 }}>Tap one.</p>
       {config.verbs.map((v) => { const I = ICONS[v.icon] || Eye; return (
         <button key={v.id} style={tile} onClick={() => pickVerb(v)}>
           <span style={iconBox}><I size={22} style={{ color: "var(--green-dk)" }} /></span>
           <span><span style={{ display: "block", fontWeight: 700, fontSize: 16 }}>{v.label}</span>
-            <span style={{ display: "block", color: "#8a8a8a", fontSize: 12.5 }}>{v.descriptor}</span></span>
+            <span style={{ display: "block", color: "var(--muted)", fontSize: 12.5 }}>{v.descriptor}</span></span>
         </button>); })}
     </div>
   );
@@ -544,7 +544,7 @@ export default function CaptureEngine({ config = cropsConfig, onDone, onBack, pr
           {f.options.map((o) => (
             <button key={o.value} onClick={() => toggle(o.value)}
               style={{ padding: "10px 14px", borderRadius: 12, fontSize: 14, fontWeight: 600,
-                border: arr.includes(o.value) ? "2px solid var(--green)" : "1px solid #d8d4c8",
+                border: arr.includes(o.value) ? "2px solid var(--green)" : "1px solid var(--line)",
                 background: arr.includes(o.value) ? "#eaf3ea" : "#fff", cursor: "pointer" }}>{o.label}</button>
           ))}
         </div>
@@ -555,20 +555,20 @@ export default function CaptureEngine({ config = cropsConfig, onDone, onBack, pr
       const filtered = libQuery ? list.filter((x) => (x.name || "").toLowerCase().includes(libQuery.toLowerCase())) : list;
       return (
         <div>
-          {loadingLibs ? <p style={{ color: "#6b6b6b", fontSize: 13 }}>Loading…</p>
+          {loadingLibs ? <p style={{ color: "var(--muted)", fontSize: 13 }}>Loading…</p>
             : list.length === 0 ? <p style={{ color: "#9a3b3b", fontSize: 13 }}>None in your library yet — add one in Library settings first.</p>
             : (<>
               {list.length > 6 && (
                 <input placeholder="Search…" value={libQuery} onChange={(e) => setLibQuery(e.target.value)}
-                  style={{ width: "100%", padding: 10, borderRadius: 10, border: "1px solid #d8d4c8", fontSize: 14, marginBottom: 8 }} />
+                  style={{ width: "100%", padding: 10, borderRadius: 10, border: "1px solid var(--line)", fontSize: 14, marginBottom: 8 }} />
               )}
               <div style={{ maxHeight: 220, overflowY: "auto", display: "flex", flexDirection: "column", gap: 6 }}>
                 {filtered.map((x) => (
                   <button key={x.library_id} onClick={() => setVal(f.name, x.library_id)}
                     style={{ textAlign: "left", padding: "10px 12px", borderRadius: 10,
-                      border: v === x.library_id ? "2px solid var(--green)" : "1px solid #d8d4c8",
+                      border: v === x.library_id ? "2px solid var(--green)" : "1px solid var(--line)",
                       background: v === x.library_id ? "#eaf3ea" : "#fff", cursor: "pointer", fontWeight: 600, fontSize: 14 }}>
-                    {x.name}{x.is_global ? <span style={{ fontSize: 11, color: "#8a8a8a", fontWeight: 400 }}> · standard</span> : null}
+                    {x.name}{x.is_global ? <span style={{ fontSize: 11, color: "var(--muted)", fontWeight: 400 }}> · standard</span> : null}
                   </button>
                 ))}
               </div>
@@ -583,19 +583,19 @@ export default function CaptureEngine({ config = cropsConfig, onDone, onBack, pr
         : chemicals;
       return (
         <div>
-          {loadingChems ? <p style={{ color: "#6b6b6b", fontSize: 13 }}>Loading chemicals…</p>
+          {loadingChems ? <p style={{ color: "var(--muted)", fontSize: 13 }}>Loading chemicals…</p>
             : chemicals.length === 0 ? <p style={{ color: "#9a3b3b", fontSize: 13 }}>No chemicals in the library yet.</p>
             : (<>
               <input placeholder="Search chemical…" value={chemQuery} onChange={(e) => setChemQuery(e.target.value)}
-                style={{ width: "100%", padding: 10, borderRadius: 10, border: "1px solid #d8d4c8", fontSize: 14, marginBottom: 8 }} />
+                style={{ width: "100%", padding: 10, borderRadius: 10, border: "1px solid var(--line)", fontSize: 14, marginBottom: 8 }} />
               <div style={{ maxHeight: 240, overflowY: "auto", display: "flex", flexDirection: "column", gap: 6 }}>
                 {filtered.map((c) => (
                   <button key={c.chemical_id} onClick={() => pickChemical(f.name, c)}
                     style={{ textAlign: "left", padding: "10px 12px", borderRadius: 10,
-                      border: v === c.chemical_id ? "2px solid var(--green)" : "1px solid #d8d4c8",
+                      border: v === c.chemical_id ? "2px solid var(--green)" : "1px solid var(--line)",
                       background: v === c.chemical_id ? "#eaf3ea" : "#fff", cursor: "pointer" }}>
                     <span style={{ fontWeight: 600, fontSize: 14, display: "block" }}>{c.chem_name}</span>
-                    <span style={{ fontSize: 12, color: "#8a8a8a" }}>
+                    <span style={{ fontSize: 12, color: "var(--muted)" }}>
                       {c.active_ingredient ? `${c.active_ingredient} · ` : ""}WHD {c.withholding_period_days ?? "?"}d</span>
                   </button>
                 ))}
@@ -614,44 +614,44 @@ export default function CaptureEngine({ config = cropsConfig, onDone, onBack, pr
         {f.options.map((o) => (
           <button key={o.value} onClick={() => setVal(f.name, o.value)}
             style={{ padding: "12px 18px", borderRadius: 12, fontSize: 15, fontWeight: 600,
-              border: v === o.value ? "2px solid var(--green)" : "1px solid #d8d4c8",
+              border: v === o.value ? "2px solid var(--green)" : "1px solid var(--line)",
               background: v === o.value ? "#eaf3ea" : "#fff", cursor: "pointer" }}>{o.label}</button>
         ))}
       </div>
     );
     if (f.input === "number") { const n = Number(v) || 0; return (
       <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-        <button onClick={() => setVal(f.name, Math.max(0, n - 1))} style={{ width: 48, height: 48, borderRadius: 12, border: "1px solid #d8d4c8", background: "var(--paper)", fontSize: 22, cursor: "pointer" }}>−</button>
+        <button onClick={() => setVal(f.name, Math.max(0, n - 1))} style={{ width: 48, height: 48, borderRadius: 12, border: "1px solid var(--line)", background: "var(--paper)", fontSize: 22, cursor: "pointer" }}>−</button>
         <input type="number" value={v} onChange={(e) => setVal(f.name, e.target.value)} inputMode="numeric"
-          style={{ width: 90, textAlign: "center", padding: 12, borderRadius: 12, border: "1px solid #d8d4c8", fontSize: 18, fontWeight: 700 }} />
-        <button onClick={() => setVal(f.name, n + 1)} style={{ width: 48, height: 48, borderRadius: 12, border: "1px solid #d8d4c8", background: "var(--paper)", fontSize: 22, cursor: "pointer" }}>+</button>
+          style={{ width: 90, textAlign: "center", padding: 12, borderRadius: 12, border: "1px solid var(--line)", fontSize: 18, fontWeight: 700 }} />
+        <button onClick={() => setVal(f.name, n + 1)} style={{ width: 48, height: 48, borderRadius: 12, border: "1px solid var(--line)", background: "var(--paper)", fontSize: 22, cursor: "pointer" }}>+</button>
       </div>
     ); }
     return <input value={v} onChange={(e) => setVal(f.name, e.target.value)}
-      style={{ width: "100%", padding: 12, borderRadius: 12, border: "1px solid #d8d4c8", fontSize: 15 }} />;
+      style={{ width: "100%", padding: 12, borderRadius: 12, border: "1px solid var(--line)", fontSize: 15 }} />;
   }
 
   return (
     <div style={wrap}>
       <button onClick={goBack} style={backBtn}><ChevronLeft size={18} /> Back</button>
       <h1 style={{ fontSize: 20, fontWeight: 800, marginBottom: 14 }}>{spec.choiceLabel || verb.label}</h1>
-      {loadingItems ? <p style={{ color: "#6b6b6b" }}>{ctx.loadingMsg}</p>
+      {loadingItems ? <p style={{ color: "var(--muted)" }}>{ctx.loadingMsg}</p>
         : items.length === 0 ? <p style={{ color: "#9a3b3b" }}>{ctx.emptyMsg}</p>
         : (<>
           {/* Anchors — Farm · <context> · Operator (the 4-anchor identity on every record) */}
           <div style={card}>
             <div style={cardHead}>Anchors · farm · {ctx.contextLabel.toLowerCase()} · operator</div>
             <div style={{ display: "grid", gridTemplateColumns: "64px 1fr", rowGap: 10, alignItems: "center", fontSize: 14 }}>
-              <span style={{ color: "#9a917c" }}>Farm</span>
+              <span style={{ color: "var(--muted)" }}>Farm</span>
               <span style={{ fontWeight: 600 }}>{anchorFarmName || selectedItem?.farm_id || "—"}</span>
-              <span style={{ color: "#9a917c" }}>{ctx.contextLabel}</span>
+              <span style={{ color: "var(--muted)" }}>{ctx.contextLabel}</span>
               {items.length === 1
                 ? <span style={{ fontWeight: 600 }}>{ctx.optionLabel(selectedItem)}</span>
                 : <select value={itemId} onChange={(e) => setItemId(e.target.value)} style={inputBox}>
                     <option value="">{ctx.pickPrompt}</option>
                     {items.map((c) => <option key={c[ctx.idKey]} value={c[ctx.idKey]}>{ctx.optionLabel(c)}</option>)}
                   </select>}
-              <span style={{ color: "#9a917c" }}>Operator</span>
+              <span style={{ color: "var(--muted)" }}>Operator</span>
               <span style={{ fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}><User size={14} />{operator || "You"}</span>
             </div>
           </div>
@@ -675,20 +675,20 @@ export default function CaptureEngine({ config = cropsConfig, onDone, onBack, pr
             <div style={cardHead}>Evidence · lifts verification</div>
             <div style={{ display: "flex", gap: 8 }}>
               <label style={evBtn(!!photoUrl)}>
-                <Camera size={20} style={{ color: photoUrl ? "var(--green)" : "#9a917c" }} />
+                <Camera size={20} style={{ color: photoUrl ? "var(--green)" : "var(--muted)" }} />
                 <span style={{ fontWeight: 600 }}>{photoUploading ? "…" : photoUrl ? "Photo ✓" : "Photo"}</span>
                 <input type="file" accept="image/*" capture="environment" style={{ display: "none" }} onChange={(e) => uploadPhoto(e.target.files?.[0])} />
               </label>
               <button type="button" onClick={captureGps} style={evBtn(!!gps)}>
-                <MapPin size={20} style={{ color: gps ? "var(--green)" : "#9a917c" }} />
+                <MapPin size={20} style={{ color: gps ? "var(--green)" : "var(--muted)" }} />
                 <span style={{ fontWeight: 600 }}>{gps ? "GPS ✓" : gpsStatus === "locating" ? "…" : "GPS"}</span>
               </button>
               <button type="button" onClick={recording ? stopRec : startRec} style={evBtn(!!voiceUrl || recording)}>
-                {recording ? <Square size={20} style={{ color: "#9a3b3b" }} /> : <Mic size={20} style={{ color: voiceUrl ? "var(--green)" : "#9a917c" }} />}
+                {recording ? <Square size={20} style={{ color: "#9a3b3b" }} /> : <Mic size={20} style={{ color: voiceUrl ? "var(--green)" : "var(--muted)" }} />}
                 <span style={{ fontWeight: 600 }}>{recording ? `Stop ${mmss(recSecs)}` : voiceUploading ? "…" : voiceUrl ? "Voice ✓" : "Voice"}</span>
               </button>
               <button type="button" onClick={() => setShowWitness((s) => !s)} style={evBtn(!!witnessName.trim())}>
-                <Users size={20} style={{ color: witnessName.trim() ? "var(--green)" : "#9a917c" }} />
+                <Users size={20} style={{ color: witnessName.trim() ? "var(--green)" : "var(--muted)" }} />
                 <span style={{ fontWeight: 600 }}>{witnessName.trim() ? "Witness ✓" : "Witness"}</span>
               </button>
             </div>
@@ -706,7 +706,7 @@ export default function CaptureEngine({ config = cropsConfig, onDone, onBack, pr
             )}
             {gpsStatus === "denied" && <p style={{ fontSize: 11.5, color: "#9a3b3b", marginTop: 8 }}>Location permission denied.</p>}
             {gpsStatus === "unavailable" && <p style={{ fontSize: 11.5, color: "#9a3b3b", marginTop: 8 }}>Location not available on this device.</p>}
-            <p style={{ fontSize: 11, color: "#9a917c", marginTop: 8, fontStyle: "italic" }}>
+            <p style={{ fontSize: 11, color: "var(--muted)", marginTop: 8, fontStyle: "italic" }}>
               Photo &amp; voice are fingerprinted (SHA-256); GPS &amp; witness are stored — banks and insurers see this when they verify the record.</p>
           </div>
           )}
@@ -734,7 +734,7 @@ export default function CaptureEngine({ config = cropsConfig, onDone, onBack, pr
 
           {error && <p style={{ color: "#9a3b3b", fontSize: 13, marginBottom: 12 }}>{error}</p>}
           {(photoUploading || voiceUploading || recording) && (
-            <p style={{ fontSize: 12, color: "#9a917c", marginBottom: 8, textAlign: "center" }}>
+            <p style={{ fontSize: 12, color: "var(--muted)", marginBottom: 8, textAlign: "center" }}>
               {recording ? "Stop the recording to save." : "Finishing upload…"}</p>
           )}
           <button onClick={submit} disabled={submitting || !selectedItem || photoUploading || voiceUploading || recording}

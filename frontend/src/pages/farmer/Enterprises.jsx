@@ -31,8 +31,8 @@ import ModeDropdown from "../../components/farm/ModeDropdown";
 import Modal from "../../components/ui/Modal";
 
 const C = {
-  soil: "var(--soil)", cream: "var(--cream)", border: "#E6DED0", muted: "var(--muted)", ink: "#3A2E26",
-  green: "var(--green)", greenDk: "var(--green-dk)", amber: "var(--amber)", red: "var(--red)", greenTint: "#E9F2DD", paper: "var(--cream-2)",
+  soil: "var(--soil)", cream: "var(--cream)", border: "var(--line)", muted: "var(--muted)", ink: "var(--soil)",
+  green: "var(--green)", greenDk: "var(--green-dk)", amber: "var(--amber)", red: "var(--red)", greenTint: "var(--green-tint)", paper: "var(--cream-2)",
 };
 const FOCUS = "focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--green)] focus-visible:ring-offset-1 transition";
 

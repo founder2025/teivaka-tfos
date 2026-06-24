@@ -19,7 +19,7 @@ import { MapPin, ShieldCheck, Users, EyeOff, Search, Crosshair, MessageCircle } 
 import { useChat } from "../../context/ChatContext";
 
 const FIJI = [-17.8, 178.0];
-const C = { soil: "#2C1A0E", green: "var(--green)", greenDk: "var(--green-dk)", cream: "var(--cream)", line: "var(--line)", muted: "var(--muted)" };
+const C = { soil: "var(--soil)", green: "var(--green)", greenDk: "var(--green-dk)", cream: "var(--cream)", line: "var(--line)", muted: "var(--muted)" };
 const TYPE_LABEL = {
   FARMER: "Farmer", BUYER: "Buyer", SUPPLIER: "Supplier", SERVICE_PROVIDER: "Service provider",
   BANKER: "Banker", BUSINESS: "Business", EXPORTER: "Exporter", IMPORTER: "Importer",
@@ -150,7 +150,7 @@ export default function Members() {
         }).addTo(lg);
         try { circle.getBounds().isValid() && bounds.push(circle.getBounds().getNorthEast(), circle.getBounds().getSouthWest()); } catch { /* ignore */ }
       }
-      L.circleMarker(yll, { radius: 8, color: "#fff", weight: 2, fillColor: "#2C1A0E", fillOpacity: 1 })
+      L.circleMarker(yll, { radius: 8, color: "#fff", weight: 2, fillColor: "var(--soil)", fillOpacity: 1 })
         .bindPopup(`<strong>You are here</strong><br/><span style="color:#888">${data.you.name || "Your farm"}</span>`)
         .addTo(lg);
     }

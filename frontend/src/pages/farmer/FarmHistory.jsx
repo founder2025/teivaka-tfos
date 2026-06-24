@@ -24,8 +24,8 @@ import FarmSelector from "../../components/farm/FarmSelector";
 import ModeDropdown from "../../components/farm/ModeDropdown";
 
 const C = {
-  soil: "var(--soil)", cream: "var(--cream)", border: "#E6DED0", muted: "var(--muted)", ink: "#3A2E26",
-  green: "var(--green)", greenDk: "var(--green-dk)", amber: "var(--amber)", red: "var(--red)", greenTint: "#E9F2DD", paper: "var(--cream-2)",
+  soil: "var(--soil)", cream: "var(--cream)", border: "var(--line)", muted: "var(--muted)", ink: "var(--soil)",
+  green: "var(--green)", greenDk: "var(--green-dk)", amber: "var(--amber)", red: "var(--red)", greenTint: "var(--green-tint)", paper: "var(--cream-2)",
 };
 const FOCUS = "focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--green)] focus-visible:ring-offset-1 transition";
 const PAGE = 100;
@@ -198,12 +198,12 @@ function printHistoryBook(rows, farmId, from, to) {
         <tr style="border-bottom:1px solid #eee">
           <td style="padding:4px 8px;color:var(--muted);white-space:nowrap;width:48px">${esc(e.time || "—")}</td>
           <td style="padding:4px 8px;font-weight:600;color:var(--soil);white-space:nowrap">${esc(e.label)}</td>
-          <td style="padding:4px 8px;color:#3A2E26">${esc(e.summary)}</td>
+          <td style="padding:4px 8px;color:var(--soil)">${esc(e.summary)}</td>
           <td style="padding:4px 8px;color:var(--muted);white-space:nowrap">${esc([e.pu, e.who].filter(Boolean).join(" · "))}</td>
         </tr>`).join("")}
     </table>`).join("");
   const html = `<!doctype html><html><head><meta charset="utf-8"><title>Farm History — ${esc(farmId || "")}</title></head>
-  <body style="font-family:Georgia,serif;color:#3A2E26;max-width:780px;margin:24px auto;padding:0 16px">
+  <body style="font-family:Georgia,serif;color:var(--soil);max-width:780px;margin:24px auto;padding:0 16px">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid var(--soil);padding-bottom:10px">
       <div><div style="font-size:18px;font-weight:800;color:var(--soil)">${esc(farmId || "Your farm")} — Farm History</div>
       <div style="font-size:11px;color:var(--muted)">Range: ${esc(rangeTxt)} · ${rows.length} records · hash-stamped, nothing lost</div></div>

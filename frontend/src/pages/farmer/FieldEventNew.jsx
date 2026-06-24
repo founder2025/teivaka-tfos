@@ -40,7 +40,7 @@ const C = {
   greenDk: "var(--green-dk)",
   red:     "var(--red)",
   cream:   "var(--cream)",
-  border:  "#E6DED0",
+  border:  "var(--line)",
   muted:   "var(--muted)",
 };
 
