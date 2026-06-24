@@ -100,8 +100,8 @@ function ClassifyRow({ cycle, onSaved }) {
     }
   }
 
-  const cropLabel = cycle.production_name || cycle.production_id || "—";
-  const blockLabel = cycle.pu_farmer_label || cycle.pu_id || "—";
+  const cropLabel = cycle.production_name || "Crop" || "—";
+  const blockLabel = cycle.pu_farmer_label || "Block" || "—";
 
   return (
     <div

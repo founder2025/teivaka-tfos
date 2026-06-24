@@ -155,7 +155,7 @@ function AlternativesList({ alternatives, onPick }) {
             className="text-xs font-medium px-2 py-1 rounded"
             style={{ background: "var(--paper)", border: `1px solid ${C.border}`, color: C.soil }}
           >
-            {a.production_name || a.production_id}
+            {a.production_name || "Crop"}
           </button>
         ))}
       </div>
@@ -384,7 +384,7 @@ export default function NewCycleModal({ isOpen, onClose, onCreated, farmId }) {
               onChange={setPuId}
               options={pus.map((pu) => ({
                 value: pu.pu_id,
-                label: pu.farmer_label || pu.pu_id,
+                label: pu.farmer_label || "Block",
                 sublabel: pu.area_ha ? `${pu.area_ha} ha` : undefined,
               }))}
               placeholder="Select block..."

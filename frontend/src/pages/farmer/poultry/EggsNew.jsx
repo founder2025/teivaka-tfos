@@ -227,7 +227,7 @@ function EggsNewInner() {
                   <option value="">Pick a coop…</option>
                   {pus.map((pu) => (
                     <option key={pu.pu_id} value={pu.pu_id}>
-                      {pu.farmer_label || pu.pu_name || pu.pu_id}
+                      {pu.farmer_label || pu.pu_name || "Block"}
                     </option>
                   ))}
                 </select>
@@ -248,7 +248,7 @@ function EggsNewInner() {
                 <option value="">— No specific flock —</option>
                 {visibleFlocks.map((f) => (
                   <option key={f.flock_id} value={f.flock_id}>
-                    {f.flock_label} ({f.flock_id})
+                    {f.flock_label}
                   </option>
                 ))}
               </select>

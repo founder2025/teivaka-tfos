@@ -116,8 +116,8 @@ export default function HarvestLog() {
   }, []);
 
   const cycleLabel = (c) => {
-    const block = c.pu_farmer_label || c.pu_name || c.pu_id;
-    return c.production_name ? `${c.production_name}${block ? ` · ${block}` : ""}` : (block || c.cycle_id);
+    const block = c.pu_farmer_label || c.pu_name || "Block";
+    return c.production_name ? `${c.production_name}${block ? ` · ${block}` : ""}` : (block || "Crop run");
   };
 
   function selectCycle(cycleId) {

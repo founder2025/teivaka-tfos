@@ -94,7 +94,7 @@ function ProductionInner() {
   const byType = useMemo(() => {
     const m = {};
     active.forEach((c) => {
-      const k = c.production_name || c.production_id || "Crop";
+      const k = c.production_name || "Crop" || "Crop";
       m[k] = m[k] || { units: 0, exp: 0, act: 0 };
       m[k].units++; m[k].exp += Number(c.planned_yield_kg) || 0; m[k].act += Number(c.actual_yield_kg) || 0;
     });
@@ -164,10 +164,10 @@ function ProductionInner() {
                         <div key={c.cycle_id} className="card" style={{ margin: 0, cursor: "pointer" }} onClick={() => navigate(`/farm/cycles/${encodeURIComponent(c.cycle_id)}`)}>
                           <div style={{ padding: "13px 14px" }}>
                             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
-                              <div style={{ fontWeight: 700, color: "var(--ink)", fontSize: 14 }}>{c.farmer_label || c.pu_farmer_label || c.pu_name || c.pu_id}</div>
+                              <div style={{ fontWeight: 700, color: "var(--ink)", fontSize: 14 }}>{c.farmer_label || c.pu_farmer_label || c.pu_name || "Block"}</div>
                               <span title={blocked ? "Harvest on hold" : "Clear"} style={{ flex: "none", width: 9, height: 9, borderRadius: "50%", background: blocked ? "var(--red)" : "var(--green)", marginTop: 4 }} />
                             </div>
-                            <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 1 }}>{c.production_name || c.production_id}</div>
+                            <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 1 }}>{c.production_name || "Crop"}</div>
                             <div style={{ marginTop: 8 }}><span style={{ display: "inline-block", fontSize: 11, fontWeight: 600, color: "var(--soil)", background: "rgba(106,168,79,0.14)", padding: "2px 8px", borderRadius: 10, textTransform: "capitalize" }}>{stage}</span></div>
                             {p != null ? (
                               <>

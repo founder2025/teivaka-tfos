@@ -264,7 +264,7 @@ function RelabelModal({ cycle, onClose, onSaved }) {
         <div className="overlay-head"><h2>Rename this crop run</h2><button className="overlay-close" onClick={onClose}><X size={14} /></button></div>
         <div className="overlay-body" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           <div style={{ fontSize: 11.5, color: "var(--muted)", lineHeight: 1.5 }}><Shield size={11} /> Your own friendly name for this cycle — e.g. "Eggplant by the mango tree". The crop type and cycle ID stay fixed; this just makes it easy to recognise.</div>
-          <div className="form-row"><label>Your name for it</label><input value={label} onChange={(e) => setLabel(e.target.value)} maxLength={64} placeholder={cycle.production_name || cycle.cycle_id} /></div>
+          <div className="form-row"><label>Your name for it</label><input value={label} onChange={(e) => setLabel(e.target.value)} maxLength={64} placeholder={cycle.production_name || "Crop run"} /></div>
           {err && <div style={{ color: "var(--red)", fontSize: 12 }}>{err}</div>}
         </div>
         <div className="overlay-foot">
@@ -402,7 +402,7 @@ function FarmSettingsInner() {
       emitToast("Your data exported");
     } catch (e) { emitToast(`Export failed: ${e.message || e}`); }
   }
-  const cycleName = (c) => c.farmer_label || c.production_name || c.crop || c.cycle_id;
+  const cycleName = (c) => c.farmer_label || c.production_name || c.crop || "Crop run";
 
   return (
     <TfpShell>
@@ -470,12 +470,12 @@ function FarmSettingsInner() {
               <SettingsCard icon={Layers} title="Land & structure" desc="Rename your zones and blocks — the code stays, the name updates everywhere">
                 {zones.length === 0 && blocks.length === 0 && <div style={{ padding: "11px 8px", color: "var(--muted)", fontSize: 13 }}>No zones or blocks on this farm yet. Add them in Locations; rename them here any time.</div>}
                 {zones.map((z) => (
-                  <SRow key={z.zone_id} label={z.zone_name || z.zone_id}
+                  <SRow key={z.zone_id} label={z.zone_name || "Zone"}
                     sub={`Zone · ${z.zone_id}${z.area_ha ? ` · ${z.area_ha} ha` : ""}`}
                     right={<button className="btn btn-sm btn-secondary" title="Rename zone" onClick={() => setRenameWhat({ title: "Rename zone", label: "Zone name", current: z.zone_name, areaLabel: "Area (ha)", area: z.area_ha, endpoint: `/api/v1/zones/${encodeURIComponent(z.zone_id)}`, nameKey: "zone_name", areaKey: "area_ha", key: ["set-zones", farmId] })}><Pencil size={11} /></button>} />
                 ))}
                 {blocks.map((b) => (
-                  <SRow key={b.pu_id} label={b.farmer_label || b.pu_name || b.pu_id}
+                  <SRow key={b.pu_id} label={b.farmer_label || b.pu_name || "Block"}
                     sub={`Block${b.area_sqm ? ` · ${b.area_sqm} m²` : ""}`}
                     right={<button className="btn btn-sm btn-secondary" title="Rename block" onClick={() => setRenameWhat({ title: "Rename block", label: "Block name", current: b.pu_name, areaLabel: "Area (m²)", area: b.area_sqm, endpoint: `/api/v1/production-units/${encodeURIComponent(b.pu_id)}`, nameKey: "pu_name", areaKey: "area_sqm", key: ["set-pu", farmId] })}><Pencil size={11} /></button>} />
                 ))}

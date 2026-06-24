@@ -225,7 +225,7 @@ function FlockPlacedNewInner() {
                 <option value="">— Not assigned to a coop yet —</option>
                 {pus.map((pu) => (
                   <option key={pu.pu_id} value={pu.pu_id}>
-                    {pu.farmer_label || pu.pu_name || pu.pu_id}
+                    {pu.farmer_label || pu.pu_name || "Block"}
                   </option>
                 ))}
               </select>

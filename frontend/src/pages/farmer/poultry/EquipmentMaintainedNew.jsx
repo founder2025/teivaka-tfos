@@ -155,7 +155,7 @@ function Inner() {
                 <div><label className="block text-xs mb-1" style={{ color: C.muted }}>Coop (filter)</label>
                   <select value={puId} onChange={e => setPuId(e.target.value)} disabled={loading} className="w-full px-3 py-2 rounded-md border text-sm" style={{ background: "var(--paper)", borderColor: C.border }}>
                     <option value="">— Show all —</option>
-                    {pus.map(pu => <option key={pu.pu_id} value={pu.pu_id}>{pu.farmer_label || pu.pu_name || pu.pu_id}</option>)}
+                    {pus.map(pu => <option key={pu.pu_id} value={pu.pu_id}>{pu.farmer_label || pu.pu_name || "Block"}</option>)}
                   </select></div>
                 <div><label className="block text-xs mb-1" style={{ color: C.muted }}>Flock *</label>
                   <select value={flockId} onChange={e => setFlockId(e.target.value)} disabled={loading} className="w-full px-3 py-3 rounded-md border text-base" style={{ background: "var(--paper)", borderColor: !flockId && farmId ? C.amber : C.border }}>

@@ -211,7 +211,7 @@ function MortalityLoggedNewInner() {
                 <option value="">— Show all flocks —</option>
                 {pus.map((pu) => (
                   <option key={pu.pu_id} value={pu.pu_id}>
-                    {pu.farmer_label || pu.pu_name || pu.pu_id}
+                    {pu.farmer_label || pu.pu_name || "Block"}
                   </option>
                 ))}
               </select>

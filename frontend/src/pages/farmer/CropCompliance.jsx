@@ -88,7 +88,7 @@ function StatusView({ farmId, comp, cycles, overridesYtd, navigate, onOverride }
               <div className="comp-block-head">
                 <div className={`comp-block-icon ${status}`}>{status === "blocked" ? <AlertTriangle size={18} /> : <Check size={18} />}</div>
                 <div style={{ flex: 1 }}>
-                  <div className="comp-block-name">{c.farmer_label || c.pu_id} · {(c.production_name || c.crop || "Crop")}</div>
+                  <div className="comp-block-name">{c.farmer_label || "Block"} · {(c.production_name || c.crop || "Crop")}</div>
                   <div style={{ marginTop: 4 }}><span className={`comp-status-pill ${status}`}>{status === "blocked" ? "Harvest blocked" : "Clear"}</span></div>
                 </div>
               </div>
@@ -175,7 +175,7 @@ function RegisterView({ farmId, navigate }) {
                   <tr key={a.event_id}>
                     <td style={{ fontSize: 11 }}>{a.applied_date}</td>
                     <td>{a.chemical}</td>
-                    <td style={{ fontSize: 11 }}>{a.block_name || a.block_id}</td>
+                    <td style={{ fontSize: 11 }}>{a.block_name || "Block"}</td>
                     <td style={{ fontSize: 11.5 }}>{a.crop || "—"}</td>
                     <td style={{ fontFamily: "Menlo,monospace" }}>{a.whd_days}d</td>
                     <td style={{ fontSize: 11, ...(a.active ? { color: "var(--red)", fontWeight: 600 } : {}) }}>{a.clear_date}{a.active ? " (active)" : ""}</td>
@@ -254,7 +254,7 @@ function CalendarView({ comp, navigate }) {
           <div className="comp-cal-row" key={e.cycle_id}>
             <div className="comp-cal-date">{e.clear_date}</div>
             <div className="comp-cal-icon"><Check size={14} /></div>
-            <div style={{ flex: 1, fontSize: 12.5, color: "var(--soil)" }}>WHD clears · {e.block_name || e.pu_id} {e.crop} harvest-safe</div>
+            <div style={{ flex: 1, fontSize: 12.5, color: "var(--soil)" }}>WHD clears · {e.block_name || "Block"} {e.crop} harvest-safe</div>
             <span className="comp-status-pill clear">harvest</span>
           </div>
         ))}

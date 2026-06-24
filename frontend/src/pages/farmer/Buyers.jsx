@@ -678,7 +678,7 @@ function NewOrderModal({ farmId, customers, onClose, onSaved }) {
         <div className="overlay-head"><h2>Log new order</h2><button onClick={onClose} className="overlay-close"><X size={14} /></button></div>
         <div className="overlay-body">
           <Field label="Buyer"><select value={customerId} onChange={(e) => setCustomerId(e.target.value)}><option value="">Pick a buyer…</option>{customers.map((c) => <option key={c.customer_id} value={c.customer_id}>{c.customer_name}</option>)}</select></Field>
-          <Field label="Crop"><select value={productionId} onChange={(e) => setProductionId(e.target.value)}><option value="">Pick a crop…</option>{productions.map((p) => <option key={p.production_id} value={p.production_id}>{p.production_name || p.production_id}</option>)}</select></Field>
+          <Field label="Crop"><select value={productionId} onChange={(e) => setProductionId(e.target.value)}><option value="">Pick a crop…</option>{productions.map((p) => <option key={p.production_id} value={p.production_id}>{p.production_name || "Crop"}</option>)}</select></Field>
           <div className="form-row" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
             <div><label>Qty (kg)</label><input type="number" min="0" value={qty} onChange={(e) => setQty(e.target.value)} /></div>
             <div><label>Price/kg</label><input type="number" min="0" step="0.10" value={price} onChange={(e) => setPrice(e.target.value)} /></div>

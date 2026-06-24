@@ -164,11 +164,11 @@ export default function CycleDetail() {
     <div className="max-w-5xl mx-auto p-4 space-y-4">
       {/* breadcrumb + header */}
       <div className="text-xs" style={{ color: C.muted }}>
-        <Link to="/farm/cycles" style={{ color: C.greenDk }}>Crops</Link> › <Link to="/farm/cycles" style={{ color: C.greenDk }}>Cycles</Link> › <span style={{ color: C.soil }}>{c.production_name || c.production_id} · {c.pu_farmer_label || c.pu_id} · {c.farmer_label || c.cycle_id}</span>
+        <Link to="/farm/cycles" style={{ color: C.greenDk }}>Crops</Link> › <Link to="/farm/cycles" style={{ color: C.greenDk }}>Cycles</Link> › <span style={{ color: C.soil }}>{c.production_name || "Crop"} · {c.pu_farmer_label || "Block"} · {c.farmer_label || "Crop run"}</span>
       </div>
       <div className="flex items-start justify-between gap-2 flex-wrap">
         <div>
-          <h1 className="text-2xl font-bold" style={{ color: C.soil }}>{c.production_name || c.production_id} · {c.pu_farmer_label || c.pu_id}</h1>
+          <h1 className="text-2xl font-bold" style={{ color: C.soil }}>{c.production_name || "Crop"} · {c.pu_farmer_label || "Block"}</h1>
           <div className="text-xs mt-0.5" style={{ color: C.muted }}>
             Day {since ?? "—"}{expLen ? ` of expected ${expLen}` : ""} · {LIFECYCLE_LABEL[status] || status}
             {toHarvest != null && status !== "CLOSED" && status !== "FAILED" ? ` · ${toHarvest > 0 ? `${toHarvest} days to harvest` : "past expected harvest"}` : ""}
@@ -286,16 +286,16 @@ export default function CycleDetail() {
         <Panel title="Rotation context">
           <div className="text-[10px] font-bold uppercase tracking-wider mb-1.5" style={{ color: C.muted }}>Prior crops in this block</div>
           {history.length === 0 ? (
-            <div className="text-xs" style={{ color: C.muted }}>No prior rotation recorded for {c.pu_farmer_label || c.pu_id}.</div>
+            <div className="text-xs" style={{ color: C.muted }}>No prior rotation recorded for {c.pu_farmer_label || "Block"}.</div>
           ) : (
             history.slice(0, 3).map((h) => (
               <div key={h.cycle_id} className="flex justify-between text-xs py-0.5">
-                <span style={{ color: C.soil }}>{h.production_name || h.production_id}</span>
+                <span style={{ color: C.soil }}>{h.production_name || "Crop"}</span>
                 <span style={{ color: C.muted }}>{fmtDate(h.planting_date)} · {(h.cycle_status || "").toUpperCase()}</span>
               </div>
             ))
           )}
-          <div className="mt-2 pt-2 border-t text-[11px]" style={{ borderColor: C.border, color: C.muted }}>Current crop: <b style={{ color: C.soil }}>{c.production_name || c.production_id}</b></div>
+          <div className="mt-2 pt-2 border-t text-[11px]" style={{ borderColor: C.border, color: C.muted }}>Current crop: <b style={{ color: C.soil }}>{c.production_name || "Crop"}</b></div>
         </Panel>
 
         {/* 5. Activity feed — real events */}

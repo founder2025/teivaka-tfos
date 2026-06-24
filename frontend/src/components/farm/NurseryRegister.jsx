@@ -72,7 +72,7 @@ function BatchRow({ b }) {
       <div className="flex items-center gap-3 py-2">
         <div style={{ flex: 1, minWidth: 0 }}>
           <div className="text-sm font-semibold" style={{ color: C.soil }}>
-            {b.production_name || b.production_id}
+            {b.production_name || "Crop"}
             {b.variety ? <span style={{ color: C.muted, fontWeight: 400 }}> · {b.variety}</span> : null}
           </div>
           <div className="text-xs" style={{ color: C.muted }}>

@@ -624,7 +624,7 @@ function EnterpriseDetail({ e, farmId, onBack, go }) {
                     <tbody>
                       {myCycles.map((c) => (
                         <tr key={c.cycle_id} onClick={() => go(`cycles/${c.cycle_id}`)} className={`cursor-pointer hover:bg-[var(--cream-2)] ${FOCUS}`} tabIndex={0} onKeyDown={(ev) => { if (ev.key === "Enter") go(`cycles/${c.cycle_id}`); }} style={{ borderTop: `1px solid rgba(92,64,51,0.07)` }}>
-                          <td className="py-1.5">{c.pu_farmer_label || c.pu_id || "—"}</td>
+                          <td className="py-1.5">{c.pu_farmer_label || "Block" || "—"}</td>
                           <td className="py-1.5"><span className="text-[11px] px-1.5 py-0.5 rounded" style={{ background: C.cream, color: C.soil }}>{(c.cycle_status || "").toUpperCase()}</span></td>
                           <td className="py-1.5" style={{ color: C.muted }}>{entFdate(c.planting_date)}</td>
                           <td className="py-1.5 text-right">{c.actual_yield_kg ? `${Number(c.actual_yield_kg).toLocaleString()} kg` : "—"}</td>

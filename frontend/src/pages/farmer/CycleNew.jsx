@@ -233,7 +233,7 @@ export default function CycleNew() {
 
       if (res.status === 201 || res.status === 200) {
         const eventData = data?.data || data;
-        const cycleId = eventData.event_id || eventData.cycle_id || "(unknown)";
+        const cycleId = eventData.event_id || "Crop run" || "(unknown)";
         const hashShort = (eventData.audit_hash || "").slice(0, 8);
         setToast(`Crop run started · ${cycleId} · audit ${hashShort}`);
         await completeLinkedTask();  // if opened from a rotation/transplant task, close it
@@ -276,7 +276,7 @@ export default function CycleNew() {
 
   const cropName = productions.find((p) => p.production_id === productionId)?.production_name;
   const selPu = productionUnits.find((p) => p.pu_id === puId);
-  const blockLabel = selPu ? (selPu.farmer_label || selPu.pu_name || selPu.pu_id) : "—";
+  const blockLabel = selPu ? (selPu.farmer_label || selPu.pu_name || "Block") : "—";
   const areaHa = plannedAreaSqm ? parseFloat(plannedAreaSqm) / 10000
     : (selPu?.area_sqm ? Number(selPu.area_sqm) / 10000 : null);
   const ready = puId && productionId && plantingDate;
@@ -307,7 +307,7 @@ export default function CycleNew() {
             <select value={puId} onChange={(e) => setPuId(e.target.value)} style={inputBox}>
               <option value="">Select a block…</option>
               {availablePUs.map((pu) => (
-                <option key={pu.pu_id} value={pu.pu_id}>{pu.farmer_label || pu.pu_name || pu.pu_id}</option>
+                <option key={pu.pu_id} value={pu.pu_id}>{pu.farmer_label || pu.pu_name || "Block"}</option>
               ))}
             </select>
             {fieldErrors.puId && <div style={{ color: "#9a3b3b", fontSize: 12, marginTop: 4 }}>{fieldErrors.puId}</div>}

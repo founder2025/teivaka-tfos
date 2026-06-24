@@ -347,7 +347,7 @@ export default function HarvestNew() {
                   {filteredCycles.map((c) => <option key={c.cycle_id} value={c.cycle_id}>Cycle {c.block_sequence ?? c.cycle_id}</option>)}
                 </select>}
 
-          {selectedCycle?.pu_id && <><span style={{ color: "var(--muted)" }}>Block</span><span style={{ fontWeight: 600 }}>{selectedCycle.pu_farmer_label || selectedCycle.pu_name || selectedCycle.pu_id}</span></>}
+          {selectedCycle?.pu_id && <><span style={{ color: "var(--muted)" }}>Block</span><span style={{ fontWeight: 600 }}>{selectedCycle.pu_farmer_label || selectedCycle.pu_name || "Block"}</span></>}
 
           <span style={{ color: "var(--muted)" }}>Operator</span>
           <span style={{ fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}><User size={14} />You</span>

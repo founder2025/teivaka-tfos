@@ -148,7 +148,7 @@ function AgreementDetail({ agreement, distributions, onClose, onEdit }) {
             : distributions.map((p, i) => (
               <div key={p.share_id || i} style={{ border: "1px solid var(--line)", borderRadius: 9, padding: "10px 12px", marginBottom: 8 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5 }}>
-                  <strong style={{ color: "var(--soil)" }}>{p.production_name || p.cycle_name || p.cycle_id}</strong>
+                  <strong style={{ color: "var(--soil)" }}>{p.production_name || p.cycle_name || "Crop run"}</strong>
                   <span style={{ color: "var(--muted)" }}>{fdate(p.calculation_date || p.created_at)}</span>
                 </div>
                 <div style={{ display: "flex", gap: 16, marginTop: 6, fontSize: 12 }}>

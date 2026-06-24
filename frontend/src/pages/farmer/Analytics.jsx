@@ -336,7 +336,7 @@ function ProfitView({ cycles }) {
         const pricePerKg = be.revenue / num(be.actual_yield_kg);
         const beKg = Math.round(be.total_cost / pricePerKg);
         const above = beKg > 0 ? Math.round((num(be.actual_yield_kg) - beKg) / beKg * 100) : null;
-        return <div className="card" style={{ padding: 14, marginTop: 14, fontSize: 12.5, color: "var(--soil)" }}><strong>Break-even:</strong> {be.crop} ({be.cycle_id}) breaks even at {beKg.toLocaleString()}kg at its actual price; you harvested {num(be.actual_yield_kg).toLocaleString()}kg{above != null ? ` — ${above >= 0 ? `${above}% above` : `${Math.abs(above)}% below`} break-even` : ""}.</div>;
+        return <div className="card" style={{ padding: 14, marginTop: 14, fontSize: 12.5, color: "var(--soil)" }}><strong>Break-even:</strong> {be.crop} breaks even at {beKg.toLocaleString()}kg at its actual price; you harvested {num(be.actual_yield_kg).toLocaleString()}kg{above != null ? ` — ${above >= 0 ? `${above}% above` : `${Math.abs(above)}% below`} break-even` : ""}.</div>;
       })()}
     </>
   );
@@ -621,7 +621,7 @@ function PerUnitView({ cycles }) {
     </div>
   );
   const zones = groupBy(outcomes, (o) => o.zone_name || "No zone").sort((a, b) => (perAcre(b.roll, "profit") ?? -1e9) - (perAcre(a.roll, "profit") ?? -1e9));
-  const blocks = groupBy(outcomes, (o) => o.pu_name || o.pu_id).sort((a, b) => (perAcre(b.roll, "profit") ?? -1e9) - (perAcre(a.roll, "profit") ?? -1e9));
+  const blocks = groupBy(outcomes, (o) => o.pu_name || "Block").sort((a, b) => (perAcre(b.roll, "profit") ?? -1e9) - (perAcre(a.roll, "profit") ?? -1e9));
   return (
     <>
       <div className="card" style={{ padding: 18, marginBottom: 14 }}>
