@@ -4,6 +4,7 @@ from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from contextlib import asynccontextmanager
 import logging
+import re
 import sentry_sdk
 from sentry_sdk.integrations.fastapi import FastApiIntegration
 from sentry_sdk.integrations.sqlalchemy import SqlalchemyIntegration
@@ -104,6 +105,46 @@ logging.basicConfig(
     level=logging.DEBUG if settings.debug else logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
 )
+
+
+class _SecretRedactingFilter(logging.Filter):
+    """B93 — strip token/ticket values out of log records so a JWT carried in an
+    SSE query string (EventSource can't set an Authorization header, so the auth
+    middleware accepts ?access_token=) never lands in the uvicorn access log /
+    docker logs. Covers the access request-line (token lives in record.args) and
+    any app log that interpolates a URL."""
+
+    _PAT = re.compile(r'(?i)(access_token|refresh_token|token|ticket)=[^&\s"\')]+')
+    _REPL = r"\1=REDACTED"
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        try:
+            if isinstance(record.args, tuple):
+                record.args = tuple(
+                    self._PAT.sub(self._REPL, a) if isinstance(a, str) else a
+                    for a in record.args
+                )
+            elif isinstance(record.args, dict):
+                record.args = {
+                    k: (self._PAT.sub(self._REPL, v) if isinstance(v, str) else v)
+                    for k, v in record.args.items()
+                }
+            if isinstance(record.msg, str) and "=" in record.msg:
+                record.msg = self._PAT.sub(self._REPL, record.msg)
+        except Exception:  # never let logging hygiene break a request
+            pass
+        return True
+
+
+_redactor = _SecretRedactingFilter()
+# Attach to the loggers that emit request lines (uvicorn/gunicorn access) so the
+# filter runs where the record originates, plus the root handlers so propagated
+# app logs are scrubbed too.
+for _ln in ("uvicorn.access", "uvicorn", "uvicorn.error", "gunicorn.access", "gunicorn.error"):
+    logging.getLogger(_ln).addFilter(_redactor)
+for _h in logging.getLogger().handlers:
+    _h.addFilter(_redactor)
+
 logger = logging.getLogger(__name__)
 
 
