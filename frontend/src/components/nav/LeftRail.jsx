@@ -119,7 +119,7 @@ function GroupSection({ entry, isOpen, onToggle, taskCount }) {
         onMouseEnter={(e) => { e.currentTarget.style.background = C.hoverBg; }}
         onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
       >
-        <span style={{ width: 28, height: 28, borderRadius: 8, background: `${entry.color}22`, color: entry.color,
+        <span style={{ width: 28, height: 28, borderRadius: 8, background: "var(--cream-2)", color: "var(--soil)",
           display: "grid", placeItems: "center", flexShrink: 0 }}>
           <Icon size={16} strokeWidth={1.9} />
         </span>
