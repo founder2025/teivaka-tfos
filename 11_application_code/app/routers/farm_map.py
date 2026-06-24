@@ -9,6 +9,8 @@ facility_type, …) round-trips untouched so the Leaflet/Geoman client owns its
 own styling. Replace-all keeps client and server in lockstep with no diffing.
 """
 from uuid import UUID
+import hashlib
+import math
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from typing import Any, Optional
@@ -97,6 +99,90 @@ async def global_pins(user: dict = Depends(get_current_user),
     """))
     pins = [dict(r) for r in result.mappings()]
     return {"pins": pins, "count": len(pins)}
+
+
+def _haversine_km(a_lat, a_lng, b_lat, b_lng):
+    if a_lat is None or a_lng is None or b_lat is None or b_lng is None:
+        return None
+    a_lat, a_lng, b_lat, b_lng = float(a_lat), float(a_lng), float(b_lat), float(b_lng)
+    dlat = math.radians(b_lat - a_lat)
+    dlng = math.radians(b_lng - a_lng)
+    h = math.sin(dlat / 2) ** 2 + math.cos(math.radians(a_lat)) * math.cos(math.radians(b_lat)) * math.sin(dlng / 2) ** 2
+    return 6371.0 * 2 * math.asin(math.sqrt(h))
+
+
+def _fuzz(lat, lng, seed):
+    """Deterministic ~0.6–1.0 km offset so a shared pin never reveals the exact
+    homestead GPS, yet stays put across reloads (seeded by the member's id).
+    Distance is computed from the REAL coords before fuzzing, so it stays exact."""
+    h = int(hashlib.sha256(str(seed).encode()).hexdigest(), 16)
+    ang = (h % 360) * math.pi / 180.0
+    rad_km = 0.6 + ((h >> 9) % 400) / 1000.0  # 0.6 .. 1.0 km
+    lat = float(lat); lng = float(lng)
+    coslat = math.cos(math.radians(lat)) or 1e-6
+    dlat = (rad_km / 111.0) * math.cos(ang)
+    dlng = (rad_km / (111.320 * coslat)) * math.sin(ang)
+    return round(lat + dlat, 6), round(lng + dlng, 6)
+
+
+@router.get("/network")
+async def network_map(user: dict = Depends(get_current_user),
+                      db: AsyncSession = _Depends(get_db)):
+    """Networking map — verified members who opted to share, plotted with the EXACT
+    distance from the viewer but a ~1km-FUZZED pin (Operator posture 2026-06-23:
+    verified-viewers-only, exact km + fuzzed pin). Cross-tenant, like global-pins;
+    returns name + type + verified badge + distance only — never exact coords."""
+    viewer_tid = str(user["tenant_id"])
+    # Viewer gate: verified members (green tick) or PARTNER+ (admins/partners inherit).
+    vrow = (await db.execute(
+        text("SELECT kyc_verified FROM tenant.users WHERE user_id = :uid"),
+        {"uid": str(user["user_id"])},
+    )).mappings().first()
+    verified = bool(vrow and vrow["kyc_verified"]) or has_role(user.get("role"), "PARTNER")
+    if not verified:
+        raise HTTPException(status_code=403, detail="VERIFICATION_REQUIRED")
+
+    # Viewer's own location (distance origin) — their first farm with coords.
+    origin = (await db.execute(
+        text("SELECT gps_lat, gps_lng FROM tenant.farms "
+             "WHERE tenant_id = :tid AND gps_lat IS NOT NULL AND gps_lng IS NOT NULL "
+             "ORDER BY created_at LIMIT 1"),
+        {"tid": viewer_tid},
+    )).mappings().first()
+    o_lat = origin["gps_lat"] if origin else None
+    o_lng = origin["gps_lng"] if origin else None
+
+    # One pin per opted-in member farm (DISTINCT ON farm; representative = earliest
+    # opted-in user in that tenant). Excludes the viewer's own tenant.
+    rows = (await db.execute(text("""
+        SELECT DISTINCT ON (f.farm_id)
+               f.farm_id, f.farm_name, f.gps_lat, f.gps_lng,
+               u.account_type, u.kyc_verified
+          FROM tenant.farms f
+          JOIN tenant.users u
+            ON u.tenant_id = f.tenant_id
+           AND u.share_location = true
+           AND u.location_share_ack_at IS NOT NULL
+         WHERE f.gps_lat IS NOT NULL AND f.gps_lng IS NOT NULL
+           AND f.is_active = true
+           AND f.tenant_id <> :viewer_tid
+         ORDER BY f.farm_id, u.created_at
+    """), {"viewer_tid": viewer_tid})).mappings().all()
+
+    members = []
+    for r in rows:
+        flat, flng = _fuzz(r["gps_lat"], r["gps_lng"], r["farm_id"])
+        dist = _haversine_km(o_lat, o_lng, r["gps_lat"], r["gps_lng"])
+        members.append({
+            "id": hashlib.sha256(str(r["farm_id"]).encode()).hexdigest()[:12],
+            "name": r["farm_name"] or "Member farm",
+            "account_type": r["account_type"] or "FARMER",
+            "verified": bool(r["kyc_verified"]),
+            "lat": flat, "lng": flng,
+            "distance_km": round(dist, 1) if dist is not None else None,
+        })
+    members.sort(key=lambda m: (m["distance_km"] is None, m["distance_km"] or 0))
+    return {"members": members, "count": len(members), "has_origin": o_lat is not None}
 
 
 @router.get("/{farm_id}")
