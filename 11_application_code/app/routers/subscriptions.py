@@ -74,7 +74,8 @@ async def get_current_subscription(user: dict = Depends(get_current_user)):
 
         tenant_dict = dict(tenant)
         tier = tenant_dict.get("subscription_tier", "FREE")
-        tier_info = TIER_DEFINITIONS.get(tier, TIER_DEFINITIONS["FREE"])
+        _plans = await _load_plans_db(db) or TIER_DEFINITIONS
+        tier_info = _plans.get(tier) or _plans.get("FREE") or TIER_DEFINITIONS["FREE"]
 
         return {"data": {
             **tenant_dict,
@@ -84,8 +85,10 @@ async def get_current_subscription(user: dict = Depends(get_current_user)):
 
 @router.get("/tiers")
 async def list_tiers(user: dict = Depends(get_current_user)):
-    """Return all available subscription tiers with pricing."""
-    return {"data": TIER_DEFINITIONS}
+    """Return all available subscription tiers with pricing (DB source of truth)."""
+    async with get_db_ctx() as db:
+        plans = await get_active_plans(db)
+    return {"data": plans}
 
 @router.post("/upgrade")
 async def request_upgrade(body: UpgradeRequest, user: dict = Depends(get_current_user)):
@@ -97,8 +100,10 @@ async def request_upgrade(body: UpgradeRequest, user: dict = Depends(get_current
     # Any account holder may REQUEST a tier change for their own tenant —
     # nothing is charged in-app; an admin approves and applies the change.
 
-    if body.target_tier not in TIER_DEFINITIONS:
-        raise HTTPException(status_code=400, detail=f"Invalid tier. Must be one of: {list(TIER_DEFINITIONS.keys())}")
+    async with get_db_ctx() as _pdb:
+        _plans = await get_active_plans(_pdb)
+    if body.target_tier not in _plans:
+        raise HTTPException(status_code=400, detail=f"Invalid tier. Must be one of: {list(_plans.keys())}")
 
     async with get_rls_db(str(user["tenant_id"])) as db:
         current = await db.execute(
@@ -222,7 +227,8 @@ async def approve_tier_request(request_id: str, user: dict = Depends(get_current
         # affiliate commission accrual — best-effort, never blocks the tier change
         try:
             from app.routers.affiliate import accrue_commission_for_tier_change
-            tier_def = TIER_DEFINITIONS.get(row[2], {})
+            _pl = await _load_plans_db(db) or TIER_DEFINITIONS
+            tier_def = _pl.get(row[2], {})
             await accrue_commission_for_tier_change(
                 db, referee_user_id=str(row[1]), tier=row[2],
                 revenue_fjd=float(tier_def.get("price_fjd_monthly") or 0))
@@ -253,3 +259,232 @@ async def reject_tier_request(request_id: str, body: TierDecision = None, user: 
             raise HTTPException(status_code=404, detail="Request not found or already decided")
         await db.commit()
     return {"data": {"request_id": request_id, "status": "REJECTED"}}
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# Admin-editable monetization (Migration 170): plans + discount codes.
+# Prices/limits/features live in community.subscription_plans (editable from
+# Admin Settings, no deploy). TIER_DEFINITIONS above is now only the seed/
+# fallback for a DB that hasn't been migrated yet.
+# ════════════════════════════════════════════════════════════════════════════
+import json as _json
+from datetime import datetime as _dt
+
+
+async def _load_plans_db(db):
+    """community.subscription_plans → dict keyed by tier, shaped like
+    TIER_DEFINITIONS. None if the table is absent/empty (caller falls back)."""
+    has = (await db.execute(text(
+        "SELECT to_regclass('community.subscription_plans') IS NOT NULL"))).scalar()
+    if not has:
+        return None
+    rows = (await db.execute(text(
+        "SELECT tier, name, price_fjd_monthly, price_fjd_annual, tis_daily_limit, "
+        "farms_limit, users_limit, features, badge, sort_order, is_active "
+        "FROM community.subscription_plans ORDER BY sort_order, tier"))).mappings().all()
+    if not rows:
+        return None
+    out = {}
+    for r in rows:
+        feats = r["features"]
+        if isinstance(feats, str):
+            try: feats = _json.loads(feats)
+            except Exception: feats = []
+        out[r["tier"]] = {
+            "name": r["name"],
+            "price_fjd_monthly": float(r["price_fjd_monthly"] or 0),
+            "price_fjd_annual": (float(r["price_fjd_annual"]) if r["price_fjd_annual"] is not None else None),
+            "tis_daily_limit": r["tis_daily_limit"],
+            "farms_limit": r["farms_limit"],
+            "users_limit": r["users_limit"],
+            "features": feats or [],
+            "badge": r["badge"],
+            "sort_order": r["sort_order"],
+            "is_active": r["is_active"],
+        }
+    return out
+
+
+async def get_active_plans(db):
+    """Active plans for display/validation; DB source of truth, dict fallback."""
+    plans = await _load_plans_db(db)
+    src = plans or TIER_DEFINITIONS
+    return {k: v for k, v in src.items() if v.get("is_active", True)}
+
+
+class PlanUpdate(BaseModel):
+    name: Optional[str] = None
+    price_fjd_monthly: Optional[float] = None
+    price_fjd_annual: Optional[float] = None
+    tis_daily_limit: Optional[int] = None
+    farms_limit: Optional[int] = None
+    users_limit: Optional[int] = None
+    features: Optional[list] = None
+    badge: Optional[str] = None
+    sort_order: Optional[int] = None
+    is_active: Optional[bool] = None
+
+
+@router.get("/admin/plans")
+async def admin_list_plans(user: dict = Depends(get_current_user)):
+    """All plans incl. inactive — drives the Admin Settings pricing editor."""
+    if user.get("role") not in _TIER_ADMIN_ROLES:
+        raise HTTPException(status_code=403, detail="Admin only")
+    async with get_db_ctx() as db:
+        plans = await _load_plans_db(db)
+    return {"data": plans or TIER_DEFINITIONS}
+
+
+@router.put("/admin/plans/{tier}")
+async def admin_upsert_plan(tier: str, body: PlanUpdate, user: dict = Depends(get_current_user)):
+    """Create/edit a plan's price, limits, features, badge, ordering, active."""
+    if user.get("role") not in _TIER_ADMIN_ROLES:
+        raise HTTPException(status_code=403, detail="Admin only")
+    tier = tier.upper()
+    fields = {k: v for k, v in body.dict().items() if v is not None}
+    async with get_db_ctx() as db:
+        exists = (await db.execute(text(
+            "SELECT 1 FROM community.subscription_plans WHERE tier = :t"), {"t": tier})).scalar()
+        if not exists:
+            await db.execute(text(
+                "INSERT INTO community.subscription_plans (tier, name) VALUES (:t, :n)"),
+                {"t": tier, "n": fields.get("name", tier.title())})
+        if fields:
+            sets, params = [], {"t": tier, "by": str(user["user_id"])}
+            for k, v in fields.items():
+                if k == "features":
+                    sets.append("features = cast(:features AS jsonb)")
+                    params["features"] = _json.dumps(v)
+                else:
+                    sets.append(f"{k} = :{k}")
+                    params[k] = v
+            sets.append("updated_at = now()")
+            sets.append("updated_by = cast(:by AS uuid)")
+            await db.execute(text(
+                f"UPDATE community.subscription_plans SET {', '.join(sets)} WHERE tier = :t"), params)
+        await db.commit()
+    return {"data": {"tier": tier, "updated": True}}
+
+
+# ── Discount codes ───────────────────────────────────────────────────────────
+class DiscountBody(BaseModel):
+    code: Optional[str] = None
+    kind: str = "PERCENT"          # PERCENT | FLAT
+    value: float = 0
+    applies_to: Optional[list] = None   # tier codes; empty/None = all
+    max_uses: Optional[int] = None
+    starts_at: Optional[str] = None
+    expires_at: Optional[str] = None
+    is_active: bool = True
+    note: Optional[str] = None
+
+
+async def _discounts_table(db) -> bool:
+    return bool((await db.execute(text(
+        "SELECT to_regclass('community.discount_codes') IS NOT NULL"))).scalar())
+
+
+@router.get("/admin/discounts")
+async def admin_list_discounts(user: dict = Depends(get_current_user)):
+    if user.get("role") not in _TIER_ADMIN_ROLES:
+        raise HTTPException(status_code=403, detail="Admin only")
+    async with get_db_ctx() as db:
+        if not await _discounts_table(db):
+            return {"data": []}
+        rows = (await db.execute(text(
+            "SELECT code, kind, value, applies_to, max_uses, used_count, starts_at, "
+            "expires_at, is_active, note, created_at FROM community.discount_codes "
+            "ORDER BY created_at DESC"))).mappings().all()
+    return {"data": [dict(r) for r in rows]}
+
+
+@router.post("/admin/discounts")
+async def admin_create_discount(body: DiscountBody, user: dict = Depends(get_current_user)):
+    if user.get("role") not in _TIER_ADMIN_ROLES:
+        raise HTTPException(status_code=403, detail="Admin only")
+    if not body.code or not body.code.strip():
+        raise HTTPException(status_code=400, detail="Code is required")
+    if body.kind not in ("PERCENT", "FLAT"):
+        raise HTTPException(status_code=400, detail="kind must be PERCENT or FLAT")
+    code = body.code.strip().upper()
+    async with get_db_ctx() as db:
+        await db.execute(text("""
+            INSERT INTO community.discount_codes
+                (code, kind, value, applies_to, max_uses, starts_at, expires_at, is_active, note, created_by)
+            VALUES
+                (:code, :kind, :value, :applies_to, :max_uses,
+                 cast(:starts_at AS timestamptz), cast(:expires_at AS timestamptz),
+                 :is_active, :note, cast(:by AS uuid))
+            ON CONFLICT (code) DO UPDATE SET
+                kind = EXCLUDED.kind, value = EXCLUDED.value, applies_to = EXCLUDED.applies_to,
+                max_uses = EXCLUDED.max_uses, starts_at = EXCLUDED.starts_at,
+                expires_at = EXCLUDED.expires_at, is_active = EXCLUDED.is_active, note = EXCLUDED.note
+        """), {
+            "code": code, "kind": body.kind, "value": body.value,
+            "applies_to": body.applies_to or [], "max_uses": body.max_uses,
+            "starts_at": body.starts_at or None, "expires_at": body.expires_at or None,
+            "is_active": body.is_active, "note": body.note, "by": str(user["user_id"]),
+        })
+        await db.commit()
+    return {"data": {"code": code, "saved": True}}
+
+
+@router.delete("/admin/discounts/{code}")
+async def admin_delete_discount(code: str, user: dict = Depends(get_current_user)):
+    if user.get("role") not in _TIER_ADMIN_ROLES:
+        raise HTTPException(status_code=403, detail="Admin only")
+    async with get_db_ctx() as db:
+        await db.execute(text("DELETE FROM community.discount_codes WHERE code = :c"),
+                         {"c": code.strip().upper()})
+        await db.commit()
+    return {"data": {"code": code.strip().upper(), "deleted": True}}
+
+
+class ValidateBody(BaseModel):
+    code: str
+    tier: str
+    billing_period: str = "MONTHLY"
+
+
+@router.post("/discounts/validate")
+async def validate_discount(body: ValidateBody, user: dict = Depends(get_current_user)):
+    """Validate a code against a tier and return the discounted price. Read-only
+    (does not consume a use — that happens on a confirmed upgrade)."""
+    code = (body.code or "").strip().upper()
+    tier = (body.tier or "").upper()
+    if not code:
+        return {"data": {"valid": False, "reason": "Enter a code"}}
+    async with get_db_ctx() as db:
+        plans = await get_active_plans(db)
+        if not await _discounts_table(db):
+            return {"data": {"valid": False, "reason": "No discount programme is active"}}
+        row = (await db.execute(text(
+            "SELECT code, kind, value, applies_to, max_uses, used_count, starts_at, expires_at, is_active "
+            "FROM community.discount_codes WHERE code = :c"), {"c": code})).mappings().first()
+    plan = plans.get(tier)
+    if not plan:
+        return {"data": {"valid": False, "reason": "Unknown plan"}}
+    if not row or not row["is_active"]:
+        return {"data": {"valid": False, "reason": "Invalid code"}}
+    now = _dt.utcnow()
+    if row["starts_at"] and row["starts_at"].replace(tzinfo=None) > now:
+        return {"data": {"valid": False, "reason": "Code not active yet"}}
+    if row["expires_at"] and row["expires_at"].replace(tzinfo=None) < now:
+        return {"data": {"valid": False, "reason": "Code expired"}}
+    if row["max_uses"] is not None and (row["used_count"] or 0) >= row["max_uses"]:
+        return {"data": {"valid": False, "reason": "Code fully redeemed"}}
+    if row["applies_to"] and tier not in row["applies_to"]:
+        return {"data": {"valid": False, "reason": "Code does not apply to this plan"}}
+    annual = body.billing_period.upper() == "ANNUAL"
+    base = plan.get("price_fjd_annual") if annual else plan.get("price_fjd_monthly")
+    base = float(base or 0)
+    if row["kind"] == "PERCENT":
+        amount = round(base * float(row["value"]) / 100.0, 2)
+    else:
+        amount = min(base, float(row["value"]))
+    return {"data": {
+        "valid": True, "code": code, "kind": row["kind"], "value": float(row["value"]),
+        "base_price": base, "discount_amount": amount,
+        "final_price": round(max(0.0, base - amount), 2),
+        "billing_period": "ANNUAL" if annual else "MONTHLY",
+    }}

@@ -8,6 +8,7 @@ import AdminLayout from "../../components/admin/AdminLayout";
 import { Link } from "react-router-dom";
 import { Megaphone, Check, X as XIcon } from "lucide-react";
 import { getJSON, send } from "../../utils/api";
+import MonetizationPanel from "../../components/admin/MonetizationPanel";
 
 const C = { soil: "var(--soil)", green: "var(--green)", greenDk: "var(--green-dk)", line: "var(--line)", muted: "var(--muted)", cream: "var(--cream)" };
 const card = { background: "var(--paper)", border: `1px solid ${C.line}`, borderRadius: 12, padding: 18, marginBottom: 16 };
@@ -61,10 +62,13 @@ export default function AdminSettings() {
         </div>
       </div>
 
+      {/* Admin-editable pricing, discounts, referral programme (live source of truth). */}
+      <MonetizationPanel />
+
       <div style={card}>
-        <strong style={{ color: C.soil, fontSize: 15 }}>Feature access by tier — read-only</strong>
+        <strong style={{ color: C.soil, fontSize: 15 }}>Feature access by tier — reference</strong>
         <p style={{ fontSize: 12, color: C.muted, margin: "4px 0 10px" }}>
-          Generated from the real tier definitions the backend enforces. Changing entitlements is a code change, not a checkbox — this matrix never lies.
+          Which features each tier includes (edit prices &amp; limits above). Feature entitlements are managed in the plan’s feature list.
         </p>
         {tiers == null ? <div style={{ color: C.muted }}>Loading…</div> : (
           <div style={{ overflowX: "auto" }}>
