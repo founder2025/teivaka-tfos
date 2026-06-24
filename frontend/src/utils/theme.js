@@ -7,16 +7,11 @@
  * sync, and follow the OS only while the user hasn't made an explicit choice.
  * Dark CSS tokens live in index.css + styles/prototype.css.
  */
-const KEY = "teivaka-theme"; // 'light' | 'dark' (absent = follow OS)
+const KEY = "teivaka-theme"; // 'light' | 'dark' (absent = light default)
 const COLORS = { light: "#0BAF9A", dark: "#0B1F33" };
 
-function systemPrefersDark() {
-  try { return window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches; }
-  catch { return false; }
-}
-
 export function getTheme() {
-  try { return localStorage.getItem(KEY) || (systemPrefersDark() ? "dark" : "light"); }
+  try { return localStorage.getItem(KEY) || "light"; }
   catch { return "light"; }
 }
 
@@ -43,8 +38,4 @@ export function toggleTheme() {
 
 export function initTheme() {
   applyTheme();
-  try {
-    const mq = window.matchMedia("(prefers-color-scheme: dark)");
-    mq.addEventListener?.("change", () => { if (!localStorage.getItem(KEY)) applyTheme(); });
-  } catch { /* ignore */ }
 }

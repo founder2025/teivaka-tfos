@@ -10,14 +10,16 @@
  * nav message; React Router performs the navigation to /login or /register.
  */
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { isAuthenticated } from "../utils/auth";
+import { getTheme, toggleTheme } from "../utils/theme";
 import L3_HTML from "./Landing.l3.html?raw";
 
 export default function Landing() {
   const navigate = useNavigate();
   const frameRef = useRef(null);
+  const [theme, setTheme] = useState(getTheme());
 
   // ── PRESERVED: authed users skip the landing ──────────────────────────
   useEffect(() => {
@@ -99,13 +101,15 @@ export default function Landing() {
       {/* Launch-waitlist CTA — overlaid so the pixel-exact L3 design stays
           untouched. Can be folded into the hero markup later with placement
           guidance from the operator. */}
+      {/* Waitlist CTA — moved to bottom-LEFT so it no longer covers the public
+          TIS chat widget (bottom-right). */}
       <button
         type="button"
         onClick={() => navigate("/waitlist")}
         aria-label="Join the launch waitlist"
         style={{
           position: "fixed",
-          right: 16,
+          left: 16,
           bottom: "calc(16px + env(safe-area-inset-bottom, 0px))",
           zIndex: 2147483000,
           display: "inline-flex",
@@ -118,12 +122,39 @@ export default function Landing() {
           color: "#fff",
           fontWeight: 700,
           fontSize: 15,
-          fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
-          boxShadow: "0 8px 22px rgba(44,26,14,0.28)",
+          fontFamily: "var(--font-sans, 'Inter', system-ui, sans-serif)",
+          boxShadow: "0 8px 22px rgba(11,31,51,0.28)",
           cursor: "pointer",
         }}
       >
         🚀 Join the launch waitlist
+      </button>
+      {/* Light/dark toggle — top-right of the public site. */}
+      <button
+        type="button"
+        onClick={() => setTheme(toggleTheme())}
+        aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+        style={{
+          position: "fixed",
+          top: "calc(12px + env(safe-area-inset-top, 0px))",
+          right: 16,
+          zIndex: 2147483600,
+          width: 40,
+          height: 40,
+          borderRadius: 999,
+          border: "1px solid var(--line)",
+          background: "var(--paper)",
+          color: "var(--soil)",
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          cursor: "pointer",
+          boxShadow: "0 4px 12px rgba(11,31,51,0.18)",
+          fontSize: 18,
+          lineHeight: 1,
+        }}
+      >
+        {theme === "dark" ? "☀️" : "🌙"}
       </button>
     </>
   );
