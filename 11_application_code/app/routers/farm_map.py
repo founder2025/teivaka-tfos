@@ -152,6 +152,16 @@ async def network_map(user: dict = Depends(get_current_user),
     o_lat = origin["gps_lat"] if origin else None
     o_lng = origin["gps_lng"] if origin else None
 
+    # Migration-tolerant: if the 164 consent columns aren't in the DB yet, return
+    # an honest-empty network instead of 500-ing (mirrors /me/prefs). degraded
+    # flags it so the cause is visible, never masked.
+    has_share = (await db.execute(text(
+        "SELECT count(*) FROM information_schema.columns WHERE table_schema='tenant' "
+        "AND table_name='users' AND column_name IN ('share_location','location_share_ack_at')"
+    ))).scalar()
+    if int(has_share or 0) < 2:
+        return {"members": [], "count": 0, "has_origin": o_lat is not None, "degraded": "share_columns_missing"}
+
     # One pin per opted-in member farm (DISTINCT ON farm; representative = earliest
     # opted-in user in that tenant). Excludes the viewer's own tenant.
     rows = (await db.execute(text("""

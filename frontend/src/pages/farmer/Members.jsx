@@ -16,7 +16,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { MapPin, ShieldCheck, Users, EyeOff } from "lucide-react";
-import FarmerLayout from "../../components/farmer/FarmerLayout";
 
 const FIJI = [-17.8, 178.0];
 const C = { soil: "#2C1A0E", green: "var(--green)", greenDk: "var(--green-dk)", cream: "var(--cream)", line: "var(--line)", muted: "var(--muted)" };
@@ -111,7 +110,6 @@ export default function Members() {
   const nearest = useMemo(() => members.slice(0, 50), [members]);
 
   return (
-    <FarmerLayout>
       <div className="max-w-4xl mx-auto px-3 py-4">
         <div className="flex items-center gap-2 mb-1">
           <Users size={20} style={{ color: C.greenDk }} />
@@ -220,6 +218,5 @@ export default function Members() {
           </div>
         )}
       </div>
-    </FarmerLayout>
   );
 }

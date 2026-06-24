@@ -396,6 +396,7 @@ export default function App() {
             <Route path="/me/team"              element={<Team />} />
             <Route path="/me/data"              element={<ExportData />} />
             <Route path="/covenant"             element={<Covenant />} />
+            <Route path="/members"              element={<Members />} />
 
             <Route path="/stub/phase-:phaseNum" element={<ComingSoon dynamic />} />
           </Route>
@@ -405,9 +406,6 @@ export default function App() {
           } />
           <Route path="/calendar" element={
             <FarmerRoute><Calendar /></FarmerRoute>
-          } />
-          <Route path="/members" element={
-            <FarmerRoute><Members /></FarmerRoute>
           } />
           <Route path="/leaderboard" element={
             <FarmerRoute><Leaderboard /></FarmerRoute>
