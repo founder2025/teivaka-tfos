@@ -16,6 +16,8 @@ import { useLocation } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import Modal from "../ui/Modal";
 import { useFormModal } from "../../context/FormModalContext";
+import CaptureEngine from "../../capture/CaptureEngine";
+import moneyConfig from "../../capture/config/whole-money";
 
 const CycleNew       = lazy(() => import("../../pages/farmer/CycleNew"));
 const NurseryNew     = lazy(() => import("../../pages/farmer/NurseryNew"));
@@ -35,7 +37,7 @@ export const FORM_REGISTRY = {
 const qc = new QueryClient({ defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } } });
 
 export default function FormModalHost() {
-  const { formKey, closeFormModal } = useFormModal();
+  const { formKey, params, closeFormModal } = useFormModal();
   const location = useLocation();
   const openPathRef = useRef(null);
 
@@ -48,6 +50,18 @@ export default function FormModalHost() {
   }, [formKey, location.pathname, closeFormModal]);
 
   if (!formKey) return null;
+
+  // Cash entry reuses the (+) money Capture Engine (writes cash_ledger + CASH_LOGGED),
+  // pre-aimed at money-in / money-out from the caller's params.type.
+  if (formKey === "cash") {
+    const et = params?.type === "out" ? "CASH_OUT" : params?.type === "in" ? "CASH_IN" : undefined;
+    return (
+      <Modal isOpen onClose={closeFormModal} title="Money" size="lg">
+        <CaptureEngine config={moneyConfig} preselect={et ? { eventType: et } : undefined} onBack={closeFormModal} onDone={closeFormModal} />
+      </Modal>
+    );
+  }
+
   const entry = FORM_REGISTRY[formKey];
   if (!entry) return null;
   const { title, Comp } = entry;

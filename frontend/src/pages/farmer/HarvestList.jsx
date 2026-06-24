@@ -15,7 +15,7 @@
  *   else                           → green "Cleared"
  */
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { useFormModal } from "../../context/FormModalContext";
 
 const C = {
   soil:    "var(--soil)",
@@ -83,6 +83,7 @@ function ComplianceBadge({ cleared, override }) {
 }
 
 function HeaderBar() {
+  const { openFormModal } = useFormModal();
   return (
     <div className="flex items-start justify-between mb-6">
       <div>
@@ -93,13 +94,14 @@ function HeaderBar() {
           Past harvest records
         </p>
       </div>
-      <Link
-        to="/farm/harvest/new"
+      <button
+        type="button"
+        onClick={() => openFormModal("harvest_new")}
         className="px-4 py-2 rounded-lg text-sm font-semibold text-white shadow-sm"
         style={{ background: C.green }}
       >
         Log harvest
-      </Link>
+      </button>
     </div>
   );
 }
@@ -129,18 +131,20 @@ function ErrorPanel({ message }) {
 }
 
 function EmptyState() {
+  const { openFormModal } = useFormModal();
   return (
     <div className="text-center py-16">
       <p className="text-base font-semibold" style={{ color: C.soil }}>
         No harvests yet
       </p>
-      <Link
-        to="/farm/harvest/new"
+      <button
+        type="button"
+        onClick={() => openFormModal("harvest_new")}
         className="inline-block mt-2 text-sm underline"
-        style={{ color: C.green }}
+        style={{ color: C.green, background: "none", border: "none", cursor: "pointer" }}
       >
         Log your first harvest
-      </Link>
+      </button>
     </div>
   );
 }

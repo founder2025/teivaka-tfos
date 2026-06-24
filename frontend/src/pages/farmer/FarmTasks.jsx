@@ -14,6 +14,7 @@ import { useMemo, useState, useEffect } from "react";
 import { QueryClientProvider, QueryClient, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { CheckCircle2, SkipForward, Plus, Sprout, ListChecks } from "lucide-react";
+import { useFormModal } from "../../context/FormModalContext";
 
 import { CurrentFarmProvider, useCurrentFarm } from "../../context/CurrentFarmContext";
 import FarmSelector from "../../components/farm/FarmSelector";
@@ -81,6 +82,7 @@ function cropStep(c) {
 }
 
 function CropPlan({ farmId, navigate }) {
+  const { openFormModal } = useFormModal();
   const { data } = useQuery({ queryKey: ["crop-plan", farmId], queryFn: () => getJSON(`/api/v1/crop-plan/farm-steps?farm_id=${encodeURIComponent(farmId)}`), enabled: !!farmId, retry: 0 });
   const steps = data?.data ?? [];
   if (!steps.length) return null;
@@ -104,7 +106,7 @@ function CropPlan({ farmId, navigate }) {
               {s.ongoing && <div className="text-[11px] mt-0.5" style={{ color: C.muted }}>Ongoing: {s.ongoing}</div>}
             </div>
             <span className="text-[11px] shrink-0" style={{ color: C.muted }}>{s.when}</span>
-            <button onClick={() => navigate(s.category === "HARVEST" ? "/farm/harvest/new" : "/farm/cycles")} className={`text-[11px] px-2.5 py-1 rounded-lg font-semibold shrink-0 ${FOCUS}`} style={{ color: C.greenDk, border: `1px solid ${C.border}` }}>+ Log</button>
+            <button onClick={() => (s.category === "HARVEST" ? openFormModal("harvest_new") : navigate("/farm/cycles"))} className={`text-[11px] px-2.5 py-1 rounded-lg font-semibold shrink-0 ${FOCUS}`} style={{ color: C.greenDk, border: `1px solid ${C.border}` }}>+ Log</button>
           </div>
         ))}
       </div>

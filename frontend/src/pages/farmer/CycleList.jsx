@@ -13,6 +13,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Layers, Sprout, Crosshair, Check, DollarSign, Package, Award, Plus, AlertTriangle, Truck } from "lucide-react";
+import { useFormModal } from "../../context/FormModalContext";
 import TfpShell from "../../components/farm/TfpShell";
 import { CurrentFarmProvider, useCurrentFarm } from "../../context/CurrentFarmContext";
 import FarmSelector from "../../components/farm/FarmSelector";
@@ -51,6 +52,7 @@ function KpiTile({ label, value, sub, color }) {
 
 function ProductionInner() {
   const navigate = useNavigate();
+  const { openFormModal } = useFormModal();
   const { farmId } = useCurrentFarm();
   const [cycles, setCycles] = useState([]);
   const [cropFin, setCropFin] = useState([]);
@@ -107,7 +109,7 @@ function ProductionInner() {
             <div><h1>Production</h1><div className="subtitle">What you're growing right now · {farmId || "your farm"}</div></div>
             <div className="page-actions">
               <FarmSelector />
-              <button className="btn btn-primary" onClick={() => navigate("/farm/cycles/new")}><Plus size={14} />New cycle</button>
+              <button className="btn btn-primary" onClick={() => openFormModal("cycle_new")}><Plus size={14} />New cycle</button>
             </div>
           </div>
 

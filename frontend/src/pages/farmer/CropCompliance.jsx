@@ -18,6 +18,7 @@
 import { useMemo, useState } from "react";
 import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
+import { useFormModal } from "../../context/FormModalContext";
 import {
   Shield, Plus, Search, Clock, AlertTriangle, Check, Leaf, Lock, FlaskConical,
   List, Award, Activity, Home, Cloud, FileText, X,
@@ -301,7 +302,8 @@ function AnalyticsView({ farmId, overridesYtd, navigate }) {
 }
 
 // ── Override modal (honest: explains the real gate; logging happens at harvest) ─
-function OverrideModal({ blk, onClose, navigate }) {
+function OverrideModal({ blk, onClose }) {
+  const { openFormModal } = useFormModal();
   return (
     <div className="overlay-backdrop show" onClick={onClose}>
       <div className="overlay-modal" style={{ maxWidth: 480 }} onClick={(e) => e.stopPropagation()}>
@@ -312,7 +314,7 @@ function OverrideModal({ blk, onClose, navigate }) {
         </div>
         <div className="overlay-foot">
           <button className="btn btn-secondary" onClick={onClose}>Wait for clearance</button>
-          <button className="btn btn-primary" onClick={() => { onClose(); navigate("/farm/harvest/new"); }}>Go to harvest →</button>
+          <button className="btn btn-primary" onClick={() => { onClose(); openFormModal("harvest_new"); }}>Go to harvest →</button>
         </div>
       </div>
     </div>

@@ -17,6 +17,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { QueryClient, QueryClientProvider, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useFormModal } from "../../context/FormModalContext";
 import {
   Sprout, Bird, Plus, ArrowRight, ShieldCheck, Link2, FileText, Crosshair, Cloud, CloudRain, Sun, CloudSun,
   Coins, DollarSign, Camera, Users, ListChecks, Activity, TrendingUp, Award, Truck, Sparkles,
@@ -364,12 +365,13 @@ function FarmComparison({ farms, navigate }) {
 
 // ── quick actions ────────────────────────────────────────────────────
 function QuickActions({ navigate }) {
+  const { openFormModal } = useFormModal();
   const acts = [
-    { label: "Harvest", icon: Sprout, go: () => navigate("/farm/harvests") },
-    { label: "Cash in", icon: ArrowRight, go: () => navigate("/farm/cash") },
-    { label: "Expense", icon: DollarSign, go: () => navigate("/farm/cash") },
+    { label: "Harvest", icon: Sprout, go: () => openFormModal("harvest_new") },
+    { label: "Cash in", icon: ArrowRight, go: () => openFormModal("cash", { type: "in" }) },
+    { label: "Expense", icon: DollarSign, go: () => openFormModal("cash", { type: "out" }) },
     { label: "Field event", icon: ListChecks, go: () => navigate("/farm/field-events?new=1") },
-    { label: "Labor", icon: Users, go: () => navigate("/farm/labor") },
+    { label: "Labor", icon: Users, go: () => openFormModal("labor") },
     { label: "Photo", icon: Camera, go: () => emitToast("Photo capture ships with the mobile log flow") },
   ];
   return (

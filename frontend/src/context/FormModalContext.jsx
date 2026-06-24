@@ -15,13 +15,13 @@ import { createContext, useCallback, useContext, useState } from "react";
 const FormModalContext = createContext(null);
 
 export function FormModalProvider({ children }) {
-  const [formKey, setFormKey] = useState(null);
+  const [state, setState] = useState({ formKey: null, params: null });
 
-  const openFormModal  = useCallback((key) => setFormKey(key || null), []);
-  const closeFormModal = useCallback(() => setFormKey(null), []);
+  const openFormModal  = useCallback((key, params = null) => setState({ formKey: key || null, params }), []);
+  const closeFormModal = useCallback(() => setState({ formKey: null, params: null }), []);
 
   return (
-    <FormModalContext.Provider value={{ formKey, openFormModal, closeFormModal }}>
+    <FormModalContext.Provider value={{ formKey: state.formKey, params: state.params, openFormModal, closeFormModal }}>
       {children}
     </FormModalContext.Provider>
   );
