@@ -5,7 +5,12 @@
  * on flock_id and write to tenant.poultry_event_log via POST /events. Field `name`s are
  * EXACT backend payload keys (verified against events_registry.py poultry payloads).
  *
- * COVERAGE (3b): 18 poultry events across 7 verbs + 1 lifecycle link. Every one writes a
+ * COVERAGE: 25 poultry events across 8 verbs + 1 lifecycle link (FLOCK_PLACED). The 7
+ * added 2026-06-24 (consolidation Step 1 — FEED_PURCHASED, CULL_LOGGED,
+ * MORTALITY_INVESTIGATED, VISITOR_LOGGED, PEST_CONTROL_APPLIED, EQUIPMENT_MAINTAINED,
+ * SUPPLIES_RECEIVED) close the (+) coverage gap vs the dedicated poultry/*New pages.
+ * VISITOR_LOGGED.arrival_time is autofilled from the occurred date (quick capture;
+ * the dedicated page keeps full arrival/departure precision until Step 3). Every one writes a
  * real poultry_event_log + audit.events row. autofillDate maps the chosen date into
  * required *_date payload keys; `input:"library"` fields resolve a farm_libraries UUID
  * (feed/vaccine); spec.validate runs a client check before submit (EGGS_GRADED sum==total).
@@ -62,6 +67,13 @@ export const poultryConfig = {
         { choiceLabel: "Feed used", event_type: "FEED_USED", autofillDate: ["used_date"], capture: [
           { name: "feed_type_id", ask: "Which feed?", input: "library", libraryType: "POULTRY_FEED", tier: "quick" },
           { name: "qty_kg", ask: "How much (kg)?", input: "number", tier: "quick" } ] },
+        { choiceLabel: "Bought feed", event_type: "FEED_PURCHASED", capture: [
+          { name: "feed_id", ask: "Which feed?", input: "library", libraryType: "POULTRY_FEED", tier: "quick" },
+          { name: "qty_kg", ask: "How much (kg)?", input: "number", tier: "quick" },
+          { name: "cost_fjd", ask: "Total cost (FJD)", input: "number", tier: "quick" },
+          { name: "payment_method", ask: "Paid by", input: "choice", tier: "quick", options: opts({value:"CASH",label:"Cash"},{value:"MPAISA",label:"M-PAiSA"},{value:"CHEQUE",label:"Cheque"},{value:"CREDIT",label:"Credit"},{value:"OTHER",label:"Other"}) },
+          { name: "supplier_id", ask: "Supplier", input: "library", libraryType: "POULTRY_SUPPLIER", tier: "detail" },
+          { name: "invoice_ref", ask: "Invoice / receipt #", input: "text", tier: "detail" } ] },
       ] } },
     },
     {
@@ -97,6 +109,16 @@ export const poultryConfig = {
           { name: "medication_name", ask: "Medicine name", input: "text", tier: "quick" },
           { name: "route", ask: "How given?", input: "choice", tier: "detail", options: opts({value:"DRINKING_WATER",label:"In water"},{value:"INJECTION",label:"Injection"},{value:"ORAL",label:"Oral"},{value:"SPRAY",label:"Spray"},{value:"FEED",label:"In feed"},{value:"OTHER",label:"Other"}) },
           { name: "dose", ask: "Dose", input: "text", tier: "detail" } ] },
+        { choiceLabel: "Culled birds", event_type: "CULL_LOGGED", capture: [
+          { name: "qty_culled", ask: "How many culled?", input: "number", tier: "quick" },
+          { name: "reason", ask: "Why?", input: "choice", tier: "quick", options: opts({value:"DISEASE",label:"Disease"},{value:"INJURY",label:"Injury"},{value:"POOR_PRODUCTION",label:"Poor production"},{value:"END_OF_CYCLE",label:"End of cycle"},{value:"OVERCROWDING",label:"Overcrowding"},{value:"OTHER",label:"Other"}) },
+          { name: "disposal_method", ask: "Disposed how?", input: "choice", tier: "quick", options: opts({value:"BURIED",label:"Buried"},{value:"BURNED",label:"Burned"},{value:"COMPOSTED",label:"Composted"},{value:"RENDERING",label:"Rendering"},{value:"OTHER",label:"Other"}) },
+          { name: "cleared_by", ask: "Cleared by", input: "choice", tier: "quick", options: opts({value:"OWNER",label:"Me"},{value:"VET",label:"Vet"},{value:"EXTENSION_OFFICER",label:"Extension officer"},{value:"WORKER",label:"Worker"}) } ] },
+        { choiceLabel: "Investigated a death", event_type: "MORTALITY_INVESTIGATED", capture: [
+          { name: "suspected_cause", ask: "Suspected cause", input: "choice", tier: "quick", options: opts({value:"DISEASE",label:"Disease"},{value:"PREDATOR",label:"Predator"},{value:"HEAT_STRESS",label:"Heat stress"},{value:"FEED_RELATED",label:"Feed-related"},{value:"INJURY",label:"Injury"},{value:"UNKNOWN",label:"Unknown"},{value:"OTHER",label:"Other"}) },
+          { name: "investigation_method", ask: "How investigated?", input: "choice", tier: "quick", options: opts({value:"VISUAL_INSPECTION",label:"Visual inspection"},{value:"NECROPSY",label:"Necropsy"},{value:"VET_CONSULTATION",label:"Vet consult"},{value:"LAB_TEST",label:"Lab test"},{value:"EXTERNAL_EXAMINATION_ONLY",label:"External exam only"}) },
+          { name: "findings", ask: "What did you find?", input: "text", tier: "quick" },
+          { name: "action_taken", ask: "Action taken", input: "text", tier: "detail" } ] },
       ] } },
     },
     {
@@ -143,6 +165,29 @@ export const poultryConfig = {
       ] } },
     },
     // Lifecycle: placing a new flock uses the dedicated create-route (breed picker + audit).
+    {
+      id: "biosecurity", label: "Biosecurity & upkeep", descriptor: "visitors, pests, equipment, supplies", icon: "ShieldCheck",
+      resolve: { branch: { prompt: "What do you want to log?", options: [
+        { choiceLabel: "Visitor came", event_type: "VISITOR_LOGGED", autofillDate: ["arrival_time"], capture: [
+          { name: "visitor_type", ask: "Who visited?", input: "choice", tier: "quick", options: opts({value:"BUYER",label:"Buyer"},{value:"SUPPLIER",label:"Supplier"},{value:"VET",label:"Vet"},{value:"EXTENSION_OFFICER",label:"Extension officer"},{value:"INSPECTOR",label:"Inspector"},{value:"OTHER_FARMER",label:"Other farmer"},{value:"FAMILY",label:"Family"},{value:"OTHER",label:"Other"}) },
+          { name: "purpose", ask: "Why?", input: "choice", tier: "quick", options: opts({value:"DELIVERY",label:"Delivery"},{value:"PURCHASE",label:"Purchase"},{value:"VETERINARY",label:"Veterinary"},{value:"INSPECTION",label:"Inspection"},{value:"CONSULTATION",label:"Consultation"},{value:"SOCIAL",label:"Social"},{value:"OTHER",label:"Other"}) } ] },
+        { choiceLabel: "Pest control", event_type: "PEST_CONTROL_APPLIED", capture: [
+          { name: "pest_target", ask: "Target pest", input: "choice", tier: "quick", options: opts({value:"RODENTS",label:"Rodents"},{value:"FLIES",label:"Flies"},{value:"MITES",label:"Mites"},{value:"LICE",label:"Lice"},{value:"COCKROACHES",label:"Cockroaches"},{value:"OTHER",label:"Other"}) },
+          { name: "applicator_role", ask: "Who applied it?", input: "choice", tier: "quick", options: opts({value:"OWNER",label:"Me"},{value:"WORKER",label:"Worker"},{value:"EXTERNAL_PEST_CONTROL",label:"Hired pest control"}) },
+          { name: "non_chemical_method", ask: "Non-chemical method", input: "choice", tier: "detail", options: opts({value:"TRAPS",label:"Traps"},{value:"PHYSICAL_REMOVAL",label:"Physical removal"},{value:"PREDATOR_BIRDS",label:"Predator birds"},{value:"OTHER",label:"Other"}) } ] },
+        { choiceLabel: "Fixed equipment", event_type: "EQUIPMENT_MAINTAINED", capture: [
+          { name: "equipment_type", ask: "Which equipment?", input: "choice", tier: "quick", options: opts({value:"FEEDER",label:"Feeder"},{value:"WATERER",label:"Waterer"},{value:"HEATING",label:"Heating"},{value:"VENTILATION",label:"Ventilation"},{value:"LIGHTING",label:"Lighting"},{value:"NEST_BOX",label:"Nest box"},{value:"FENCING",label:"Fencing"},{value:"OTHER",label:"Other"}) },
+          { name: "maintenance_type", ask: "What did you do?", input: "choice", tier: "quick", options: opts({value:"REPAIR",label:"Repair"},{value:"CLEANING",label:"Cleaning"},{value:"REPLACEMENT",label:"Replacement"},{value:"INSPECTION",label:"Inspection"},{value:"CALIBRATION",label:"Calibration"}) },
+          { name: "performed_by", ask: "Who did it?", input: "choice", tier: "quick", options: opts({value:"OWNER",label:"Me"},{value:"WORKER",label:"Worker"},{value:"EXTERNAL_SERVICE",label:"Hired service"}) },
+          { name: "cost_fjd", ask: "Cost (FJD)", input: "number", tier: "detail" } ] },
+        { choiceLabel: "Supplies received", event_type: "SUPPLIES_RECEIVED", capture: [
+          { name: "supply_type", ask: "What supplies?", input: "choice", tier: "quick", options: opts({value:"BEDDING",label:"Bedding"},{value:"EQUIPMENT",label:"Equipment"},{value:"MEDICAL",label:"Medical"},{value:"CLEANING",label:"Cleaning"},{value:"FEED_ADDITIVES",label:"Feed additives"},{value:"PACKAGING",label:"Packaging"},{value:"OTHER",label:"Other"}) },
+          { name: "qty_received", ask: "How much?", input: "number", tier: "quick" },
+          { name: "unit", ask: "Unit", input: "choice", tier: "quick", options: opts({value:"KG",label:"kg"},{value:"L",label:"litres"},{value:"UNITS",label:"units"},{value:"BAGS",label:"bags"},{value:"BOXES",label:"boxes"}) },
+          { name: "cost_fjd", ask: "Cost (FJD)", input: "number", tier: "detail" },
+          { name: "supplier_name", ask: "Supplier", input: "text", tier: "detail" } ] },
+      ] } },
+    },
     { id: "flock_new", label: "Place a new flock", descriptor: "start a new batch of birds", icon: "PlusCircle", route: "/farm/poultry/flocks/new" },
   ],
 };
