@@ -38,7 +38,8 @@ export default function Members() {
   const [data, setData] = useState({ members: [], count: 0, has_origin: false });
   const [prefs, setPrefs] = useState(null); // {share_location, location_share_ack}
   const [savingPref, setSavingPref] = useState(false);
-  const [radius, setRadius] = useState(null); // km within; null = Any
+  const [radius, setRadius] = useState(50); // km within; null = Any. Default bounded
+                                            // so the common path is index-backed at scale.
   const [cats, setCats] = useState([]);        // selected account_type filters
   const [qInput, setQInput] = useState("");    // raw search box
   const [q, setQ] = useState("");              // debounced query sent to server
