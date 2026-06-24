@@ -185,11 +185,15 @@ async def _post_author(db, post_id):
 
 
 # ----------------------------------------------------------------------------- models
+ALLOWED_POST_TYPES = {"UPDATE", "QUESTION", "PHOTO", "KNOWLEDGE", "OPPORTUNITY", "HELP", "ACHIEVEMENT"}
+
+
 class PostCreate(BaseModel):
     body: str
     audience: str = "everyone"
     location: Optional[str] = None
     vertical: Optional[str] = None
+    post_type: Optional[str] = None   # activity chip (UPDATE/QUESTION/KNOWLEDGE/OPPORTUNITY/HELP/ACHIEVEMENT)
     photos: Optional[List[str]] = []
     mentions: Optional[List[str]] = []
     is_question: bool = False
@@ -399,6 +403,38 @@ async def list_feed(
     return {"data": posts}
 
 
+# ----------------------------------------------------------------------------- trust score
+@router.get("/trust-score")
+async def trust_score(user: dict = Depends(get_current_user)):
+    """A member's trust score from REAL signals (no fabricated points): KYC verification,
+    earned certificates, audit records they authored, and community posts linked to a
+    verified record. Read-only; each source is guarded so a missing/locked table can't
+    500 the score."""
+    uid = str(user["user_id"])
+    kyc = False
+    certs = records = linked = 0
+    async with get_rls_db(str(user["tenant_id"])) as db:
+        try:
+            kyc = bool((await db.execute(text(
+                "SELECT kyc_verified FROM tenant.users WHERE user_id = cast(:u AS uuid)"), {"u": uid})).scalar())
+        except Exception: pass
+        try:
+            certs = (await db.execute(text(
+                "SELECT count(*) FROM community.course_certificates WHERE user_id = cast(:u AS uuid)"), {"u": uid})).scalar() or 0
+        except Exception: pass
+        try:
+            linked = (await db.execute(text(
+                "SELECT count(*) FROM community.feed_posts WHERE author_user_id = cast(:u AS uuid) AND link_audit_hash IS NOT NULL"), {"u": uid})).scalar() or 0
+        except Exception: pass
+        try:
+            records = (await db.execute(text(
+                "SELECT count(*) FROM audit.events WHERE created_by = cast(:u AS uuid)"), {"u": uid})).scalar() or 0
+        except Exception: pass
+    score = (10 if kyc else 0) + min(int(records), 100) * 1 + int(certs) * 5 + int(linked) * 2
+    return {"data": {"score": score, "kyc_verified": kyc,
+                     "verified_records": int(records), "certificates": int(certs), "linked_posts": int(linked)}}
+
+
 # ----------------------------------------------------------------------------- create / delete
 @router.post("/feed")
 async def create_feed_post(body: PostCreate, user: dict = Depends(community_write("post", 10))):
@@ -422,6 +458,11 @@ async def create_feed_post(body: PostCreate, user: dict = Depends(community_writ
             if not await is_group_member(db, body.group_id, user["user_id"]):
                 raise HTTPException(status_code=403, detail="Join the group to post in it")
             group_id = body.group_id
+        # Activity chip → post_type (validated against the allowlist; falls back to the
+        # derived value so an unknown/blank chip never violates the CHECK constraint).
+        pt = (body.post_type or "").upper()
+        if pt not in ALLOWED_POST_TYPES:
+            pt = "QUESTION" if body.is_question else ("PHOTO" if body.photos else "UPDATE")
         g_col = ", group_id" if group_id else ""
         g_val = ", :group_id" if group_id else ""
         await db.execute(text(f"""
@@ -443,7 +484,7 @@ async def create_feed_post(body: PostCreate, user: dict = Depends(community_writ
             "reach": reach,
             "kind": kind,
             "body": body.body.strip(),
-            "post_type": "QUESTION" if body.is_question else ("PHOTO" if body.photos else "UPDATE"),
+            "post_type": pt,
             "is_question": body.is_question,
             "audience": body.audience if body.audience in _AUDIENCES else "everyone",
             "location": body.location,

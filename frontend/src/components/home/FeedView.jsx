@@ -301,6 +301,7 @@ function Composer({ me, onPosted, groupId }) {
         body: draft.body.trim(), audience: draft.audience, location: draft.location,
         vertical: draft.vertical.trim() || null, photos: draft.photos.map((p) => p.url),
         is_question: draft.isQuestion, link_audit_hash: draft.link, reach: draft.reach, kind: draft.kind,
+        post_type: activeActivity ? activeActivity.toUpperCase() : null,
         ...(groupId ? { group_id: groupId } : {}),
       });
       setDraft(BLANK_DRAFT);
