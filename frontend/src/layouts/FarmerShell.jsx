@@ -237,9 +237,12 @@ function ShellContent() {
     NARROW_ROUTE_PREFIXES.some(
       (p) => location.pathname === p || location.pathname.startsWith(`${p}/`),
     );
+  // Phone gets near-full-bleed gutters (12px) so content reads as native sections,
+  // not boxes floating in wide margins; tablet/desktop keep the prototype's roomy
+  // edge-to-edge layout. (Phase 2 mobile-native.)
   const widthClass = isNarrow
-    ? "max-w-screen-md mx-auto px-4"
-    : "max-w-screen-2xl mx-auto px-6 md:px-8";
+    ? "max-w-screen-md mx-auto px-3 sm:px-4"
+    : "max-w-screen-2xl mx-auto px-3 sm:px-6 md:px-8";
 
   // Cmd/Ctrl+L — universal log shortcut (Day 3a: toast; Day 3b: open LogSheet).
   useUniversalLogShortcut();
@@ -350,8 +353,18 @@ function ShellContent() {
           transition: "margin-left 180ms ease",
         }}
       >
-        <main className="flex-1 pb-24 md:pb-8">
-          <div className={`${widthClass} py-5`}>
+        <main
+          className="flex-1"
+          style={{
+            // Clear the fixed BottomNav (shown <=1024px) AND the device home
+            // indicator. Desktop (>=1025px) has no bottom nav → normal padding.
+            // Fixes the latent 768–1024px gap where the old pb-8 sat under the nav.
+            paddingBottom: narrow
+              ? "calc(var(--bottomnav-h) + var(--safe-bottom) + 12px)"
+              : 32,
+          }}
+        >
+          <div className={`${widthClass} py-3 md:py-5`}>
             {narrow && <PillarSubNavStrip />}
             <Outlet />
           </div>

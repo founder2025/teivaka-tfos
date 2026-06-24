@@ -7511,3 +7511,23 @@
 .tfp .tfos-doc-platform .tfos-doc-brand {justify-content:flex-end}
 .tfp .tfos-doc-platform .tfos-doc-wordmark {font-size:15px;letter-spacing:1.5px}
 .tfp .tfos-doc-platform-tag {font-size:8px;letter-spacing:1px;text-transform:uppercase;color:var(--green);margin-top:3px;font-weight:700}
+/* ════════════════════════════════════════════════════════════════════════════
+   NATIVE MOBILE FLATTEN  (html.native-app only — never affects the live web)
+   Phase 2: kill the "floating cards on grey" look on phones. Cards lose their
+   shadow + heavy border and tighten into native-feeling sections. Scoped to the
+   Capacitor shell + phone widths so desktop/tablet/web are untouched. Tune on-device.
+   ════════════════════════════════════════════════════════════════════════════ */
+@media (max-width: 820px) {
+  html.native-app .tfp .card {
+    box-shadow: none;
+    border-radius: 14px;
+    border-color: var(--cream-2);
+    padding: 14px;
+    margin-bottom: 10px;
+  }
+  /* Section headers sit a touch tighter; bigger, more app-like titles. */
+  html.native-app .tfp .card-head { margin-bottom: 10px; }
+  html.native-app .tfp .card-head h3 { font-size: 16px; }
+  /* Catalog/(+) door + type cards: flatter, snappier taps. */
+  html.native-app .tfp .catalog-type-card { box-shadow: none; }
+}
