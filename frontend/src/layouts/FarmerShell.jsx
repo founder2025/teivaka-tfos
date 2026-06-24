@@ -45,10 +45,12 @@ import { ChatProvider } from "../context/ChatContext";
 import { firePings, AnnouncementBanner } from "../utils/useFlags.jsx";
 import LogSheet from "../components/launcher/LogSheet";
 import ActionSheet from "../components/launcher/ActionSheet";
+import FormModalHost from "../components/launcher/FormModalHost";
 import { getLauncher } from "../components/launcher/launcherRegistry";
 import { useCapabilities } from "../utils/capabilities";
 import { LeftRailProvider, useLeftRail } from "../context/LeftRailContext";
 import { LauncherProvider, useLauncher } from "../context/LauncherContext";
+import { FormModalProvider } from "../context/FormModalContext";
 import { GuidedTour, useTour } from "../components/tour/GuidedTour";
 import { FARM_TOURS } from "../config/farmTours";
 import SetupHost from "../components/onboarding/SetupHost";
@@ -376,6 +378,7 @@ function ShellContent() {
       <FarmPillarLogFab />
       <ChatWidget />
       <LauncherSheet />
+      <FormModalHost />
       <FarmTourHost />
       <SetupHost />
       <OfflineBanner />
@@ -447,10 +450,12 @@ export default function FarmerShell() {
   return (
     <LeftRailProvider>
       <LauncherProvider>
-        <ChatProvider>
-          <AnnouncementBanner />
-          <ShellContent />
-        </ChatProvider>
+        <FormModalProvider>
+          <ChatProvider>
+            <AnnouncementBanner />
+            <ShellContent />
+          </ChatProvider>
+        </FormModalProvider>
       </LauncherProvider>
     </LeftRailProvider>
   );

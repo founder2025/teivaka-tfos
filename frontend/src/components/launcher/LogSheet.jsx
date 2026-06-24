@@ -11,6 +11,18 @@ import {
 import Modal from "../ui/Modal";
 import CaptureEngine from "../../capture/CaptureEngine";
 import { buildCatalog, configForVertical } from "../../capture/catalog";
+import { useFormModal } from "../../context/FormModalContext";
+
+// (+) route cards that have a registered form-modal open as a card over the page
+// instead of navigating to a full page. Routes with no entry (e.g. a list page like
+// "Close a crop" → /farm/cycles) fall through to plain navigation.
+const ROUTE_TO_FORMKEY = {
+  "/farm/cycles/new": "cycle_new",
+  "/farm/nursery/new": "nursery_new",
+  "/farm/harvest/new": "harvest_new",
+  "/farm/poultry/flocks/new": "flock_new",
+  "/farm/labor": "labor",
+};
 
 /**
  * LogSheet — the Universal (+) catalog (prototype-parity rebuild 2026-06-24).
@@ -40,6 +52,7 @@ function svgIcon(name) {
 
 export default function LogSheet({ isOpen, onClose, target = null }) {
   const navigate = useNavigate();
+  const { openFormModal } = useFormModal();
   const [activeGroups, setActiveGroups] = useState(null);   // null => unknown => fail-open
   const [query, setQuery] = useState("");
   const [condensed, setCondensed] = useState(false);
@@ -122,7 +135,13 @@ export default function LogSheet({ isOpen, onClose, target = null }) {
   }
 
   function pickCard(vertical, card) {
-    if (card.route) { onClose(); navigate(card.route); return; }
+    if (card.route) {
+      const formKey = ROUTE_TO_FORMKEY[card.route];
+      onClose();                                  // close the (+) sheet first
+      if (formKey) openFormModal(formKey);        // open the form as a card over the page
+      else navigate(card.route);                  // list pages etc. still navigate
+      return;
+    }
     setFormEntry({ vertical, eventType: card.eventType });
   }
 
