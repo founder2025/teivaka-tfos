@@ -15,6 +15,7 @@ Presence is never exposed for non-connections. community.* has no RLS; FKs to te
 import os
 import json
 import time
+import secrets
 import asyncio
 import logging
 from datetime import datetime, timezone
@@ -219,13 +220,34 @@ async def presence_ping(user: dict = Depends(get_current_user)):
 
 
 # ----------------------------------------------------------------------------- realtime (SSE)
+@router.post("/chat/stream-ticket")
+async def stream_ticket(request: Request, user: dict = Depends(get_current_user)):
+    """Mint a short-lived (30s), single-use ticket for SSE auth (chat + TIS
+    streams). EventSource can't set an Authorization header, so the client gets a
+    ticket here (header-authed) and opens the stream with ?ticket=… — the JWT
+    never travels in a URL/log (B93). The middleware redeems + deletes it."""
+    auth_header = request.headers.get("Authorization", "")
+    token = auth_header.split(" ", 1)[1].strip() if auth_header.startswith("Bearer ") else None
+    if not token:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    ticket = secrets.token_urlsafe(32)
+    try:
+        r = await _r()
+        await r.setex(f"stream_ticket:{ticket}", 30, token)
+    except Exception as e:
+        logger.error(f"stream-ticket mint failed: {e}")
+        raise HTTPException(status_code=503, detail="Could not create stream ticket")
+    return {"ticket": ticket}
+
+
 @router.get("/chat/stream")
 async def chat_stream(request: Request, user: dict = Depends(get_current_user)):
     """Per-user Server-Sent Events stream. Pushes a lightweight signal
     ({type, thread_id, from}) whenever something changes for this user — a new
     message, reaction, typing ping or read receipt — so the client refreshes
     instantly instead of polling every few seconds (Pacific-data friendly).
-    EventSource can't set headers; the auth middleware accepts ?access_token=."""
+    EventSource can't set headers; the client passes a single-use ?ticket=
+    (minted via POST /chat/stream-ticket) which the auth middleware redeems."""
     uid = str(user["user_id"])
 
     async def gen():

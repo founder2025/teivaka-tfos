@@ -4,11 +4,42 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import jwt, JWTError
 from sqlalchemy import text
 import logging
+import os
+import redis.asyncio as aioredis
 from app.config import settings
 from app.db.session import AsyncSessionLocal
 
 logger = logging.getLogger(__name__)
 security = HTTPBearer(auto_error=False)
+
+# SSE endpoints (EventSource can't set an Authorization header). Instead of a JWT
+# in the query string (B93 — logged, in history, in proxy logs), these paths
+# accept a short-lived, single-use ?ticket= minted via POST .../chat/stream-ticket.
+_STREAM_PATHS: frozenset[str] = frozenset({
+    "/api/v1/tis/stream",
+    "/api/v1/community/chat/stream",
+})
+_ticket_redis = None
+
+
+async def _redeem_stream_ticket(ticket: str) -> str | None:
+    """Single-use redemption of an SSE auth ticket → the original JWT. GET+DELETE
+    so a ticket leaked via a URL/log is useless after one use; tickets also self-
+    expire (30s TTL set at mint). Fails closed (→ 401) if Redis is unavailable."""
+    global _ticket_redis
+    try:
+        if _ticket_redis is None:
+            _ticket_redis = aioredis.from_url(
+                os.environ.get("REDIS_URL", "redis://redis:6379/0"), decode_responses=True
+            )
+        key = f"stream_ticket:{ticket}"
+        val = await _ticket_redis.get(key)
+        if val is not None:
+            await _ticket_redis.delete(key)
+        return val
+    except Exception as e:  # redis blip → no auth → 401, never a 500
+        logger.warning(f"stream ticket redeem failed: {e}")
+        return None
 
 
 def _auth_deny(status_code: int, detail: str) -> JSONResponse:
@@ -91,16 +122,17 @@ class AuthMiddleware:
         if path in self.PUBLIC_PATHS or any(path.startswith(p) for p in self.PUBLIC_PREFIXES):
             return await call_next(request)
 
-        # Extract Bearer token.
-        # SSE endpoints (EventSource) cannot set custom headers, so for the
-        # TIS advisory stream we also accept ?access_token= as a fallback.
-        # This is narrowly scoped by path — no other endpoint reads query auth.
+        # Extract Bearer token. SSE endpoints can't set headers, so the stream
+        # paths instead accept a single-use ?ticket= (redeemed to the JWT) — the
+        # JWT itself never travels in a URL/log (B93).
         auth_header = request.headers.get("Authorization", "")
         token: str | None = None
         if auth_header.startswith("Bearer "):
             token = auth_header.split(" ", 1)[1].strip()
-        elif path == "/api/v1/tis/stream":
-            token = (request.query_params.get("access_token") or "").strip() or None
+        elif path in _STREAM_PATHS:
+            ticket = (request.query_params.get("ticket") or "").strip() or None
+            if ticket:
+                token = await _redeem_stream_ticket(ticket)
 
         if not token:
             return _auth_deny(

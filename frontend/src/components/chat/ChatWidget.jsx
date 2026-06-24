@@ -18,6 +18,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { X, Send, Minus, ArrowLeft, Image as ImageIcon, Mic, Square, MoreVertical, SmilePlus, User, UserPlus, Reply } from "lucide-react";
 import { useChat } from "../../context/ChatContext";
+import { openTicketedStream } from "../../utils/streamTicket";
 
 const API = "/api/v1/community";
 const tok = () => localStorage.getItem("tfos_access_token");
@@ -456,16 +457,18 @@ export default function ChatWidget() {
   // SSE realtime: instant message / reaction / typing / seen, no busy polling
   useEffect(() => {
     if (!tok()) return undefined;
-    let es;
-    try { es = new EventSource(`${API}/chat/stream?access_token=${encodeURIComponent(tok())}`); }
-    catch { return undefined; }
-    es.addEventListener("chat", (e) => {
-      pollConns();
-      let detail = {}; try { detail = JSON.parse(e.data); } catch { /* ignore */ }
-      window.dispatchEvent(new CustomEvent("tfos-chat-refresh", { detail }));
+    // SSE auth via single-use ticket (no JWT in the URL — B93); helper reconnects.
+    const stream = openTicketedStream(`${API}/chat/stream`, {
+      listeners: {
+        chat: (e) => {
+          pollConns();
+          let detail = {}; try { detail = JSON.parse(e.data); } catch { /* ignore */ }
+          window.dispatchEvent(new CustomEvent("tfos-chat-refresh", { detail }));
+        },
+        ping: () => {},
+      },
     });
-    es.addEventListener("ping", () => {});
-    return () => { try { es.close(); } catch { /* ignore */ } };
+    return () => stream.close();
   }, [pollConns]);
 
   useEffect(() => { if (!toasts.length) return undefined; const id = setTimeout(() => setToasts((t) => t.slice(1)), 5000); return () => clearTimeout(id); }, [toasts]);

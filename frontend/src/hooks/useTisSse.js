@@ -1,11 +1,12 @@
 import { useEffect, useState, useCallback } from "react";
+import { openTicketedStream } from "../utils/streamTicket";
 
 /**
  * useTisSse — subscribes to GET /api/v1/tis/stream (SSE) and exposes the
  * running advisory list + a markRead(id) action.
  *
- * EventSource cannot set Authorization headers, so we pass the token as
- * ?access_token=. The backend accepts either Bearer or the query param.
+ * EventSource can't set Authorization headers, so the stream is authed with a
+ * single-use ticket (no JWT in the URL — B93) via openTicketedStream.
  */
 export function useTisSse() {
   const [advisories, setAdvisories] = useState([]);
@@ -15,24 +16,25 @@ export function useTisSse() {
     const token = localStorage.getItem("tfos_access_token");
     if (!token) return undefined;
 
-    const url = `/api/v1/tis/stream?access_token=${encodeURIComponent(token)}`;
-    const es = new EventSource(url);
-
-    es.onopen = () => setConnected(true);
-    es.onerror = () => setConnected(false);
-
-    es.addEventListener("advisory", (e) => {
-      let data;
-      try { data = JSON.parse(e.data); } catch { return; }
-      setAdvisories((prev) => {
-        if (prev.some((a) => a.advisory_id === data.advisory_id)) return prev;
-        return [data, ...prev];
-      });
+    // SSE auth via single-use ticket (no JWT in the URL — B93). The helper owns
+    // reconnection, minting a fresh ticket each time.
+    const stream = openTicketedStream("/api/v1/tis/stream", {
+      onOpen: () => setConnected(true),
+      onError: () => setConnected(false),
+      listeners: {
+        advisory: (e) => {
+          let data;
+          try { data = JSON.parse(e.data); } catch { return; }
+          setAdvisories((prev) => {
+            if (prev.some((a) => a.advisory_id === data.advisory_id)) return prev;
+            return [data, ...prev];
+          });
+        },
+        ping: () => {},
+      },
     });
 
-    es.addEventListener("ping", () => {});
-
-    return () => es.close();
+    return () => stream.close();
   }, []);
 
   const markRead = useCallback(async (advisory_id) => {
