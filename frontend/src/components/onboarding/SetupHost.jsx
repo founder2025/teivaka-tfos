@@ -56,6 +56,20 @@ const ITEMS = [
   { key: "contact", label: "WhatsApp number for alerts", to: "/me", farmOnly: false },
 ];
 
+// The 8 production enterprises a farm can run (the universal MONEY/NOTES/OTHER are
+// always on). Picking here sets tenant.farm_active_groups, which scopes the (+)
+// and the farm to only what this farmer actually does.
+const ENTERPRISES = [
+  { group: "CROPS", label: "Crops" },
+  { group: "POULTRY", label: "Poultry" },
+  { group: "LIVESTOCK", label: "Livestock" },
+  { group: "PERENNIALS", label: "Tree & fruit" },
+  { group: "APICULTURE", label: "Bees" },
+  { group: "AQUACULTURE", label: "Fish" },
+  { group: "FORESTRY", label: "Forestry" },
+  { group: "SPECIALTY", label: "Specialty" },
+];
+
 function personaGroupKey(accountType) {
   // navPillarKeys returns the visible pillar set; "farm" present == farm persona.
   return navPillarKeys(accountType);
@@ -72,6 +86,11 @@ export default function SetupHost() {
   const [farmNameInput, setFarmNameInput] = useState("");
   const [savingFarm, setSavingFarm] = useState(false);
   const [farmErr, setFarmErr] = useState("");
+  // "What do you farm?" — sets farm_active_groups to the chosen enterprises.
+  const [editingEnt, setEditingEnt] = useState(false);
+  const [entSel, setEntSel] = useState(null); // Set of selected groups; null = not loaded
+  const [savingEnt, setSavingEnt] = useState(false);
+  const [entErr, setEntErr] = useState("");
 
   const load = useCallback(async () => {
     try {
@@ -123,6 +142,49 @@ export default function SetupHost() {
       setFarmErr("Couldn't save that just now — please try again.");
     } finally {
       setSavingFarm(false);
+    }
+  };
+
+  // "What do you farm?" — load current active groups (default-all-on for new
+  // farms), let the farmer pick the ones they actually run, then PUT the full set
+  // so the rest are deactivated. Scopes the (+) + makes farm_active_groups a real
+  // signal (reversal of the Phase 5.10 "all-on, user trims" default — by design).
+  const openEnterprises = async () => {
+    if (editingEnt) { setEditingEnt(false); return; }
+    setEntErr("");
+    if (entSel === null && data.farm_id) {
+      try {
+        const r = await fetch(`/api/v1/farms/${encodeURIComponent(data.farm_id)}/active-groups`, { headers: authHeaders() });
+        const b = r.ok ? await r.json() : null;
+        const groups = (b?.data?.groups) || [];
+        setEntSel(new Set(groups.filter((g) => g.is_active).map((g) => g.catalog_group)));
+      } catch {
+        setEntSel(new Set());
+      }
+    }
+    setEditingEnt(true);
+  };
+  const toggleEnt = (g) => setEntSel((s) => {
+    const n = new Set(s || []);
+    if (n.has(g)) n.delete(g); else n.add(g);
+    return n;
+  });
+  const saveEnterprises = async () => {
+    if (!data.farm_id || !entSel) return;
+    setSavingEnt(true);
+    setEntErr("");
+    try {
+      const groups = ENTERPRISES.map((e) => ({ catalog_group: e.group, is_active: entSel.has(e.group) }));
+      const res = await fetch(`/api/v1/farms/${encodeURIComponent(data.farm_id)}/active-groups`, {
+        method: "PUT", headers: authHeaders(), body: JSON.stringify({ groups }),
+      });
+      if (!res.ok) throw new Error(String(res.status));
+      setEditingEnt(false);
+      await load();
+    } catch {
+      setEntErr("Couldn't save that just now — please try again.");
+    } finally {
+      setSavingEnt(false);
     }
   };
 
@@ -213,6 +275,8 @@ export default function SetupHost() {
                       setFarmErr("");
                       setFarmNameInput(data.farm_name || "");
                       setEditingFarm((v) => !v);
+                    } else if (r.key === "verticals") {
+                      openEnterprises();
                     } else {
                       navigate(r.to);
                     }
@@ -270,6 +334,48 @@ export default function SetupHost() {
                         className="text-xs"
                         style={{ color: C.muted }}
                       >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Inline "What do you farm?" — sets farm_active_groups to the picks */}
+                {r.key === "verticals" && editingEnt && (
+                  <div className="px-2 pb-2 pt-1">
+                    <p className="text-xs mb-2" style={{ color: C.muted }}>
+                      Pick what you farm — the (+) and your farm show only these. Change it any time.
+                    </p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {ENTERPRISES.map((e) => {
+                        const on = !!(entSel && entSel.has(e.group));
+                        return (
+                          <button
+                            key={e.group}
+                            type="button"
+                            onClick={() => toggleEnt(e.group)}
+                            className="px-2.5 py-1 rounded-full text-xs font-semibold"
+                            style={on
+                              ? { background: C.green, color: "#fff" }
+                              : { background: "#fff", color: C.soil, border: `1px solid ${C.line}` }}
+                          >
+                            {e.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {entErr && <p className="text-xs mt-1" style={{ color: "var(--red)" }}>{entErr}</p>}
+                    <div className="flex items-center gap-2 mt-2">
+                      <button
+                        type="button"
+                        onClick={saveEnterprises}
+                        disabled={savingEnt || !entSel}
+                        className="px-3 py-1.5 rounded-lg text-white text-xs font-semibold disabled:opacity-50"
+                        style={{ background: C.green }}
+                      >
+                        {savingEnt ? "Saving…" : "Save"}
+                      </button>
+                      <button type="button" onClick={() => setEditingEnt(false)} className="text-xs" style={{ color: C.muted }}>
                         Cancel
                       </button>
                     </div>
