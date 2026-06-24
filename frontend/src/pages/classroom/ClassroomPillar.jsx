@@ -14,13 +14,14 @@
  */
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { BookOpen, Plus, Award, QrCode, Download, Edit3, Lock, GraduationCap, X } from "lucide-react";
+import { BookOpen, Plus, Award, QrCode, Download, Edit3, Lock, GraduationCap, X, Play, Bookmark, Flame, ChevronRight, Calendar, Users, Layers } from "lucide-react";
 import { getJSON, send } from "../../utils/api";
 import { useChat } from "../../context/ChatContext";
 import { useFlags, DisabledNotice } from "../../utils/useFlags.jsx";
 import CoursePlayer, { Stars } from "../../components/classroom/CoursePlayer";
 import CourseBuilder from "../../components/classroom/CourseBuilder";
 import { useCapabilities } from "../../utils/capabilities";
+import { useIsNarrow } from "../../hooks/useIsNarrow";
 // ROOT-CAUSE FIX: prototype.css was only imported by TfpShell — without this
 // import the whole pillar rendered UNSTYLED (no cards, no modals, no grid).
 import "../../styles/prototype.css";
@@ -585,6 +586,156 @@ function TeachingView({ onEdit, onNew }) {
   );
 }
 
+// ── Overview landing blocks (screenshot layout) ───────────────────────────────
+function railCard(title, viewAll, navigate, children) {
+  return (
+    <div className="card" style={{ padding: 14, marginBottom: 14 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+        <strong style={{ fontSize: 13.5, color: "var(--soil)" }}>{title}</strong>
+        {viewAll && <button onClick={viewAll} style={{ background: "none", border: "none", color: "var(--green-dk)", fontWeight: 600, fontSize: 12, cursor: "pointer" }}>View all</button>}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+// Honest: courses carry no category yet (no backend field) — no faked counts.
+function BrowseByCategory() {
+  const cats = ["Crop Production", "Livestock", "Farm Management", "Business & Finance", "Climate & Environment"];
+  return (
+    <div style={{ marginBottom: 18 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+        <strong style={{ fontSize: 15, color: "var(--soil)" }}>Browse by Category</strong>
+      </div>
+      <div style={{ display: "flex", gap: 10, overflowX: "auto", paddingBottom: 4 }}>
+        {cats.map((c) => (
+          <div key={c} className="card" style={{ padding: "12px 14px", minWidth: 150, flexShrink: 0, display: "flex", alignItems: "center", gap: 8 }}>
+            <Layers size={16} style={{ color: "var(--green-dk)" }} />
+            <div><div style={{ fontSize: 13, fontWeight: 600, color: "var(--soil)" }}>{c}</div><div style={{ fontSize: 11, color: "var(--muted)" }}>Coming soon</div></div>
+          </div>
+        ))}
+      </div>
+      <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 6, fontStyle: "italic" }}>Categories activate once courses are organised into them.</div>
+    </div>
+  );
+}
+
+function LatestLessons({ onOpen }) {
+  const [items, setItems] = useState(null);
+  useEffect(() => { getJSON(`${API}/lessons/latest`).then((r) => setItems(r.data || [])).catch(() => setItems([])); }, []);
+  if (items == null) return null;
+  return (
+    <div style={{ marginTop: 18 }}>
+      <strong style={{ fontSize: 15, color: "var(--soil)" }}>Latest Lessons</strong>
+      <div className="card" style={{ padding: 6, marginTop: 10 }}>
+        {items.length === 0 ? (
+          <div style={{ padding: 14, color: "var(--muted)", fontSize: 13 }}>No lessons published yet.</div>
+        ) : items.map((l) => (
+          <div key={l.lesson_id} onClick={() => onOpen({ courseId: l.course_id, lessonId: l.lesson_id })}
+            style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 10px", borderBottom: "1px solid var(--line)", cursor: "pointer" }}>
+            <span style={{ width: 30, height: 30, borderRadius: 8, background: "rgba(106,168,79,0.12)", color: "var(--green-dk)", display: "grid", placeItems: "center", flexShrink: 0 }}><Play size={14} /></span>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: "var(--soil)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{l.title}</div>
+              <div style={{ fontSize: 11, color: "var(--muted)" }}>{l.author_name || "Instructor"}{l.level ? ` · ${l.level}` : ""}</div>
+            </div>
+            <Bookmark size={15} style={{ color: "var(--muted)", flexShrink: 0 }} />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function RailContinue({ navigate, onResume }) {
+  const [items, setItems] = useState(null);
+  useEffect(() => { getJSON(`${API}/me/progress`).then((r) => setItems((r.data || []).filter((p) => p.progress_pct > 0 && p.progress_pct < 100))).catch(() => setItems([])); }, []);
+  return railCard("Continue Learning", () => navigate("/classroom/learning"), navigate, (
+    (!items || items.length === 0)
+      ? <div style={{ fontSize: 12.5, color: "var(--muted)" }}>No courses in progress yet — start one to see it here.</div>
+      : <>
+          {items.slice(0, 3).map((p) => (
+            <div key={p.course_id} onClick={() => onResume(p.course_id)} style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 10, cursor: "pointer" }}>
+              <span style={{ width: 40, height: 40, borderRadius: 8, background: coverFor(p.title), flexShrink: 0 }} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 12.5, fontWeight: 600, color: "var(--soil)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.title}</div>
+                <div className="course-card-bar" style={{ marginTop: 4 }}><div className="course-card-fill" style={{ width: `${p.progress_pct}%` }} /></div>
+                <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 2 }}>{p.progress_pct}% complete</div>
+              </div>
+            </div>
+          ))}
+          <button className="btn btn-sm btn-secondary" style={{ width: "100%", marginTop: 4 }} onClick={() => navigate("/classroom/learning")}>Go to My Courses</button>
+        </>
+  ));
+}
+
+function RailCertificates({ navigate }) {
+  const [items, setItems] = useState(null);
+  useEffect(() => { getJSON(`${API}/me/certificates`).then((r) => setItems(r.data || [])).catch(() => setItems([])); }, []);
+  return railCard("My Certificates", () => navigate("/classroom/certificates"), navigate, (
+    (!items || items.length === 0)
+      ? <div style={{ fontSize: 12.5, color: "var(--muted)" }}>Complete a course to earn your first certificate.</div>
+      : <>
+          {items.slice(0, 3).map((c) => (
+            <div key={c.cert_id} style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 10 }}>
+              <span style={{ width: 34, height: 34, borderRadius: 8, background: "rgba(106,168,79,0.12)", color: "var(--green-dk)", display: "grid", placeItems: "center", flexShrink: 0 }}><Award size={16} /></span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 12.5, fontWeight: 600, color: "var(--soil)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.course_title}</div>
+                <div style={{ fontSize: 11, color: "var(--muted)" }}>Issued {c.issued_at ? new Date(c.issued_at).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }) : ""}</div>
+              </div>
+            </div>
+          ))}
+          <button className="btn btn-sm btn-secondary" style={{ width: "100%", marginTop: 4 }} onClick={() => navigate("/classroom/certificates")}>View all certificates</button>
+        </>
+  ));
+}
+
+function RailStreak() {
+  const [d, setD] = useState(null);
+  useEffect(() => { getJSON(`${API}/me/streak`).then((r) => setD(r.data || null)).catch(() => setD(null)); }, []);
+  const DOW = ["M", "T", "W", "T", "F", "S", "S"];
+  return (
+    <div className="card" style={{ padding: 14, marginBottom: 14 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
+        <Flame size={16} style={{ color: "#E0792B" }} /><strong style={{ fontSize: 13.5, color: "var(--soil)" }}>Learning Streak</strong>
+      </div>
+      <div style={{ fontSize: 22, fontWeight: 800, color: "var(--soil)" }}>{d ? d.streak_days : 0} day{(d?.streak_days || 0) === 1 ? "" : "s"}</div>
+      <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 10 }}>{(d?.streak_days || 0) > 0 ? "Keep it up! 🌟" : "Complete a lesson to start your streak."}</div>
+      <div style={{ display: "flex", gap: 6 }}>
+        {(d?.week || DOW.map(() => ({ active: false }))).map((w, i) => (
+          <div key={i} style={{ flex: 1, textAlign: "center" }}>
+            <div style={{ width: 24, height: 24, margin: "0 auto", borderRadius: "50%", display: "grid", placeItems: "center",
+              background: w.active ? "var(--green)" : "var(--cream)", color: w.active ? "#fff" : "var(--muted)", fontSize: 11, fontWeight: 700, border: w.active ? "none" : "1px solid var(--line)" }}>
+              {w.active ? "✓" : ""}
+            </div>
+            <div style={{ fontSize: 10, color: "var(--muted)", marginTop: 2 }}>{DOW[i]}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function RailInstructors({ navigate, onOpen }) {
+  const [items, setItems] = useState(null);
+  useEffect(() => { getJSON(`${API}/instructors`).then((r) => setItems(r.data || [])).catch(() => setItems([])); }, []);
+  return railCard("Top Instructors", () => navigate("/classroom/instructors"), navigate, (
+    (!items || items.length === 0)
+      ? <div style={{ fontSize: 12.5, color: "var(--muted)" }}>Instructors appear here as courses are published.</div>
+      : items.slice(0, 3).map((t) => (
+          <div key={t.user_id} style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 10 }}>
+            {t.avatar_url
+              ? <img src={t.avatar_url} alt="" style={{ width: 34, height: 34, borderRadius: "50%", objectFit: "cover", flexShrink: 0 }} />
+              : <span style={{ width: 34, height: 34, borderRadius: "50%", background: coverFor(t.full_name), color: "#fff", display: "grid", placeItems: "center", fontSize: 13, fontWeight: 700, flexShrink: 0 }}>{(t.full_name || "?")[0]}</span>}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 12.5, fontWeight: 600, color: "var(--soil)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.full_name}</div>
+              <div style={{ fontSize: 11, color: "var(--muted)", textTransform: "capitalize" }}>{t.profession || "Instructor"}</div>
+            </div>
+            {t.avg_rating != null && <span style={{ fontSize: 12, fontWeight: 700, color: "var(--soil)", flexShrink: 0 }}>★ {t.avg_rating}</span>}
+          </div>
+        ))
+  ));
+}
+
 export default function ClassroomPillar() {
   const { pathname } = useLocation();
   const navigate = useNavigate();
@@ -612,6 +763,7 @@ export default function ClassroomPillar() {
   const [gSort, setGSort] = useState("featured");
   const { can } = useCapabilities();
   const institution = can("CLASSROOM_UPLOAD_MODULE");  // banks/donors/exporters/regulators
+  const wide = !useIsNarrow(1100);  // room for the right rail on the overview landing
 
   const load = () =>
     getJSON(`${API}/courses`)
@@ -635,12 +787,45 @@ export default function ClassroomPillar() {
   }[view]), [view]);
 
   let body;
-  if (view === "overview" || view === "courses") {
+  if (view === "overview") {
+    const featured = filterCourses(courses || [], { sort: "featured" }).slice(0, 4);
+    const center = (
+      <>
+        <Hero courses={courses} />
+        <GlobalNote />
+        <BrowseByCategory />
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", margin: "4px 0 10px" }}>
+          <strong style={{ fontSize: 15, color: "var(--soil)" }}>Featured Courses</strong>
+          <button onClick={() => navigate("/classroom/courses")} style={{ background: "none", border: "none", color: "var(--green-dk)", fontWeight: 600, fontSize: 12, cursor: "pointer" }}>View all</button>
+        </div>
+        <CourseGrid courses={featured} loading={courses == null} canAuthor={false}
+          onOpen={(c) => setPlaying(c.course_id)} onEdit={(c) => setBuilding(c.course_id)} onNew={() => setCreating(true)} />
+        <LatestLessons onOpen={setPlaying} />
+        <TeachCard canAuthor={canAuthor} applicationsOpen={appsOpen} onChanged={load} institution={institution} />
+      </>
+    );
+    body = wide ? (
+      <div style={{ display: "flex", gap: 20, alignItems: "flex-start" }}>
+        <div style={{ flex: 1, minWidth: 0 }}>{center}</div>
+        <aside style={{ width: 320, flexShrink: 0 }}>
+          <RailContinue navigate={navigate} onResume={setPlaying} />
+          <RailCertificates navigate={navigate} />
+          <RailStreak />
+          <RailInstructors navigate={navigate} onOpen={setPlaying} />
+        </aside>
+      </div>
+    ) : (
+      <>
+        {center}
+        <RailContinue navigate={navigate} onResume={setPlaying} />
+        <RailCertificates navigate={navigate} />
+        <RailStreak />
+        <RailInstructors navigate={navigate} onOpen={setPlaying} />
+      </>
+    );
+  } else if (view === "courses") {
     body = (
       <>
-        {view === "overview" ? <Hero courses={courses} /> : null}
-        {view === "overview" ? <GlobalNote /> : null}
-        {view === "overview" ? <ContinueStrip onResume={setPlaying} /> : null}
         {canAuthor && (
           <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
             <button className="btn btn-sm btn-secondary" onClick={() => navigate("/classroom/teaching")}><GraduationCap size={13} />My teaching</button>

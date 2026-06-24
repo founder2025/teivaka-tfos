@@ -355,6 +355,50 @@ async def my_progress(user: dict = Depends(get_current_user)):
         } for r in rows]}
 
 
+@router.get("/me/streak")
+async def my_streak(user: dict = Depends(get_current_user)):
+    """Learning streak — from the distinct Fiji-local days the learner completed a
+    lesson. Read-only over community.lesson_progress (no new table)."""
+    from datetime import timedelta
+    async with get_db_ctx() as db:
+        today = (await db.execute(text("SELECT (now() AT TIME ZONE 'Pacific/Fiji')::date"))).scalar()
+        rows = (await db.execute(text(
+            "SELECT DISTINCT (completed_at AT TIME ZONE 'Pacific/Fiji')::date AS d "
+            "FROM community.lesson_progress "
+            "WHERE user_id = cast(:uid AS uuid) AND completed_at IS NOT NULL"),
+            {"uid": str(user["user_id"])})).all()
+        dayset = {r[0] for r in rows}
+        # current streak: count back from today (or yesterday, so it doesn't reset mid-day)
+        cur = today if today in dayset else (today - timedelta(days=1))
+        streak = 0
+        while cur in dayset:
+            streak += 1
+            cur -= timedelta(days=1)
+        # last 7 days Mon→Sun of the current week
+        monday = today - timedelta(days=today.weekday())
+        week = [{"date": str(monday + timedelta(days=i)),
+                 "active": (monday + timedelta(days=i)) in dayset} for i in range(7)]
+        return {"data": {"streak_days": streak, "week": week}}
+
+
+@router.get("/lessons/latest")
+async def latest_lessons(user: dict = Depends(get_current_user)):
+    """Recent published lessons across published courses. Best-effort 'latest' by
+    course recency (lessons carry no own timestamp). Read-only (no new table)."""
+    async with get_db_ctx() as db:
+        rows = (await db.execute(text("""
+            SELECT l.lesson_id, l.title, l.course_id, c.title AS course_title, c.level,
+                   u.full_name AS author_name, u.avatar_url AS author_avatar
+            FROM community.course_lessons l
+            JOIN community.courses c ON c.course_id = l.course_id AND c.status = 'PUBLISHED'
+            LEFT JOIN tenant.users u ON u.user_id = c.author_user_id
+            WHERE l.status = 'PUBLISHED'
+            ORDER BY c.created_at DESC, l.position ASC
+            LIMIT 8
+        """))).mappings().all()
+        return {"data": [dict(r) for r in rows]}
+
+
 # ------------------------------------------------------------------ quiz --
 
 class QuizAttempt(BaseModel):
