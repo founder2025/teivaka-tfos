@@ -33,6 +33,33 @@ export const CONFIGS = {
 // Display order (Crops is priority vertical → first; whole-farm money last).
 const ORDER = ["CROPS", "POULTRY", "LIVESTOCK", "MONEY"];
 
+// Natural farming-flow rank per verb-section (lower = earlier in the real-world
+// flow). Sections sort by their vertical's position, then this rank — so a door's
+// events read top-to-bottom the way farming actually happens, not config order.
+const FLOW_RANK = {
+  // CROPS: establish → grow → protect → maintain → monitor → harvest → store → sell → close
+  "CROPS:cycle_new": 5, "CROPS:nursery": 7, "CROPS:planting": 10, "CROPS:water_feed": 20,
+  "CROPS:protection": 30, "CROPS:maintenance": 40, "CROPS:monitoring": 45, "CROPS:harvest": 60,
+  "CROPS:storage": 65, "CROPS:sales": 70, "CROPS:cycle_close": 90,
+  // POULTRY: acquire → feed → health → monitor → collect → coop/biosecurity → incident
+  "POULTRY:flock_new": 5, "POULTRY:birds": 10, "POULTRY:feed": 20, "POULTRY:health": 30,
+  "POULTRY:monitor": 40, "POULTRY:eggs": 50, "POULTRY:coop": 60, "POULTRY:biosecurity": 65,
+  "POULTRY:incident": 70,
+  // LIVESTOCK: acquire → health → move/breed → produce → sell
+  "LIVESTOCK:new_animals": 10, "LIVESTOCK:health": 30, "LIVESTOCK:death": 35,
+  "LIVESTOCK:move_breed": 40, "LIVESTOCK:milk": 50, "LIVESTOCK:sale": 70,
+  // MONEY
+  "MONEY:in": 10, "MONEY:out": 20, "MONEY:finance": 30, "MONEY:labor": 40,
+};
+
+// The three level-1 doors. Each maps to the config verticals it contains; WHOLE is
+// universal. Icons are lucide names resolved in LogSheet.
+export const DOORS = [
+  { key: "PLANT",  label: "Plant-based",  sub: "Crops · trees · nursery",        icon: "Sprout",   verticals: ["CROPS"] },
+  { key: "ANIMAL", label: "Animal-based", sub: "Poultry · livestock · bees",     icon: "PawPrint", verticals: ["POULTRY", "LIVESTOCK"] },
+  { key: "WHOLE",  label: "Whole-farm",   sub: "Money · labour · notes",         icon: "Banknote", verticals: ["MONEY"] },
+];
+
 // Condensed mode = the handful every farmer logs (mirrors the prototype's 8-essential
 // SOLO_CATALOG, extended for the animal + money verticals prod actually ships).
 export const ESSENTIALS = new Set([
@@ -82,7 +109,29 @@ export function buildCatalog(activeGroups) {
       }
     }
   }
+  // Sort into natural farming-flow order: by vertical position, then flow rank.
+  sections.sort((a, b) => {
+    const va = ORDER.indexOf(a.vertical), vb = ORDER.indexOf(b.vertical);
+    if (va !== vb) return va - vb;
+    return (FLOW_RANK[a.id] ?? 50) - (FLOW_RANK[b.id] ?? 50);
+  });
   return sections;
+}
+
+// The Quick-Log essentials: the handful a farmer logs almost daily, scoped to what
+// the farm runs. Flattened to one-tap cards (deduped by event_type, capped).
+export function essentialsCards(activeGroups, limit = 8) {
+  const out = [];
+  const seen = new Set();
+  for (const sec of buildCatalog(activeGroups)) {
+    for (const c of sec.cards) {
+      if (!c.essential || !c.eventType || seen.has(c.eventType)) continue;
+      seen.add(c.eventType);
+      out.push({ ...c, vertical: sec.vertical });
+      if (out.length >= limit) return out;
+    }
+  }
+  return out;
 }
 
 export default buildCatalog;
