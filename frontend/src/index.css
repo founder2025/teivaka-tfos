@@ -12,6 +12,16 @@
   --font-sans:'Inter',system-ui,-apple-system,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;
   --font-mono:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
 
+  /* ── Device safe-area insets (notch / status bar / home indicator / Android nav).
+     viewport-fit=cover (index.html) exposes env(safe-area-inset-*). These tokens give
+     every surface one name to pad against on both web-PWA and the native shell. */
+  --safe-top:    env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left:   env(safe-area-inset-left, 0px);
+  --safe-right:  env(safe-area-inset-right, 0px);
+  /* Fixed bottom-nav height; content padding + sheets pad against this + safe-bottom. */
+  --bottomnav-h: 64px;
+
   --color-soil:   #1F2937;   /* text/icons → graphite */
   --color-green:  #0A7D6F;   /* brand (white-text safe) → teal-600 */
   --color-cream:  #F8FAFC;   /* light surface → cloud */
@@ -190,3 +200,45 @@ html[data-theme="dark"] .divide-gray-200 > :not([hidden]) ~ :not([hidden]) { bor
 html[data-theme="dark"] .hover\:bg-gray-50:hover,
 html[data-theme="dark"] .hover\:bg-gray-100:hover { background-color: var(--cream-2) !important; }
 html[data-theme="dark"] .hover\:bg-white:hover { background-color: var(--paper) !important; }
+
+/* ════════════════════════════════════════════════════════════════════════════
+   MOBILE / NATIVE SHELL  (Capacitor + web-PWA)
+   Phase 1 foundation. Safe-area helpers + native-app posture. The `native-app`
+   class is added to <html> by src/native/bridge.js only inside the native shell,
+   so these rules never affect a desktop browser unless explicitly opted in.
+   ════════════════════════════════════════════════════════════════════════════ */
+
+/* Safe-area padding helpers — pad a surface against the device insets. */
+.safe-top    { padding-top:    var(--safe-top); }
+.safe-bottom { padding-bottom: var(--safe-bottom); }
+.safe-x      { padding-left: var(--safe-left); padding-right: var(--safe-right); }
+
+/* Momentum scroll + no overscroll glow chaining for native-feeling lists. */
+.native-scroll {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
+}
+
+/* Kill the desktop text-selection / tap-highlight / callout on the native shell
+   so taps feel like a native app, not a web page. Inputs keep selection. */
+html.native-app, html.native-app body {
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+}
+html.native-app * { -webkit-user-select: none; user-select: none; }
+html.native-app input,
+html.native-app textarea,
+html.native-app [contenteditable="true"],
+html.native-app .selectable { -webkit-user-select: text; user-select: text; }
+
+/* Minimum 44px touch targets for primary tap controls inside the native shell. */
+html.native-app button,
+html.native-app a[role="button"],
+html.native-app .tap { min-height: 44px; }
+
+/* The fixed top app bar pads the status-bar inset so its content never sits under
+   the notch. Applied on web-PWA too (env() is 0 on non-notched devices). */
+.app-topbar { padding-top: var(--safe-top); }
+
+/* Bottom nav already pads safe-bottom in JSX; this guarantees content above it. */
+.has-bottomnav { padding-bottom: calc(var(--bottomnav-h) + var(--safe-bottom)); }

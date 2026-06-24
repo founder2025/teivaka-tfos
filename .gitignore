@@ -73,3 +73,8 @@ _archive/
 .9-1b-*.txt
 *.bak-*
 00_project_overview/handover/
+
+# Capacitor native platform projects (generated on a Mac via `npx cap add`; machine-specific signing)
+frontend/ios/
+frontend/android/
+frontend/.capacitor/

@@ -142,7 +142,7 @@ export default function TopAppBar() {
 
   return (
     <header
-      className="sticky top-0 z-40"
+      className="app-topbar sticky top-0 z-40"
       style={{
         background: "var(--paper)",
         borderBottom: `1px solid ${C.border}`,
