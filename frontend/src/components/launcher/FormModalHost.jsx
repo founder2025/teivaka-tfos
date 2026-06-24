@@ -18,20 +18,25 @@ import Modal from "../ui/Modal";
 import { useFormModal } from "../../context/FormModalContext";
 import CaptureEngine from "../../capture/CaptureEngine";
 import moneyConfig from "../../capture/config/whole-money";
+import cropsConfig from "../../capture/config/crops";
 
-const CycleNew       = lazy(() => import("../../pages/farmer/CycleNew"));
-const NurseryNew     = lazy(() => import("../../pages/farmer/NurseryNew"));
-const HarvestNew     = lazy(() => import("../../pages/farmer/HarvestNew"));
-const FlockPlacedNew = lazy(() => import("../../pages/farmer/poultry/FlockPlacedNew"));
-const Labor          = lazy(() => import("../../pages/farmer/Labor"));
+const CycleNew         = lazy(() => import("../../pages/farmer/CycleNew"));
+const NurseryNew       = lazy(() => import("../../pages/farmer/NurseryNew"));
+const HarvestNew       = lazy(() => import("../../pages/farmer/HarvestNew"));
+const FlockPlacedNew   = lazy(() => import("../../pages/farmer/poultry/FlockPlacedNew"));
+const Labor            = lazy(() => import("../../pages/farmer/Labor"));
+const EstablishUnitNew = lazy(() => import("../../pages/farmer/EstablishUnitNew"));
 
-// formKey -> { title, Comp }. Keys are stable identifiers used by callers.
+// formKey -> { title, Comp }. Keys are stable identifiers used by callers. The page
+// Comp is rendered UNCHANGED inside the Modal and receives any params as props (with
+// URL fallback inside the page); the host auto-closes when the page navigates away.
 export const FORM_REGISTRY = {
-  cycle_new:   { title: "Start a crop",        Comp: CycleNew },
-  nursery_new: { title: "Nursery & seedlings", Comp: NurseryNew },
-  harvest_new: { title: "Harvest",             Comp: HarvestNew },
-  flock_new:   { title: "Place a flock",       Comp: FlockPlacedNew },
-  labor:       { title: "Worker check-in",     Comp: Labor },
+  cycle_new:   { title: "Start a crop",            Comp: CycleNew },
+  nursery_new: { title: "Nursery & seedlings",     Comp: NurseryNew },
+  harvest_new: { title: "Harvest",                 Comp: HarvestNew },
+  flock_new:   { title: "Place a flock",           Comp: FlockPlacedNew },
+  labor:       { title: "Worker check-in",         Comp: Labor },
+  unit_new:    { title: "Add a production unit",    Comp: EstablishUnitNew },
 };
 
 const qc = new QueryClient({ defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } } });
@@ -62,6 +67,20 @@ export default function FormModalHost() {
     );
   }
 
+  // Crop field events reuse the (+) crops Capture Engine (writes field_events + audit),
+  // optionally pre-aimed at an event_type (e.g. CHEMICAL_APPLIED) and pre-anchored to a
+  // cycle (params.cycleId). Matches the (+) "Plant-based" flow exactly.
+  if (formKey === "crops") {
+    const pre = (params?.eventType || params?.cycleId)
+      ? { eventType: params?.eventType, itemId: params?.cycleId }
+      : undefined;
+    return (
+      <Modal isOpen onClose={closeFormModal} title="Log a field event" size="lg">
+        <CaptureEngine config={cropsConfig} preselect={pre} onBack={closeFormModal} onDone={closeFormModal} />
+      </Modal>
+    );
+  }
+
   const entry = FORM_REGISTRY[formKey];
   if (!entry) return null;
   const { title, Comp } = entry;
@@ -70,7 +89,7 @@ export default function FormModalHost() {
     <Modal isOpen onClose={closeFormModal} title={title} size="lg">
       <QueryClientProvider client={qc}>
         <Suspense fallback={<div style={{ padding: 32, textAlign: "center", color: "var(--muted)" }}>Loading…</div>}>
-          <Comp />
+          <Comp {...(params || {})} />
         </Suspense>
       </QueryClientProvider>
     </Modal>

@@ -18,6 +18,7 @@
  */
 import { useEffect, useState, useCallback } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
+import { useFormModal } from "../../context/FormModalContext";
 
 const C = {
   soil: "var(--soil)", green: "var(--green)", greenDk: "var(--green-dk)", greenTint: "#E9F2DD",
@@ -73,6 +74,7 @@ function MiniStat({ label, value, color }) {
 export default function CycleDetail() {
   const { cycleId } = useParams();
   const navigate = useNavigate();
+  const { openFormModal } = useFormModal();
   const [cycle, setCycle] = useState(null);
   const [fin, setFin] = useState(null);
   const [events, setEvents] = useState([]);
@@ -181,7 +183,7 @@ export default function CycleDetail() {
       {/* header actions */}
       <div className="flex flex-wrap gap-2">
         <ActionBtn onClick={() => navigate("/farm/cycles")}>← Back to list</ActionBtn>
-        <ActionBtn onClick={() => navigate(`/farm/field-events?new=1&cycle=${encodeURIComponent(cycleId)}`)}>+ Log event</ActionBtn>
+        <ActionBtn onClick={() => openFormModal("crops", { cycleId })}>+ Log event</ActionBtn>
         <ActionBtn onClick={() => navigate(`/farm/tasks?cycle=${encodeURIComponent(cycleId)}`)}>View tasks</ActionBtn>
         {transitions.map((next) => (
           <ActionBtn key={next} onClick={() => transition(next)} disabled={!!acting} danger={next === "FAILED"}>
@@ -249,7 +251,7 @@ export default function CycleDetail() {
         </Panel>
 
         {/* 2. Chemical compliance */}
-        <Panel title="Chemical compliance" action="+ Apply" onAction={() => navigate(`/farm/field-events?new=1&cycle=${encodeURIComponent(cycleId)}`)}>
+        <Panel title="Chemical compliance" action="+ Apply" onAction={() => openFormModal("crops", { eventType: "CHEMICAL_APPLIED", cycleId })}>
           {block ? (
             <>
               <div className="text-lg font-extrabold" style={{ color: C.red }}>{block.chemical} — {block.days_remaining}d left</div>

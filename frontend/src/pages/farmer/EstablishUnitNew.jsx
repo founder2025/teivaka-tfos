@@ -37,10 +37,12 @@ function extractList(res, ...paths) {
   return [];
 }
 
-export default function EstablishUnitNew() {
+export default function EstablishUnitNew({ enterprise: enterpriseProp } = {}) {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const presetEnt = (searchParams.get("enterprise") || "").toUpperCase();
+  // When opened as a card (FormModalHost), the enterprise comes in as a prop; when
+  // opened at /farm/unit/new it comes from the URL. Prop wins, URL is the fallback.
+  const presetEnt = (enterpriseProp || searchParams.get("enterprise") || "").toUpperCase();
 
   const [farmId, setFarmId] = useState(null);
   const [kindsMap, setKindsMap] = useState({}); // enterprise → {unit_kinds, default_uom}

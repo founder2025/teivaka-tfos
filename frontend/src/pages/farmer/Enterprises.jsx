@@ -18,6 +18,7 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { QueryClientProvider, QueryClient, useQuery } from "@tanstack/react-query";
+import { useFormModal } from "../../context/FormModalContext";
 import {
   Sprout, Plus, Search, Layers, Coins, AlertTriangle, Crosshair, ArrowRight,
   Shield, BarChart3, Bird, RefreshCw,
@@ -551,6 +552,7 @@ function InvestorTab({ D, onOpen, navigate }) {
 function entFdate(iso) { if (!iso) return "—"; const d = new Date(iso); return isNaN(d) ? String(iso) : d.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "2-digit" }); }
 
 function EnterpriseDetail({ e, farmId, onBack, go }) {
+  const { openFormModal } = useFormModal();
   const isAnimal = e.kind === "animal";
   const baseTabs = [["dashboard", "Dashboard"], ["production", isAnimal ? "Herd & animals" : "Production"]];
   if (isAnimal) baseTabs.push(["breeding", "Breeding"]);
@@ -616,7 +618,7 @@ function EnterpriseDetail({ e, farmId, onBack, go }) {
           {!isAnimal && (
             <Section title="Cycles" meta="Every run of this crop · live">
               {cyclesQ.isLoading ? <div className="text-sm" style={{ color: C.muted }}>Loading cycles…</div>
-                : myCycles.length === 0 ? <Build desc="No cycles logged for this crop yet." link="Start a cycle" onLink={() => go("cycles/new")} />
+                : myCycles.length === 0 ? <Build desc="No cycles logged for this crop yet." link="Start a cycle" onLink={() => openFormModal("cycle_new")} />
                 : (
                   <table className="w-full text-sm">
                     <tbody>
@@ -673,7 +675,7 @@ function EnterpriseDetail({ e, farmId, onBack, go }) {
           {isAnimal ? <Build desc="Animal event timeline builds as you log." />
             : cycleIds.length === 0 ? <Build desc="No cycles for this crop yet — nothing to show." />
             : recordsQ.isLoading ? <div className="text-sm" style={{ color: C.muted }}>Loading records…</div>
-            : (recordsQ.data || []).length === 0 ? <Build desc="No field events logged against this crop's cycles yet." link="Log a field event" onLink={() => go("field-events?new=1")} />
+            : (recordsQ.data || []).length === 0 ? <Build desc="No field events logged against this crop's cycles yet." link="Log a field event" onLink={() => openFormModal("crops")} />
             : (
               <ul className="space-y-1.5">
                 {(recordsQ.data || []).map((ev) => (
@@ -720,6 +722,7 @@ function ErrorState({ onRetry }) {
   );
 }
 function AddModal({ open, onClose, navigate }) {
+  const { openFormModal } = useFormModal();
   const opt = (Icon, title, desc, onClick) => (
     <button onClick={onClick} className={`w-full text-left rounded-xl border p-3 flex items-start gap-3 hover:brightness-95 ${FOCUS}`} style={{ borderColor: C.border, background: "var(--paper)" }}>
       <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0" style={{ background: C.greenTint, color: C.greenDk }}><Icon size={18} /></div>
@@ -730,8 +733,8 @@ function AddModal({ open, onClose, navigate }) {
     <Modal isOpen={open} onClose={onClose} title="Add an enterprise" size="sm">
       <div className="space-y-2.5">
         <div className="text-xs" style={{ color: C.muted }}>Pick what you farm — it sets up its own tasks, schedule, compliance and records, then appears here.</div>
-        {opt(Sprout, "Start a crop cycle", "Tomatoes, cassava, kava — any field or tree crop", () => navigate("cycles/new"))}
-        {opt(Bird, "Place a flock", "Layer hens, broilers — start a poultry group", () => navigate("poultry/flocks/new"))}
+        {opt(Sprout, "Start a crop cycle", "Tomatoes, cassava, kava — any field or tree crop", () => { onClose(); openFormModal("cycle_new"); })}
+        {opt(Bird, "Place a flock", "Layer hens, broilers — start a poultry group", () => { onClose(); openFormModal("flock_new"); })}
         {opt(Plus, "Another type", "Cattle, goats, pigs, bees, fish & more", () => { emitToast("That vertical's create flow is on the build roadmap"); onClose(); })}
       </div>
     </Modal>

@@ -29,6 +29,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Plus, ListChecks } from "lucide-react";
 import ThemedSelect from "../../components/inputs/ThemedSelect.jsx";
+import { useFormModal } from "../../context/FormModalContext";
 import ThemedCombobox from "../../components/inputs/ThemedCombobox.jsx";
 import { CurrentFarmProvider, useCurrentFarm } from "../../context/CurrentFarmContext";
 import FarmSelector from "../../components/farm/FarmSelector";
@@ -1366,6 +1367,7 @@ function FieldEventEditModal({ evt, onClose, onSaved }) {
 
 function FieldEventsLog() {
   const navigate = useNavigate();
+  const { openFormModal } = useFormModal();
   const { farmId } = useCurrentFarm();
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ["field-events", farmId],
@@ -1385,7 +1387,7 @@ function FieldEventsLog() {
         <div><h1>Field events</h1><div className="subtitle">Spray, irrigation, fertilizer, scouting and more — logged against your blocks</div></div>
         <div className="page-actions">
           <FarmSelector />
-          <button className="btn btn-primary" onClick={() => navigate("/farm/field-events?new=1")}><Plus size={14} />Log event</button>
+          <button className="btn btn-primary" onClick={() => openFormModal("crops")}><Plus size={14} />Log event</button>
         </div>
       </div>
 

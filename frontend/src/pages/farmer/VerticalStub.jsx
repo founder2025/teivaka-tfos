@@ -15,6 +15,7 @@ import { useNavigate } from "react-router-dom";
 import { Fish, Trees, TreeDeciduous, PawPrint, Hexagon, Sparkles, Bell, Check, ArrowLeft, Plus } from "lucide-react";
 import TfpShell from "../../components/farm/TfpShell";
 import { CurrentFarmProvider, useCurrentFarm } from "../../context/CurrentFarmContext";
+import { useFormModal } from "../../context/FormModalContext";
 
 const ICONS = { AQUACULTURE: Fish, FORESTRY: Trees, PERENNIALS: TreeDeciduous, LIVESTOCK: PawPrint, APICULTURE: Hexagon, SPECIALTY: Sparkles };
 
@@ -36,6 +37,7 @@ function emitToast(m) { window.dispatchEvent(new CustomEvent("tfos:toast", { det
 
 function StubInner({ vertical }) {
   const navigate = useNavigate();
+  const { openFormModal } = useFormModal();
   const { farmId } = useCurrentFarm();
   const [sent, setSent] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -77,7 +79,7 @@ function StubInner({ vertical }) {
             <div style={{ fontSize: 13.5, color: "var(--muted)", lineHeight: 1.6, marginBottom: 20 }}>{c.line}</div>
             {c.addLabel && (
               <div style={{ marginBottom: 14 }}>
-                <button className="btn btn-primary" onClick={() => navigate(`/farm/unit/new?enterprise=${vertical}`)}>
+                <button className="btn btn-primary" onClick={() => openFormModal("unit_new", { enterprise: vertical })}>
                   <Plus size={15} />{c.addLabel}
                 </button>
               </div>

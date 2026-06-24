@@ -15,6 +15,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useFormModal } from "../../context/FormModalContext";
 import { QueryClientProvider, QueryClient } from "@tanstack/react-query";
 import { Clock, Camera, Sprout, Package, Coins, Bird, ShieldCheck, FileText, RefreshCw, AlertTriangle, Plus, Download, Printer, Search, Database, ListChecks } from "lucide-react";
 
@@ -242,6 +243,7 @@ function Chip({ active, label, onClick }) {
 function HistoryInner() {
   const { farmId } = useCurrentFarm();
   const rrNavigate = useNavigate();
+  const { openFormModal } = useFormModal();
   const go = (sub) => rrNavigate(`/farm/${sub}`);
 
   const [preset, setPreset] = useState("all");
@@ -346,7 +348,7 @@ function HistoryInner() {
             <div className="text-xs mt-1 max-w-md mx-auto" style={{ color: C.muted }}>{(from || to || filter !== "all" || q) ? "Widen the dates, clear the filter, or pick All time." : "Every action lands here with the date it happened and a tamper-proof stamp. Nothing is ever edited after the fact."}</div>
             {(from || to || filter !== "all" || q)
               ? <button onClick={() => { applyPreset("all"); setFilter("all"); setSearch(""); }} className={`mt-3 text-xs px-3 py-1.5 rounded-lg hover:brightness-95 ${FOCUS}`} style={{ color: C.greenDk, border: `1px solid ${C.border}` }}>Show all time</button>
-              : <button onClick={() => go("cycles/new")} className={`mt-3 text-sm px-4 py-2 rounded-lg text-white flex items-center gap-1.5 mx-auto hover:brightness-95 ${FOCUS}`} style={{ background: C.greenDk }}><Plus size={14} />Log your first activity</button>}
+              : <button onClick={() => openFormModal("cycle_new")} className={`mt-3 text-sm px-4 py-2 rounded-lg text-white flex items-center gap-1.5 mx-auto hover:brightness-95 ${FOCUS}`} style={{ background: C.greenDk }}><Plus size={14} />Log your first activity</button>}
           </div>
         </Card>
       ) : (

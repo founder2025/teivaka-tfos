@@ -370,7 +370,7 @@ function QuickActions({ navigate }) {
     { label: "Harvest", icon: Sprout, go: () => openFormModal("harvest_new") },
     { label: "Cash in", icon: ArrowRight, go: () => openFormModal("cash", { type: "in" }) },
     { label: "Expense", icon: DollarSign, go: () => openFormModal("cash", { type: "out" }) },
-    { label: "Field event", icon: ListChecks, go: () => navigate("/farm/field-events?new=1") },
+    { label: "Field event", icon: ListChecks, go: () => openFormModal("crops") },
     { label: "Labor", icon: Users, go: () => openFormModal("labor") },
     { label: "Photo", icon: Camera, go: () => emitToast("Photo capture ships with the mobile log flow") },
   ];
