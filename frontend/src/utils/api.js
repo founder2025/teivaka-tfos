@@ -84,13 +84,30 @@ export async function apiFetch(url, opts = {}) {
   return res;
 }
 
+// Strip internal codes/ids so a leaked backend message never reaches a farmer:
+// drop a leading "ERROR_CODE: " prefix and any "xxx_id=VALUE" tokens. Returns a
+// clean human string, or null if nothing human-readable remains.
+function humanizeError(detail) {
+  let msg = null;
+  if (typeof detail === "string") msg = detail;
+  else if (detail && typeof detail === "object") msg = detail.error?.message || detail.message || (typeof detail.detail === "string" ? detail.detail : null);
+  if (!msg || typeof msg !== "string") return null;
+  msg = msg.replace(/^[A-Z][A-Z0-9_]{2,}:\s*/, "");      // leading CODE:
+  msg = msg.replace(/\b[a-z][a-z0-9_]*_id\s*=\s*\S+\s*/gi, "");  // pu_id=… / cycle_id=…
+  msg = msg.trim();
+  // If what's left is itself just a bare CODE (no spaces), it's not human → drop.
+  if (!msg || /^[A-Z][A-Z0-9_]{2,}$/.test(msg)) return null;
+  return msg;
+}
+
 async function parseErr(res) {
   const detail = (await res.json().catch(() => ({})))?.detail;
   const kind = res.status >= 500 ? "server" : "client";
-  const userMessage = detail || (res.status >= 500
+  const human = humanizeError(detail);
+  const userMessage = human || (res.status >= 500
     ? "Server problem — please try again in a moment."
-    : `Request failed (${res.status}).`);
-  return new ApiError(detail || String(res.status), { kind, status: res.status, userMessage });
+    : "Something went wrong — please try again.");
+  return new ApiError(human || String(res.status), { kind, status: res.status, userMessage });
 }
 
 export async function getJSON(url) {

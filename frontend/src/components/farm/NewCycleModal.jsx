@@ -104,7 +104,6 @@ function CategoryGroupedOptions({ productions }) {
               {p.local_name && p.local_name.toLowerCase() !== (p.production_name || "").toLowerCase()
                 ? ` · ${p.local_name}`
                 : ""}
-              {" "}({p.production_id})
             </option>
           ))}
         </optgroup>

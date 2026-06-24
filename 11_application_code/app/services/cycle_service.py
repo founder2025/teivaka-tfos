@@ -312,10 +312,11 @@ async def create_cycle(
         )
     except IntegrityError as e:
         if _ACTIVE_PU_INDEX in str(getattr(e, "orig", e)):
+            # Code prefix kept for router branching; human part carries NO internal
+            # id/code (farmer-facing).
             raise ValueError(
-                f"PU_ALREADY_HAS_ACTIVE_CYCLE: pu_id={pu_id} already has a "
-                "non-terminal cycle. Close or fail the existing cycle before "
-                "starting a new one."
+                "PU_ALREADY_HAS_ACTIVE_CYCLE: This block already has an active crop — "
+                "close or finish it before starting a new one."
             ) from e
         raise
 

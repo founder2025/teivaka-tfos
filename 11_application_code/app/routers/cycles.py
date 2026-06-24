@@ -157,6 +157,14 @@ async def create_cycle(
         )
     except ValueError as e:
         msg = str(e)
+        if msg.startswith("PU_ALREADY_HAS_ACTIVE_CYCLE"):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=error_envelope(
+                    "ACTIVE_CYCLE_EXISTS",
+                    "This block already has an active crop — close or finish it before starting a new one.",
+                ),
+            )
         if msg.startswith("ROTATION_BLOCKED") or msg.startswith("ROTATION_AVOID"):
             # Re-run rotation_check to surface full payload (alternatives etc.)
             payload_data = await rotation_check(
