@@ -14,6 +14,9 @@ on:
       - ".github/workflows/android-debug-apk.yml"
   workflow_dispatch: {}
 
+permissions:
+  contents: write   # needed to publish the APK as a Release asset
+
 jobs:
   build-apk:
     runs-on: ubuntu-latest
@@ -51,9 +54,32 @@ jobs:
         working-directory: frontend/android
         run: ./gradlew assembleDebug --no-daemon --stacktrace
 
-      - name: Upload APK
+      # Rename so the downloaded file is obviously the app, not "app-debug".
+      - name: Stage APK
+        run: |
+          mkdir -p out
+          cp frontend/android/app/build/outputs/apk/debug/app-debug.apk out/teivaka.apk
+
+      # Belt-and-braces: also keep it as a run artifact.
+      - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: teivaka-debug-apk
-          path: frontend/android/app/build/outputs/apk/debug/app-debug.apk
+          path: out/teivaka.apk
           if-no-files-found: error
+
+      # The phone-friendly path: a Release with a DIRECT .apk link (no zip, no login
+      # to download). Same stable tag each build, so the link never changes.
+      - name: Publish APK to Release (direct download link)
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: android-debug
+          name: "Teivaka Android (debug — latest)"
+          body: |
+            Latest debug build of the Teivaka Android app for on-phone testing.
+            Tap **teivaka.apk** below on your Android phone to install
+            (allow "install from unknown sources"). Testing only — not the Play release.
+          prerelease: true
+          make_latest: "false"
+          files: out/teivaka.apk
+
