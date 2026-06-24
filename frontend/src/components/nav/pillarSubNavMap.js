@@ -74,8 +74,9 @@ export const PILLAR_SUB_NAV = {
   "/tis": {
     label: "TIS",
     items: [
-      { path: "/tis",         label: "Chat",    icon: Sparkles },
-      { path: "/tis/history", label: "History", icon: Clock },
+      { path: "/tis",         label: "Chat",         icon: Sparkles },
+      { path: "/tis/plan",    label: "Plan my farm", icon: Sprout },
+      { path: "/tis/history", label: "History",      icon: Clock },
       { path: "/tis/voice",   label: "Voice",   icon: Mic,    phase: "5" },
       { path: "/tis/usage",   label: "Usage",   icon: Activity },
     ],
