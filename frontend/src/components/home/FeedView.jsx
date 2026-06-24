@@ -464,6 +464,7 @@ function PostCard({ post, me, onChange, onRemoved }) {
   const [reporting, setReporting] = useState(false);
   const [audienceOpen, setAudienceOpen] = useState(false);
   const [lightbox, setLightbox] = useState(null); // photo index or null
+  const [expanded, setExpanded] = useState(false); // long-body "…more" toggle
   useEffect(() => { setP(post); setEditText(post.body); }, [post]);
   const mine = p.author_user_id === me?.user_id;
 
@@ -592,7 +593,13 @@ function PostCard({ post, me, onChange, onRemoved }) {
           </div>
         </div>
       ) : (
-        <div className="cm-post-body">{renderBody(p.body)}{p.edited_at && <span style={{ fontSize: 10.5, color: "var(--muted)" }}> · edited</span>}</div>
+        <div className="cm-post-body">
+          <div className={expanded ? "" : "cm-clamp"}>{renderBody(p.body)}</div>
+          {(p.body || "").length > 280 && (
+            <button className="cm-more-btn" onClick={() => setExpanded(!expanded)}>{expanded ? "Show less" : "…more"}</button>
+          )}
+          {p.edited_at && <span style={{ fontSize: 10.5, color: "var(--muted)" }}> · edited</span>}
+        </div>
       )}
 
       {p.link_audit_hash && (

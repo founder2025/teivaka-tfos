@@ -66,6 +66,11 @@
 .tfp .cm-post-photos { display: grid; gap: 6px; margin: 10px 0 4px; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
 .tfp .cm-post-photos img { width: 100%; border-radius: 8px; display: block; }
 
+/* Long-body clamp + "…more" toggle */
+.tfp .cm-clamp { display: -webkit-box; -webkit-line-clamp: 5; -webkit-box-orient: vertical; overflow: hidden; }
+.tfp .cm-more-btn { background: none; border: none; color: var(--green); font-weight: 600; font-size: 12.5px; cursor: pointer; padding: 2px 0; font-family: inherit; }
+.tfp .cm-more-btn:hover { text-decoration: underline; }
+
 /* ── Post media grid (FB-style: 1 / 2 / 3 / 4+), no layout shift, tap → lightbox ─ */
 .tfp .cm-media { display: grid; gap: 4px; margin: 10px 0 4px; border-radius: 12px; overflow: hidden; }
 .tfp .cm-media-one   { grid-template-columns: 1fr; }
