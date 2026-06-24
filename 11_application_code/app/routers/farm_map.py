@@ -144,13 +144,17 @@ async def network_map(user: dict = Depends(get_current_user),
 
     # Viewer's own location (distance origin) — their first farm with coords.
     origin = (await db.execute(
-        text("SELECT gps_lat, gps_lng FROM tenant.farms "
+        text("SELECT farm_name, gps_lat, gps_lng FROM tenant.farms "
              "WHERE tenant_id = :tid AND gps_lat IS NOT NULL AND gps_lng IS NOT NULL "
              "ORDER BY created_at LIMIT 1"),
         {"tid": viewer_tid},
     )).mappings().first()
     o_lat = origin["gps_lat"] if origin else None
     o_lng = origin["gps_lng"] if origin else None
+    # The viewer's own pin (exact — it's their own farm), so a solo user still sees
+    # the map populate with "You are here" instead of a blank canvas.
+    you = ({"name": origin["farm_name"] or "Your farm",
+            "lat": float(o_lat), "lng": float(o_lng)} if o_lat is not None else None)
 
     # Migration-tolerant: if the 164 consent columns aren't in the DB yet, return
     # an honest-empty network instead of 500-ing (mirrors /me/prefs). degraded
@@ -160,7 +164,7 @@ async def network_map(user: dict = Depends(get_current_user),
         "AND table_name='users' AND column_name IN ('share_location','location_share_ack_at')"
     ))).scalar()
     if int(has_share or 0) < 2:
-        return {"members": [], "count": 0, "has_origin": o_lat is not None, "degraded": "share_columns_missing"}
+        return {"members": [], "count": 0, "has_origin": o_lat is not None, "you": you, "degraded": "share_columns_missing"}
 
     # One pin per opted-in member farm (DISTINCT ON farm; representative = earliest
     # opted-in user in that tenant). Excludes the viewer's own tenant.
@@ -192,7 +196,7 @@ async def network_map(user: dict = Depends(get_current_user),
             "distance_km": round(dist, 1) if dist is not None else None,
         })
     members.sort(key=lambda m: (m["distance_km"] is None, m["distance_km"] or 0))
-    return {"members": members, "count": len(members), "has_origin": o_lat is not None}
+    return {"members": members, "count": len(members), "has_origin": o_lat is not None, "you": you}
 
 
 @router.get("/{farm_id}")

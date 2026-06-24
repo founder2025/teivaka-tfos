@@ -81,6 +81,14 @@ export default function Members() {
     if (state !== "ready" || !mapRef.current || !layerRef.current) return;
     const lg = layerRef.current; lg.clearLayers();
     const bounds = [];
+    // "You are here" — the viewer's own farm, so a solo user still sees the map populate.
+    if (data.you && data.you.lat != null && data.you.lng != null) {
+      const yll = [Number(data.you.lat), Number(data.you.lng)];
+      bounds.push(yll);
+      L.circleMarker(yll, { radius: 8, color: "#fff", weight: 2, fillColor: "#2C1A0E", fillOpacity: 1 })
+        .bindPopup(`<strong>You are here</strong><br/><span style="color:#888">${data.you.name || "Your farm"}</span>`)
+        .addTo(lg);
+    }
     (data.members || []).forEach((m) => {
       if (m.lat == null || m.lng == null) return;
       const ll = [Number(m.lat), Number(m.lng)];
@@ -173,7 +181,7 @@ export default function Members() {
 
             <div className="relative rounded-2xl overflow-hidden" style={{ height: 420, border: `1px solid ${C.line}` }}>
               <div ref={elRef} style={{ position: "absolute", inset: 0, background: C.cream }} />
-              {members.length === 0 && (
+              {members.length === 0 && !data.you && (
                 <div className="absolute inset-0 z-[500] flex items-center justify-center text-center px-6" style={{ background: "rgba(255,255,255,0.82)" }}>
                   <div>
                     <Users size={28} style={{ color: C.muted, margin: "0 auto 8px" }} />
@@ -183,6 +191,12 @@ export default function Members() {
                 </div>
               )}
             </div>
+
+            {members.length === 0 && data.you && (
+              <p className="text-xs mt-3" style={{ color: C.muted }}>
+                You're on the map. Other verified members appear here once they share their location.
+              </p>
+            )}
 
             {members.length > 0 && (
               <div className="mt-4">
