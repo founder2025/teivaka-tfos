@@ -236,9 +236,12 @@ async def network_map(radius_km: float = None,
     has_origin = o_lat is not None
 
     # SQL haversine (km) from the viewer origin; NULL when the viewer has no origin.
+    # Params are CAST to float8 so a NULL origin (no location set yet) can't make
+    # Postgres deduce conflicting types for the bind param → 500.
     def _dist(lat, lng):
-        return (f"(6371.0*2*asin(sqrt( power(sin(radians((:olat - {lat})/2)),2)"
-                f" + cos(radians(:olat))*cos(radians({lat}))*power(sin(radians((:olng - {lng})/2)),2) )))")
+        return (f"(6371.0*2*asin(sqrt( power(sin(radians((CAST(:olat AS float8) - {lat})/2)),2)"
+                f" + cos(radians(CAST(:olat AS float8)))*cos(radians({lat}))"
+                f" *power(sin(radians((CAST(:olng AS float8) - {lng})/2)),2) )))")
 
     qp = {"viewer_tid": viewer_tid, "cap": _CAP,
           "olat": float(o_lat) if has_origin else None,
@@ -333,7 +336,7 @@ async def network_map(radius_km: float = None,
     # Per-category counts (all categories, within radius/search) — cheap aggregates,
     # NOT the category filter, so chips always show their counts.
     category_counts = {}
-    cnt_qp = {k: v for k, v in qp.items() if k not in ("cap", "cats")}
+    cnt_qp = {k: v for k, v in qp.items() if k not in ("cap", "cats", "olat", "olng")}
     crows = (await db.execute(text(f"""
         SELECT account_type, count(*) AS n FROM (
             SELECT DISTINCT ON (f.farm_id) u.account_type
