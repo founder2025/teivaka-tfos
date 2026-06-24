@@ -144,6 +144,7 @@ def _fuzz(lat, lng, seed):
 @router.get("/network")
 async def network_map(radius_km: float = None,
                       categories: str = None,
+                      q: str = None,
                       user: dict = Depends(get_current_user),
                       db: AsyncSession = _Depends(get_db)):
     """Networking map — verified members who opted to share, plotted with the EXACT
@@ -230,13 +231,20 @@ async def network_map(radius_km: float = None,
         bbox_f = " AND f.gps_lat BETWEEN :lat_lo AND :lat_hi AND f.gps_lng BETWEEN :lng_lo AND :lng_hi"
         bbox_u = " AND u.gps_lat BETWEEN :lat_lo AND :lat_hi AND u.gps_lng BETWEEN :lng_lo AND :lng_hi"
 
+    # Text search — name + (farms) town/island, pushed into SQL.
+    q_f = q_u = ""
+    if q and q.strip():
+        qp["q"] = f"%{q.strip()}%"
+        q_f = " AND (f.farm_name ILIKE :q OR f.location_island ILIKE :q OR f.location_name ILIKE :q)"
+        q_u = " AND u.full_name ILIKE :q"
+
     candidates = []
 
     # 1) Farmers — one pin per opted-in member farm with coords (representative =
     #    earliest opted-in user in that tenant). Excludes the viewer's own tenant.
     frows = (await db.execute(text(f"""
         SELECT DISTINCT ON (f.farm_id)
-               f.farm_id AS key, f.farm_name AS name, f.gps_lat, f.gps_lng,
+               f.farm_id AS key, u.user_id AS uid, f.farm_name AS name, f.gps_lat, f.gps_lng,
                u.account_type, u.kyc_verified
           FROM tenant.farms f
           JOIN tenant.users u
@@ -245,11 +253,12 @@ async def network_map(radius_km: float = None,
            AND u.location_share_ack_at IS NOT NULL
          WHERE f.gps_lat IS NOT NULL AND f.gps_lng IS NOT NULL
            AND f.is_active = true
-           AND f.tenant_id <> :viewer_tid{bbox_f}
+           AND f.tenant_id <> :viewer_tid{bbox_f}{q_f}
          ORDER BY f.farm_id, u.created_at
     """), qp)).mappings().all()
     for r in frows:
-        candidates.append({"key": r["key"], "name": r["name"] or "Member farm",
+        candidates.append({"key": r["key"], "uid": str(r["uid"]) if r["uid"] else None,
+                           "name": r["name"] or "Member farm",
                            "account_type": r["account_type"] or "FARMER",
                            "verified": bool(r["kyc_verified"]),
                            "rlat": r["gps_lat"], "rlng": r["gps_lng"]})
@@ -263,13 +272,14 @@ async def network_map(radius_km: float = None,
               FROM tenant.users u
              WHERE u.share_location = true AND u.location_share_ack_at IS NOT NULL
                AND u.gps_lat IS NOT NULL AND u.gps_lng IS NOT NULL
-               AND u.tenant_id <> :viewer_tid{bbox_u}
+               AND u.tenant_id <> :viewer_tid{bbox_u}{q_u}
                AND NOT EXISTS (SELECT 1 FROM tenant.farms f
                                 WHERE f.tenant_id = u.tenant_id
                                   AND f.gps_lat IS NOT NULL AND f.is_active = true)
         """), qp)).mappings().all()
         for r in urows:
-            candidates.append({"key": str(r["key"]), "name": r["name"] or "Member",
+            candidates.append({"key": str(r["key"]), "uid": str(r["key"]),
+                               "name": r["name"] or "Member",
                                "account_type": r["account_type"] or "MEMBER",
                                "verified": bool(r["kyc_verified"]),
                                "rlat": r["gps_lat"], "rlng": r["gps_lng"]})
@@ -298,11 +308,14 @@ async def network_map(radius_km: float = None,
 
     members = []
     for c in candidates:
-        flat, flng = _fuzz(c["rlat"], c["rlng"], c["key"])
+        # Accurate pin — the real location (farm-map centroid for farmers, the
+        # operating/home location for non-farm members). Operator-ratified
+        # 2026-06-24: accuracy over fuzz; verified-gate + opt-in remain the guard.
         members.append({
             "id": hashlib.sha256(str(c["key"]).encode()).hexdigest()[:12],
+            "user_id": c["uid"],  # for Connect (chat) — opted-in + verified-gated
             "name": c["name"], "account_type": c["account_type"], "verified": c["verified"],
-            "lat": flat, "lng": flng,
+            "lat": float(c["rlat"]), "lng": float(c["rlng"]),
             "distance_km": round(c["distance_km"], 1) if c["distance_km"] is not None else None,
         })
     return {"members": members, "count": len(members), "category_counts": category_counts,

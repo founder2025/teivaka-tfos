@@ -15,7 +15,8 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import { MapPin, ShieldCheck, Users, EyeOff } from "lucide-react";
+import { MapPin, ShieldCheck, Users, EyeOff, Search, Crosshair, MessageCircle } from "lucide-react";
+import { useChat } from "../../context/ChatContext";
 
 const FIJI = [-17.8, 178.0];
 const C = { soil: "#2C1A0E", green: "var(--green)", greenDk: "var(--green-dk)", cream: "var(--cream)", line: "var(--line)", muted: "var(--muted)" };
@@ -39,6 +40,14 @@ export default function Members() {
   const [savingPref, setSavingPref] = useState(false);
   const [radius, setRadius] = useState(null); // km within; null = Any
   const [cats, setCats] = useState([]);        // selected account_type filters
+  const [qInput, setQInput] = useState("");    // raw search box
+  const [q, setQ] = useState("");              // debounced query sent to server
+  const [locating, setLocating] = useState(false);
+  const markersRef = useRef({});               // member id -> leaflet marker (row->pin focus)
+  const { openWith } = useChat();
+
+  // debounce the search box → q
+  useEffect(() => { const t = setTimeout(() => setQ(qInput.trim()), 350); return () => clearTimeout(t); }, [qInput]);
 
   async function loadPrefs() {
     try {
@@ -47,14 +56,15 @@ export default function Members() {
     } catch { setPrefs({}); }
   }
 
-  // Radius + category filtering is pushed to the server (?radius_km=&categories=)
-  // so the client only downloads members in-radius, not the whole platform.
+  // Radius + category + search are pushed to the server (?radius_km=&categories=&q=)
+  // so the client only downloads matching members, not the whole platform.
   const loadNetwork = useCallback(async () => {
     setState("loading");
     try {
       const p = new URLSearchParams();
       if (radius) p.set("radius_km", String(radius));
       if (cats.length) p.set("categories", cats.join(","));
+      if (q) p.set("q", q);
       const qs = p.toString();
       const r = await fetch(`/api/v1/farm-map/network${qs ? `?${qs}` : ""}`, { headers: authHeaders() });
       if (r.status === 403) { setState("forbidden"); return; }
@@ -62,10 +72,46 @@ export default function Members() {
       setData(await r.json());
       setState("ready");
     } catch { setState("error"); }
-  }, [radius, cats]);
+  }, [radius, cats, q]);
 
   useEffect(() => { loadPrefs(); }, []);
   useEffect(() => { loadNetwork(); }, [loadNetwork]);
+
+  // One-tap: capture device location → save it as the member's shared location.
+  // (Farmers' accurate anchor is the farm they draw in Locations; this is the
+  // quick path + the operating/home location for non-farm members.)
+  const useMyLocation = () => {
+    if (typeof navigator === "undefined" || !navigator.geolocation) return;
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        try {
+          await fetch("/api/v1/me", {
+            method: "PATCH", headers: authHeaders(),
+            body: JSON.stringify({
+              share_location: true,
+              gps_lat: Number(pos.coords.latitude.toFixed(6)),
+              gps_lng: Number(pos.coords.longitude.toFixed(6)),
+            }),
+          });
+          await loadPrefs();
+          await loadNetwork();
+        } finally { setLocating(false); }
+      },
+      () => setLocating(false),
+      { enableHighAccuracy: true, timeout: 10000 },
+    );
+  };
+
+  // Focus a member's pin from its list row.
+  const focusMember = (id) => {
+    const mk = markersRef.current[id];
+    if (mk && mapRef.current) {
+      mapRef.current.setView(mk.getLatLng(), Math.max(mapRef.current.getZoom(), 13), { animate: true });
+      mk.openPopup();
+      elRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+  };
 
   // Init the map once the ready state mounts the map element.
   useEffect(() => {
@@ -89,6 +135,7 @@ export default function Members() {
   useEffect(() => {
     if (state !== "ready" || !mapRef.current || !layerRef.current) return;
     const lg = layerRef.current; lg.clearLayers();
+    markersRef.current = {};
     const bounds = [];
     // "You are here" — the viewer's own farm, so a solo user still sees the map populate.
     if (data.you && data.you.lat != null && data.you.lng != null) {
@@ -110,13 +157,14 @@ export default function Members() {
       if (m.lat == null || m.lng == null) return;
       const ll = [Number(m.lat), Number(m.lng)];
       bounds.push(ll);
-      const dist = m.distance_km != null ? `${m.distance_km} km away` : "distance: set your farm location";
-      L.circleMarker(ll, {
+      const dist = m.distance_km != null ? `${m.distance_km} km away` : "distance: set your location";
+      const mk = L.circleMarker(ll, {
         radius: 7, color: "#fff", weight: 1.5,
         fillColor: m.verified ? "var(--green)" : "#c79a3a", fillOpacity: 0.95,
       })
-        .bindPopup(`<strong>${m.name}</strong>${m.verified ? " &#10003;" : ""}<br/><span style="color:#888">${TYPE_LABEL[m.account_type] || m.account_type}</span><br/>${dist}<br/><span style="color:#888;font-size:11px">approx — within ~1 km</span>`)
+        .bindPopup(`<strong>${m.name}</strong>${m.verified ? " &#10003;" : ""}<br/><span style="color:#888">${TYPE_LABEL[m.account_type] || m.account_type}</span><br/>${dist}`)
         .addTo(lg);
+      markersRef.current[m.id] = mk;
     });
     if (bounds.length) mapRef.current.fitBounds(bounds, { padding: [40, 40], maxZoom: 12 });
   }, [data, state, radius]);
@@ -153,7 +201,7 @@ export default function Members() {
           <h1 className="text-xl font-bold" style={{ color: C.soil }}>Member network</h1>
         </div>
         <p className="text-sm mb-4" style={{ color: C.muted }}>
-          Verified members near you — exact distance, approximate pin. Connect with farmers, buyers and service providers around you.
+          Verified members near you — exact distance &amp; location. Search and connect with farmers, buyers, service providers and institutions around you.
         </p>
 
         {/* One-time consent notice */}
@@ -202,11 +250,33 @@ export default function Members() {
         {state === "ready" && (
           <>
             {!data.has_origin && (
-              <div className="rounded-xl px-4 py-3 mb-3 text-xs flex items-center gap-2" style={{ background: C.cream, color: C.soil, border: `1px solid ${C.line}` }}>
-                <MapPin size={14} style={{ color: C.greenDk }} />
-                Set your farm location (Farm → Map) to filter by distance and see exact distances.
+              <div className="rounded-xl px-4 py-3 mb-3 text-xs" style={{ background: C.cream, color: C.soil, border: `1px solid ${C.line}` }}>
+                <div className="flex items-center gap-2 mb-2">
+                  <MapPin size={14} style={{ color: C.greenDk }} />
+                  Set your location to filter by distance and appear on the map.
+                </div>
+                <button type="button" onClick={useMyLocation} disabled={locating}
+                  className="px-3 py-1.5 rounded-lg text-white text-xs font-semibold disabled:opacity-50 inline-flex items-center gap-1.5"
+                  style={{ background: C.green }}>
+                  <Crosshair size={13} /> {locating ? "Locating…" : "Use my current location"}
+                </button>
+                <span className="ml-2" style={{ color: C.muted }}>or draw your farm in Farm → Map</span>
               </div>
             )}
+
+            {/* Text search + one-tap locate */}
+            <div className="flex items-center gap-2 mb-3">
+              <div className="relative flex-1">
+                <Search size={14} style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: C.muted }} />
+                <input value={qInput} onChange={(e) => setQInput(e.target.value)} placeholder="Search by name or town…"
+                  className="w-full rounded-lg pl-8 pr-3 py-2 text-sm" style={{ border: `1px solid ${C.line}`, color: C.soil, outline: "none" }} />
+              </div>
+              <button type="button" onClick={useMyLocation} disabled={locating}
+                className="px-2.5 py-2 rounded-lg text-xs font-semibold inline-flex items-center gap-1.5 disabled:opacity-50"
+                style={{ border: `1px solid ${C.line}`, color: C.greenDk, background: "#fff", whiteSpace: "nowrap" }}>
+                <Crosshair size={13} /> {locating ? "Locating…" : "My location"}
+              </button>
+            </div>
 
             {/* Radius filter — within X km of you */}
             <div className="flex flex-wrap items-center gap-2 mb-2">
@@ -277,19 +347,30 @@ export default function Members() {
                 </p>
                 <div className="grid gap-2">
                   {nearest.map((m) => (
-                    <div key={m.id} className="flex items-center gap-3 rounded-xl px-3 py-2.5" style={{ background: "#fff", border: `1px solid ${C.line}` }}>
-                      <span className="flex items-center justify-center rounded-full shrink-0" style={{ width: 30, height: 30, background: C.cream }}>
-                        <MapPin size={14} style={{ color: C.greenDk }} />
-                      </span>
-                      <div className="flex-1 min-w-0">
-                        <div className="text-sm font-semibold truncate" style={{ color: C.soil }}>
-                          {m.name}{m.verified && <ShieldCheck size={12} style={{ color: C.greenDk, display: "inline", marginLeft: 4, verticalAlign: "middle" }} />}
+                    <div key={m.id} className="flex items-center gap-2 rounded-xl px-3 py-2.5" style={{ background: "#fff", border: `1px solid ${C.line}` }}>
+                      <button type="button" onClick={() => focusMember(m.id)}
+                        className="flex items-center gap-3 flex-1 min-w-0 text-left" style={{ background: "transparent", border: 0, padding: 0, cursor: "pointer" }}
+                        title="Show on map">
+                        <span className="flex items-center justify-center rounded-full shrink-0" style={{ width: 30, height: 30, background: C.cream }}>
+                          <MapPin size={14} style={{ color: C.greenDk }} />
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-semibold truncate" style={{ color: C.soil }}>
+                            {m.name}{m.verified && <ShieldCheck size={12} style={{ color: C.greenDk, display: "inline", marginLeft: 4, verticalAlign: "middle" }} />}
+                          </div>
+                          <div className="text-xs" style={{ color: C.muted }}>{TYPE_LABEL[m.account_type] || m.account_type}</div>
                         </div>
-                        <div className="text-xs" style={{ color: C.muted }}>{TYPE_LABEL[m.account_type] || m.account_type}</div>
-                      </div>
+                      </button>
                       <div className="text-sm font-semibold shrink-0" style={{ color: C.greenDk }}>
                         {m.distance_km != null ? `${m.distance_km} km` : "—"}
                       </div>
+                      {m.user_id && (
+                        <button type="button" onClick={() => openWith({ user_id: m.user_id, full_name: m.name, profession: m.account_type })}
+                          className="px-2.5 py-1.5 rounded-lg text-xs font-semibold inline-flex items-center gap-1 shrink-0"
+                          style={{ background: C.green, color: "#fff" }} title={`Message ${m.name}`}>
+                          <MessageCircle size={12} /> Connect
+                        </button>
+                      )}
                     </div>
                   ))}
                 </div>
