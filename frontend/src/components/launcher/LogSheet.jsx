@@ -148,7 +148,7 @@ function UniversalSection({ navigate, onClose }) {
   );
 }
 
-export default function LogSheet({ isOpen, onClose }) {
+export default function LogSheet({ isOpen, onClose, target = null }) {
   const navigate = useNavigate();
   const [data, setData] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -224,6 +224,22 @@ export default function LogSheet({ isOpen, onClose }) {
       cancelled = true;
     };
   }, [isOpen]);
+
+  // Deep-link: when opened with a target (e.g. a dashboard quick-action), jump
+  // straight to the right vertical + animal sub-flow. The verb/flock preselect is
+  // handed to CaptureEngine below. No target => normal grid (unchanged).
+  useEffect(() => {
+    if (isOpen && target?.vertical) {
+      setSelectedVertical(target.vertical);
+      if (target.animalSub) setAnimalSub(target.animalSub);
+    }
+  }, [isOpen, target]);
+
+  // Verb/flock preselect for CaptureEngine — only forwarded for the targeted
+  // sub-flow so a stale target never bleeds into another vertical.
+  const enginePreselect = target?.verbId || target?.itemId
+    ? { verbId: target.verbId, itemId: target.itemId }
+    : undefined;
 
   const events = data?.data?.events || [];
   // meta.active_groups present only when farm_id was passed to the endpoint (else
@@ -317,7 +333,8 @@ export default function LogSheet({ isOpen, onClose }) {
 
       {/* PLANT drills into the Universal Capture Engine (verb-first). */}
       {!isManage && !isLoading && !error && isLevel2 && selectedVertical === "PLANT" && (
-        <CaptureEngine config={cropsConfig} onDone={onClose} />
+        <CaptureEngine config={cropsConfig} onDone={onClose}
+          preselect={target?.vertical === "PLANT" ? enginePreselect : undefined} />
       )}
 
       {/* ANIMAL splits: pick the sub-flow (different anchor models). */}
@@ -348,10 +365,12 @@ export default function LogSheet({ isOpen, onClose }) {
 
       {/* POULTRY + LIVESTOCK each drill into the Capture Engine (different anchor models). */}
       {!isManage && !isLoading && !error && isLevel2 && selectedVertical === "ANIMAL" && animalSub === "POULTRY" && (
-        <CaptureEngine config={poultryConfig} onDone={onClose} />
+        <CaptureEngine config={poultryConfig} onDone={onClose}
+          preselect={target?.animalSub === "POULTRY" ? enginePreselect : undefined} />
       )}
       {!isManage && !isLoading && !error && isLevel2 && selectedVertical === "ANIMAL" && animalSub === "LIVESTOCK" && (
-        <CaptureEngine config={livestockConfig} onDone={onClose} />
+        <CaptureEngine config={livestockConfig} onDone={onClose}
+          preselect={target?.animalSub === "LIVESTOCK" ? enginePreselect : undefined} />
       )}
 
       {/* WHOLE-farm drills into the Money engine (cash-ledger) — no tile wall. */}

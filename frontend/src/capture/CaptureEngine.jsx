@@ -72,7 +72,7 @@ const DEFAULT_CONTEXT = {
   injectPayload: (c) => (c.production_id ? { production_id: c.production_id } : {}),
 };
 
-export default function CaptureEngine({ config = cropsConfig, onDone }) {
+export default function CaptureEngine({ config = cropsConfig, onDone, preselect }) {
   const navigate = useNavigate();
   const ctx = config.context || DEFAULT_CONTEXT;
   const [items, setItems] = useState([]);
@@ -117,6 +117,7 @@ export default function CaptureEngine({ config = cropsConfig, onDone }) {
   const mediaRef = useRef(null);
   const chunksRef = useRef([]);
   const timerRef = useRef(null);
+  const preAppliedRef = useRef(false);
 
   useEffect(() => {
     let off = false;
@@ -147,6 +148,24 @@ export default function CaptureEngine({ config = cropsConfig, onDone }) {
     })();
     return () => { off = true; };
   }, [ctx.loader]);
+
+  // Deep-link preselect (e.g. a dashboard quick-action opens the (+) already aimed
+  // at a verb and/or a specific flock). Applied exactly once; no preselect => the
+  // normal verb-grid flow is untouched. `route` verbs are skipped — a deep-link
+  // should never auto-navigate the user away from the sheet.
+  useEffect(() => {
+    if (preAppliedRef.current || !preselect) return;
+    preAppliedRef.current = true;
+    if (preselect.itemId) setItemId(preselect.itemId);
+    if (preselect.verbId) {
+      const v = (config.verbs || []).find((x) => x.id === preselect.verbId);
+      if (v && !v.route) {
+        setVerb(v); clearEntry();
+        setSpec(v.resolve.primary ? v.resolve.primary : null);
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [preselect]);
 
   const selectedItem = useMemo(
     () => items.find((c) => c[ctx.idKey] === itemId) || null, [items, itemId, ctx.idKey],

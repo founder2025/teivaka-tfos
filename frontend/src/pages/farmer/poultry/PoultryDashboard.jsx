@@ -11,6 +11,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { apiClient } from '../../../utils/apiClient';
 import EventCorrectModal from '../../../components/EventCorrectModal';
+import { useLauncher } from '../../../context/LauncherContext';
 
 // 48h correction window — gate the Edit affordance by server created_at.
 function within48h(createdAt) {
@@ -277,7 +278,7 @@ function FCRCard({ fcr }) {
 }
 
 function TrendsSection({ trends }) {
-  const navigate = useNavigate();
+  const { open: openLauncher } = useLauncher();
   if (!trends) return null;
 
   const eggsData = (trends.eggs_daily || []).map(d => ({ day: fmtDateShort(d.day), eggs: d.eggs }));
@@ -292,7 +293,7 @@ function TrendsSection({ trends }) {
         <div className="rounded-md border p-6 text-center" style={{ background: '#fff', borderColor: C.border }}>
           <div className="text-sm mb-2" style={{ color: C.soil }}>No trends data yet</div>
           <div className="text-xs mb-4" style={{ color: C.muted }}>Log eggs collected and feed used to see your operations chart up here.</div>
-          <button onClick={() => navigate('/farm/poultry/eggs/new')} className="px-3 py-2 rounded-md text-sm font-medium" style={{ background: C.green, color: '#fff' }}>
+          <button onClick={() => openLauncher({ vertical: 'ANIMAL', animalSub: 'POULTRY', verbId: 'eggs' })} className="px-3 py-2 rounded-md text-sm font-medium" style={{ background: C.green, color: '#fff' }}>
             Log eggs collected →
           </button>
         </div>

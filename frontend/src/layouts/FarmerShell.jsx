@@ -429,7 +429,7 @@ function ActiveTour({ cfg }) {
 // level so the (+) button on every page (mobile center + desktop pill +
 // Cmd/Ctrl+L) converges on one sheet instance.
 function LauncherSheet() {
-  const { sheetOpen, close } = useLauncher();
+  const { sheetOpen, target, close } = useLauncher();
   const { pathname } = useLocation();
   const { can } = useCapabilities();
   const cfg = getLauncher(pathname, can);
@@ -437,7 +437,7 @@ function LauncherSheet() {
   // render nothing so the (+) never opens an irrelevant/empty sheet.
   if (!cfg) return null;
   if (cfg.kind === "farmCatalog") {
-    return <LogSheet isOpen={sheetOpen} onClose={close} />;
+    return <LogSheet isOpen={sheetOpen} onClose={close} target={target} />;
   }
   return <ActionSheet isOpen={sheetOpen} onClose={close} title={cfg.title} actions={cfg.actions} />;
 }
