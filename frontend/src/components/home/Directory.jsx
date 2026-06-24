@@ -114,7 +114,7 @@ export default function Directory() {
                     <span className="pill grey" style={{ fontSize: 10.5 }}>{personaLabel(p.profession)}</span>
                     {p.country && <span>{p.country}</span>}
                     {p.member_since && <span>since {sinceYear(p.member_since)}</span>}
-                    {p.online ? <span style={{ color: "#2e7d32", fontWeight: 600 }}>online</span> : null}
+                    {p.online ? <span style={{ color: "var(--green)", fontWeight: 600 }}>online</span> : null}
                   </div>
                   {p.bio && <div style={{ fontSize: 12.5, color: "var(--soil)", marginTop: 4, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>{p.bio}</div>}
                   {(p.active_listings > 0 || p.wanted_count > 0) && (

@@ -438,14 +438,14 @@ export default function CaptureEngine({ config = cropsConfig, onDone, onBack, pr
   const fieldLabel = { display: "block", fontSize: 13, fontWeight: 600, marginBottom: 6, color: "#5a5a4a" };
   const inputBox = { width: "100%", padding: 11, borderRadius: 10, border: "1px solid #d8d4c8", fontSize: 14 };
   const evBtn = (active) => ({ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4,
-    padding: "12px 6px", borderRadius: 12, border: active ? "2px solid #2e7d32" : "1px dashed #cfc7b5",
+    padding: "12px 6px", borderRadius: 12, border: active ? "2px solid var(--green)" : "1px dashed #cfc7b5",
     background: active ? "#eaf3ea" : "#fff", cursor: "pointer", fontSize: 12 });
 
   // --- success ---
   if (result) return (
     <div style={wrap}>
       <div style={{ textAlign: "center", padding: "24px 0 8px" }}>
-        <Check size={56} style={{ color: "#2e7d32" }} />
+        <Check size={56} style={{ color: "var(--green)" }} />
         <h2 style={{ fontSize: 20, fontWeight: 700, marginTop: 12 }}>{editSaved ? "Correction saved" : "Saved"}</h2>
         <p style={{ color: "#6b6b6b", fontSize: 13, marginTop: 6 }}>
           Recorded {result.event_id}{result.audit_hash ? ` · ${result.audit_hash.slice(0, 12)}…` : ""}</p>
@@ -454,7 +454,7 @@ export default function CaptureEngine({ config = cropsConfig, onDone, onBack, pr
       {canEditResult && !editOpen && (
         <div style={{ ...card, textAlign: "center" }}>
           <p style={{ fontSize: 12.5, color: "#7a7363", marginBottom: 10 }}>Made a mistake? You can fix this for 48 hours — every change is logged.</p>
-          <button onClick={openEdit} style={{ background: "none", border: "1px solid #d8d4c8", borderRadius: 12, padding: "10px 16px", fontWeight: 600, cursor: "pointer", color: "#3c5a3c" }}>Edit note / photo</button>
+          <button onClick={openEdit} style={{ background: "none", border: "1px solid #d8d4c8", borderRadius: 12, padding: "10px 16px", fontWeight: 600, cursor: "pointer", color: "var(--green-dk)" }}>Edit note / photo</button>
         </div>
       )}
 
@@ -478,14 +478,14 @@ export default function CaptureEngine({ config = cropsConfig, onDone, onBack, pr
           {error && <p style={{ color: "#9a3b3b", fontSize: 13, marginBottom: 10 }}>{error}</p>}
           <div style={{ display: "flex", gap: 10 }}>
             <button onClick={() => setEditOpen(false)} style={{ flex: 1, padding: 12, borderRadius: 12, border: "1px solid #d8d4c8", background: "#fff", cursor: "pointer" }}>Cancel</button>
-            <button onClick={saveEdit} disabled={editBusy || editPhotoUploading} style={{ flex: 1, padding: 12, borderRadius: 12, border: "none", background: "#2e7d32", color: "#fff", fontWeight: 700, cursor: "pointer" }}>{editBusy ? "Saving…" : "Save changes"}</button>
+            <button onClick={saveEdit} disabled={editBusy || editPhotoUploading} style={{ flex: 1, padding: 12, borderRadius: 12, border: "none", background: "var(--green)", color: "#fff", fontWeight: 700, cursor: "pointer" }}>{editBusy ? "Saving…" : "Save changes"}</button>
           </div>
         </div>
       )}
 
       <button onClick={goBack} style={{ ...tile, justifyContent: "center", marginTop: 12 }}><Plus size={18} /> Log something else</button>
       {onDone && (
-        <button onClick={onDone} style={{ ...tile, justifyContent: "center", marginTop: 0, background: "#2e7d32", color: "#fff", border: "none" }}>
+        <button onClick={onDone} style={{ ...tile, justifyContent: "center", marginTop: 0, background: "var(--green)", color: "#fff", border: "none" }}>
           <Check size={18} /> Done
         </button>
       )}
@@ -499,7 +499,7 @@ export default function CaptureEngine({ config = cropsConfig, onDone, onBack, pr
       <p style={{ color: "#6b6b6b", fontSize: 13, marginBottom: 18 }}>Tap one.</p>
       {config.verbs.map((v) => { const I = ICONS[v.icon] || Eye; return (
         <button key={v.id} style={tile} onClick={() => pickVerb(v)}>
-          <span style={iconBox}><I size={22} style={{ color: "#3c5a3c" }} /></span>
+          <span style={iconBox}><I size={22} style={{ color: "var(--green-dk)" }} /></span>
           <span><span style={{ display: "block", fontWeight: 700, fontSize: 16 }}>{v.label}</span>
             <span style={{ display: "block", color: "#8a8a8a", fontSize: 12.5 }}>{v.descriptor}</span></span>
         </button>); })}
@@ -544,7 +544,7 @@ export default function CaptureEngine({ config = cropsConfig, onDone, onBack, pr
           {f.options.map((o) => (
             <button key={o.value} onClick={() => toggle(o.value)}
               style={{ padding: "10px 14px", borderRadius: 12, fontSize: 14, fontWeight: 600,
-                border: arr.includes(o.value) ? "2px solid #2e7d32" : "1px solid #d8d4c8",
+                border: arr.includes(o.value) ? "2px solid var(--green)" : "1px solid #d8d4c8",
                 background: arr.includes(o.value) ? "#eaf3ea" : "#fff", cursor: "pointer" }}>{o.label}</button>
           ))}
         </div>
@@ -566,7 +566,7 @@ export default function CaptureEngine({ config = cropsConfig, onDone, onBack, pr
                 {filtered.map((x) => (
                   <button key={x.library_id} onClick={() => setVal(f.name, x.library_id)}
                     style={{ textAlign: "left", padding: "10px 12px", borderRadius: 10,
-                      border: v === x.library_id ? "2px solid #2e7d32" : "1px solid #d8d4c8",
+                      border: v === x.library_id ? "2px solid var(--green)" : "1px solid #d8d4c8",
                       background: v === x.library_id ? "#eaf3ea" : "#fff", cursor: "pointer", fontWeight: 600, fontSize: 14 }}>
                     {x.name}{x.is_global ? <span style={{ fontSize: 11, color: "#8a8a8a", fontWeight: 400 }}> · standard</span> : null}
                   </button>
@@ -592,7 +592,7 @@ export default function CaptureEngine({ config = cropsConfig, onDone, onBack, pr
                 {filtered.map((c) => (
                   <button key={c.chemical_id} onClick={() => pickChemical(f.name, c)}
                     style={{ textAlign: "left", padding: "10px 12px", borderRadius: 10,
-                      border: v === c.chemical_id ? "2px solid #2e7d32" : "1px solid #d8d4c8",
+                      border: v === c.chemical_id ? "2px solid var(--green)" : "1px solid #d8d4c8",
                       background: v === c.chemical_id ? "#eaf3ea" : "#fff", cursor: "pointer" }}>
                     <span style={{ fontWeight: 600, fontSize: 14, display: "block" }}>{c.chem_name}</span>
                     <span style={{ fontSize: 12, color: "#8a8a8a" }}>
@@ -614,7 +614,7 @@ export default function CaptureEngine({ config = cropsConfig, onDone, onBack, pr
         {f.options.map((o) => (
           <button key={o.value} onClick={() => setVal(f.name, o.value)}
             style={{ padding: "12px 18px", borderRadius: 12, fontSize: 15, fontWeight: 600,
-              border: v === o.value ? "2px solid #2e7d32" : "1px solid #d8d4c8",
+              border: v === o.value ? "2px solid var(--green)" : "1px solid #d8d4c8",
               background: v === o.value ? "#eaf3ea" : "#fff", cursor: "pointer" }}>{o.label}</button>
         ))}
       </div>
@@ -675,20 +675,20 @@ export default function CaptureEngine({ config = cropsConfig, onDone, onBack, pr
             <div style={cardHead}>Evidence · lifts verification</div>
             <div style={{ display: "flex", gap: 8 }}>
               <label style={evBtn(!!photoUrl)}>
-                <Camera size={20} style={{ color: photoUrl ? "#2e7d32" : "#9a917c" }} />
+                <Camera size={20} style={{ color: photoUrl ? "var(--green)" : "#9a917c" }} />
                 <span style={{ fontWeight: 600 }}>{photoUploading ? "…" : photoUrl ? "Photo ✓" : "Photo"}</span>
                 <input type="file" accept="image/*" capture="environment" style={{ display: "none" }} onChange={(e) => uploadPhoto(e.target.files?.[0])} />
               </label>
               <button type="button" onClick={captureGps} style={evBtn(!!gps)}>
-                <MapPin size={20} style={{ color: gps ? "#2e7d32" : "#9a917c" }} />
+                <MapPin size={20} style={{ color: gps ? "var(--green)" : "#9a917c" }} />
                 <span style={{ fontWeight: 600 }}>{gps ? "GPS ✓" : gpsStatus === "locating" ? "…" : "GPS"}</span>
               </button>
               <button type="button" onClick={recording ? stopRec : startRec} style={evBtn(!!voiceUrl || recording)}>
-                {recording ? <Square size={20} style={{ color: "#9a3b3b" }} /> : <Mic size={20} style={{ color: voiceUrl ? "#2e7d32" : "#9a917c" }} />}
+                {recording ? <Square size={20} style={{ color: "#9a3b3b" }} /> : <Mic size={20} style={{ color: voiceUrl ? "var(--green)" : "#9a917c" }} />}
                 <span style={{ fontWeight: 600 }}>{recording ? `Stop ${mmss(recSecs)}` : voiceUploading ? "…" : voiceUrl ? "Voice ✓" : "Voice"}</span>
               </button>
               <button type="button" onClick={() => setShowWitness((s) => !s)} style={evBtn(!!witnessName.trim())}>
-                <Users size={20} style={{ color: witnessName.trim() ? "#2e7d32" : "#9a917c" }} />
+                <Users size={20} style={{ color: witnessName.trim() ? "var(--green)" : "#9a917c" }} />
                 <span style={{ fontWeight: 600 }}>{witnessName.trim() ? "Witness ✓" : "Witness"}</span>
               </button>
             </div>
@@ -714,7 +714,7 @@ export default function CaptureEngine({ config = cropsConfig, onDone, onBack, pr
           {/* Event-specific fields */}
           {quick.map((f) => <div key={f.name} style={{ marginBottom: 18 }}>
             <label style={fieldLabel}>{f.ask}</label>{fieldInput(f)}</div>)}
-          {detail.length > 0 && !showDetail && <button onClick={() => setShowDetail(true)} style={{ background: "none", border: "none", color: "#3c5a3c", fontWeight: 600, cursor: "pointer", marginBottom: 16 }}>+ Add detail</button>}
+          {detail.length > 0 && !showDetail && <button onClick={() => setShowDetail(true)} style={{ background: "none", border: "none", color: "var(--green-dk)", fontWeight: 600, cursor: "pointer", marginBottom: 16 }}>+ Add detail</button>}
           {showDetail && detail.map((f) => <div key={f.name} style={{ marginBottom: 18 }}>
             <label style={fieldLabel}>{f.ask}</label>{fieldInput(f)}</div>)}
 
@@ -726,7 +726,7 @@ export default function CaptureEngine({ config = cropsConfig, onDone, onBack, pr
           </div>
 
           {/* About to record — the audit preview */}
-          <div style={{ border: "1px solid #cfe0cf", background: "#f0f6f0", borderRadius: 12, padding: "10px 12px", marginBottom: 14, fontSize: 12.5, color: "#3c5a3c" }}>
+          <div style={{ border: "1px solid #cfe0cf", background: "#f0f6f0", borderRadius: 12, padding: "10px 12px", marginBottom: 14, fontSize: 12.5, color: "var(--green-dk)" }}>
             <div style={{ fontWeight: 700, marginBottom: 4, display: "flex", alignItems: "center", gap: 6 }}><ShieldCheck size={14} /> About to record</div>
             {spec.event_type} · {selectedItem ? ctx.shortLabel(selectedItem) : "—"} · {prettyDate(occurredDate)} {occurredTime} · {operator || "You"}
             {(() => { const e = [photoUrl && "photo", gps && "GPS", voiceUrl && "voice", witnessName.trim() && "witness"].filter(Boolean); return e.length ? ` · +${e.join(" +")}` : ""; })()}
@@ -739,7 +739,7 @@ export default function CaptureEngine({ config = cropsConfig, onDone, onBack, pr
           )}
           <button onClick={submit} disabled={submitting || !selectedItem || photoUploading || voiceUploading || recording}
             style={{ width: "100%", padding: 16, borderRadius: 14, border: "none", fontSize: 16, fontWeight: 700, color: "#fff",
-              background: (!selectedItem || photoUploading || voiceUploading || recording) ? "#b8b8b8" : "#2e7d32",
+              background: (!selectedItem || photoUploading || voiceUploading || recording) ? "#b8b8b8" : "var(--green)",
               cursor: submitting || !selectedItem ? "default" : "pointer",
               display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
             {submitting ? <Loader2 size={18} /> : <Check size={18} />}{submitting ? "Saving…" : "Save"}</button>

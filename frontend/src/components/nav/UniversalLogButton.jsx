@@ -5,7 +5,7 @@ import { useLauncher } from "../../context/LauncherContext";
 
 const C = {
   green:     "var(--green)",
-  greenDark: "#568A3F",
+  greenDark: "var(--green-dk)",
 };
 
 /**

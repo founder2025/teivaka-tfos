@@ -114,7 +114,7 @@ export default function Landing() {
           padding: "13px 20px",
           borderRadius: 999,
           border: "none",
-          background: "#6AA84F",
+          background: "var(--green)",
           color: "#fff",
           fontWeight: 700,
           fontSize: 15,

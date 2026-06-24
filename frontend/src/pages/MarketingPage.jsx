@@ -21,8 +21,8 @@ const COLORS = {
   cream:    "#F8F3E9",
   cream2:   "#EFE8D8",
   paper:    "#FFFFFF",
-  green:    "#6AA84F",
-  greenDk:  "#4F8A37",
+  green:    "var(--green)",
+  greenDk:  "var(--green-dk)",
   soil:     "#5C4033",
   soil2:    "#7A5C4E",
   amber:    "#BF9000",
@@ -628,7 +628,7 @@ function Icon({ name, style, className }) {
 // inline-styled marketing shell. Tokens declared once as CSS custom properties.
 const OFP_CSS = `
 .ofp{
-  --cream:#F8F3E9;--green:#6AA84F;--green-deep:#3F6B2C;
+  --cream:#F8F3E9;--green:var(--green);--green-deep:#3F6B2C;
   --soil:#5C4033;--soil-ink:#3A2820;--cream-deep:#EFE6D4;--sand:#C2A878;
   --serif:'DM Serif Display','IBM Plex Serif',Georgia,serif;
   --mono:'IBM Plex Mono','SF Mono',Menlo,monospace;
@@ -858,7 +858,7 @@ function OurFarmsPage({ navigate }) {
 
 const TVM_CSS = `
 .tvm{
-  --cream:#F8F3E9;--green:#6AA84F;--green-deep:#3F6B2C;--soil:#5C4033;
+  --cream:#F8F3E9;--green:var(--green);--green-deep:#3F6B2C;--soil:#5C4033;
   --soil-ink:#3A2820;--cream-deep:#EFE6D4;--green-mist:#C9DFB0;--amber:#BF9000;
   --serif:'DM Serif Display','IBM Plex Serif',Georgia,serif;
   --mono:'IBM Plex Mono','SF Mono',Menlo,monospace;
@@ -1141,7 +1141,7 @@ const NSG_CSS = `
     radial-gradient(circle at 88% 82%, rgba(191,144,0,0.14), transparent 44%),
     #F8F3E9;
   font-family:'IBM Plex Sans',-apple-system,BlinkMacSystemFont,sans-serif;
-  --cream:#F8F3E9;--green:#6AA84F;--green-deep:#3F6B2C;--soil:#5C4033;
+  --cream:#F8F3E9;--green:var(--green);--green-deep:#3F6B2C;--soil:#5C4033;
   --soil-ink:#3A2820;--cream-deep:#EFE6D4;--green-mist:#C9DFB0;--amber:#BF9000;
   --serif:'DM Serif Display','IBM Plex Serif',Georgia,serif;
   --mono:'IBM Plex Mono','SF Mono',Menlo,monospace;
@@ -1591,7 +1591,7 @@ function TFOSPage({ navigate }) {
             <div key={p.n} className="tvm-card" style={{ marginTop: 22, textAlign: "left" }}>
               <span className="tvm-tag">Pillar {p.n}</span>
               <h3 style={{ marginTop: 8 }}>{p.name}</h3>
-              <p style={{ color: "#4F8A37", fontWeight: 600, margin: "2px 0 12px" }}>{p.subtitle}</p>
+              <p style={{ color: "var(--green-dk)", fontWeight: 600, margin: "2px 0 12px" }}>{p.subtitle}</p>
               <p><strong>The problem.</strong> {p.problem}</p>
               <p style={{ marginTop: 10 }}><strong>What it does</strong></p>
               <ul style={{ margin: "12px 0 0", paddingLeft: 20, color: "#5C4033", lineHeight: 1.75, fontSize: 15.5 }}>
@@ -2038,9 +2038,9 @@ export default function MarketingPage({ pageKey }) {
     gap: 6,
     padding: "8px 14px",
     borderRadius: 6,
-    border: "1px solid #6AA84F",
+    border: "1px solid var(--green)",
     background: "#fff",
-    color: "#6AA84F",
+    color: "var(--green)",
     fontSize: 13,
     fontWeight: 600,
     cursor: "pointer",
@@ -2053,8 +2053,8 @@ export default function MarketingPage({ pageKey }) {
     gap: 6,
     padding: "8px 14px",
     borderRadius: 6,
-    border: "1px solid #6AA84F",
-    background: "#6AA84F",
+    border: "1px solid var(--green)",
+    background: "var(--green)",
     color: "#fff",
     fontSize: 13,
     fontWeight: 600,
@@ -2150,8 +2150,8 @@ export default function MarketingPage({ pageKey }) {
           <section className="fdr-quote">
             <style>{`
 .fdr-quote{max-width:760px;margin:0 auto;padding:48px 0 40px;border-bottom:1px solid rgba(92,64,51,0.12);background:#F8F3E9}
-.fdr-quote .fdr-label{font-family:'IBM Plex Mono','SF Mono',Menlo,monospace;font-size:11px;letter-spacing:0.13em;text-transform:uppercase;color:#6AA84F;margin:0 0 18px}
-.fdr-quote .fdr-bq{font-family:'IBM Plex Serif',Georgia,serif;font-style:italic;font-size:19px;line-height:1.65;color:#5C4033;margin:0;border-left:3px solid #6AA84F;padding-left:24px}
+.fdr-quote .fdr-label{font-family:'IBM Plex Mono','SF Mono',Menlo,monospace;font-size:11px;letter-spacing:0.13em;text-transform:uppercase;color:var(--green);margin:0 0 18px}
+.fdr-quote .fdr-bq{font-family:'IBM Plex Serif',Georgia,serif;font-style:italic;font-size:19px;line-height:1.65;color:#5C4033;margin:0;border-left:3px solid var(--green);padding-left:24px}
 .fdr-quote .fdr-attr{font-family:'IBM Plex Sans',-apple-system,BlinkMacSystemFont,sans-serif;font-size:14px;font-weight:600;color:#5C4033;margin-top:24px;padding-left:24px;text-align:left}
 @media (max-width:640px){
   .fdr-quote .fdr-bq{font-size:17px}
@@ -2171,9 +2171,9 @@ export default function MarketingPage({ pageKey }) {
 .wwd .wwd-lead{max-width:820px;margin:0 0 8px;font-family:'IBM Plex Sans',-apple-system,BlinkMacSystemFont,sans-serif;font-size:18px;line-height:1.6;color:#5C4033}
 .wwd .wwd-cards{display:grid;grid-template-columns:repeat(2,1fr);gap:22px;margin:30px 0 8px}
 .wwd .wwd-card{background:#FBF8F1;border:1px solid rgba(92,64,51,0.16);border-radius:10px;padding:30px 28px}
-.wwd .wwd-card .wwd-lt{font-family:'IBM Plex Mono','SF Mono',Menlo,monospace;font-size:11px;color:#4F8A37;letter-spacing:0.12em;text-transform:uppercase;font-weight:600}
+.wwd .wwd-card .wwd-lt{font-family:'IBM Plex Mono','SF Mono',Menlo,monospace;font-size:11px;color:var(--green-dk);letter-spacing:0.12em;text-transform:uppercase;font-weight:600}
 .wwd .wwd-card h3{font-family:'IBM Plex Serif',Georgia,serif;font-size:22px;font-weight:600;line-height:1.1;margin:10px 0 2px;color:#241910}
-.wwd .wwd-card .wwd-st{color:#4F8A37;font-weight:600;font-size:14px;margin:0 0 12px}
+.wwd .wwd-card .wwd-st{color:var(--green-dk);font-weight:600;font-size:14px;margin:0 0 12px}
 .wwd .wwd-card p{font-size:14.5px;color:#5C4033;line-height:1.6;margin:0}
 .wwd .wwd-card ul{margin:12px 0 0;padding-left:18px;color:#5C4033;line-height:1.7;font-size:14px}
 .wwd .wwd-h2{font-family:'IBM Plex Serif',Georgia,serif;font-size:24px;font-weight:600;color:#241910;margin:42px 0 10px}
@@ -2235,9 +2235,9 @@ export default function MarketingPage({ pageKey }) {
 .tm .tm-sec{margin-bottom:40px}
 .tm .tm-h2{font-family:'IBM Plex Serif',Georgia,serif;font-weight:600;font-size:22px;color:#5C4033;margin:0 0 14px}
 .tm .tm-name{font-family:'IBM Plex Serif',Georgia,serif;font-weight:600;font-size:20px;color:#241910;margin:0 0 2px}
-.tm .tm-role{font-family:'IBM Plex Mono','SF Mono',Menlo,monospace;font-size:12px;letter-spacing:0.04em;color:#6AA84F;margin:0 0 12px}
+.tm .tm-role{font-family:'IBM Plex Mono','SF Mono',Menlo,monospace;font-size:12px;letter-spacing:0.04em;color:var(--green);margin:0 0 12px}
 .tm .tm-bio{margin:0 0 14px;color:#2A2118;line-height:1.6}
-.tm .tm-link{display:inline-block;color:#4F8A37;text-decoration:underline;font-size:15px;cursor:pointer;background:none;border:none;padding:0;font-family:inherit}
+.tm .tm-link{display:inline-block;color:var(--green-dk);text-decoration:underline;font-size:15px;cursor:pointer;background:none;border:none;padding:0;font-family:inherit}
 `}</style>
             <section className="tm-sec">
               <h2 className="tm-h2">Founder</h2>
@@ -2262,7 +2262,7 @@ export default function MarketingPage({ pageKey }) {
             <style>{`
 .ct-social .ct-social-row{display:flex;align-items:center;gap:18px;margin-top:14px}
 .ct-social .ct-social-row a{display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;color:#5C4033;transition:color .2s;text-decoration:none}
-.ct-social .ct-social-row a:hover{color:#6AA84F}
+.ct-social .ct-social-row a:hover{color:var(--green)}
 .ct-social .ct-social-row svg{width:24px;height:24px;display:block}
 `}</style>
             <h2 style={h2Style}>Connect</h2>
@@ -2344,14 +2344,14 @@ const TVF_CSS = `
 .tvf-footer .tvf-brand{display:inline-flex;align-items:center;gap:11px;margin-bottom:16px;text-decoration:none;cursor:pointer}
 .tvf-footer .tvf-brand img{height:32px;width:auto;display:block}
 .tvf-footer .tvf-tagline{max-width:300px;line-height:1.6;margin:0;color:rgba(248,243,233,0.6)}
-.tvf-footer .tvf-col h4{font-family:'IBM Plex Mono','SF Mono',Menlo,monospace;font-size:11px;letter-spacing:0.13em;text-transform:uppercase;color:#6AA84F;margin:0 0 16px;font-weight:500}
+.tvf-footer .tvf-col h4{font-family:'IBM Plex Mono','SF Mono',Menlo,monospace;font-size:11px;letter-spacing:0.13em;text-transform:uppercase;color:var(--green);margin:0 0 16px;font-weight:500}
 .tvf-footer .tvf-col a{display:block;color:rgba(248,243,233,0.6);padding:5px 0;font-size:14px;cursor:pointer;text-decoration:none}
 .tvf-footer .tvf-col a:hover{color:#F8F3E9}
 .tvf-footer .tvf-col a.tvf-thework{color:#C9DFB0;font-weight:500}
 .tvf-footer .tvf-col a.tvf-thework:hover{color:#E0EFCB}
 .tvf-footer .tvf-legal{display:flex;flex-wrap:wrap;gap:24px;padding-top:26px;font-family:'IBM Plex Mono','SF Mono',Menlo,monospace;font-size:12px}
 .tvf-footer .tvf-legal a{color:rgba(248,243,233,0.6);text-decoration:none;letter-spacing:0.03em;transition:color .2s;cursor:pointer}
-.tvf-footer .tvf-legal a:hover{color:#6AA84F}
+.tvf-footer .tvf-legal a:hover{color:var(--green)}
 .tvf-footer .tvf-bottom{display:flex;justify-content:space-between;padding-top:28px;font-family:'IBM Plex Mono','SF Mono',Menlo,monospace;font-size:12px;color:rgba(248,243,233,0.45);flex-wrap:wrap;gap:12px}
 @media (max-width:768px){
   .tvf-footer .tvf-grid{grid-template-columns:1fr}
@@ -2359,7 +2359,7 @@ const TVF_CSS = `
 }
 .tvf-footer .tvf-social{display:flex;align-items:center;gap:16px;margin-top:16px;padding-top:16px;border-top:1px solid rgba(248,243,233,0.28)}
 .tvf-footer .tvf-social a{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;padding:0;color:rgba(248,243,233,0.6);transition:color .2s;cursor:pointer}
-.tvf-footer .tvf-social a:hover{color:#6AA84F}
+.tvf-footer .tvf-social a:hover{color:var(--green)}
 .tvf-footer .tvf-social svg{width:20px;height:20px;display:block}
 `;
 

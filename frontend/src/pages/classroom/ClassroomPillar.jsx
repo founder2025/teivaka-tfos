@@ -35,7 +35,7 @@ const toast = (message, type) => { try { window.dispatchEvent(new CustomEvent("t
 const COVER_PALETTE = [
   "linear-gradient(135deg,var(--green),#3d6b2e)",   // field green
   "linear-gradient(135deg,var(--amber),#7a5c00)",   // harvest amber
-  "linear-gradient(135deg,#2e7d6b,#174f42)",   // taro leaf teal
+  "linear-gradient(135deg,var(--green),#174f42)",   // taro leaf teal
   "linear-gradient(135deg,#7b5ea7,#4a3168)",   // eggplant violet
   "linear-gradient(135deg,#c0603a,#83402a)",   // terracotta soil
   "linear-gradient(135deg,#3a7ca5,#235a7c)",   // lagoon blue

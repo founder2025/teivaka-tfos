@@ -5,17 +5,24 @@
 /* ── TFOS Global Styles ─────────────────────────────────────────────────────── */
 
 :root {
-  --color-soil:   #2C1A0E;
-  --color-green:  #3D8C40;
-  --color-cream:  #F5EFE0;
-  --color-gold:   #D4A017;
-  --color-slate:  #1A1F2E;
-  --color-border: #E0D5C0;
+  /* ── Ocean Teal theme (aliased over the legacy token names so the whole app
+     re-themes without per-component edits). Light-only. ────────────────────── */
+  --teal:#0BAF9A; --teal-600:#0A7D6F; --navy:#0B1F33; --cloud:#F8FAFC; --graphite:#1F2937;
+  --growth:#22C55E; --coral:#EF4444; --coral-600:#DC2626;
+  --font-sans:'Inter',system-ui,-apple-system,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;
+  --font-mono:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+
+  --color-soil:   #1F2937;   /* text/icons → graphite */
+  --color-green:  #0A7D6F;   /* brand (white-text safe) → teal-600 */
+  --color-cream:  #F8FAFC;   /* light surface → cloud */
+  --color-gold:   #C9892B;   /* trial/premium accent (kept warm, off-brand on purpose) */
+  --color-slate:  #0B1F33;   /* deep surface → trust navy */
+  --color-border: #E2E8F0;
 
   /* Farmer-shell palette (PALETTE_FARM): used by event-catalog (+) UI and farmer-facing surfaces. */
-  --green: #6AA84F;
-  --cream: #F8F3E9;
-  --soil:  #5C4033;
+  --green: #0A7D6F;
+  --cream: #F8FAFC;
+  --soil:  #1F2937;
 }
 
 /* Dark mode: flip the global --color-* namespace (body bg/text + auth/marketing
@@ -54,12 +61,15 @@ html {
 }
 
 body {
-  font-family: 'Lora', Georgia, serif;
+  font-family: var(--font-sans);
   background-color: var(--color-cream);
   color: var(--color-soil);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
+
+/* Codes, IDs, audit hashes, money figures — JetBrains Mono. */
+.mono { font-family: var(--font-mono); }
 
 /* ── Leaflet map fix ────────────────────────────────────────────────────────── */
 .leaflet-container {

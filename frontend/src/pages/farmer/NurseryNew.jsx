@@ -223,14 +223,14 @@ export default function NurseryNew() {
       </div>
 
       {/* About to record — the audit preview */}
-      <div style={{ border: "1px solid #cfe0cf", background: "#f0f6f0", borderRadius: 12, padding: "10px 12px", marginBottom: 14, fontSize: 12.5, color: "#3c5a3c" }}>
+      <div style={{ border: "1px solid #cfe0cf", background: "#f0f6f0", borderRadius: 12, padding: "10px 12px", marginBottom: 14, fontSize: 12.5, color: "var(--green-dk)" }}>
         <div style={{ fontWeight: 700, marginBottom: 4, display: "flex", alignItems: "center", gap: 6 }}><ShieldCheck size={14} /> About to record</div>
         NURSERY_BATCH_CREATED · {cropName || "—"} · {totalSeeds || "0"} seeds · {prettyDate(sowingDate)} · You
       </div>
 
       <button onClick={submit} disabled={submitting || !ready}
         style={{ width: "100%", padding: 16, borderRadius: 14, border: "none", fontSize: 16, fontWeight: 700, color: "#fff",
-          background: (!ready) ? "#b8b8b8" : "#2e7d32", cursor: submitting || !ready ? "default" : "pointer",
+          background: (!ready) ? "#b8b8b8" : "var(--green)", cursor: submitting || !ready ? "default" : "pointer",
           display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
         {submitting ? <Loader2 size={18} /> : <Check size={18} />}{submitting ? "Saving…" : "Log nursery batch"}
       </button>

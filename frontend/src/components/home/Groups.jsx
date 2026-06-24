@@ -29,7 +29,7 @@ const CAT_LABEL = Object.fromEntries(CATEGORIES);
 
 const COVERS = [
   "linear-gradient(135deg,var(--green),#3d6b2e)", "linear-gradient(135deg,var(--amber),#7a5c00)",
-  "linear-gradient(135deg,#2e7d6b,#174f42)", "linear-gradient(135deg,#7b5ea7,#4a3168)",
+  "linear-gradient(135deg,var(--green),#174f42)", "linear-gradient(135deg,#7b5ea7,#4a3168)",
   "linear-gradient(135deg,#c0603a,#83402a)", "linear-gradient(135deg,#3a7ca5,#235a7c)",
 ];
 function coverFor(name) {

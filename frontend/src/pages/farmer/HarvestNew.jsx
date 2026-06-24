@@ -395,14 +395,14 @@ export default function HarvestNew() {
       )}
 
       {/* About to record — the audit preview */}
-      <div style={{ border: "1px solid #cfe0cf", background: "#f0f6f0", borderRadius: 12, padding: "10px 12px", marginBottom: 14, fontSize: 12.5, color: "#3c5a3c" }}>
+      <div style={{ border: "1px solid #cfe0cf", background: "#f0f6f0", borderRadius: 12, padding: "10px 12px", marginBottom: 14, fontSize: 12.5, color: "var(--green-dk)" }}>
         <div style={{ fontWeight: 700, marginBottom: 4, display: "flex", alignItems: "center", gap: 6 }}><ShieldCheck size={14} /> About to record</div>
         HARVEST_LOGGED · {cropName || "—"} · {qtyKg || "0"} kg · Grade {grade} · {prettyDate(harvestDate)} · You
       </div>
 
       <button onClick={onSubmit} disabled={!canSubmit}
         style={{ width: "100%", padding: 16, borderRadius: 14, border: "none", fontSize: 16, fontWeight: 700, color: "#fff",
-          background: canSubmit ? "#2e7d32" : "#b8b8b8", cursor: canSubmit ? "pointer" : "default",
+          background: canSubmit ? "var(--green)" : "#b8b8b8", cursor: canSubmit ? "pointer" : "default",
           display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
         {submitting ? <Loader2 size={18} /> : <Check size={18} />}{submitting ? "Logging harvest…" : "Log harvest"}
       </button>
