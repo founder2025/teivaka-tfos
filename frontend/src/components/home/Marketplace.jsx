@@ -72,11 +72,16 @@ function NewListingModal({ onClose, onCreated }) {
   const [gps, setGps] = useState([]);
   const fileRef = useRef();
   const set = (k, v) => setF((s) => ({ ...s, [k]: v }));
-  // Crop catalog (for the price-hint picker) — fetched once. Shape-robust:
-  // the endpoint may return a bare array or {data:[...]}.
+  // Crop catalog (for the price-hint picker) — fetched once. The endpoint wraps
+  // the list in success_envelope → {data:{productions:[...], count}}. Extract the
+  // array defensively and ALWAYS store an array (a non-array here = prods.map crash).
   useEffect(() => {
     getJSON("/api/v1/productions")
-      .then((r) => setProds(Array.isArray(r) ? r : (r?.data || [])))
+      .then((r) => {
+        const arr = r?.data?.productions
+          ?? (Array.isArray(r?.data) ? r.data : (Array.isArray(r) ? r : []));
+        setProds(Array.isArray(arr) ? arr : []);
+      })
       .catch(() => setProds([]));
   }, []);
   const onPickProd = async (id) => {
@@ -160,7 +165,7 @@ function NewListingModal({ onClose, onCreated }) {
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
               <select style={inp} value={f.production_id} onChange={(e) => onPickProd(e.target.value)}>
                 <option value="">{f.category === "WANTED" ? "Which crop are you looking for?" : "Which crop? (optional — shows the market price)"}</option>
-                {prods.map((p) => <option key={p.production_id} value={p.production_id}>{p.production_name}</option>)}
+                {(Array.isArray(prods) ? prods : []).map((p) => <option key={p.production_id} value={p.production_id}>{p.production_name}</option>)}
               </select>
               {mkt && mkt.avg_price_fjd != null && (
                 <div style={{ fontSize: 12, color: "var(--green-dk)", display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
