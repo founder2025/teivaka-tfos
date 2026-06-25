@@ -8,8 +8,10 @@ from decimal import Decimal
 from datetime import datetime, date
 from typing import Optional, List
 import uuid
+import logging
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 class OrderLineItem(BaseModel):
     production_id: str
@@ -27,6 +29,7 @@ class OrderCreate(BaseModel):
     line_items: List[OrderLineItem]
     payment_method: Optional[str] = None
     notes: Optional[str] = None
+    is_marketplace_sale: bool = False  # platform fee accrues only when true
 
 @router.get("")
 async def list_orders(
@@ -81,10 +84,12 @@ async def create_order(body: OrderCreate, user: dict = Depends(get_current_user)
         await db.execute(text("""
             INSERT INTO tenant.orders
                 (order_id, tenant_id, farm_id, customer_id, order_date, delivery_date,
-                 delivery_address, total_amount_fjd, order_status, payment_method, notes, created_by)
+                 delivery_address, total_amount_fjd, order_status, payment_method, notes,
+                 is_marketplace_sale, created_by)
             VALUES
                 (:order_id, :tenant_id, :farm_id, :customer_id, :order_date, :delivery_date,
-                 :delivery_address, :total_amount_fjd, 'PENDING', :payment_method, :notes, :created_by)
+                 :delivery_address, :total_amount_fjd, 'PENDING', :payment_method, :notes,
+                 :is_marketplace_sale, :created_by)
         """), {
             "order_id": order_id,
             "tenant_id": str(user["tenant_id"]),
@@ -96,6 +101,7 @@ async def create_order(body: OrderCreate, user: dict = Depends(get_current_user)
             "total_amount_fjd": total_amount,
             "payment_method": body.payment_method,
             "notes": body.notes,
+            "is_marketplace_sale": body.is_marketplace_sale,
             "created_by": str(user["user_id"]),
         })
         for item in body.line_items:
@@ -157,7 +163,7 @@ async def log_payment(order_id: str, body: PaymentCreate, user: dict = Depends(g
     async with get_rls_db(tid) as db:
         order = (await db.execute(
             text("""SELECT o.order_id, o.farm_id, o.customer_id, o.net_amount_fjd, o.total_amount_fjd,
-                           c.customer_name
+                           o.is_marketplace_sale, c.customer_name
                     FROM tenant.orders o JOIN tenant.customers c ON c.customer_id = o.customer_id
                     WHERE o.order_id = :oid AND o.tenant_id = :tid"""),
             {"oid": order_id, "tid": tid},
@@ -196,4 +202,18 @@ async def log_payment(order_id: str, body: PaymentCreate, user: dict = Depends(g
                 "payment_date": pay_date.isoformat(),
             },
         )
-    return {"data": {"order_id": order_id, "order_status": "PAID", "ledger_id": ledger_id, "audit_hash": this_hash}}
+        # Marketplace transaction fee — accrue a platform receivable on the
+        # payment, but ONLY for flagged marketplace sales. Best-effort: a fee
+        # failure must never block the farmer's payment record.
+        fee = None
+        if order["is_marketplace_sale"]:
+            try:
+                from app.routers.marketplace_fees import accrue_marketplace_fee
+                fee = await accrue_marketplace_fee(
+                    db, tenant_id=tid, order_id=order_id, category="PRODUCE",
+                    gross_amount_fjd=body.amount_fjd, source_ledger_id=ledger_id)
+            except Exception as e:  # noqa: BLE001
+                logger.warning("marketplace fee accrual failed for %s: %s", order_id, e)
+    return {"data": {"order_id": order_id, "order_status": "PAID", "ledger_id": ledger_id,
+                     "audit_hash": this_hash,
+                     "marketplace_fee_fjd": (str(fee["fee_amount_fjd"]) if fee else None)}}

@@ -659,6 +659,7 @@ function NewOrderModal({ farmId, customers, onClose, onSaved }) {
   const [customerId, setCustomerId] = useState("");
   const [productionId, setProductionId] = useState("");
   const [qty, setQty] = useState(""); const [price, setPrice] = useState(""); const [grade, setGrade] = useState("A");
+  const [marketplace, setMarketplace] = useState(false);
   const [busy, setBusy] = useState(false);
   const prodQ = useQuery({ queryKey: ["productions"], queryFn: getProductions });
   const productions = prodQ.data ?? [];
@@ -667,7 +668,7 @@ function NewOrderModal({ farmId, customers, onClose, onSaved }) {
     if (!customerId || !productionId || !qty || !price) { emitToast("Buyer, crop, quantity and price are required"); return; }
     setBusy(true);
     try {
-      const r = await fetch("/api/v1/orders", { method: "POST", headers: authHeaders(), body: JSON.stringify({ farm_id: farmId, customer_id: customerId, order_date: todayISO(), line_items: [{ production_id: productionId, quantity_kg: Number(qty), unit_price_fjd: Number(price), grade }] }) });
+      const r = await fetch("/api/v1/orders", { method: "POST", headers: authHeaders(), body: JSON.stringify({ farm_id: farmId, customer_id: customerId, order_date: todayISO(), is_marketplace_sale: marketplace, line_items: [{ production_id: productionId, quantity_kg: Number(qty), unit_price_fjd: Number(price), grade }] }) });
       if (!r.ok) throw new Error();
       emitToast("Order created"); onSaved?.();
     } catch { emitToast("Could not create order"); } finally { setBusy(false); }
@@ -684,6 +685,10 @@ function NewOrderModal({ farmId, customers, onClose, onSaved }) {
             <div><label>Price/kg</label><input type="number" min="0" step="0.10" value={price} onChange={(e) => setPrice(e.target.value)} /></div>
             <div><label>Grade</label><select value={grade} onChange={(e) => setGrade(e.target.value)}><option>A</option><option>B</option><option>C</option></select></div>
           </div>
+          <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 12, fontSize: 13, color: "var(--soil)" }}>
+            <input type="checkbox" checked={marketplace} onChange={(e) => setMarketplace(e.target.checked)} />
+            This sale came through the Teivaka marketplace
+          </label>
         </div>
         <div className="overlay-foot"><button className="btn btn-secondary" onClick={onClose}>Cancel</button><button className="btn btn-primary" onClick={submit} disabled={busy}>{busy ? "Creating…" : `Create · ${fjd2(total)}`}</button></div>
       </div>

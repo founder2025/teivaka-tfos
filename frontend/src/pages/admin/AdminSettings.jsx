@@ -10,6 +10,7 @@ import { Megaphone, Check, X as XIcon } from "lucide-react";
 import { getJSON, send } from "../../utils/api";
 import MonetizationPanel from "../../components/admin/MonetizationPanel";
 import SponsoredSeatsPanel from "../../components/admin/SponsoredSeatsPanel";
+import MarketplaceFeesPanel from "../../components/admin/MarketplaceFeesPanel";
 
 const C = { soil: "var(--soil)", green: "var(--green)", greenDk: "var(--green-dk)", line: "var(--line)", muted: "var(--muted)", cream: "var(--cream)" };
 const card = { background: "var(--paper)", border: `1px solid ${C.line}`, borderRadius: 12, padding: 18, marginBottom: 16 };
@@ -68,6 +69,9 @@ export default function AdminSettings() {
 
       {/* Sponsored Farmer Seats — orgs sponsor farmers; codes redeem to funded plans. */}
       <SponsoredSeatsPanel />
+
+      {/* Marketplace transaction fees — rates + accrued platform revenue. */}
+      <MarketplaceFeesPanel />
 
       <div style={card}>
         <strong style={{ color: C.soil, fontSize: 15 }}>Feature access by tier — reference</strong>
