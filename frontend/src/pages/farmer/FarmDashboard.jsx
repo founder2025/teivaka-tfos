@@ -409,38 +409,55 @@ function OvHeader({ name, lastSync, navigate }) {
   );
 }
 
-function Ring({ score, color }) {
+const TRACK = "#E6EBF1";
+const TINT = { green: C.greenTint, amber: "#FEF6E6", red: "#FBEAE6", gray: "#EEF2F6" };
+
+function Ring({ score, color, size = 64 }) {
+  const inner = size - 14;
   return (
-    <div className="grid place-items-center shrink-0" style={{ width: 60, height: 60, borderRadius: "50%", background: `conic-gradient(${color} ${(score || 0) * 3.6}deg, var(--line) 0)` }}>
-      <div className="grid place-items-center bg-white" style={{ width: 46, height: 46, borderRadius: "50%" }}><span className="font-extrabold text-lg" style={{ color: C.soil }}>{score}</span></div>
+    <div className="grid place-items-center shrink-0" style={{ width: size, height: size, borderRadius: "50%", background: `conic-gradient(${color} ${(score || 0) * 3.6}deg, ${TRACK} 0)` }}>
+      <div className="grid place-items-center bg-white" style={{ width: inner, height: inner, borderRadius: "50%" }}><span className="font-extrabold" style={{ color: C.soil, fontSize: size * 0.3 }}>{score}</span></div>
     </div>
+  );
+}
+
+function KpiTile({ icon: Icon, label, value, sub, color, tint, accent, go }) {
+  return (
+    <button onClick={go} className={`rounded-2xl border bg-white p-4 text-left shadow-sm hover:shadow-md transition-shadow relative overflow-hidden ${FOCUS}`} style={{ borderColor: C.border }}>
+      <div className="absolute top-0 left-0 right-0" style={{ height: 3, background: accent }} />
+      <div className="grid place-items-center rounded-xl" style={{ width: 36, height: 36, background: tint }}><Icon size={18} style={{ color: accent }} /></div>
+      <div className="text-[10px] uppercase tracking-wide font-bold mt-2.5" style={{ color: C.muted }}>{label}</div>
+      <div className="text-2xl font-extrabold leading-tight mt-0.5" style={{ color }}>{value}</div>
+      <div className="text-[11px] mt-0.5" style={{ color: C.muted }}>{sub}</div>
+    </button>
   );
 }
 
 function HealthKpis({ score, grade, net, businesses, catCount, dueToday, highPr, cash, alerts, navigate }) {
   const ringColor = score >= 80 ? C.green : score >= 55 ? C.amber : C.red;
-  const Kpi = ({ icon: Icon, label, value, sub, color, go }) => (
-    <button onClick={go} className={`rounded-2xl border p-4 text-left bg-white ${FOCUS}`} style={{ borderColor: C.border }}>
-      <div className="flex items-center gap-1.5 text-[11px] uppercase tracking-wide font-bold" style={{ color: C.muted }}><Icon size={13} />{label}</div>
-      <div className="text-xl font-extrabold mt-1 leading-tight" style={{ color }}>{value}</div>
-      <div className="text-[11px] mt-0.5" style={{ color: C.muted }}>{sub}</div>
-    </button>
-  );
+  const tiles = [
+    { icon: TrendingUp, label: "Net Profit", value: money(net), sub: "this season", color: Number(net) < 0 ? C.red : C.greenDk, accent: Number(net) < 0 ? C.red : C.green, tint: Number(net) < 0 ? TINT.red : TINT.green, go: () => navigate("/farm/cash") },
+    { icon: LayoutGrid, label: "Enterprises", value: businesses, sub: `across ${catCount} categor${catCount === 1 ? "y" : "ies"}`, color: C.soil, accent: C.green, tint: TINT.green, go: () => navigate("/farm/enterprises") },
+    { icon: ListChecks, label: "Tasks Today", value: dueToday, sub: highPr ? `${highPr} high priority` : "all clear", color: C.soil, accent: C.amber, tint: TINT.amber, go: () => navigate("/farm/tasks") },
+    { icon: Wallet, label: "Cash Balance", value: money(cash), sub: "available", color: C.greenDk, accent: C.green, tint: TINT.green, go: () => navigate("/farm/cash") },
+    { icon: Bell, label: "Alerts", value: alerts, sub: alerts ? "action needed" : "none", color: alerts ? C.amber : C.muted, accent: alerts ? C.amber : C.muted, tint: alerts ? TINT.amber : TINT.gray, go: () => navigate("/farm/compliance") },
+  ];
   return (
-    <div className="grid gap-3 grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
-      <button onClick={() => navigate("/farm/compliance")} className={`rounded-2xl border p-4 bg-white flex items-center gap-3 col-span-2 ${FOCUS}`} style={{ borderColor: C.border }}>
-        <Ring score={score} color={ringColor} />
-        <div className="min-w-0 text-left">
+    <div className="space-y-3">
+      {/* Farm Health hero */}
+      <button onClick={() => navigate("/farm/compliance")} className={`w-full rounded-2xl border p-5 flex items-center gap-5 text-left shadow-sm hover:shadow-md transition-shadow ${FOCUS}`} style={{ borderColor: C.border, background: `linear-gradient(135deg, ${C.greenTint}, #ffffff 70%)` }}>
+        <Ring score={score} color={ringColor} size={72} />
+        <div className="min-w-0">
           <div className="text-[11px] uppercase tracking-wide font-bold" style={{ color: C.muted }}>Farm Health</div>
-          <div className="text-base font-extrabold" style={{ color: C.soil }}>{grade}</div>
-          <div className="text-[11px]" style={{ color: C.muted }}>Your farm is performing — view full health</div>
+          <div className="text-xl font-extrabold" style={{ color: C.soil }}>{grade}</div>
+          <div className="text-[11px]" style={{ color: C.muted }}>Your farm is performing — tap to view full health</div>
         </div>
+        <span className="ml-auto text-[11px] font-semibold shrink-0 hidden sm:flex items-center gap-1" style={{ color: C.greenDk }}>View full health <ArrowRight size={13} /></span>
       </button>
-      <Kpi icon={TrendingUp} label="Net Profit" value={money(net)} sub="this season" color={Number(net) < 0 ? C.red : C.greenDk} go={() => navigate("/farm/cash")} />
-      <Kpi icon={LayoutGrid} label="Enterprises" value={businesses} sub={`across ${catCount} categor${catCount === 1 ? "y" : "ies"}`} color={C.soil} go={() => navigate("/farm/enterprises")} />
-      <Kpi icon={ListChecks} label="Tasks Today" value={dueToday} sub={highPr ? `${highPr} high priority` : "all clear"} color={C.soil} go={() => navigate("/farm/tasks")} />
-      <Kpi icon={Wallet} label="Cash Balance" value={money(cash)} sub="available" color={C.greenDk} go={() => navigate("/farm/cash")} />
-      <Kpi icon={Bell} label="Alerts" value={alerts} sub={alerts ? "action needed" : "none"} color={alerts ? C.amber : C.muted} go={() => navigate("/farm/compliance")} />
+      {/* KPI grid (5-up) */}
+      <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">
+        {tiles.map((t) => <KpiTile key={t.label} {...t} />)}
+      </div>
     </div>
   );
 }
@@ -494,6 +511,7 @@ const ENT_TABS = [
   ["Forestry", "forestry"], ["Aquaculture", "aquaculture"], ["Apiculture", "apiculture"],
 ];
 const ENT_ICON = { crops: Sprout, livestock: Leaf, poultry: Bird, forestry: Trees, aquaculture: Leaf, apiculture: Leaf };
+const ENT_ACCENT = { crops: "var(--green)", livestock: "var(--soil)", poultry: "var(--amber)", forestry: "var(--green-dk)", aquaculture: "#2C6E8A", apiculture: "#C9A227" };
 
 function EnterprisePortfolio({ enterprises, counts, navigate }) {
   const [tab, setTab] = useState(null);
@@ -523,19 +541,24 @@ function EnterprisePortfolio({ enterprises, counts, navigate }) {
         <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {rows.map((e) => {
             const Icon = ENT_ICON[e.kind] || Sprout;
+            const accent = ENT_ACCENT[e.kind] || C.green;
+            const tint = e.kind === "poultry" ? TINT.amber : e.kind === "livestock" ? "#F1EFEA" : C.greenTint;
             return (
-              <button key={e.id} onClick={() => navigate(e.route)} className={`rounded-xl border p-3 text-left bg-white ${FOCUS}`} style={{ borderColor: C.border }}>
-                <div className="flex items-center gap-2">
-                  <div className="grid place-items-center rounded-lg shrink-0" style={{ width: 34, height: 34, background: C.greenTint }}><Icon size={17} style={{ color: C.greenDk }} /></div>
-                  <div className="min-w-0">
-                    <div className="text-[9px] font-bold uppercase tracking-wide" style={{ color: C.muted }}>{e.kindLabel}</div>
-                    <div className="text-sm font-bold truncate" style={{ color: C.soil }}>{e.name}</div>
+              <button key={e.id} onClick={() => navigate(e.route)} className={`rounded-2xl border bg-white text-left shadow-sm hover:shadow-md transition-shadow relative overflow-hidden ${FOCUS}`} style={{ borderColor: C.border }}>
+                <div className="absolute top-0 left-0 right-0" style={{ height: 3, background: accent }} />
+                <div className="p-3.5">
+                  <div className="flex items-center gap-2.5">
+                    <div className="grid place-items-center rounded-xl shrink-0" style={{ width: 38, height: 38, background: tint }}><Icon size={19} style={{ color: accent }} /></div>
+                    <div className="min-w-0">
+                      <div className="text-[9px] font-bold uppercase tracking-wide" style={{ color: accent }}>{e.kindLabel}</div>
+                      <div className="text-sm font-bold truncate" style={{ color: C.soil }}>{e.name}</div>
+                    </div>
                   </div>
-                </div>
-                {e.metric && <div className="text-[11px] mt-2" style={{ color: C.muted }}>{e.metric}</div>}
-                <div className="flex items-center justify-between mt-2 pt-2" style={{ borderTop: `1px solid rgba(31,41,55,0.06)` }}>
-                  <div><div className="text-[9px] uppercase" style={{ color: C.muted }}>Income (season)</div><div className="text-xs font-bold" style={{ color: C.soil }}>{money(e.income)}</div></div>
-                  <div className="text-right"><div className="text-[9px] uppercase" style={{ color: C.muted }}>Net (season)</div><div className="text-xs font-bold" style={{ color: Number(e.net) < 0 ? C.red : C.greenDk }}>{money(e.net)}</div></div>
+                  {e.metric && <span className="inline-block text-[10px] font-semibold px-2 py-0.5 rounded-full mt-2.5" style={{ background: tint, color: accent }}>{e.metric}</span>}
+                  <div className="flex items-center justify-between mt-3 pt-2.5" style={{ borderTop: `1px solid rgba(31,41,55,0.07)` }}>
+                    <div><div className="text-[9px] uppercase" style={{ color: C.muted }}>Income (season)</div><div className="text-sm font-bold" style={{ color: C.soil }}>{money(e.income)}</div></div>
+                    <div className="text-right"><div className="text-[9px] uppercase" style={{ color: C.muted }}>Net (season)</div><div className="text-sm font-bold" style={{ color: Number(e.net) < 0 ? C.red : C.greenDk }}>{money(e.net)}</div></div>
+                  </div>
                 </div>
               </button>
             );
@@ -555,8 +578,8 @@ function FinancialSnapshot({ revenue, expenses, net, topRevenue, topExpense, nav
         <button onClick={() => navigate("/farm/reports")} className="text-[11px] font-semibold" style={{ color: C.greenDk }}>View full report</button>
       </div>
       <div className="flex items-center gap-4 flex-wrap">
-        <div className="grid place-items-center shrink-0" style={{ width: 110, height: 110, borderRadius: "50%", background: `conic-gradient(${C.green} ${pct * 3.6}deg, ${C.line || "var(--line)"} 0)` }}>
-          <div className="grid place-items-center bg-white text-center" style={{ width: 84, height: 84, borderRadius: "50%" }}>
+        <div className="grid place-items-center shrink-0" style={{ width: 118, height: 118, borderRadius: "50%", background: `conic-gradient(${Number(net) < 0 ? C.red : C.green} ${Math.max(6, pct) * 3.6}deg, ${TRACK} 0)` }}>
+          <div className="grid place-items-center bg-white text-center shadow-sm" style={{ width: 86, height: 86, borderRadius: "50%" }}>
             <div><div className="text-[9px] uppercase" style={{ color: C.muted }}>Net Profit</div><div className="text-sm font-extrabold" style={{ color: Number(net) < 0 ? C.red : C.greenDk }}>{money(net)}</div></div>
           </div>
         </div>
