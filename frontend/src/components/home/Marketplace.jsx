@@ -100,6 +100,7 @@ function NewListingModal({ onClose, onCreated }) {
   };
   const submit = async () => {
     if (!f.listing_title.trim() || !f.listing_description.trim()) { toast("Title and description are required.", "error"); return; }
+    if (f.category === "WANTED" && !f.production_id) { toast("Pick the crop you're looking for.", "error"); return; }
     setBusy(true);
     try {
       await send("POST", `${API}/listings`, {
@@ -150,10 +151,10 @@ function NewListingModal({ onClose, onCreated }) {
           {cfg.extras.map(([k, label]) => (
             <input key={k} style={inp} placeholder={label} maxLength={80} value={details[k] || ""} onChange={(e) => setD(k, e.target.value)} />
           ))}
-          {f.category === "PRODUCE" && (
+          {["PRODUCE", "WANTED"].includes(f.category) && (
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
               <select style={inp} value={f.production_id} onChange={(e) => onPickProd(e.target.value)}>
-                <option value="">Which crop? (optional — shows the market price)</option>
+                <option value="">{f.category === "WANTED" ? "Which crop are you looking for?" : "Which crop? (optional — shows the market price)"}</option>
                 {prods.map((p) => <option key={p.production_id} value={p.production_id}>{p.production_name}</option>)}
               </select>
               {mkt && mkt.avg_price_fjd != null && (
@@ -234,6 +235,13 @@ function ListingDetail({ l, onClose, onChanged }) {
     chat.setDropdownOpen?.(false);
     onClose();
   };
+  // WANTED cards are demand records (id "DEM-<uuid>") — close via the demand path.
+  const closeRequest = async () => {
+    if (!window.confirm("Close this request?")) return;
+    const id = String(l.listing_id).replace(/^DEM-/, "");
+    try { await send("POST", `/api/v1/market/demand/${id}/close`); toast("Request closed ✓", "success"); onChanged(); onClose(); }
+    catch (e) { toast(`${e.userMessage || e.message}`, "error"); }
+  };
   const order = async () => {
     const unit = l.price_basis || "kg";
     const cap = l.quantity_available_kg ? Number(l.quantity_available_kg) : null;
@@ -305,12 +313,16 @@ function ListingDetail({ l, onClose, onChanged }) {
         </div>
         <div className="overlay-foot" style={{ flexWrap: "wrap", gap: 8 }}>
           {l.is_mine ? (
-            <>
-              {!l.sold_at
-                ? <button className="btn btn-primary" onClick={() => act("PATCH", "sold", "Marked as sold ✓")}><CheckCircle2 size={14} /> Mark as sold</button>
-                : <button className="btn btn-primary" onClick={() => act("PATCH", "relist", "Relisted ✓")}><RotateCcw size={14} /> Relist</button>}
-              <button className="btn btn-secondary" onClick={() => act("PATCH", "close", "Listing closed")}>Close listing</button>
-            </>
+            l.category === "WANTED" ? (
+              <button className="btn btn-secondary" onClick={closeRequest}>Close request</button>
+            ) : (
+              <>
+                {!l.sold_at
+                  ? <button className="btn btn-primary" onClick={() => act("PATCH", "sold", "Marked as sold ✓")}><CheckCircle2 size={14} /> Mark as sold</button>
+                  : <button className="btn btn-primary" onClick={() => act("PATCH", "relist", "Relisted ✓")}><RotateCcw size={14} /> Relist</button>}
+                <button className="btn btn-secondary" onClick={() => act("PATCH", "close", "Listing closed")}>Close listing</button>
+              </>
+            )
           ) : (
             <>
               {["PRODUCE", "INPUTS"].includes(l.category) && l.listing_status === "ACTIVE" && l.price_per_kg_fjd != null && (
@@ -319,8 +331,8 @@ function ListingDetail({ l, onClose, onChanged }) {
               {l.category === "SERVICES" && l.listing_status === "ACTIVE" && (
                 <button className="btn btn-primary" onClick={requestService}><CheckCircle2 size={14} /> Request service</button>
               )}
-              <button className="btn btn-secondary" onClick={message}><MessageCircle size={14} /> Message seller</button>
-              <button className="btn btn-secondary" onClick={toggleSave}><Bookmark size={14} /> {saved ? "Saved ✓" : "Save"}</button>
+              <button className="btn btn-secondary" onClick={message}><MessageCircle size={14} /> Message {l.category === "WANTED" ? "buyer" : "seller"}</button>
+              {l.category !== "WANTED" && <button className="btn btn-secondary" onClick={toggleSave}><Bookmark size={14} /> {saved ? "Saved ✓" : "Save"}</button>}
               <button className="btn btn-secondary" onClick={shareToFeed}><Share2 size={14} /> Share to feed</button>
             </>
           )}

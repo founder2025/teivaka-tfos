@@ -57,6 +57,45 @@ class PostCreate(BaseModel):
     photos: Optional[List[str]] = []
     tags: Optional[List[str]] = []
 
+# ── B2: WANTED demand is served from community.demand_records (single source of
+# truth), mapped into the listing-card shape so the marketplace UI renders it
+# unchanged. A "Wanted" must name a crop (demand_records.production_id NOT NULL).
+def _demand_card(r, uid: str) -> dict:
+    cb = str(r["created_by"]) if r["created_by"] else None
+    return {
+        "listing_id": f"DEM-{r['demand_record_id']}",
+        "category": "WANTED",
+        "listing_title": (r["production_name"] or "Produce") + " wanted",
+        "listing_description": r["notes"],
+        "price_per_kg_fjd": (float(r["price_offered_fjd"]) if r["price_offered_fjd"] is not None else None),
+        "price_basis": "budget",
+        "quantity_available_kg": (float(r["quantity_kg"]) if r["quantity_kg"] is not None else None),
+        "island": r["island"], "pickup_location": r["location_region"], "grade": r["grade"],
+        "production_id": r["production_id"], "production_name": r["production_name"],
+        "created_by": cb, "created_at": (r["created_at"].isoformat() if r["created_at"] else None),
+        "seller_name": r["buyer_name"] or r["seller_name"], "seller_avatar": r["seller_avatar"],
+        "seller_verified": False, "contact_whatsapp": r["contact_whatsapp"],
+        "is_mine": cb == uid, "is_saved": False, "negotiable": True, "photos": [],
+        "listing_status": "ACTIVE" if r["status"] == "OPEN" else "CLOSED",
+        "sold_at": None, "demand_status": r["status"],
+    }
+
+
+async def _fetch_demand_cards(db, uid: str, where_extra: str, params: dict) -> list:
+    rows = (await db.execute(text(f"""
+        SELECT d.demand_record_id, d.production_id, p.production_name, d.quantity_kg,
+               d.price_offered_fjd, d.island, d.location_region, d.grade, d.notes,
+               d.buyer_name, d.contact_whatsapp, d.created_by, d.created_at, d.status,
+               u.full_name AS seller_name, u.avatar_url AS seller_avatar
+        FROM community.demand_records d
+        LEFT JOIN shared.productions p ON p.production_id = d.production_id
+        LEFT JOIN tenant.users u ON u.user_id = d.created_by
+        WHERE {where_extra}
+        ORDER BY d.created_at DESC LIMIT 100
+    """), params)).mappings().all()
+    return [_demand_card(r, uid) for r in rows]
+
+
 @router.get("/listings")
 async def list_community_listings(
     production_id: str = None,
@@ -84,6 +123,16 @@ async def list_community_listings(
                     f"ELSE has_table_privilege(current_user, 'community.{name}', 'SELECT') END")
         if not bool((await db.execute(text(_tbl("listings")))).scalar()):
             return {"data": [], "meta": {"degraded": "listings table missing — run scripts/deploy_community_fix.sh"}}
+        has_demand = bool((await db.execute(text(_tbl("demand_records")))).scalar())
+        # B2: the WANTED browse tab is served from demand_records (single source).
+        if has_demand and (category or "").upper() == "WANTED" and not mine and not saved:
+            dw = "d.status = 'OPEN'"
+            dp = {"uid": uid}
+            if production_id:
+                dw += " AND d.production_id = :pid"; dp["pid"] = production_id
+            if island:
+                dw += " AND d.island = :island"; dp["island"] = island
+            return {"data": await _fetch_demand_cards(db, uid, dw, dp)}
         has_kyc = bool((await db.execute(text(_col("users", "kyc_verified", "tenant")))).scalar())
         has_cat = bool((await db.execute(text(_col("listings", "category")))).scalar())
         has_sold = bool((await db.execute(text(_col("listings", "sold_at")))).scalar())
@@ -123,7 +172,11 @@ async def list_community_listings(
         if search:
             q += " AND (cl.listing_title ILIKE :srch OR cl.listing_description ILIKE :srch)"; params["srch"] = f"%{search}%"
         result = await db.execute(text(q + " ORDER BY cl.created_at DESC LIMIT 100"), params)
-        return {"data": [dict(r) for r in result.mappings().all()]}
+        data = [dict(r) for r in result.mappings().all()]
+        # B2: "My listings" also surfaces the user's WANTED requests (now demand records).
+        if mine and has_demand and (not category or category.upper() in ("ALL", "WANTED")):
+            data += await _fetch_demand_cards(db, uid, "d.created_by = cast(:uid AS uuid)", {"uid": uid})
+        return {"data": data}
 
 @router.post("/listings")
 async def create_listing(body: ListingCreate, user: dict = Depends(community_write("listing", 10))):
@@ -135,6 +188,32 @@ async def create_listing(body: ListingCreate, user: dict = Depends(community_wri
     basis = (body.price_basis or "kg").lower()
     if basis not in ("kg", "unit", "hour", "job", "day", "head", "pack", "item", "budget"):
         basis = "kg"
+
+    # B2: a "Wanted" is buyer demand — write it to the canonical demand_records
+    # (single source of truth, feeds Signals), not the listings table.
+    if cat == "WANTED":
+        if not body.production_id:
+            raise HTTPException(status_code=400, detail="Pick the crop you're looking for")
+        async with get_rls_db(str(user["tenant_id"])) as db:
+            buyer_name = (await db.execute(text(
+                "SELECT full_name FROM tenant.users WHERE user_id = cast(:u AS uuid)"),
+                {"u": str(user["user_id"])})).scalar()
+            country = (await db.execute(text(
+                "SELECT country FROM tenant.tenants WHERE tenant_id = cast(:t AS uuid)"),
+                {"t": str(user["tenant_id"])})).scalar()
+            row = (await db.execute(text("""
+                INSERT INTO community.demand_records
+                    (tenant_id, farm_id, created_by, production_id, quantity_kg, frequency,
+                     buyer_name, island, price_offered_fjd, status, contact_whatsapp, notes, country)
+                VALUES (cast(:t AS uuid), :farm, cast(:u AS uuid), :pid,
+                        GREATEST(COALESCE(:qty, 1), 1), 'ONE_OFF', :bn, :island, :price, 'OPEN',
+                        :wa, :notes, :country)
+                RETURNING demand_record_id
+            """), {"t": str(user["tenant_id"]), "farm": body.farm_id, "u": str(user["user_id"]),
+                   "pid": body.production_id, "qty": body.quantity_available_kg, "bn": buyer_name,
+                   "island": body.island, "price": body.price_per_kg_fjd, "wa": body.contact_whatsapp,
+                   "notes": (body.listing_description or body.listing_title), "country": country})).mappings().first()
+        return {"data": {"listing_id": f"DEM-{row['demand_record_id']}", "listing_status": "OPEN"}}
 
     listing_id = f"LST-{uuid.uuid4().hex[:6].upper()}"
     async with get_rls_db(str(user["tenant_id"])) as db:

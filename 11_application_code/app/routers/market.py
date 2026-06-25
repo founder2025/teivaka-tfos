@@ -338,6 +338,20 @@ async def submit_demand(body: DemandSubmit, user: dict = Depends(get_current_use
     return {"data": {"demand_record_id": str(row["demand_record_id"]), "is_recurring": is_recurring}}
 
 
+@router.post("/demand/{demand_record_id}/close")
+async def close_demand(demand_record_id: str, user: dict = Depends(get_current_user)):
+    """Close a buyer-demand request (the poster's "Close request" action)."""
+    async with get_rls_db(str(user["tenant_id"])) as db:
+        res = await db.execute(text(
+            "UPDATE community.demand_records SET status='CLOSED', updated_at=now() "
+            "WHERE demand_record_id = cast(:d AS uuid) AND created_by = cast(:u AS uuid) "
+            "AND status IN ('OPEN','PARTIAL')"),
+            {"d": demand_record_id, "u": str(user["user_id"])})
+        if res.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Request not found or already closed")
+    return {"data": {"demand_record_id": demand_record_id, "status": "CLOSED"}}
+
+
 # ----------------------------------------------------------------------------- supply
 @router.get("/supply")
 async def list_supply(production_id: str = None, island: str = None, user: dict = Depends(get_current_user)):
