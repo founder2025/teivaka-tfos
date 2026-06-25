@@ -210,7 +210,8 @@ async def log_payment(order_id: str, body: PaymentCreate, user: dict = Depends(g
             try:
                 from app.routers.marketplace_fees import accrue_marketplace_fee
                 fee = await accrue_marketplace_fee(
-                    db, tenant_id=tid, order_id=order_id, category="PRODUCE",
+                    db, tenant_id=tid, order_id=order_id,
+                    category=(order.get("marketplace_category") or "PRODUCE"),
                     gross_amount_fjd=body.amount_fjd, source_ledger_id=ledger_id)
             except Exception as e:  # noqa: BLE001
                 logger.warning("marketplace fee accrual failed for %s: %s", order_id, e)

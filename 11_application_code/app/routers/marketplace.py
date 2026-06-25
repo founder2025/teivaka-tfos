@@ -151,8 +151,10 @@ async def order_from_listing(listing_id: str, body: ListingOrder, user: dict = D
         """), {"lid": listing_id})).mappings().first()
         if not L:
             raise HTTPException(status_code=404, detail="Listing not found")
-        if L["category"] != "PRODUCE":
-            raise HTTPException(status_code=400, detail="Only produce listings can be ordered here yet")
+        if L["category"] == "SERVICES":
+            raise HTTPException(status_code=400, detail="Use Request service for service listings")
+        if L["category"] not in ("PRODUCE", "INPUTS"):
+            raise HTTPException(status_code=400, detail="This listing type can't be ordered here yet")
         if L["listing_status"] != "ACTIVE":
             raise HTTPException(status_code=409, detail="This listing is no longer available")
         if str(L["tenant_id"]) == buyer_tid:
@@ -211,15 +213,26 @@ async def order_from_listing(listing_id: str, body: ListingOrder, user: dict = D
                     VALUES (:c, cast(:t AS uuid), :n, 'DIRECT', :wa, :notes)
                 """), {"c": cust, "t": seller_tid, "n": buyer_name, "wa": buyer_wa,
                        "notes": f"Teivaka marketplace buyer (user {buyer_uid})"})
-        await db.execute(text("""
+        # Carry the listing's category onto the order so the PAID path accrues the
+        # right fee rate (PRODUCE 2% vs INPUTS 3%). Column-guarded for migration 180.
+        fee_cat = L["category"] if L["category"] in ("PRODUCE", "INPUTS") else "PRODUCE"
+        has_mc = bool((await db.execute(text(
+            "SELECT 1 FROM information_schema.columns WHERE table_schema='tenant' "
+            "AND table_name='orders' AND column_name='marketplace_category'"))).scalar())
+        mc_col = ", marketplace_category" if has_mc else ""
+        mc_val = ", :mcat" if has_mc else ""
+        oparams = {"oid": order_id, "t": seller_tid, "farm": L["farm_id"], "cust": cust,
+                   "total": total, "notes": f"Marketplace order from listing {listing_id}", "bid": buyer_uid}
+        if has_mc:
+            oparams["mcat"] = fee_cat
+        await db.execute(text(f"""
             INSERT INTO tenant.orders
                 (order_id, tenant_id, farm_id, customer_id, order_type, order_date,
-                 total_amount_fjd, net_amount_fjd, order_status, is_marketplace_sale, notes, created_by)
+                 total_amount_fjd, net_amount_fjd, order_status, is_marketplace_sale, notes, created_by{mc_col})
             VALUES
                 (:oid, cast(:t AS uuid), :farm, :cust, 'SALES', CURRENT_DATE,
-                 :total, :total, 'CONFIRMED', true, :notes, cast(:bid AS uuid))
-        """), {"oid": order_id, "t": seller_tid, "farm": L["farm_id"], "cust": cust,
-               "total": total, "notes": f"Marketplace order from listing {listing_id}", "bid": buyer_uid})
+                 :total, :total, 'CONFIRMED', true, :notes, cast(:bid AS uuid){mc_val})
+        """), oparams)
         line_id = f"OLI-{uuid.uuid4().hex[:6].upper()}"
         await db.execute(text("""
             INSERT INTO tenant.order_line_items
@@ -267,3 +280,66 @@ async def order_from_listing(listing_id: str, body: ListingOrder, user: dict = D
 
     return {"data": {"order_id": order_id, "total_fjd": str(total), "quantity_kg": str(qty),
                      "status": "CONFIRMED", "is_marketplace_sale": True}}
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# SERVICES listing → request: bridges a marketplace SERVICES listing into the
+# service-jobs flow as a job pre-CLAIMED by the lister (the provider). The buyer
+# is the requester; when they later confirm completion + price, the existing
+# service-jobs path accrues the 5% SERVICES fee against the provider. Keeps
+# services on their dedicated mechanism instead of the crop/kg-shaped orders.
+# ════════════════════════════════════════════════════════════════════════════
+class ServiceRequest(BaseModel):
+    notes: Optional[str] = None
+
+
+@router.post("/listings/{listing_id}/request-service")
+async def request_service_from_listing(listing_id: str, body: ServiceRequest, user: dict = Depends(get_current_user)):
+    buyer_tid = str(user["tenant_id"])
+    buyer_uid = str(user["user_id"])
+    async with get_db_ctx() as db:
+        L = (await db.execute(text("""
+            SELECT listing_id, tenant_id, created_by, listing_title, listing_status,
+                   contact_whatsapp, COALESCE(category,'PRODUCE') AS category
+            FROM community.listings WHERE listing_id = :lid
+        """), {"lid": listing_id})).mappings().first()
+        if not L:
+            raise HTTPException(status_code=404, detail="Listing not found")
+        if L["category"] != "SERVICES":
+            raise HTTPException(status_code=400, detail="Only service listings can be requested here")
+        if L["listing_status"] != "ACTIVE":
+            raise HTTPException(status_code=409, detail="This listing is no longer available")
+        if str(L["tenant_id"]) == buyer_tid:
+            raise HTTPException(status_code=400, detail="That's your own listing")
+        job_id = f"JOB-{datetime.now().strftime('%Y%m%d')}-{uuid.uuid4().hex[:5].upper()}"
+        await db.execute(text("""
+            INSERT INTO community.service_jobs
+                (job_id, service_type, status, requester_tenant_id, requester_user_id,
+                 title, notes, claimed_by_user_id, claimed_by_tenant_id, claimed_at)
+            VALUES
+                (:j, 'OTHER', 'CLAIMED', cast(:rt AS uuid), cast(:ru AS uuid),
+                 :title, :notes, cast(:pu AS uuid), cast(:pt AS uuid), now())
+        """), {"j": job_id, "rt": buyer_tid, "ru": buyer_uid,
+               "title": L["listing_title"], "notes": body.notes,
+               "pu": str(L["created_by"]), "pt": str(L["tenant_id"])})
+        try:
+            await db.execute(text(
+                "INSERT INTO community.feed_notifications (user_id, actor_user_id, type, body) "
+                "VALUES (cast(:u AS uuid), cast(:a AS uuid), 'SERVICE_REQUESTED', :b)"),
+                {"u": str(L["created_by"]), "a": buyer_uid,
+                 "b": f"New service request for: {L['listing_title']}. Open the Service hub to coordinate."})
+        except Exception as e:  # noqa: BLE001
+            logger.warning("service request notify failed: %s", e)
+        await db.commit()
+
+    if L["contact_whatsapp"]:
+        try:
+            from app.services.notification_service import whatsapp_service
+            await whatsapp_service.send_alert(
+                L["contact_whatsapp"],
+                f"New Teivaka service request for: {L['listing_title']}. Open the app → Service hub to coordinate.",
+                severity="INFO")
+        except Exception as e:  # noqa: BLE001
+            logger.warning("service request whatsapp failed: %s", e)
+
+    return {"data": {"job_id": job_id, "status": "CLAIMED"}}
