@@ -171,3 +171,35 @@ async def admin_update_ledger(fee_id: int, body: LedgerPatch, user: dict = Depen
             raise HTTPException(status_code=404, detail="Fee row not found")
         await db.commit()
     return {"data": {"id": fee_id, "status": st}}
+
+
+# ── WhatsApp test-send (PR.2 receipt verification) ──────────────────────────
+# Approving a Meta template is an external Business Manager step. Once the token,
+# phone-number id, and approved template name are set in .env, FOUNDER fires a
+# test here and confirms receipt in a real WhatsApp inbox before the alert path
+# counts as shipped. Returns the live status (sent/mock_sent/failed + id).
+class WhatsAppTest(BaseModel):
+    to_number: str
+    template_name: Optional[str] = None          # if set, send_template; else text
+    body_params: Optional[list] = None            # template body {{1}},{{2}}... values
+    message: Optional[str] = None                 # text fallback when no template
+
+
+@router.post("/admin/whatsapp/test")
+async def admin_whatsapp_test(body: WhatsAppTest, user: dict = Depends(get_current_user)):
+    _require_admin(user)
+    from app.services.notification_service import whatsapp_service
+    from app.config import settings
+    if body.template_name:
+        components = None
+        if body.body_params:
+            components = [{"type": "body", "parameters": [
+                {"type": "text", "text": str(x)} for x in body.body_params]}]
+        res = await whatsapp_service.send_template(
+            body.to_number, body.template_name,
+            language_code=(getattr(settings, "whatsapp_template_lang", "en") or "en"),
+            components=components)
+    else:
+        res = await whatsapp_service.send_alert(
+            body.to_number, body.message or "Teivaka WhatsApp test message.", severity="INFO")
+    return {"data": {"configured": whatsapp_service.enabled, **res}}
