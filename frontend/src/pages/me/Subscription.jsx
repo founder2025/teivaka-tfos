@@ -36,13 +36,27 @@ export default function Subscription() {
   const [tiers, setTiers] = useState(null);
   const [req, setReq] = useState(null);
   const [busy, setBusy] = useState(null);
+  const [sponsor, setSponsor] = useState(null);
+  const [code, setCode] = useState("");
+  const [redeeming, setRedeeming] = useState(false);
 
   const load = () => {
     getJSON("/api/v1/subscriptions/current").then((r) => setCurrent(r?.data ?? r)).catch(() => setCurrent({}));
     getJSON("/api/v1/subscriptions/tiers").then((r) => setTiers(r?.data ?? r ?? {})).catch(() => setTiers({}));
     getJSON("/api/v1/subscriptions/requests/mine").then((r) => setReq(r?.data ?? null)).catch(() => {});
+    getJSON("/api/v1/sponsored-seats/mine").then((r) => setSponsor(r?.data ?? null)).catch(() => {});
   };
   useEffect(() => { load(); }, []);
+
+  const redeem = async () => {
+    if (!code.trim()) { toast("Enter your sponsor code", "error"); return; }
+    setRedeeming(true);
+    try {
+      const r = await send("POST", "/api/v1/sponsored-seats/redeem", { code: code.trim() });
+      toast(`Sponsored by ${r?.data?.sponsor_name || "your sponsor"} — ${r?.data?.granted_tier} unlocked ✓`, "success");
+      setCode(""); load();
+    } catch (e) { toast(String(e.message || e), "error"); } finally { setRedeeming(false); }
+  };
 
   const cur = (current?.subscription_tier || "").toUpperCase();
   const status = current?.subscription_status || "Active";
@@ -67,6 +81,29 @@ export default function Subscription() {
         <div style={tile}><div style={{ fontSize: 11, color: C.muted, textTransform: "uppercase" }}>Payment</div><div style={{ fontWeight: 700, color: C.soil, fontSize: 14 }}><CreditCard size={13} style={{ verticalAlign: "-2px" }} /> M-PAiSA (manual)</div></div>
         <div style={tile}><div style={{ fontSize: 11, color: C.muted, textTransform: "uppercase" }}>Status</div><div style={{ fontWeight: 700, color: C.greenDk, fontSize: 14 }}>{status}</div></div>
       </div>
+
+      {/* Sponsor code — redeem, or show active sponsorship */}
+      {sponsor ? (
+        <div style={{ ...card, background: "rgba(46,125,50,0.07)", border: "1px solid rgba(46,125,50,0.35)" }}>
+          <div style={{ fontWeight: 800, color: C.greenDk, fontSize: 13.5 }}>Sponsored by {sponsor.sponsor_name}</div>
+          <div style={{ fontSize: 12.5, color: C.soil }}>
+            Your <strong>{sponsor.granted_tier}</strong> plan is paid for by your sponsor — no cost to you. Your data always stays yours.
+          </div>
+        </div>
+      ) : (
+        <div style={card}>
+          <div style={{ fontWeight: 700, color: C.soil, fontSize: 13.5, marginBottom: 4 }}>Have a sponsor code?</div>
+          <div style={{ fontSize: 12.5, color: C.muted, marginBottom: 10 }}>If a bank, ministry, or NGO is sponsoring your access, enter the code they gave you to unlock your funded plan free.</div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <input value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} placeholder="TVK-XXXXXXXX"
+              style={{ flex: 1, minWidth: 200, border: `1px solid ${C.line}`, borderRadius: 8, padding: "9px 12px", fontSize: 14, fontFamily: "monospace", letterSpacing: "0.04em", color: C.soil, background: "var(--paper)" }} />
+            <button onClick={redeem} disabled={redeeming}
+              style={{ background: C.green, color: "#fff", border: "none", borderRadius: 8, padding: "9px 18px", fontSize: 13, fontWeight: 700, cursor: "pointer", opacity: redeeming ? 0.6 : 1 }}>
+              {redeeming ? "Redeeming…" : "Redeem"}
+            </button>
+          </div>
+        </div>
+      )}
 
       {pending && (
         <div style={{ ...card, background: "rgba(191,144,0,0.08)", border: "1px solid rgba(191,144,0,0.4)" }}>

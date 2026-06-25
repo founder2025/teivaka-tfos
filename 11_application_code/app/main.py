@@ -88,6 +88,7 @@ from app.routers import (
     admin_command,
     chat,
     sponsors,
+    sponsored_seats,
     subscriptions,
     webhooks,
     reports,
@@ -437,6 +438,7 @@ app.include_router(admin_command.public_router, prefix=f"{PREFIX}/platform",    
 
 # Platform
 app.include_router(subscriptions.router,      prefix=f"{PREFIX}/subscriptions",      tags=["Subscriptions"])
+app.include_router(sponsored_seats.router,    prefix=PREFIX,                         tags=["Sponsored Seats"])
 app.include_router(webhooks.router,           prefix=f"{PREFIX}/webhooks",           tags=["Webhooks"])
 app.include_router(reports.router,            prefix=f"{PREFIX}/reports",            tags=["Reports"])
 app.include_router(exports.router,            prefix=f"{PREFIX}/exports",            tags=["Exports"])
