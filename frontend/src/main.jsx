@@ -1,6 +1,7 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
+import ErrorBoundary from "./components/ErrorBoundary";
 import "./index.css";
 import { initTheme } from "./utils/theme";
 import { installNativeNetworkShim, bootNative, isNative } from "./native/bridge";
@@ -13,7 +14,9 @@ initTheme(); // keep theme-color + 'system' OS-changes in sync (boot script set 
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
-    <App />
+    <ErrorBoundary>
+      <App />
+    </ErrorBoundary>
   </React.StrictMode>
 );
 
