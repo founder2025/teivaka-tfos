@@ -1,6 +1,11 @@
 # TEIVAKA MONETIZATION STRATEGY
 
-> **Status:** Canonical · Operator-ratified 2026-06-15
+> **Status:** Canonical · Operator-ratified 2026-06-15 · **RESTRUCTURED & re-ratified
+> 2026-06-25 (Hormozi lens: price OUTCOMES, not features; farmers = distribution,
+> institutions = monetization).** Sections 1–11 below were rewritten in the 2026-06-25
+> restructure; the funding plan + north star are carried forward unchanged. Wired into
+> the platform via migrations 170–172 + `community.subscription_plans` /
+> `community.product_catalog` (admin-editable, no deploy).
 > **Confidentiality:** INTERNAL / CONFIDENTIAL — this is competitive IP. Do NOT publish
 > any of this (pricing, revenue mix, channel design) to the public website or any
 > public-facing surface. It lives in the repo as the team's source of truth and as the
@@ -61,113 +66,123 @@ Resilient by design — no dependence on a single revenue source.
 
 ---
 
-## 1. FARMER SUBSCRIPTIONS
+## THE ECONOMIC ENGINE (the 2026-06-25 sharpening)
 
-**Free Farmer** — Free forever. User acquisition, community growth, marketplace
-liquidity, data generation, mission alignment. Includes: community, marketplace, market
-prices, basic farm records, basic learning, weather, government notices, basic AI.
+Farmers **create** value (records, verification, production, trust, data).
+Institutions **consume** value (banks, exporters, buyers, governments, NGOs, insurers,
+processors). Therefore: **Farmer = Distribution. Institution = Monetization.** We do not
+charge a farmer for analytics when the bank is the one saving thousands because those
+analytics exist. We price the *outcome* to whoever captures it.
 
-**Teivaka Pro** — FJD $15/mo or $150/yr. Commercial smallholders. Unlimited records,
-labor mgmt, P&L tracking, financial reporting, yield analytics, planning tools, advanced
-AI, priority marketplace visibility, premium training.
-
-**Teivaka Business** — FJD $49/mo or $490/yr. Commercial farms, co-ops, agribusiness.
-Multiple farms, team accounts, inventory, machinery, compliance reporting, advanced
-analytics, BI tools.
-
-**Enterprise** — from FJD $299/mo. Exporters, large co-ops, government programs,
-corporate ag. Custom pricing by scale.
+The platform hardcodes **products, not just plans**: Farmer Plans · Sponsored Farmer
+Seats · Teivaka Verified · Teivaka Market Access · Teivaka Intelligence · Compliance &
+Traceability · Teivaka Academy · Advertising · Enterprise Contracts.
 
 ---
 
-## 2. SPONSORED FARMER SEATS  *(projected to be one of the largest streams)*
+## PRODUCT 1 — FARMER PLANS  *(distribution: capture the network, don't milk it)*
 
-Organizations buy subscriptions on behalf of farmers; farmers get access free.
+Wired live + entitlement-gated (`community.subscription_plans`, internal codes
+FREE/BASIC/PROFESSIONAL stable; farmer-visible names below). **No Enterprise on the
+farmer side** — that's institutional Verified/Intelligence territory. No "unlimited"
+anything on a farmer plan (those are custom-level economics).
 
-- **NGO Package** — 500 farmers — FJD $10,000/yr (farmer access, impact dashboard,
-  training, reporting).
-- **NGO Growth Package** — 1,000 farmers — FJD $20,000/yr.
-- **Ministry Package** — 5,000 farmers — FJD $75,000/yr (national dashboard, production
-  analytics, program tracking, impact reporting).
-- **National Agriculture Package** — 20,000+ farmers — custom, from FJD $250,000/yr.
+**Free (forever)** — FJD 0. *Acquire the network — target 80–90% of farmers.*
+Unlimited records, unlimited verification, community, marketplace, classroom, trust
+score, 1 farm, **TIS 50/month**, basic reports, offline access.
 
----
+**Farm Pro** — FJD **19/mo · 180/yr**. *Serious commercial smallholder — 5–15%.*
+5 farms, 20 team members, **TIS 500/month**, advanced reports, **Loan Readiness Pack**,
+buyer matching, inventory, labour management, season analytics.
 
-## 3. MARKETPLACE TRANSACTION FEES  *(targeted largest source)*
+**Farm Business** — FJD **69/mo · 690/yr**. *Commercial operation — 1–5%.*
+25 farms, 100 users, **TIS 5,000/month**, forecasting, cashflow planning, automation,
+advanced dashboards, branded reports, priority support, advanced verification.
 
-- **Produce Marketplace** (farmers → buyers/hotels/restaurants/exporters/processors): **2%**
-- **Input Marketplace** (seeds/fertilizers/chemicals/equipment): **3%**
-- **Service Marketplace** (tractor/excavator/consultants/spraying): **5%**
-- **Labor Marketplace** (employers hire workers): **5%**
-
----
-
-## 4. ADVERTISING SYSTEM  *(agriculture-related advertisers only — protect trust)*
-
-- Sponsored Listings — Starter FJD $99/mo · Growth FJD $299/mo · Premium FJD $999/mo.
-- Eligible: seed/fertilizer/equipment suppliers, banks, insurers, exporters, agribusiness.
+> *Note: TIS caps above are per-MONTH (the product definition). The live limiter still
+> meters per-DAY and over-delivers vs these caps; the daily→monthly conversion is a
+> separate scheduled slice.*
 
 ---
 
-## 5. VERIFIED BUSINESS DIRECTORY
+## PRODUCT 2 — TEIVAKA VERIFIED™  *(where the money starts)*
 
-- Basic Listing — Free.
-- Verified Listing — FJD $199/yr.
-- Premium Verified Listing — FJD $999/yr (priority placement, verified badge, lead-gen,
-  analytics).
-
----
-
-## 6. TEIVAKA CLASSROOM
-
-- Basic learning — free.
-- Certificate Courses — FJD $49–$199 (Kava Farming, Commercial Vegetable Production,
-  Farm Business Management, Agribusiness Entrepreneurship, Export Readiness).
-- Professional Certification Programs — FJD $499–$2,000+ (agribusiness managers,
-  extension officers, commercial farm managers).
+Customers: **banks, exporters, insurers, buyers, processors.**
+- **Starter** — FJD **500/mo** — Verified Farmer Network access, basic search, verification lookups.
+- **Professional** — FJD **2,500/mo** — advanced search, verified supplier discovery, portfolio monitoring, risk dashboard, buyer matching.
+- **Enterprise** — from FJD **10,000/mo** — custom integrations, API, bulk verification, compliance tools.
 
 ---
 
-## 7. FINANCIAL SERVICES COMMISSIONS
+## PRODUCT 3 — TEIVAKA INTELLIGENCE™
 
-Partner with banks, credit providers, insurers. Revenue from loan / insurance /
-equipment-financing / input-financing referrals. Commission **1%–5%** per partner
-agreement.
+Customers: **government, NGOs, development partners, research institutions.**
+- **Regional Dashboard** — FJD **2,000/mo**.
+- **National Dashboard** — FJD **10,000/mo**.
+- **Custom Analytics** — from FJD **25,000** per project.
 
----
-
-## 8. DATA & INSIGHTS PLATFORM
-
-**Only aggregated and anonymized data. No personal farmer data sold.**
-Customers: government, NGOs, banks, researchers, development agencies.
-Products: crop production reports, regional yield reports, input-demand forecasting,
-labor-demand forecasting, land-utilization reports, market-trend reports.
-Pricing: **FJD $5,000–$50,000/yr** per organization.
+(Aggregated/anonymized only — no personal farmer data sold.)
 
 ---
 
-## 9. LAND ACTIVATION REVENUE  *(unique Teivaka advantage)*
+## PRODUCT 4 — TEIVAKA MARKET ACCESS™
 
-Idle landowners connect with farmers.
-- Land Listing Fee — FJD $50/yr.
-- Premium Land Listing — FJD $250/yr.
-- Successful Match Fee — **1%–3%** of the first lease agreement.
+Customers: **exporters, buyers, processors.**
+- **Buyer Subscription** — FJD **500/mo**.
+- **Verified Supplier Discovery** — FJD **1,500/mo**.
+- **Preferred Buyer Status** — FJD **3,000/mo**.
 
----
-
-## 10. AI ASSISTANT MONETIZATION
-
-- Free Tier — 10 prompts/month.
-- Pro Tier — 100 prompts/month (included).
-- Business Tier — unlimited fair usage (included).
-- Enterprise — custom AI agents, additional pricing.
+Plus marketplace transaction fees on produce **2%** · inputs **3%** · services **5%** ·
+labour **5%**.
 
 ---
 
-## 11. API & INTEGRATION REVENUE  *(future phase)*
+## PRODUCT 5 — SPONSORED FARMERS™  *(push hardest in Fiji)*
 
-Organizations pay to connect systems (government, ERP, financial, export).
-Pricing: FJD $99–$999/month based on usage.
+Organizations sponsor farmer access; farmers get it free. **FJD 10 / farmer / month.**
+- FDB — 1,000 farmers → **FJD 10,000/mo**.
+- Agricultural Ministry — 5,000 farmers → **FJD 50,000/mo**.
+- NGO — 500 farmers → **FJD 5,000/mo**.
+
+---
+
+## PRODUCT 6 — COMPLIANCE & TRACEABILITY™  *(future gold mine)*
+
+Customers: **exporters, processors, governments.** FJD **1,000–20,000/mo** by scale —
+export-grade traceability, compliance reporting, audit-ready records.
+
+---
+
+## PRODUCT 7 — TEIVAKA ACADEMY™
+
+Course revenue split **70% instructor / 30% Teivaka**. Certification **FJD 20** per
+certificate.
+
+---
+
+## PRODUCT 8 — ADVERTISING  *(agriculture advertisers only — protect trust)*
+
+Sponsored Listings — Starter **99/mo** · Growth **299/mo** · Premium **999/mo**.
+Eligible: seed/fertilizer/equipment suppliers, banks, insurers, exporters, agribusiness.
+
+---
+
+## PRODUCT 9 — ENTERPRISE CONTRACTS / DATA & INSIGHTS
+
+Bespoke institutional deals + aggregated data products (FJD **5,000–50,000/yr** per org).
+Land Activation also lives here: land listing FJD 50/yr · premium FJD 250/yr · successful
+match fee **1%–3%** of the first lease.
+
+---
+
+### The revenue logic (why fewer paying customers wins)
+
+At 10,000 farmers, the poor model is `10,000 × FJD 20 = FJD 200k/mo` and dependent on
+farmers paying. The better model — **500 paid farmers + 3 banks + 2 exporters + 1
+ministry + 2 NGOs + marketplace + compliance** — yields **FJD 100k–300k/mo with far
+fewer paying customers**, because institutions pay for the outcome the farmer network
+produces. Teivaka is a **trust, intelligence, and market-infrastructure layer**, not farm
+software.
 
 ---
 

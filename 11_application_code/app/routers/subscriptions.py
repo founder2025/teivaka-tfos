@@ -10,51 +10,63 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 # Subscription tier definitions — fallback/seed only; the live source of truth is
-# community.subscription_plans (migration 170, corrected by 171). Prices here mirror
-# TEIVAKA_Monetization_Strategy.md (Operator-ratified 2026-06-15): Free / Teivaka
-# Pro $15 / Teivaka Business $49 / Enterprise from $299. Internal tier CODES are
-# kept stable (BASIC=Pro tier, PROFESSIONAL=Business tier) to avoid churning the
-# tenant.subscription_tier PK/CHECK; only display `name` carries the brand label.
+# community.subscription_plans (migrations 170–172). Prices mirror the ratified
+# Hormozi monetization restructure (2026-06-25): Free / Farm Pro $19 / Farm
+# Business $69. NO Enterprise on the farmer side (institutional Verified/
+# Intelligence territory). Internal tier CODES kept stable (BASIC=Farm Pro,
+# PROFESSIONAL=Farm Business) to avoid churning the tenant.subscription_tier
+# PK/CHECK; only display `name` carries the brand label. TIS caps are per-MONTH
+# in the spec; the live limiter still counts per-day until a dedicated slice.
 TIER_DEFINITIONS = {
     "FREE": {
         "name": "Free",
         "price_fjd_monthly": 0,
         "price_fjd_annual": 0,
         "tis_daily_limit": 5,
+        "tis_monthly_limit": 50,
         "farms_limit": 1,
         "users_limit": 2,
         "badge": None,
-        "features": ["basic_tracking", "tis_chat", "weather_log"],
+        "is_active": True,
+        "features": ["unlimited_records", "verification", "community", "marketplace", "classroom", "trust_score", "basic_tis", "basic_reports", "offline"],
     },
     "BASIC": {
-        "name": "Teivaka Pro",
-        "price_fjd_monthly": 15,
-        "price_fjd_annual": 150,
-        "tis_daily_limit": 25,
-        "farms_limit": 2,
-        "users_limit": 5,
+        "name": "Farm Pro",
+        "price_fjd_monthly": 19,
+        "price_fjd_annual": 180,
+        "tis_daily_limit": 50,
+        "tis_monthly_limit": 500,
+        "farms_limit": 5,
+        "users_limit": 20,
         "badge": "Most popular",
-        "features": ["basic_tracking", "tis_chat", "weather_log", "community_listings", "financials", "rotation_planner"],
+        "is_active": True,
+        "features": ["everything_in_free", "advanced_reports", "loan_readiness_pack", "buyer_matching", "inventory", "labour_management", "season_analytics"],
     },
     "PROFESSIONAL": {
-        "name": "Teivaka Business",
-        "price_fjd_monthly": 49,
-        "price_fjd_annual": 490,
-        "tis_daily_limit": 100,
-        "farms_limit": 10,
-        "users_limit": 20,
+        "name": "Farm Business",
+        "price_fjd_monthly": 69,
+        "price_fjd_annual": 690,
+        "tis_daily_limit": 500,
+        "tis_monthly_limit": 5000,
+        "farms_limit": 25,
+        "users_limit": 100,
         "badge": None,
-        "features": ["all_basic", "voice_query", "livestock", "apiculture", "profit_share", "nursery", "exports", "decision_engine"],
+        "is_active": True,
+        "features": ["everything_in_pro", "forecasting", "cashflow_planning", "automation", "advanced_dashboards", "branded_reports", "priority_support", "advanced_verification"],
     },
+    # Enterprise removed from the farmer side (kept inactive for back-compat with
+    # any tenant still stamped ENTERPRISE; not offered as an upgrade target).
     "ENTERPRISE": {
-        "name": "Enterprise",
+        "name": "Enterprise (legacy)",
         "price_fjd_monthly": 299,
         "price_fjd_annual": None,
         "tis_daily_limit": 500,
-        "farms_limit": -1,  # unlimited
+        "tis_monthly_limit": 5000,
+        "farms_limit": -1,
         "users_limit": -1,
         "badge": None,
-        "features": ["all_professional", "custom_reports", "api_access", "dedicated_support", "multi_island"],
+        "is_active": False,
+        "features": ["legacy"],
     },
 }
 
@@ -291,8 +303,13 @@ async def _load_plans_db(db):
         "SELECT to_regclass('community.subscription_plans') IS NOT NULL"))).scalar()
     if not has:
         return None
+    cols = (await db.execute(text(
+        "SELECT column_name FROM information_schema.columns "
+        "WHERE table_schema='community' AND table_name='subscription_plans'"))).scalars().all()
+    has_monthly = "tis_monthly_limit" in set(cols)
+    monthly_sel = "tis_monthly_limit, " if has_monthly else ""
     rows = (await db.execute(text(
-        "SELECT tier, name, price_fjd_monthly, price_fjd_annual, tis_daily_limit, "
+        f"SELECT tier, name, price_fjd_monthly, price_fjd_annual, tis_daily_limit, {monthly_sel}"
         "farms_limit, users_limit, features, badge, sort_order, is_active "
         "FROM community.subscription_plans ORDER BY sort_order, tier"))).mappings().all()
     if not rows:
@@ -308,6 +325,7 @@ async def _load_plans_db(db):
             "price_fjd_monthly": float(r["price_fjd_monthly"] or 0),
             "price_fjd_annual": (float(r["price_fjd_annual"]) if r["price_fjd_annual"] is not None else None),
             "tis_daily_limit": r["tis_daily_limit"],
+            "tis_monthly_limit": (r["tis_monthly_limit"] if has_monthly else None),
             "farms_limit": r["farms_limit"],
             "users_limit": r["users_limit"],
             "features": feats or [],
@@ -330,6 +348,7 @@ class PlanUpdate(BaseModel):
     price_fjd_monthly: Optional[float] = None
     price_fjd_annual: Optional[float] = None
     tis_daily_limit: Optional[int] = None
+    tis_monthly_limit: Optional[int] = None
     farms_limit: Optional[int] = None
     users_limit: Optional[int] = None
     features: Optional[list] = None
@@ -501,3 +520,97 @@ async def validate_discount(body: ValidateBody, user: dict = Depends(get_current
         "final_price": round(max(0.0, base - amount), 2),
         "billing_period": "ANNUAL" if annual else "MONTHLY",
     }}
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# Product catalog (Migration 172): institutional + other revenue lines —
+# Sponsored Farmers, Verified, Intelligence, Market Access, Compliance, Academy,
+# Advertising. Admin-editable catalog/config; billing + institution accounts are
+# NOT wired yet (no checkout) — this is the sales/management surface.
+# ════════════════════════════════════════════════════════════════════════════
+async def _products_table(db) -> bool:
+    return bool((await db.execute(text(
+        "SELECT to_regclass('community.product_catalog') IS NOT NULL"))).scalar())
+
+
+def _product_row(r):
+    return {
+        "id": r["id"], "product": r["product"], "name": r["name"],
+        "audience": r["audience"],
+        "price_fjd_monthly": (float(r["price_fjd_monthly"]) if r["price_fjd_monthly"] is not None else None),
+        "price_fjd_annual": (float(r["price_fjd_annual"]) if r["price_fjd_annual"] is not None else None),
+        "price_note": r["price_note"],
+        "features": (r["features"] if not isinstance(r["features"], str) else _json.loads(r["features"] or "[]")),
+        "sort_order": r["sort_order"], "is_active": r["is_active"],
+    }
+
+
+@router.get("/products")
+async def list_products(user: dict = Depends(get_current_user)):
+    """Active product catalog, grouped by product family (for the institutions
+    / 'sell sheet' surface). DB source of truth; empty list if not migrated."""
+    async with get_db_ctx() as db:
+        if not await _products_table(db):
+            return {"data": {}}
+        rows = (await db.execute(text(
+            "SELECT * FROM community.product_catalog WHERE is_active = true "
+            "ORDER BY sort_order, id"))).mappings().all()
+    grouped: dict = {}
+    for r in rows:
+        grouped.setdefault(r["product"], []).append(_product_row(r))
+    return {"data": grouped}
+
+
+@router.get("/admin/products")
+async def admin_list_products(user: dict = Depends(get_current_user)):
+    if user.get("role") not in _TIER_ADMIN_ROLES:
+        raise HTTPException(status_code=403, detail="Admin only")
+    async with get_db_ctx() as db:
+        if not await _products_table(db):
+            return {"data": []}
+        rows = (await db.execute(text(
+            "SELECT * FROM community.product_catalog ORDER BY sort_order, id"))).mappings().all()
+    return {"data": [_product_row(r) for r in rows]}
+
+
+class ProductUpdate(BaseModel):
+    product: Optional[str] = None
+    name: Optional[str] = None
+    audience: Optional[str] = None
+    price_fjd_monthly: Optional[float] = None
+    price_fjd_annual: Optional[float] = None
+    price_note: Optional[str] = None
+    features: Optional[list] = None
+    sort_order: Optional[int] = None
+    is_active: Optional[bool] = None
+
+
+@router.put("/admin/products/{product_id}")
+async def admin_upsert_product(product_id: str, body: ProductUpdate, user: dict = Depends(get_current_user)):
+    """Create/edit a catalog product's price, audience, features, ordering, active."""
+    if user.get("role") not in _TIER_ADMIN_ROLES:
+        raise HTTPException(status_code=403, detail="Admin only")
+    pid = product_id.strip().upper()
+    fields = {k: v for k, v in body.dict().items() if v is not None}
+    async with get_db_ctx() as db:
+        exists = (await db.execute(text(
+            "SELECT 1 FROM community.product_catalog WHERE id = :i"), {"i": pid})).scalar()
+        if not exists:
+            await db.execute(text(
+                "INSERT INTO community.product_catalog (id, product, name) VALUES (:i, :p, :n)"),
+                {"i": pid, "p": fields.get("product", "CUSTOM"), "n": fields.get("name", pid.title())})
+        if fields:
+            sets, params = [], {"i": pid, "by": str(user["user_id"])}
+            for k, v in fields.items():
+                if k == "features":
+                    sets.append("features = cast(:features AS jsonb)")
+                    params["features"] = _json.dumps(v)
+                else:
+                    sets.append(f"{k} = :{k}")
+                    params[k] = v
+            sets.append("updated_at = now()")
+            sets.append("updated_by = cast(:by AS uuid)")
+            await db.execute(text(
+                f"UPDATE community.product_catalog SET {', '.join(sets)} WHERE id = :i"), params)
+        await db.commit()
+    return {"data": {"id": pid, "updated": True}}

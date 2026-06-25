@@ -26,7 +26,8 @@ function PlanRow({ tier, plan, onSaved }) {
       await send("PUT", `/api/v1/subscriptions/admin/plans/${tier}`, {
         name: p.name, badge: p.badge || null,
         price_fjd_monthly: num(p.price_fjd_monthly), price_fjd_annual: num(p.price_fjd_annual),
-        tis_daily_limit: num(p.tis_daily_limit), farms_limit: num(p.farms_limit), users_limit: num(p.users_limit),
+        tis_daily_limit: num(p.tis_daily_limit), tis_monthly_limit: num(p.tis_monthly_limit),
+        farms_limit: num(p.farms_limit), users_limit: num(p.users_limit),
         is_active: p.is_active !== false,
       });
       toast(`${tier} saved ✓`, "success"); onSaved?.();
@@ -43,9 +44,10 @@ function PlanRow({ tier, plan, onSaved }) {
           <input type="checkbox" checked={p.is_active !== false} onChange={(e) => set("is_active", e.target.checked)} /> Active
         </label>
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 8 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 8 }}>
         <div><span style={lbl}>FJD / month</span><input type="number" value={p.price_fjd_monthly ?? ""} onChange={(e) => set("price_fjd_monthly", e.target.value)} style={inp} /></div>
         <div><span style={lbl}>FJD / year</span><input type="number" value={p.price_fjd_annual ?? ""} onChange={(e) => set("price_fjd_annual", e.target.value)} style={inp} /></div>
+        <div><span style={lbl}>TIS / month</span><input type="number" value={p.tis_monthly_limit ?? ""} onChange={(e) => set("tis_monthly_limit", e.target.value)} style={inp} /></div>
         <div><span style={lbl}>TIS / day</span><input type="number" value={p.tis_daily_limit ?? ""} onChange={(e) => set("tis_daily_limit", e.target.value)} style={inp} /></div>
         <div><span style={lbl}>Farms (−1=∞)</span><input type="number" value={p.farms_limit ?? ""} onChange={(e) => set("farms_limit", e.target.value)} style={inp} /></div>
         <div><span style={lbl}>Users (−1=∞)</span><input type="number" value={p.users_limit ?? ""} onChange={(e) => set("users_limit", e.target.value)} style={inp} /></div>
@@ -57,17 +59,56 @@ function PlanRow({ tier, plan, onSaved }) {
   );
 }
 
+function ProductRow({ p, onSaved }) {
+  const [s, setS] = useState(p);
+  const [busy, setBusy] = useState(false);
+  const set = (k, v) => setS((o) => ({ ...o, [k]: v }));
+  const num = (v) => (v === "" || v == null ? null : Number(v));
+  const save = async () => {
+    setBusy(true);
+    try {
+      await send("PUT", `/api/v1/subscriptions/admin/products/${p.id}`, {
+        name: s.name, audience: s.audience || null,
+        price_fjd_monthly: num(s.price_fjd_monthly), price_fjd_annual: num(s.price_fjd_annual),
+        price_note: s.price_note || null, sort_order: num(s.sort_order),
+        is_active: s.is_active !== false,
+      });
+      toast(`${p.id} saved ✓`, "success"); onSaved?.();
+    } catch (e) { toast(e.userMessage || e.message, "error"); }
+    finally { setBusy(false); }
+  };
+  return (
+    <div style={{ border: `1px solid ${C.line}`, borderRadius: 10, padding: 12, marginBottom: 10 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+        <input value={s.name || ""} onChange={(e) => set("name", e.target.value)} placeholder="Plan name" style={{ ...inp, width: 280, fontWeight: 700 }} />
+        <label style={{ fontSize: 12, color: C.muted, display: "flex", alignItems: "center", gap: 5, marginLeft: "auto" }}>
+          <input type="checkbox" checked={s.is_active !== false} onChange={(e) => set("is_active", e.target.checked)} /> Active
+        </label>
+        <button onClick={save} disabled={busy} style={{ ...btn, opacity: busy ? 0.6 : 1 }}><Save size={13} />{busy ? "…" : "Save"}</button>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1.6fr 0.9fr 0.9fr 1.2fr", gap: 8 }}>
+        <div><span style={lbl}>Audience</span><input value={s.audience || ""} onChange={(e) => set("audience", e.target.value)} style={inp} /></div>
+        <div><span style={lbl}>FJD / month</span><input type="number" value={s.price_fjd_monthly ?? ""} onChange={(e) => set("price_fjd_monthly", e.target.value)} style={inp} /></div>
+        <div><span style={lbl}>FJD / year</span><input type="number" value={s.price_fjd_annual ?? ""} onChange={(e) => set("price_fjd_annual", e.target.value)} style={inp} /></div>
+        <div><span style={lbl}>Price note</span><input value={s.price_note || ""} onChange={(e) => set("price_note", e.target.value)} placeholder="e.g. from · per certificate" style={inp} /></div>
+      </div>
+    </div>
+  );
+}
+
 export default function MonetizationPanel() {
   const [plans, setPlans] = useState(null);
+  const [products, setProducts] = useState(null);
   const [discounts, setDiscounts] = useState(null);
   const [nd, setNd] = useState({ code: "", kind: "PERCENT", value: 10, applies_to: "", max_uses: "", expires_at: "", note: "" });
   const [ref, setRef] = useState(null);
 
   const loadPlans = () => getJSON("/api/v1/subscriptions/admin/plans").then((r) => setPlans(r?.data || {})).catch(() => setPlans({}));
+  const loadProducts = () => getJSON("/api/v1/subscriptions/admin/products").then((r) => setProducts(r?.data || [])).catch(() => setProducts([]));
   const loadDiscounts = () => getJSON("/api/v1/subscriptions/admin/discounts").then((r) => setDiscounts(r?.data || [])).catch(() => setDiscounts([]));
   const loadRef = () => getJSON("/api/v1/affiliate/admin/overview").then((r) => setRef(r?.data?.settings || {})).catch(() => setRef({}));
 
-  useEffect(() => { loadPlans(); loadDiscounts(); loadRef(); }, []);
+  useEffect(() => { loadPlans(); loadProducts(); loadDiscounts(); loadRef(); }, []);
 
   const addDiscount = async () => {
     if (!nd.code.trim()) { toast("Enter a code", "error"); return; }
@@ -107,6 +148,28 @@ export default function MonetizationPanel() {
           : Object.keys(plans).length === 0 ? <div style={{ color: C.muted, fontSize: 13 }}>No plans yet — run migration 170 on the server, then reload.</div>
           : Object.entries(plans).sort((a, b) => (a[1].sort_order ?? 0) - (b[1].sort_order ?? 0))
               .map(([tier, plan]) => <PlanRow key={tier} tier={tier} plan={plan} onSaved={loadPlans} />)}
+      </div>
+
+      {/* ── Product catalog (institutional + other revenue lines) ── */}
+      <div style={card}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+          <DollarSign size={16} style={{ color: C.greenDk }} />
+          <strong style={{ color: C.soil, fontSize: 15 }}>Product catalog</strong>
+        </div>
+        <p style={{ fontSize: 12.5, color: C.muted, margin: "0 0 12px" }}>
+          Institutional & other revenue lines — Sponsored Farmers, Verified, Intelligence, Market Access,
+          Compliance, Academy, Advertising. Editable here. <strong>Catalog only</strong> — checkout / institution
+          accounts are not wired yet.
+        </p>
+        {products == null ? <div style={{ color: C.muted }}>Loading…</div>
+          : products.length === 0 ? <div style={{ color: C.muted, fontSize: 13 }}>No products yet — run migration 172 on the server, then reload.</div>
+          : Object.entries(products.reduce((acc, p) => { (acc[p.product] = acc[p.product] || []).push(p); return acc; }, {}))
+              .map(([fam, items]) => (
+                <div key={fam} style={{ marginBottom: 14 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: C.greenDk, marginBottom: 6 }}>{fam.replace(/_/g, " ")}</div>
+                  {items.sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0)).map((p) => <ProductRow key={p.id} p={p} onSaved={loadProducts} />)}
+                </div>
+              ))}
       </div>
 
       {/* ── Discount codes ── */}
