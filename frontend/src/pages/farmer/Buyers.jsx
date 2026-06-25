@@ -52,6 +52,20 @@ async function getCommunications(custId) { const r = await fetch(`/api/v1/custom
 async function getDemandSignals(farmId) { const r = await fetch(`/api/v1/demand-signals${farmId ? `?farm_id=${encodeURIComponent(farmId)}` : ""}`, { headers: authHeaders() }); if (!r.ok) throw new Error(r.status); return (await r.json())?.data ?? []; }
 async function getLeads(farmId) { const r = await fetch(`/api/v1/leads${farmId ? `?farm_id=${encodeURIComponent(farmId)}` : ""}`, { headers: authHeaders() }); if (!r.ok) throw new Error(r.status); return (await r.json())?.data ?? []; }
 async function getDisputes(custId) { const r = await fetch(`/api/v1/disputes?customer_id=${encodeURIComponent(custId)}`, { headers: authHeaders() }); if (!r.ok) throw new Error(r.status); return (await r.json())?.data ?? []; }
+// Connect the gap: post a transport / cold-storage job for a sale so nearby
+// providers can claim it (prevents spoilage when the farmer has no transport).
+async function postServiceJob(order, serviceType) {
+  try {
+    const title = serviceType === "COLD_STORAGE" ? `Cold storage for order ${order.order_id}` : `Deliver order ${order.order_id}`;
+    const r = await fetch("/api/v1/service-jobs", { method: "POST", headers: authHeaders(), body: JSON.stringify({
+      service_type: serviceType, title, farm_id: order.farm_id, order_id: order.order_id,
+      produce_desc: order.customer_name ? `Sale to ${order.customer_name}` : null,
+      dropoff_location: order.delivery_address || order.customer_name || null,
+    }) });
+    if (!r.ok) throw new Error();
+    emitToast(serviceType === "COLD_STORAGE" ? "Cold-storage job posted — nearby providers notified" : "Transport job posted — nearby providers notified");
+  } catch { emitToast("Could not post the job"); }
+}
 
 function amt(o) { return Number(o.net_amount_fjd ?? o.total_amount_fjd ?? o.total_fjd ?? 0); }
 function reliabilityTier(s) { return s >= 80 ? "high" : s >= 60 ? "medium" : "low"; }
@@ -429,8 +443,10 @@ function BuyerDetail({ b, orders, onBack, onNewOrder, advance, onLogPayment, onL
             return (
               <div key={o.order_id} className="buyer-history-row" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, padding: "8px 0", borderBottom: "1px solid rgba(92,64,51,0.08)" }}>
                 <div><div style={{ fontWeight: 600, color: "var(--soil)", fontSize: 13 }}>{fjd2(amt(o))}</div><div style={{ fontSize: 11, color: "var(--muted)" }}>{String(o.order_date).slice(0, 10)}</div></div>
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
                   {owed && <button className="btn btn-secondary btn-sm" onClick={() => onLogPayment(o)}>Log payment</button>}
+                  <button className="btn btn-secondary btn-sm" title="Post a delivery job for nearby providers" onClick={() => postServiceJob(o, "TRANSPORT")}>Find transport</button>
+                  <button className="btn btn-secondary btn-sm" title="Post a cold-storage job for nearby providers" onClick={() => postServiceJob(o, "COLD_STORAGE")}>Cold storage</button>
                   <StatusPill status={o.order_status} onChange={(s) => advance(o.order_id, s)} />
                 </div>
               </div>
