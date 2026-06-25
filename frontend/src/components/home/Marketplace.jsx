@@ -205,8 +205,9 @@ function ListingDetail({ l, onClose, onChanged }) {
     onClose();
   };
   const order = async () => {
+    const unit = l.price_basis || "kg";
     const cap = l.quantity_available_kg ? Number(l.quantity_available_kg) : null;
-    const ans = window.prompt(cap ? `How many to order? (up to ${cap})` : "How many to order?", cap ? String(cap) : "");
+    const ans = window.prompt(cap ? `How many ${unit} to order? (up to ${cap})` : `How many ${unit} to order?`, cap ? String(cap) : "");
     if (ans == null) return;
     const qty = Number(ans);
     if (!qty || qty <= 0) { toast("Enter a valid quantity", "error"); return; }

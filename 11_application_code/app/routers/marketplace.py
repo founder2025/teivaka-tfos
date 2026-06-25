@@ -146,7 +146,8 @@ async def order_from_listing(listing_id: str, body: ListingOrder, user: dict = D
         L = (await db.execute(text("""
             SELECT listing_id, tenant_id, farm_id, production_id, listing_title,
                    quantity_available_kg, price_per_kg_fjd, grade, listing_status,
-                   created_by, contact_whatsapp, COALESCE(category,'PRODUCE') AS category
+                   created_by, contact_whatsapp, COALESCE(category,'PRODUCE') AS category,
+                   COALESCE(price_basis,'kg') AS price_basis
             FROM community.listings WHERE listing_id = :lid
         """), {"lid": listing_id})).mappings().first()
         if not L:
@@ -162,12 +163,13 @@ async def order_from_listing(listing_id: str, body: ListingOrder, user: dict = D
         if L["price_per_kg_fjd"] is None:
             raise HTTPException(status_code=400, detail="This listing has no set price — contact the seller")
         price = Decimal(str(L["price_per_kg_fjd"]))
+        basis = L["price_basis"] or "kg"
         avail = L["quantity_available_kg"]
         qty = Decimal(str(body.quantity_kg)) if body.quantity_kg is not None else (Decimal(str(avail)) if avail is not None else None)
         if qty is None or qty <= 0:
             raise HTTPException(status_code=400, detail="Enter a quantity to order")
         if avail is not None and qty > Decimal(str(avail)):
-            raise HTTPException(status_code=400, detail=f"Only {avail} kg available on this listing")
+            raise HTTPException(status_code=400, detail=f"Only {avail} {basis} available on this listing")
         b = (await db.execute(text("""
             SELECT u.full_name, u.whatsapp_number, t.company_name
             FROM tenant.users u JOIN tenant.tenants t ON t.tenant_id = u.tenant_id
@@ -245,7 +247,7 @@ async def order_from_listing(listing_id: str, body: ListingOrder, user: dict = D
                 "INSERT INTO community.feed_notifications (user_id, actor_user_id, type, body) "
                 "VALUES (cast(:u AS uuid), cast(:a AS uuid), 'MARKETPLACE_ORDER', :b)"),
                 {"u": str(L["created_by"]), "a": buyer_uid,
-                 "b": f"New marketplace order: {buyer_name} ordered {qty}kg of {L['listing_title']} (FJD {total})."})
+                 "b": f"New marketplace order: {buyer_name} ordered {qty} {basis} of {L['listing_title']} (FJD {total})."})
         except Exception as e:  # noqa: BLE001
             logger.warning("marketplace order notify failed: %s", e)
 
@@ -273,13 +275,13 @@ async def order_from_listing(listing_id: str, body: ListingOrder, user: dict = D
             from app.services.notification_service import whatsapp_service
             await whatsapp_service.send_alert(
                 L["contact_whatsapp"],
-                f"New Teivaka marketplace order: {qty}kg {L['listing_title']} (FJD {total}) from {buyer_name}. Open the app to confirm.",
+                f"New Teivaka marketplace order: {qty} {basis} {L['listing_title']} (FJD {total}) from {buyer_name}. Open the app to confirm.",
                 severity="INFO")
         except Exception as e:  # noqa: BLE001
             logger.warning("marketplace order whatsapp failed: %s", e)
 
-    return {"data": {"order_id": order_id, "total_fjd": str(total), "quantity_kg": str(qty),
-                     "status": "CONFIRMED", "is_marketplace_sale": True}}
+    return {"data": {"order_id": order_id, "total_fjd": str(total), "quantity": str(qty),
+                     "price_basis": basis, "status": "CONFIRMED", "is_marketplace_sale": True}}
 
 
 # ════════════════════════════════════════════════════════════════════════════
