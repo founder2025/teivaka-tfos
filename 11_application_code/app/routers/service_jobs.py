@@ -19,6 +19,7 @@ Provider:
 community.* is cross-tenant (no RLS) — a farmer's job must be visible to provider
 tenants. In-app notifications via community.feed_notifications (WhatsApp next).
 """
+import asyncio
 import logging
 import math
 import uuid
@@ -61,6 +62,45 @@ async def _notify(db, user_id, actor_user_id, ntype: str, body: str):
             {"u": str(user_id), "a": str(actor_user_id), "t": ntype, "b": body})
     except Exception as e:  # noqa: BLE001
         logger.warning("service-job notify failed: %s", e)
+
+
+async def _whatsapp_blast(phones: list, message: str):
+    """Best-effort WhatsApp fan-out (mock-logs when Meta isn't configured).
+    Business-initiated alerts outside a 24h window need an approved template —
+    until that's set up + receipt-verified (PR.2), live delivery is limited."""
+    phones = [p for p in {(p or "").strip() for p in phones} if p]
+    if not phones:
+        return
+    try:
+        from app.services.notification_service import whatsapp_service
+        await asyncio.gather(*[
+            whatsapp_service.send_alert(p, message, severity="INFO") for p in phones
+        ], return_exceptions=True)
+    except Exception as e:  # noqa: BLE001
+        logger.warning("service-job whatsapp blast failed: %s", e)
+
+
+async def _notify_matching_providers(db, job: dict, actor_user_id) -> list:
+    """In-app notify active providers whose service types include this job and who
+    are within radius of the pickup (or have no coords). Returns phones to WhatsApp."""
+    rows = (await db.execute(text(
+        "SELECT user_id, phone, base_lat, base_lng, service_radius_km "
+        "FROM community.service_provider_profiles "
+        "WHERE is_active = true AND :st = ANY(service_types) LIMIT 200"),
+        {"st": job["service_type"]})).mappings().all()
+    body = f"New {job['service_type'].replace('_', ' ').lower()} job near you: {job['title']}. Open Teivaka → Service hub to claim."
+    phones, sent = [], 0
+    for r in rows:
+        d = _haversine_km(r["base_lat"], r["base_lng"], job.get("pickup_lat"), job.get("pickup_lng"))
+        if d is not None and d > (r["service_radius_km"] or 25):
+            continue
+        await _notify(db, r["user_id"], actor_user_id, "SERVICE_JOB_POSTED", body)
+        if r["phone"]:
+            phones.append(r["phone"])
+        sent += 1
+        if sent >= 50:  # cap fan-out per job (note: move to a worker at scale)
+            break
+    return phones
 
 
 # ── Provider profile ─────────────────────────────────────────────────────────
@@ -162,8 +202,19 @@ async def create_job(body: JobCreate, user: dict = Depends(get_current_user)):
             "dloc": body.dropoff_location, "dlat": body.dropoff_lat, "dlng": body.dropoff_lng,
             "needed": body.needed_by, "budget": body.budget_fjd, "notes": body.notes,
         })
+        # Push to matching nearby providers: in-app now (same txn) + WhatsApp after.
+        phones = []
+        try:
+            phones = await _notify_matching_providers(
+                db,
+                {"service_type": st, "title": body.title.strip(),
+                 "pickup_lat": body.pickup_lat, "pickup_lng": body.pickup_lng},
+                user["user_id"])
+        except Exception as e:  # noqa: BLE001
+            logger.warning("provider notify failed for %s: %s", job_id, e)
         await db.commit()
-    return {"data": {"job_id": job_id, "status": "OPEN"}}
+    await _whatsapp_blast(phones, f"New job on Teivaka: {body.title.strip()}. Open the app → Service hub to view and claim it.")
+    return {"data": {"job_id": job_id, "status": "OPEN", "providers_notified": len(phones)}}
 
 
 @router.get("/service-jobs/mine")
