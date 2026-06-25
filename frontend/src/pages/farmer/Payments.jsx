@@ -61,7 +61,12 @@ export default function Payments() {
       else if (s.unlocked) { setGate("open"); load(); }
       else if (s.pin_set) { setGate("enter"); }
       else { setGate("open"); load(); }   // no PIN yet → open until the owner secures it
-    } catch { setGate("error"); setGateMsg("Couldn't load Payments security. Check your connection and try again."); }
+    } catch {
+      // Status couldn't load (e.g. backend mid-deploy). Don't show a dead-end card:
+      // fail OPEN and let the server enforce — a PIN-holder's data calls return 423,
+      // which flips us to the unlock screen; everyone else just gets the hub.
+      setHasPin(false); setGate("open"); load();
+    }
   }, [load]);
   useEffect(() => { checkGate(); }, [checkGate]);
   // If the server unlock expires mid-session, any 423 re-shows the PIN screen.
