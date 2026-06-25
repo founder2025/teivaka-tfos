@@ -405,6 +405,7 @@ export default function App() {
             <Route path="/me/referrals"         element={<Referrals />} />
             <Route path="/me/affiliate"         element={<Affiliate />} />
             <Route path="/me/affiliate/console" element={<AffiliateConsole />} />
+            <Route path="/me/payments"          element={<Payments />} />
             <Route path="/me/team"              element={<Team />} />
             <Route path="/me/data"              element={<ExportData />} />
             <Route path="/covenant"             element={<Covenant />} />

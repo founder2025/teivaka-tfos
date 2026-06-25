@@ -272,21 +272,22 @@ async def confirm_transaction(txn_id: str, body: Confirm, user: dict = Depends(g
         if tx["state"] in ("REVERSED", "FAILED"):
             raise HTTPException(status_code=409, detail=f"Transaction is {tx['state']}")
 
-        # Resolve a farm for the ledger row (cash_ledger requires farm_id).
+        # Cash-flow link is for farm managers: if the account has a farm, record a
+        # cash_ledger row; otherwise (buyer/creator/provider with no farm) the
+        # payment + audit row IS the record. Universal — works for every role.
         farm_id = tx["farm_id"] or (await db.execute(text(
             "SELECT farm_id FROM tenant.farms ORDER BY created_at LIMIT 1"))).scalar()
-        if not farm_id:
-            raise HTTPException(status_code=400, detail="No farm on file to record this payment against")
 
         # Single-writer guard: never double-post a ledger row for this payment.
         existing = (await db.execute(text(
             "SELECT 1 FROM tenant.cash_ledger WHERE reference_type='PAYMENT' AND reference_id=:r LIMIT 1"),
             {"r": txn_id})).scalar()
-        ledger_id = f"CSH-{date.today():%Y%m%d}-{uuid.uuid4().hex[:4].upper()}"
         ttype = "EXPENSE" if tx["direction"] == "COLLECT" else "INCOME"
         who = tx["counterparty_label"] or ("payee" if tx["direction"] == "COLLECT" else "payer")
         descr = f"{'Payment to' if ttype == 'EXPENSE' else 'Payment from'} {who} · {tx['provider']} {body.confirmation_ref or tx['provider_ref'] or ''}".strip()
-        if not existing:
+        ledger_id = None
+        if farm_id and not existing:
+            ledger_id = f"CSH-{date.today():%Y%m%d}-{uuid.uuid4().hex[:4].upper()}"
             await db.execute(text("""
                 INSERT INTO tenant.cash_ledger
                     (ledger_id, tenant_id, farm_id, transaction_date, transaction_type, category,
@@ -309,11 +310,11 @@ async def confirm_transaction(txn_id: str, body: Confirm, user: dict = Depends(g
                SET state='CONFIRMED', confirmation_ref=:r, confirmed_via='USER',
                    cash_ledger_id=:l, updated_at=now()
              WHERE txn_id=:x
-        """), {"r": body.confirmation_ref, "l": (None if existing else ledger_id), "x": txn_id})
+        """), {"r": body.confirmation_ref, "l": ledger_id, "x": txn_id})
         await db.execute(text("UPDATE tenant.payables SET status='SETTLED', updated_at=now() WHERE obligation_id=:o"),
                          {"o": tx["obligation_id"]})
-    return {"data": {"txn_id": txn_id, "state": "CONFIRMED", "ledger_id": (None if existing else ledger_id),
-                     "audit_hash": this_hash}}
+    return {"data": {"txn_id": txn_id, "state": "CONFIRMED", "ledger_id": ledger_id,
+                     "recorded_in_cashflow": ledger_id is not None, "audit_hash": this_hash}}
 
 
 @router.get("/transactions")

@@ -94,7 +94,7 @@ export default function Payments() {
       <div style={{ padding: 16, maxWidth: 880, margin: "0 auto" }}>
         <h1 style={{ fontSize: 20, fontWeight: 800, color: "var(--soil)" }}>Payments</h1>
         <p style={{ fontSize: 12.5, color: "var(--muted)", margin: "2px 0 14px" }}>
-          You authorise and pay through your own M-PAiSA, bank or cash — Teivaka only records it in your cash flow.
+          You authorise and pay through your own M-PAiSA, bank or cash — Teivaka only records it for you (and into your farm cash flow if you manage a farm).
         </p>
 
         {/* summary */}

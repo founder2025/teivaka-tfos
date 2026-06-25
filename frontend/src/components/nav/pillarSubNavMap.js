@@ -151,6 +151,7 @@ export const ME_MENU_ITEMS = [
   { path: "/me",                   label: "Profile",          icon: User },
   { path: "/me/settings",          label: "Settings",         icon: Settings },
   { path: "/admin",                label: "Admin Command Center", icon: Shield, gate: "admin" },
+  { path: "/me/payments",          label: "Payments",         icon: Coins },
   { path: "/me/subscription",      label: "Subscription tier", icon: CreditCard },
   { path: "/me/referrals",         label: "Referrals",        icon: Gift },
   { path: "/me/affiliate",         label: "Affiliate program", icon: Award },
