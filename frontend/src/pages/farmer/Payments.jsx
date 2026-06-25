@@ -37,6 +37,11 @@ export default function Payments() {
   const [form, setForm] = useState({ amount_fjd: "", category: "INPUTS", counterparty_label: "", due_date: "" });
   const [showMethods, setShowMethods] = useState(false);
   const [mform, setMform] = useState({ method_type: "WALLET", label: "", masked_identifier: "" });
+  // PIN gate
+  const [gate, setGate] = useState("loading");   // loading | setup | enter | locked | open
+  const [pin, setPin] = useState("");
+  const [pin2, setPin2] = useState("");
+  const [gateMsg, setGateMsg] = useState("");
 
   const load = useCallback(() => {
     fetch(`${API}/summary`, { headers: auth() }).then((r) => r.json()).then((d) => setSum(d?.data)).catch(() => setSum(null));
@@ -44,7 +49,42 @@ export default function Payments() {
     fetch(`${API}/methods`, { headers: auth() }).then((r) => r.json()).then((d) => setMethods(d?.data || [])).catch(() => setMethods([]));
     fetch(`${API}/suggestions`, { headers: auth() }).then((r) => r.json()).then((d) => setSuggestions(d?.data || [])).catch(() => setSuggestions([]));
   }, []);
-  useEffect(() => { load(); }, [load]);
+
+  const checkGate = useCallback(async () => {
+    try {
+      const d = await call("GET", "/security/status");
+      const s = d.data;
+      if (s.unlocked) { setGate("open"); load(); }
+      else if (s.locked) { setGate("locked"); setGateMsg("Too many attempts — locked. Try again shortly."); }
+      else setGate(s.pin_set ? "enter" : "setup");
+    } catch { setGate("enter"); }
+  }, [load]);
+  useEffect(() => { checkGate(); }, [checkGate]);
+
+  const submitGate = async () => {
+    setGateMsg("");
+    try {
+      if (gate === "setup") {
+        if (pin !== pin2) { setGateMsg("PINs don't match"); return; }
+        await call("POST", "/security/set-pin", { pin });
+      } else {
+        await call("POST", "/security/unlock", { pin });
+      }
+      setPin(""); setPin2(""); setGate("open"); load();
+    } catch (e) {
+      setGateMsg(e.message || "Incorrect PIN");
+      if ((e.message || "").toLowerCase().includes("locked")) setGate("locked");
+    }
+  };
+  const forgotPin = async () => {
+    const pw = window.prompt("Confirm your account password to reset your PIN");
+    if (!pw) return;
+    const np = window.prompt("New 4–6 digit PIN");
+    if (!np) return;
+    try { await call("POST", "/security/reset", { password: pw, new_pin: np }); toast("PIN reset ✓", "success"); setGate("open"); load(); }
+    catch (e) { toast(e.message, "error"); }
+  };
+  const lockNow = async () => { try { await call("POST", "/security/lock"); } catch { /* noop */ } setGate("enter"); };
 
   const create = async () => {
     const amt = Number(form.amount_fjd);
@@ -89,6 +129,47 @@ export default function Payments() {
   const rows = (payables || []).filter((p) => p.direction === tab);
   const sugg = suggestions.filter((s) => s.direction === tab);
 
+  if (gate !== "open") {
+    const setup = gate === "setup";
+    const locked = gate === "locked";
+    return (
+      <TfpShell>
+        <div style={{ maxWidth: 360, margin: "48px auto", padding: 24, border: "1px solid var(--line)", borderRadius: 16, background: "var(--paper)", textAlign: "center" }}>
+          <div style={{ fontSize: 34, marginBottom: 6 }}>🔒</div>
+          <h1 style={{ fontSize: 18, fontWeight: 800, color: "var(--soil)" }}>
+            {locked ? "Payments locked" : setup ? "Secure your Payments" : "Enter your PIN"}
+          </h1>
+          <p style={{ fontSize: 12.5, color: "var(--muted)", margin: "6px 0 16px" }}>
+            {locked ? "Too many attempts. Try again in a few minutes."
+              : setup ? "Set a 4–6 digit PIN. You'll enter it to open Payments — only you can get in."
+              : "This area is protected. Enter your payments PIN to continue."}
+          </p>
+          {gate === "loading" && <div style={{ fontSize: 13, color: "var(--muted)" }}>Checking…</div>}
+          {!locked && gate !== "loading" && (
+            <>
+              <input autoFocus type="password" inputMode="numeric" maxLength={6} value={pin}
+                onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))}
+                onKeyDown={(e) => e.key === "Enter" && !setup && submitGate()}
+                placeholder="PIN" style={{ ...inp, textAlign: "center", letterSpacing: 6, fontSize: 20, marginBottom: 10 }} />
+              {setup && (
+                <input type="password" inputMode="numeric" maxLength={6} value={pin2}
+                  onChange={(e) => setPin2(e.target.value.replace(/\D/g, ""))}
+                  onKeyDown={(e) => e.key === "Enter" && submitGate()}
+                  placeholder="Confirm PIN" style={{ ...inp, textAlign: "center", letterSpacing: 6, fontSize: 20, marginBottom: 10 }} />
+              )}
+              {gateMsg && <div style={{ fontSize: 12, color: "#b91c1c", marginBottom: 8 }}>{gateMsg}</div>}
+              <button style={{ ...primary, width: "100%", padding: "10px", fontSize: 14 }} onClick={submitGate}>
+                {setup ? "Set PIN & open" : "Unlock"}
+              </button>
+              {!setup && <button style={{ ...btn, border: "none", marginTop: 10, color: "var(--green-dk)" }} onClick={forgotPin}>Forgot PIN?</button>}
+            </>
+          )}
+          {locked && <button style={{ ...btn, marginTop: 8 }} onClick={checkGate}>Try again</button>}
+        </div>
+      </TfpShell>
+    );
+  }
+
   return (
     <TfpShell>
       <div style={{ padding: 16, maxWidth: 880, margin: "0 auto" }}>
@@ -115,6 +196,7 @@ export default function Payments() {
             <button key={k} onClick={() => setTab(k)} style={{ ...btn, fontWeight: 700, ...(tab === k ? { background: "var(--green)", color: "var(--paper)", borderColor: "var(--green-dk)" } : {}) }}>{label}</button>
           ))}
           <button onClick={() => setShowMethods((s) => !s)} style={{ ...btn, marginLeft: "auto" }}>Payment methods ({methods.length})</button>
+          <button onClick={lockNow} title="Lock Payments" style={btn}>🔒 Lock</button>
         </div>
 
         {/* methods */}

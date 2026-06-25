@@ -18,7 +18,7 @@ Routes (mounted at /api/v1/payments):
 import json
 import logging
 import uuid
-from datetime import date, datetime
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Optional
 
@@ -30,6 +30,14 @@ from app.db.session import get_rls_db
 from app.middleware.rls import get_current_user
 from app.core.audit_chain import emit_audit_event
 from app.services.payment_providers import get_provider
+from app.core.payment_lock import (
+    pin_context, hash_pin, verify_pin, set_unlocked, is_unlocked, clear_unlocked,
+    require_payment_unlock, MAX_FAILED, LOCKOUT_SECONDS, UNLOCK_TTL_SECONDS,
+)
+
+
+def _now():
+    return datetime.now(timezone.utc)
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -47,7 +55,7 @@ def _f(v):
 
 # ───────────────────────────── providers ──────────────────────────────────
 @router.get("/providers")
-async def list_providers(user: dict = Depends(get_current_user)):
+async def list_providers(user: dict = Depends(require_payment_unlock)):
     async with get_rls_db(str(user["tenant_id"])) as db:
         rows = (await db.execute(text(
             "SELECT code, display, is_manual, can_collect, can_request, can_disburse, can_qr, enabled "
@@ -65,7 +73,7 @@ class MethodCreate(BaseModel):
 
 
 @router.get("/methods")
-async def list_methods(user: dict = Depends(get_current_user)):
+async def list_methods(user: dict = Depends(require_payment_unlock)):
     async with get_rls_db(str(user["tenant_id"])) as db:
         rows = (await db.execute(text(
             "SELECT method_id, provider, method_type, label, masked_identifier, is_default, status "
@@ -74,7 +82,7 @@ async def list_methods(user: dict = Depends(get_current_user)):
 
 
 @router.post("/methods")
-async def add_method(body: MethodCreate, user: dict = Depends(get_current_user)):
+async def add_method(body: MethodCreate, user: dict = Depends(require_payment_unlock)):
     mid = _nid("PM")
     async with get_rls_db(str(user["tenant_id"])) as db:
         if body.is_default:
@@ -91,7 +99,7 @@ async def add_method(body: MethodCreate, user: dict = Depends(get_current_user))
 
 
 @router.delete("/methods/{method_id}")
-async def archive_method(method_id: str, user: dict = Depends(get_current_user)):
+async def archive_method(method_id: str, user: dict = Depends(require_payment_unlock)):
     async with get_rls_db(str(user["tenant_id"])) as db:
         res = await db.execute(text(
             "UPDATE tenant.payment_methods SET status='ARCHIVED', updated_at=now() WHERE method_id=:m"),
@@ -110,7 +118,7 @@ class CounterpartyCreate(BaseModel):
 
 
 @router.get("/counterparties")
-async def list_counterparties(user: dict = Depends(get_current_user)):
+async def list_counterparties(user: dict = Depends(require_payment_unlock)):
     async with get_rls_db(str(user["tenant_id"])) as db:
         rows = (await db.execute(text(
             "SELECT counterparty_id, name, kind, provider, masked_handle "
@@ -119,7 +127,7 @@ async def list_counterparties(user: dict = Depends(get_current_user)):
 
 
 @router.post("/counterparties")
-async def add_counterparty(body: CounterpartyCreate, user: dict = Depends(get_current_user)):
+async def add_counterparty(body: CounterpartyCreate, user: dict = Depends(require_payment_unlock)):
     cid = _nid("CP")
     async with get_rls_db(str(user["tenant_id"])) as db:
         await db.execute(text("""
@@ -145,7 +153,7 @@ class PayableCreate(BaseModel):
 
 @router.get("/payables")
 async def list_payables(status: Optional[str] = None, direction: Optional[str] = None,
-                        user: dict = Depends(get_current_user)):
+                        user: dict = Depends(require_payment_unlock)):
     async with get_rls_db(str(user["tenant_id"])) as db:
         q = ("SELECT obligation_id, direction, category, counterparty_label, amount_fjd, currency, "
              "status, due_date, source_type, source_id, farm_id, notes, created_at "
@@ -161,7 +169,7 @@ async def list_payables(status: Optional[str] = None, direction: Optional[str] =
 
 
 @router.post("/payables")
-async def create_payable(body: PayableCreate, user: dict = Depends(get_current_user)):
+async def create_payable(body: PayableCreate, user: dict = Depends(require_payment_unlock)):
     oid = _nid("OBL")
     async with get_rls_db(str(user["tenant_id"])) as db:
         if body.farm_id:
@@ -187,7 +195,7 @@ async def create_payable(body: PayableCreate, user: dict = Depends(get_current_u
 
 
 @router.post("/payables/{obligation_id}/cancel")
-async def cancel_payable(obligation_id: str, user: dict = Depends(get_current_user)):
+async def cancel_payable(obligation_id: str, user: dict = Depends(require_payment_unlock)):
     async with get_rls_db(str(user["tenant_id"])) as db:
         res = await db.execute(text(
             "UPDATE tenant.payables SET status='CANCELLED', updated_at=now() "
@@ -202,7 +210,7 @@ class Instruct(BaseModel):
 
 
 @router.post("/payables/{obligation_id}/instruct")
-async def instruct(obligation_id: str, body: Instruct, user: dict = Depends(get_current_user)):
+async def instruct(obligation_id: str, body: Instruct, user: dict = Depends(require_payment_unlock)):
     """Generate a (manual) payment instruction for an obligation and open a
     transaction in INITIATED state."""
     async with get_rls_db(str(user["tenant_id"])) as db:
@@ -251,7 +259,7 @@ class Confirm(BaseModel):
 
 
 @router.post("/transactions/{txn_id}/confirm")
-async def confirm_transaction(txn_id: str, body: Confirm, user: dict = Depends(get_current_user)):
+async def confirm_transaction(txn_id: str, body: Confirm, user: dict = Depends(require_payment_unlock)):
     """Mark a transaction CONFIRMED and record it in cash flow: one cash_ledger
     row (EXPENSE for COLLECT, INCOME for RECEIVE) + one CASH_LOGGED audit event.
     Idempotent — a confirmed transaction never writes a second ledger row."""
@@ -318,7 +326,7 @@ async def confirm_transaction(txn_id: str, body: Confirm, user: dict = Depends(g
 
 
 @router.get("/transactions")
-async def list_transactions(obligation_id: Optional[str] = None, user: dict = Depends(get_current_user)):
+async def list_transactions(obligation_id: Optional[str] = None, user: dict = Depends(require_payment_unlock)):
     async with get_rls_db(str(user["tenant_id"])) as db:
         q = ("SELECT txn_id, obligation_id, provider, provider_ref, state, amount_fjd, "
              "instruction_payload, confirmation_ref, created_at FROM tenant.payment_transactions WHERE 1=1 ")
@@ -336,7 +344,7 @@ async def list_transactions(obligation_id: Optional[str] = None, user: dict = De
 # self-settle into cash_ledger (orders → log_payment) are deliberately excluded
 # to avoid double-counting.
 @router.get("/suggestions")
-async def suggestions(user: dict = Depends(get_current_user)):
+async def suggestions(user: dict = Depends(require_payment_unlock)):
     tid = str(user["tenant_id"])
     uid = str(user["user_id"])
     async with get_rls_db(tid) as db:
@@ -379,7 +387,7 @@ class Adopt(BaseModel):
 
 
 @router.post("/payables/adopt")
-async def adopt(body: Adopt, user: dict = Depends(get_current_user)):
+async def adopt(body: Adopt, user: dict = Depends(require_payment_unlock)):
     """Materialize a derived obligation into tenant.payables (idempotent), so it
     can run through the normal instruct/confirm flow. Records the farmer's cash
     movement only — it does NOT mark the source paid in its native system (AR/
@@ -426,7 +434,7 @@ async def adopt(body: Adopt, user: dict = Depends(get_current_user)):
 
 
 @router.get("/summary")
-async def summary(user: dict = Depends(get_current_user)):
+async def summary(user: dict = Depends(require_payment_unlock)):
     async with get_rls_db(str(user["tenant_id"])) as db:
         rows = (await db.execute(text("""
             SELECT direction,
@@ -438,3 +446,127 @@ async def summary(user: dict = Depends(get_current_user)):
     for r in rows:
         out[r["direction"]] = {"outstanding": _f(r["outstanding"]), "settled": _f(r["settled"])}
     return {"data": {"to_pay": out["COLLECT"], "to_receive": out["RECEIVE"]}}
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# Security: payments PIN gate. These routes are intentionally NOT behind
+# require_payment_unlock (they're how you unlock). Data is already owner-only via
+# JWT + RLS; the PIN protects an already-logged-in device. Verified loud, fail closed.
+# ════════════════════════════════════════════════════════════════════════════
+def _validate_pin(pin: str):
+    if not (pin and pin.isdigit() and 4 <= len(pin) <= 6):
+        raise HTTPException(status_code=400, detail="PIN must be 4–6 digits")
+    if len(set(pin)) == 1:
+        raise HTTPException(status_code=400, detail="Choose a less obvious PIN")
+
+
+@router.get("/security/status")
+async def security_status(user: dict = Depends(get_current_user)):
+    uid = str(user["user_id"])
+    async with get_rls_db(str(user["tenant_id"])) as db:
+        row = (await db.execute(text(
+            "SELECT pin_hash, locked_until FROM tenant.payment_security WHERE user_id=cast(:u AS uuid)"),
+            {"u": uid})).mappings().first()
+    locked = bool(row and row["locked_until"] and row["locked_until"] > _now())
+    return {"data": {"pin_set": bool(row), "locked": locked,
+                     "locked_until": (row["locked_until"].isoformat() if locked else None),
+                     "unlocked": await is_unlocked(uid)}}
+
+
+class SetPin(BaseModel):
+    pin: str
+    current_pin: Optional[str] = None
+
+
+@router.post("/security/set-pin")
+async def set_pin(body: SetPin, user: dict = Depends(get_current_user)):
+    _validate_pin(body.pin)
+    uid = str(user["user_id"]); tid = str(user["tenant_id"])
+    async with get_rls_db(tid) as db:
+        row = (await db.execute(text(
+            "SELECT pin_hash FROM tenant.payment_security WHERE user_id=cast(:u AS uuid)"),
+            {"u": uid})).mappings().first()
+        if row:
+            if not (body.current_pin and verify_pin(body.current_pin, row["pin_hash"])):
+                raise HTTPException(status_code=403, detail="Current PIN is incorrect")
+            await db.execute(text(
+                "UPDATE tenant.payment_security SET pin_hash=:h, failed_attempts=0, locked_until=NULL, "
+                "updated_at=now() WHERE user_id=cast(:u AS uuid)"), {"h": hash_pin(body.pin), "u": uid})
+        else:
+            await db.execute(text(
+                "INSERT INTO tenant.payment_security (user_id, tenant_id, pin_hash) "
+                "VALUES (cast(:u AS uuid), cast(:t AS uuid), :h)"),
+                {"u": uid, "t": tid, "h": hash_pin(body.pin)})
+    ttl = await set_unlocked(uid)
+    return {"data": {"pin_set": True, "unlocked": True, "ttl": ttl}}
+
+
+class Unlock(BaseModel):
+    pin: str
+
+
+@router.post("/security/unlock")
+async def unlock(body: Unlock, user: dict = Depends(get_current_user)):
+    uid = str(user["user_id"])
+    async with get_rls_db(str(user["tenant_id"])) as db:
+        row = (await db.execute(text(
+            "SELECT pin_hash, failed_attempts, locked_until FROM tenant.payment_security "
+            "WHERE user_id=cast(:u AS uuid)"), {"u": uid})).mappings().first()
+        if not row:
+            raise HTTPException(status_code=409, detail="No payments PIN set yet")
+        if row["locked_until"] and row["locked_until"] > _now():
+            raise HTTPException(status_code=423, detail="Too many attempts — locked. Try again later.")
+        if verify_pin(body.pin, row["pin_hash"]):
+            await db.execute(text(
+                "UPDATE tenant.payment_security SET failed_attempts=0, locked_until=NULL, updated_at=now() "
+                "WHERE user_id=cast(:u AS uuid)"), {"u": uid})
+            ttl = await set_unlocked(uid)
+            return {"data": {"unlocked": True, "ttl": ttl}}
+        attempts = (row["failed_attempts"] or 0) + 1
+        locked_until = None
+        if attempts >= MAX_FAILED:
+            locked_until = _now() + timedelta(seconds=LOCKOUT_SECONDS)
+            attempts = 0
+        await db.execute(text(
+            "UPDATE tenant.payment_security SET failed_attempts=:a, locked_until=:lu, updated_at=now() "
+            "WHERE user_id=cast(:u AS uuid)"), {"a": attempts, "lu": locked_until, "u": uid})
+    if locked_until:
+        raise HTTPException(status_code=423, detail="Too many attempts — locked for 15 minutes.")
+    raise HTTPException(status_code=401, detail=f"Incorrect PIN · {MAX_FAILED - attempts} attempts left")
+
+
+@router.post("/security/lock")
+async def lock(user: dict = Depends(get_current_user)):
+    await clear_unlocked(str(user["user_id"]))
+    return {"data": {"unlocked": False}}
+
+
+class ResetPin(BaseModel):
+    password: str
+    new_pin: str
+
+
+@router.post("/security/reset")
+async def reset_pin(body: ResetPin, user: dict = Depends(get_current_user)):
+    """Forgot-PIN: re-authenticate with the account password, then set a new PIN."""
+    _validate_pin(body.new_pin)
+    uid = str(user["user_id"]); tid = str(user["tenant_id"])
+    async with get_rls_db(tid) as db:
+        ph = (await db.execute(text(
+            "SELECT password_hash FROM tenant.users WHERE user_id=cast(:u AS uuid)"),
+            {"u": uid})).scalar()
+        if not ph or not pin_context.verify(body.password, ph):
+            raise HTTPException(status_code=403, detail="Password is incorrect")
+        exists = (await db.execute(text(
+            "SELECT 1 FROM tenant.payment_security WHERE user_id=cast(:u AS uuid)"), {"u": uid})).scalar()
+        if exists:
+            await db.execute(text(
+                "UPDATE tenant.payment_security SET pin_hash=:h, failed_attempts=0, locked_until=NULL, "
+                "updated_at=now() WHERE user_id=cast(:u AS uuid)"), {"h": hash_pin(body.new_pin), "u": uid})
+        else:
+            await db.execute(text(
+                "INSERT INTO tenant.payment_security (user_id, tenant_id, pin_hash) "
+                "VALUES (cast(:u AS uuid), cast(:t AS uuid), :h)"),
+                {"u": uid, "t": tid, "h": hash_pin(body.new_pin)})
+    await set_unlocked(uid)
+    return {"data": {"pin_set": True, "unlocked": True}}
