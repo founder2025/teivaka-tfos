@@ -9,38 +9,51 @@ import logging
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
-# Subscription tier definitions (aligned with TFOS pricing model)
+# Subscription tier definitions — fallback/seed only; the live source of truth is
+# community.subscription_plans (migration 170, corrected by 171). Prices here mirror
+# TEIVAKA_Monetization_Strategy.md (Operator-ratified 2026-06-15): Free / Teivaka
+# Pro $15 / Teivaka Business $49 / Enterprise from $299. Internal tier CODES are
+# kept stable (BASIC=Pro tier, PROFESSIONAL=Business tier) to avoid churning the
+# tenant.subscription_tier PK/CHECK; only display `name` carries the brand label.
 TIER_DEFINITIONS = {
     "FREE": {
         "name": "Free",
         "price_fjd_monthly": 0,
+        "price_fjd_annual": 0,
         "tis_daily_limit": 5,
         "farms_limit": 1,
         "users_limit": 2,
+        "badge": None,
         "features": ["basic_tracking", "tis_chat", "weather_log"],
     },
     "BASIC": {
-        "name": "Basic",
-        "price_fjd_monthly": 49,
+        "name": "Teivaka Pro",
+        "price_fjd_monthly": 15,
+        "price_fjd_annual": 150,
         "tis_daily_limit": 25,
         "farms_limit": 2,
         "users_limit": 5,
+        "badge": "Most popular",
         "features": ["basic_tracking", "tis_chat", "weather_log", "community_listings", "financials", "rotation_planner"],
     },
     "PROFESSIONAL": {
-        "name": "Professional",
-        "price_fjd_monthly": 149,
+        "name": "Teivaka Business",
+        "price_fjd_monthly": 49,
+        "price_fjd_annual": 490,
         "tis_daily_limit": 100,
         "farms_limit": 10,
         "users_limit": 20,
+        "badge": None,
         "features": ["all_basic", "voice_query", "livestock", "apiculture", "profit_share", "nursery", "exports", "decision_engine"],
     },
     "ENTERPRISE": {
         "name": "Enterprise",
-        "price_fjd_monthly": 399,
+        "price_fjd_monthly": 299,
+        "price_fjd_annual": None,
         "tis_daily_limit": 500,
         "farms_limit": -1,  # unlimited
         "users_limit": -1,
+        "badge": None,
         "features": ["all_professional", "custom_reports", "api_access", "dedicated_support", "multi_island"],
     },
 }
