@@ -13,7 +13,7 @@ import {
   LayoutDashboard, Shield, Users, BadgeCheck, CreditCard,
   Flag, GraduationCap, Store, BarChart3, LineChart,
   Settings, Cog, Map as MapIcon, ArrowLeft, Award, Crosshair, Globe, Bug,
-  CloudRain, Coins, Megaphone,
+  CloudRain, Coins, Megaphone, Receipt,
 } from "lucide-react";
 const C = { soil: "var(--soil)", cream: "var(--cream)", green: "var(--green)", greenDk: "var(--green-dk)", line: "var(--line)", muted: "var(--muted)", gold: "var(--amber)" };
 
@@ -35,6 +35,7 @@ const SECTIONS = [
   ]},
   { label: "Commerce", items: [
     { path: "/admin/sponsors", label: "Sponsor Corner", Icon: Megaphone },
+    { path: "/admin/billing", label: "Billing & Invoices", Icon: Receipt },
     { path: "/me/affiliate/console", label: "Affiliate console", Icon: Award },
   ]},
   { label: "Intelligence", items: [
