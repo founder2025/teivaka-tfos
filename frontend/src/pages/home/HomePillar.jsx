@@ -257,12 +257,7 @@ export default function HomePillar() {
   } else if (view === "following") {
     body = <FeedView initialFilter="following" />;
   } else if (view === "marketplace") {
-    body = (
-      <>
-        <Marketplace />
-        <MarketIntelligence />
-      </>
-    );
+    body = <Marketplace />;
   } else if (view === "prices") {
     body = <MarketIntelligence />;
   } else if (view === "directory") {
