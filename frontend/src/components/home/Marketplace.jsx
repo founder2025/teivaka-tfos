@@ -58,7 +58,9 @@ function NewListingModal({ onClose, onCreated }) {
   // Profession-aware default category from /auth/me (default only — changeable).
   useEffect(() => {
     getJSON("/api/v1/auth/me").then((r) => {
-      const prof = ((r?.data ?? r)?.profession || "").toLowerCase();
+      const d = (r?.data ?? r) || {};
+      // /auth/me returns account_type (canonical); .profession is legacy/absent.
+      const prof = (d.profession || d.account_type || "").toLowerCase();
       const def = PROF_DEFAULT_CAT[prof];
       if (def) setF((s2) => ({ ...s2, category: def, price_basis: CAT_CFG[def].bases[0][0] }));
     }).catch(() => {});

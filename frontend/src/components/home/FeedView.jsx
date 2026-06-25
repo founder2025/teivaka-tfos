@@ -254,8 +254,10 @@ function Composer({ me, onPosted, groupId }) {
   useEffect(() => {
     getJSON("/api/v1/auth/me").then((r) => {
       const d = r?.data ?? r;
-      const prof = (d?.profession || "").toLowerCase();
-      setCanGlobal(prof === "exporter" || prof === "importer");
+      // /auth/me returns account_type (canonical: COMMODITY_EXPORTER / TRADE_IMPORTER);
+      // accept legacy short forms too.
+      const at = (d?.account_type || d?.profession || "").toUpperCase();
+      setCanGlobal(["COMMODITY_EXPORTER", "TRADE_IMPORTER", "EXPORTER", "IMPORTER"].includes(at));
       if (d?.email) setMyEmail(d.email);
     }).catch(() => {});
   }, []);
