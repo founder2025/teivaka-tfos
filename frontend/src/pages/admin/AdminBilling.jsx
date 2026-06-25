@@ -44,6 +44,12 @@ export default function AdminBilling() {
     try { const d = await call("POST", "/invoices/generate", { tenant_id: acct.tenant_id }); toast(`Invoice ${d.data.invoice_id} created (${fjd(d.data.total_fjd)})`, "success"); load(); }
     catch (e) { toast(e.message, "error"); } finally { setBusy(false); }
   };
+  const setEmail = async (acct) => {
+    const v = window.prompt(`Billing email for ${acct.account_label || "this account"} (blank = use owner: ${acct.effective_email || "none on file"})`, acct.billing_email_override || "");
+    if (v === null) return;
+    try { await call("PUT", `/accounts/${acct.tenant_id}/email`, { email: v || null }); toast("Billing email updated ✓", "success"); load(); }
+    catch (e) { toast(e.message, "error"); }
+  };
   const action = async (inv, verb, payload) => {
     setBusy(true);
     try { await call("POST", `/invoices/${inv.invoice_id}/${verb}`, payload); toast(`${inv.invoice_id} → ${verb}`, "success"); load(); }
@@ -84,17 +90,22 @@ export default function AdminBilling() {
         <div style={{ border: "1px solid var(--line)", borderRadius: 10, overflow: "hidden", marginBottom: 26 }}>
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead><tr style={{ background: "var(--cream)" }}>
-              <th style={cell}>Account</th><th style={cell}>Marketplace</th><th style={cell}>Sponsorships</th><th style={cell}>Total</th><th style={cell}></th>
+              <th style={cell}>Account</th><th style={cell}>Marketplace</th><th style={cell}>Sponsorships</th><th style={cell}>Total</th><th style={cell}>Billing email</th><th style={cell}></th>
             </tr></thead>
             <tbody>
-              {outstanding === null && <tr><td style={cell} colSpan={5}>Loading…</td></tr>}
-              {outstanding?.length === 0 && <tr><td style={cell} colSpan={5}>No outstanding charges — all caught up.</td></tr>}
+              {outstanding === null && <tr><td style={cell} colSpan={6}>Loading…</td></tr>}
+              {outstanding?.length === 0 && <tr><td style={cell} colSpan={6}>No outstanding charges — all caught up.</td></tr>}
               {outstanding?.map((a) => (
                 <tr key={a.tenant_id}>
                   <td style={cell}>{a.account_label || a.tenant_id.slice(0, 8)}</td>
                   <td style={cell}>{fjd(a.marketplace_fjd)} <span style={{ color: "var(--muted)", fontSize: 11 }}>({a.fee_count})</span></td>
                   <td style={cell}>{fjd(a.sponsor_fjd)} <span style={{ color: "var(--muted)", fontSize: 11 }}>({a.sponsor_count})</span></td>
                   <td style={{ ...cell, fontWeight: 700 }}>{fjd(a.total_fjd)}</td>
+                  <td style={cell}>
+                    <span style={{ color: a.effective_email ? "var(--soil)" : "#b91c1c", fontSize: 12 }}>{a.effective_email || "none on file"}</span>
+                    {a.billing_email_override && <span title="custom billing email" style={{ color: "var(--green-dk)", fontSize: 10, marginLeft: 4 }}>•custom</span>}
+                    <button style={{ ...btn, padding: "2px 7px", marginLeft: 6, fontSize: 11 }} onClick={() => setEmail(a)}>Edit</button>
+                  </td>
                   <td style={cell}><button disabled={busy} style={{ ...btn, borderColor: "var(--green-dk)", color: "var(--green-dk)" }} onClick={() => generate(a)}>Generate invoice</button></td>
                 </tr>
               ))}

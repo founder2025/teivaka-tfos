@@ -64,8 +64,21 @@ async def _load_invoice(db, invoice_id: str):
     return inv, lines
 
 
+async def _tenants_has_billing_email(db) -> bool:
+    return bool((await db.execute(text(
+        "SELECT 1 FROM information_schema.columns WHERE table_schema='tenant' "
+        "AND table_name='tenants' AND column_name='billing_email'"))).scalar())
+
+
 async def _billing_email(db, tenant_id) -> Optional[str]:
-    """Best billing recipient for an account — prefer the owner/founder user."""
+    """Billing recipient — the account's explicit billing_email override
+    (migration 182) if set, else the owner/founder user email."""
+    if await _tenants_has_billing_email(db):
+        override = (await db.execute(text(
+            "SELECT billing_email FROM tenant.tenants WHERE tenant_id = cast(:t AS uuid)"),
+            {"t": str(tenant_id)})).scalar()
+        if override and override.strip():
+            return override.strip()
     return (await db.execute(text(
         "SELECT email FROM tenant.users WHERE tenant_id = cast(:t AS uuid) AND email IS NOT NULL "
         "ORDER BY CASE WHEN role IN ('OWNER','FOUNDER') THEN 0 ELSE 1 END, created_at LIMIT 1"),
@@ -132,7 +145,8 @@ async def outstanding(user: dict = Depends(get_current_user)):
     placements, grouped by tenant."""
     _require_admin(user)
     async with get_db_ctx() as db:
-        rows = (await db.execute(text("""
+        bcol = "t.billing_email" if await _tenants_has_billing_email(db) else "NULL::text"
+        rows = (await db.execute(text(f"""
             WITH mf AS (
                 SELECT tenant_id, SUM(fee_amount_fjd) AS amt, COUNT(*) AS cnt
                 FROM community.marketplace_fee_ledger
@@ -148,6 +162,12 @@ async def outstanding(user: dict = Depends(get_current_user)):
                 GROUP BY u.tenant_id
             )
             SELECT t.tenant_id, t.company_name AS account_label,
+                   {bcol} AS billing_email_override,
+                   COALESCE({bcol}, (
+                       SELECT email FROM tenant.users u2
+                       WHERE u2.tenant_id = t.tenant_id AND u2.email IS NOT NULL
+                       ORDER BY CASE WHEN u2.role IN ('OWNER','FOUNDER') THEN 0 ELSE 1 END, u2.created_at
+                       LIMIT 1)) AS effective_email,
                    COALESCE(mf.amt,0) AS marketplace_fjd, COALESCE(mf.cnt,0) AS fee_count,
                    COALESCE(sp.amt,0) AS sponsor_fjd,      COALESCE(sp.cnt,0) AS sponsor_count,
                    COALESCE(mf.amt,0) + COALESCE(sp.amt,0) AS total_fjd
@@ -159,10 +179,34 @@ async def outstanding(user: dict = Depends(get_current_user)):
         """))).mappings().all()
     return {"data": [{
         "tenant_id": str(r["tenant_id"]), "account_label": r["account_label"],
+        "billing_email_override": r["billing_email_override"], "effective_email": r["effective_email"],
         "marketplace_fjd": _f(r["marketplace_fjd"]), "fee_count": r["fee_count"],
         "sponsor_fjd": _f(r["sponsor_fjd"]), "sponsor_count": r["sponsor_count"],
         "total_fjd": _f(r["total_fjd"]),
     } for r in rows]}
+
+
+class AccountEmail(BaseModel):
+    email: Optional[str] = None
+
+
+@router.put("/admin/billing/accounts/{tenant_id}/email")
+async def set_billing_email(tenant_id: str, body: AccountEmail, user: dict = Depends(get_current_user)):
+    """Set (or clear, with null/empty) an account's billing email override."""
+    _require_admin(user)
+    email = (body.email or "").strip() or None
+    if email and ("@" not in email or "." not in email.split("@")[-1]):
+        raise HTTPException(status_code=400, detail="Enter a valid email address")
+    async with get_db_ctx() as db:
+        if not await _tenants_has_billing_email(db):
+            raise HTTPException(status_code=409, detail="billing_email column missing — run migration 182")
+        res = await db.execute(text(
+            "UPDATE tenant.tenants SET billing_email = :e WHERE tenant_id = cast(:t AS uuid)"),
+            {"e": email, "t": tenant_id})
+        if res.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Account not found")
+        await db.commit()
+    return {"data": {"tenant_id": tenant_id, "billing_email": email}}
 
 
 @router.get("/admin/billing/invoices")
