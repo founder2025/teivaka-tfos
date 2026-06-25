@@ -9,7 +9,7 @@
  *   - /api/*  → never cached (writes go through the IndexedDB outbox; reads
  *     just fail gracefully offline).
  */
-const CACHE = "tfos-shell-v1";
+const CACHE = "tfos-shell-v3-20260626";
 const SHELL = ["/", "/teivaka_logo.png", "/teivaka-lockup.png"];
 
 self.addEventListener("install", (e) => {
