@@ -21,8 +21,9 @@ import { useFormModal } from "../../context/FormModalContext";
 import {
   Sprout, Bird, Plus, ArrowRight, ShieldCheck, Link2, FileText, Crosshair, Cloud, CloudRain, Sun, CloudSun,
   Coins, DollarSign, Camera, Users, ListChecks, Activity, TrendingUp, Award, Truck, Sparkles,
-  Zap, Leaf, LayoutGrid,
+  Zap, Leaf, LayoutGrid, Bell, TriangleAlert, RefreshCw, Wallet, Trees, CheckCircle2,
 } from "lucide-react";
+import { formatMoney } from "../../utils/money";
 
 import { CurrentFarmProvider, useCurrentFarm } from "../../context/CurrentFarmContext";
 import RecentLoggedStrip from "../../components/farm/RecentLoggedStrip";
@@ -387,6 +388,190 @@ function QuickActions({ navigate }) {
   );
 }
 
+// ── prototype-format overview sections (real data, flat icons, theme) ────────
+const money = (v) => (v == null ? "—" : formatMoney(v));
+function dayPart() { const h = new Date().getHours(); return h < 12 ? "morning" : h < 17 ? "afternoon" : "evening"; }
+
+function OvHeader({ name, lastSync, navigate }) {
+  return (
+    <div className="flex items-start justify-between gap-3 flex-wrap">
+      <div>
+        <h1 className="text-2xl font-bold flex items-center gap-2" style={{ color: C.soil }}>Good {dayPart()}, {name || "there"} <Sun size={18} style={{ color: C.amber }} /></h1>
+        <div className="text-xs mt-0.5" style={{ color: C.muted }}>Here's what's happening on your farm today.</div>
+      </div>
+      <div className="flex items-center gap-2 flex-wrap">
+        {lastSync && <span className="text-[11px] flex items-center gap-1" style={{ color: C.muted }}><RefreshCw size={12} />Last sync: {lastSync}</span>}
+        <FarmSelector />
+        <button onClick={() => navigate("/tis")} className={`text-sm px-3 py-2 rounded-lg font-semibold flex items-center gap-1.5 ${FOCUS}`} style={{ color: C.greenDk, border: `1px solid ${C.border}`, background: "white" }}><Sparkles size={14} />AI to Farm</button>
+        <button onClick={() => navigate("/farm/enterprises")} className={`text-sm px-3 py-2 rounded-lg text-white font-semibold flex items-center gap-1.5 ${FOCUS}`} style={{ background: C.greenDk }}><Plus size={14} />Add Enterprise</button>
+      </div>
+    </div>
+  );
+}
+
+function Ring({ score, color }) {
+  return (
+    <div className="grid place-items-center shrink-0" style={{ width: 60, height: 60, borderRadius: "50%", background: `conic-gradient(${color} ${(score || 0) * 3.6}deg, var(--line) 0)` }}>
+      <div className="grid place-items-center bg-white" style={{ width: 46, height: 46, borderRadius: "50%" }}><span className="font-extrabold text-lg" style={{ color: C.soil }}>{score}</span></div>
+    </div>
+  );
+}
+
+function HealthKpis({ score, grade, net, businesses, catCount, dueToday, highPr, cash, alerts, navigate }) {
+  const ringColor = score >= 80 ? C.green : score >= 55 ? C.amber : C.red;
+  const Kpi = ({ icon: Icon, label, value, sub, color, go }) => (
+    <button onClick={go} className={`rounded-2xl border p-4 text-left bg-white ${FOCUS}`} style={{ borderColor: C.border }}>
+      <div className="flex items-center gap-1.5 text-[11px] uppercase tracking-wide font-bold" style={{ color: C.muted }}><Icon size={13} />{label}</div>
+      <div className="text-xl font-extrabold mt-1 leading-tight" style={{ color }}>{value}</div>
+      <div className="text-[11px] mt-0.5" style={{ color: C.muted }}>{sub}</div>
+    </button>
+  );
+  return (
+    <div className="grid gap-3 grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
+      <button onClick={() => navigate("/farm/compliance")} className={`rounded-2xl border p-4 bg-white flex items-center gap-3 col-span-2 ${FOCUS}`} style={{ borderColor: C.border }}>
+        <Ring score={score} color={ringColor} />
+        <div className="min-w-0 text-left">
+          <div className="text-[11px] uppercase tracking-wide font-bold" style={{ color: C.muted }}>Farm Health</div>
+          <div className="text-base font-extrabold" style={{ color: C.soil }}>{grade}</div>
+          <div className="text-[11px]" style={{ color: C.muted }}>Your farm is performing — view full health</div>
+        </div>
+      </button>
+      <Kpi icon={TrendingUp} label="Net Profit" value={money(net)} sub="this season" color={Number(net) < 0 ? C.red : C.greenDk} go={() => navigate("/farm/cash")} />
+      <Kpi icon={LayoutGrid} label="Enterprises" value={businesses} sub={`across ${catCount} categor${catCount === 1 ? "y" : "ies"}`} color={C.soil} go={() => navigate("/farm/enterprises")} />
+      <Kpi icon={ListChecks} label="Tasks Today" value={dueToday} sub={highPr ? `${highPr} high priority` : "all clear"} color={C.soil} go={() => navigate("/farm/tasks")} />
+      <Kpi icon={Wallet} label="Cash Balance" value={money(cash)} sub="available" color={C.greenDk} go={() => navigate("/farm/cash")} />
+      <Kpi icon={Bell} label="Alerts" value={alerts} sub={alerts ? "action needed" : "none"} color={alerts ? C.amber : C.muted} go={() => navigate("/farm/compliance")} />
+    </div>
+  );
+}
+
+function AttentionAdvisor({ attention, best, riskiest, navigate }) {
+  return (
+    <div className="grid gap-3 lg:grid-cols-2">
+      <div className="rounded-2xl border bg-white" style={{ borderColor: C.border }}>
+        <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: `1px solid ${C.border}` }}>
+          <span className="text-sm font-bold flex items-center gap-1.5" style={{ color: C.soil }}><TriangleAlert size={15} style={{ color: C.amber }} />Attention Needed</span>
+          <button onClick={() => navigate("/farm/tasks")} className="text-[11px] font-semibold" style={{ color: C.greenDk }}>View all</button>
+        </div>
+        {attention.length === 0 ? (
+          <div className="px-4 py-8 text-center text-sm" style={{ color: C.muted }}>Nothing needs attention — you're on top of it.</div>
+        ) : attention.map((a, i) => (
+          <button key={i} onClick={() => navigate(a.route)} className="w-full flex items-center gap-3 px-4 py-2.5 text-left" style={{ borderTop: i ? `1px solid rgba(31,41,55,0.06)` : "none" }}>
+            <div className="grid place-items-center rounded-lg shrink-0" style={{ width: 30, height: 30, background: a.bg }}><a.icon size={15} style={{ color: a.fg }} /></div>
+            <div className="flex-1 min-w-0">
+              <div className="text-sm font-semibold truncate" style={{ color: C.soil }}>{a.title}</div>
+              {a.sub && <div className="text-[11px] truncate" style={{ color: C.muted }}>{a.sub}</div>}
+            </div>
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0" style={{ background: a.bg, color: a.fg }}>{a.tag}</span>
+          </button>
+        ))}
+      </div>
+      <div className="rounded-2xl border bg-white p-4" style={{ borderColor: C.border }}>
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-sm font-bold flex items-center gap-1.5" style={{ color: C.soil }}><Sparkles size={15} style={{ color: C.greenDk }} />AI Farm Advisor</span>
+          <button onClick={() => navigate("/tis")} className="text-[11px] font-semibold px-2 py-1 rounded-lg" style={{ color: C.greenDk, border: `1px solid ${C.border}` }}>Ask AI</button>
+        </div>
+        <div className="grid grid-cols-2 gap-2 mt-2">
+          <div className="rounded-xl p-3" style={{ background: C.greenTint }}>
+            <div className="text-[10px] uppercase font-bold" style={{ color: C.muted }}>Best enterprise</div>
+            <div className="text-sm font-bold mt-0.5" style={{ color: C.greenDk }}>{best ? best.name : "—"}</div>
+            {best && <div className="text-[11px]" style={{ color: C.muted }}>{money(best.net)} net</div>}
+          </div>
+          <div className="rounded-xl p-3" style={{ background: "#FBEAE6" }}>
+            <div className="text-[10px] uppercase font-bold" style={{ color: C.muted }}>Watch</div>
+            <div className="text-sm font-bold mt-0.5" style={{ color: C.red }}>{riskiest ? riskiest.name : "—"}</div>
+            {riskiest && <div className="text-[11px]" style={{ color: C.muted }}>{money(riskiest.net)} net</div>}
+          </div>
+        </div>
+        <div className="text-[11px] mt-3" style={{ color: C.muted }}>Grounded advice (cited agronomy + decision signals) appears here as the engine learns your farm. <span className="font-semibold">Building</span> — ask TIS for guidance now.</div>
+      </div>
+    </div>
+  );
+}
+
+const ENT_TABS = [
+  ["All", null], ["Crops", "crops"], ["Livestock", "livestock"], ["Poultry", "poultry"],
+  ["Forestry", "forestry"], ["Aquaculture", "aquaculture"], ["Apiculture", "apiculture"],
+];
+const ENT_ICON = { crops: Sprout, livestock: Leaf, poultry: Bird, forestry: Trees, aquaculture: Leaf, apiculture: Leaf };
+
+function EnterprisePortfolio({ enterprises, counts, navigate }) {
+  const [tab, setTab] = useState(null);
+  const rows = enterprises.filter((e) => !tab || e.kind === tab);
+  return (
+    <div className="rounded-2xl border bg-white p-4" style={{ borderColor: C.border }}>
+      <div className="flex items-center justify-between gap-2 flex-wrap mb-3">
+        <span className="text-sm font-bold uppercase tracking-wide" style={{ color: C.soil }}>Enterprise Portfolio</span>
+        <button onClick={() => navigate("/farm/enterprises")} className="text-[11px] font-semibold px-2.5 py-1 rounded-lg" style={{ color: C.greenDk, border: `1px solid ${C.border}` }}>Manage Enterprises</button>
+      </div>
+      <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar mb-3">
+        {ENT_TABS.map(([label, key]) => {
+          const n = key == null ? enterprises.length : (counts[key] || 0);
+          const active = tab === key;
+          const disabled = key != null && n === 0;
+          return (
+            <button key={label} disabled={disabled} onClick={() => setTab(key)} className={`text-xs px-3 py-1.5 rounded-full font-semibold shrink-0 ${FOCUS}`}
+              style={active ? { background: C.greenDk, color: "#fff" } : { color: disabled ? C.muted : C.soil, background: "var(--paper)", border: `1px solid ${C.border}`, opacity: disabled ? 0.5 : 1 }}>
+              {label} ({n})
+            </button>
+          );
+        })}
+      </div>
+      {rows.length === 0 ? (
+        <div className="py-8 text-center text-sm" style={{ color: C.muted }}>No enterprises here yet — add one to get started.</div>
+      ) : (
+        <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          {rows.map((e) => {
+            const Icon = ENT_ICON[e.kind] || Sprout;
+            return (
+              <button key={e.id} onClick={() => navigate(e.route)} className={`rounded-xl border p-3 text-left bg-white ${FOCUS}`} style={{ borderColor: C.border }}>
+                <div className="flex items-center gap-2">
+                  <div className="grid place-items-center rounded-lg shrink-0" style={{ width: 34, height: 34, background: C.greenTint }}><Icon size={17} style={{ color: C.greenDk }} /></div>
+                  <div className="min-w-0">
+                    <div className="text-[9px] font-bold uppercase tracking-wide" style={{ color: C.muted }}>{e.kindLabel}</div>
+                    <div className="text-sm font-bold truncate" style={{ color: C.soil }}>{e.name}</div>
+                  </div>
+                </div>
+                {e.metric && <div className="text-[11px] mt-2" style={{ color: C.muted }}>{e.metric}</div>}
+                <div className="flex items-center justify-between mt-2 pt-2" style={{ borderTop: `1px solid rgba(31,41,55,0.06)` }}>
+                  <div><div className="text-[9px] uppercase" style={{ color: C.muted }}>Income (season)</div><div className="text-xs font-bold" style={{ color: C.soil }}>{money(e.income)}</div></div>
+                  <div className="text-right"><div className="text-[9px] uppercase" style={{ color: C.muted }}>Net (season)</div><div className="text-xs font-bold" style={{ color: Number(e.net) < 0 ? C.red : C.greenDk }}>{money(e.net)}</div></div>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function FinancialSnapshot({ revenue, expenses, net, topRevenue, topExpense, navigate }) {
+  const pct = revenue > 0 ? Math.max(0, Math.min(100, (net / revenue) * 100)) : 0;
+  return (
+    <div className="rounded-2xl border bg-white p-4" style={{ borderColor: C.border }}>
+      <div className="flex items-center justify-between mb-3">
+        <span className="text-sm font-bold uppercase tracking-wide" style={{ color: C.soil }}>Financial Snapshot</span>
+        <button onClick={() => navigate("/farm/reports")} className="text-[11px] font-semibold" style={{ color: C.greenDk }}>View full report</button>
+      </div>
+      <div className="flex items-center gap-4 flex-wrap">
+        <div className="grid place-items-center shrink-0" style={{ width: 110, height: 110, borderRadius: "50%", background: `conic-gradient(${C.green} ${pct * 3.6}deg, ${C.line || "var(--line)"} 0)` }}>
+          <div className="grid place-items-center bg-white text-center" style={{ width: 84, height: 84, borderRadius: "50%" }}>
+            <div><div className="text-[9px] uppercase" style={{ color: C.muted }}>Net Profit</div><div className="text-sm font-extrabold" style={{ color: Number(net) < 0 ? C.red : C.greenDk }}>{money(net)}</div></div>
+          </div>
+        </div>
+        <div className="flex-1 min-w-[180px] grid grid-cols-3 gap-3">
+          <div><div className="text-[10px] uppercase" style={{ color: C.muted }}>Revenue</div><div className="text-sm font-bold" style={{ color: C.soil }}>{money(revenue)}</div></div>
+          <div><div className="text-[10px] uppercase" style={{ color: C.muted }}>Expenses</div><div className="text-sm font-bold" style={{ color: C.soil }}>{money(expenses)}</div></div>
+          <div><div className="text-[10px] uppercase" style={{ color: C.muted }}>Cash flow</div><div className="text-sm font-bold" style={{ color: Number(net) < 0 ? C.red : C.greenDk }}>{Number(net) < 0 ? "Negative" : "Positive"}</div></div>
+          <div><div className="text-[10px] uppercase" style={{ color: C.muted }}>Top revenue</div><div className="text-xs font-bold truncate" style={{ color: C.soil }}>{topRevenue || "—"}</div></div>
+          <div><div className="text-[10px] uppercase" style={{ color: C.muted }}>Top expense</div><div className="text-xs font-bold" style={{ color: C.soil }}>{topExpense || "—"}</div></div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── page ─────────────────────────────────────────────────────────────
 function FarmOverview() {
   const { farmId } = useCurrentFarm();
@@ -449,34 +634,73 @@ function FarmOverview() {
   let score = entScores.length ? Math.round(entScores.reduce((a, b) => a + b, 0) / entScores.length) : (activeCycles || head ? 70 : 0);
   if (activeCycles === 0 && head === 0 && entScores.length) score = Math.max(0, score - 20);
   if (holds) score = Math.max(0, score - Math.round((holds * 40) / Math.max(1, entScores.length)));
-  const grade = score >= 80 ? "Strong" : score >= 55 ? "Steady" : score >= 30 ? "Watch" : entScores.length ? "At risk" : "New";
+  const grade = score >= 80 ? "Very Good" : score >= 55 ? "Steady" : score >= 30 ? "Watch" : entScores.length ? "At risk" : "New";
   const standing = { grade, score };
+
+  // ── prototype-format derivations (real data only) ──────────────────────────
+  const me = useQuery({ queryKey: ["ov-me"], queryFn: () => getJSON("/api/v1/auth/me"), retry: 0 });
+  const meName = String((me.data?.data?.full_name ?? me.data?.full_name ?? "") || "").split(" ")[0] || "";
+  const lastSync = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const t0 = new Date().toISOString().slice(0, 10);
+
+  const cropRevenue = cropRows.reduce((a, r) => a + n0(r.total_income_fjd), 0);
+  const totLabor = cropRows.reduce((a, r) => a + n0(r.total_labor_fjd), 0);
+  const totInput = cropRows.reduce((a, r) => a + n0(r.total_input_cost_fjd), 0);
+  const revenue = n0(finSummary?.total_income_fjd ?? finSummary?.total_revenue_fjd ?? cropRevenue);
+  const netProfit = finSummary?.net_profit_fjd != null ? n0(finSummary.net_profit_fjd) : (cropRevenue - totLabor - totInput);
+  const expenses = Math.max(0, revenue - netProfit);
+  const topRevenue = cropRows.length ? cropRows.slice().sort((a, b) => n0(b.total_income_fjd) - n0(a.total_income_fjd))[0].production_name : null;
+  const topExpense = (totInput || totLabor) ? (totInput >= totLabor ? "Inputs" : "Labour") : null;
+
+  const cropWithNet = cropRows.map((r) => ({ name: r.production_name, net: n0(r.total_income_fjd) - n0(r.total_labor_fjd) - n0(r.total_input_cost_fjd) }));
+  const best = cropWithNet.length ? cropWithNet.reduce((a, b) => (b.net > a.net ? b : a)) : null;
+  const riskiest = cropWithNet.length ? cropWithNet.reduce((a, b) => (b.net < a.net ? b : a)) : null;
+
+  const dueToday = taskRows.filter((x) => x.due_date && x.due_date <= t0).length;
+  const highPr = taskRows.filter((x) => (x.task_rank ?? 999) < 300 && x.due_date && x.due_date <= t0).length;
+  const alerts = holds + cropWithNet.filter((c) => c.net < 0).length;
+
+  const flockKind = (f) => { const s = String(f.species || f.flock_type || f.flock_name || "").toLowerCase(); return /chick|broiler|layer|hen|poultry|duck/.test(s) ? "poultry" : "livestock"; };
+  const cycleByCrop = {};
+  cycleRows.forEach((c) => { if (["ACTIVE", "HARVESTING"].includes(String(c.cycle_status || "").toUpperCase())) { const k = c.production_name; const eh = c.expected_harvest_date; if (eh && (!cycleByCrop[k] || eh < cycleByCrop[k])) cycleByCrop[k] = eh; } });
+  const cropEnts = cropRows.map((r, i) => {
+    const net = n0(r.total_income_fjd) - n0(r.total_labor_fjd) - n0(r.total_input_cost_fjd);
+    const eh = cycleByCrop[r.production_name];
+    const days = eh ? Math.ceil((new Date(eh) - Date.now()) / 86400000) : null;
+    return { id: `c${i}`, kind: "crops", kindLabel: "Crops", name: r.production_name, income: n0(r.total_income_fjd), net, metric: days != null ? (days <= 0 ? "Ready to harvest" : `${days} day${days === 1 ? "" : "s"} to harvest`) : null, route: "/farm/cycles" };
+  });
+  const flockEnts = flockRows.map((f, i) => { const k = flockKind(f); return { id: `f${i}`, kind: k, kindLabel: k === "poultry" ? "Poultry" : "Livestock", name: f.flock_name || f.species || "Flock", income: null, net: null, metric: `${n0(f.current_count)} ${k === "poultry" ? "birds" : "animals"}`, route: "/farm/enterprises" }; });
+  const enterprises = [...cropEnts, ...flockEnts];
+  const entCounts = { crops: cropEnts.length, poultry: flockEnts.filter((e) => e.kind === "poultry").length, livestock: flockEnts.filter((e) => e.kind === "livestock").length, forestry: 0, aquaculture: 0, apiculture: 0 };
+  const catCount = Object.values(entCounts).filter((n) => n > 0).length;
+
+  const attn = [];
+  if (holds) attn.push({ icon: ShieldCheck, bg: "#FBEAE6", fg: C.red, title: `${holds} harvest${holds === 1 ? "" : "s"} blocked`, sub: "Chemical withholding period not cleared", tag: "High", route: "/farm/compliance" });
+  taskRows.slice().sort((a, b) => (a.task_rank ?? 999) - (b.task_rank ?? 999)).slice(0, Math.max(0, 4 - attn.length)).forEach((tk) => {
+    const w = tk.due_date ? (tk.due_date < t0 ? "Overdue" : tk.due_date === t0 ? "Today" : "Upcoming") : "Upcoming";
+    attn.push({ icon: ListChecks, bg: C.greenTint, fg: C.greenDk, title: tk.imperative, sub: null, tag: w, route: "/farm/tasks" });
+  });
 
   const handleCycleCreated = () => { ["ov-cycles", "ov-crops", "ov-fin"].forEach((k) => qc.invalidateQueries({ queryKey: [k, farmId] })); qc.invalidateQueries({ queryKey: ["ov-tasks"] }); };
   const taskAction = async (id, action) => { try { await postJSON(`/api/v1/tasks/${id}/${action}`); emitToast(action === "complete" ? "Task done" : "Task skipped"); qc.invalidateQueries({ queryKey: ["ov-tasks"] }); } catch { emitToast("Couldn't update the task — try again"); } };
 
   return (
-    <div className="tfp space-y-3">
-      <HeaderRow />
-      <FarmSectionsNav />
-      <RecentLoggedStrip farmId={farmId} />
-      <PillarCards crops={cropRows} flocks={flockRows} activeCycles={activeCycles} navigate={navigate} />
-      <FarmSummary score={score} grade={grade} businesses={businesses} net={net} activeCycles={activeCycles} holds={holds} team={team} hours={hours} navigate={navigate} />
-      <BankabilityPath navigate={navigate} />
-      <Priorities tasks={taskRows} navigate={navigate} onAction={taskAction} />
-      <WeatherStrip farmId={farmId} navigate={navigate} />
-      <HeadlineMetrics fin={finSummary} cash={cashBal} activeCycles={activeCycles} head={head} openTasks={openTasks} holds={holds} standing={standing} navigate={navigate} />
-      <Intelligence crops={cropRows} navigate={navigate} />
-      <CyclePipeline cycles={cycleRows} navigate={navigate} />
-      <FarmComparison farms={farmsArr} navigate={navigate} />
-      <Section icon={Truck} title="Demand pipeline" link="Open Buyers →" onLink={() => navigate("/farm/buyers")}>
-        <div className="text-sm" style={{ color: C.muted }}>Buyer orders and supply-matching appear here once you add buyers and log harvests. <span className="font-bold">Building</span></div>
-      </Section>
-      <Section icon={Sparkles} title="TIS suggestions" link="Open TIS →" onLink={() => navigate("/tis")}>
-        <div className="text-sm" style={{ color: C.muted }}>TIS suggestions based on your farm's activity appear here. <span className="font-bold">Building</span></div>
-      </Section>
-
+    <div className="tfp space-y-4">
+      <OvHeader name={meName} lastSync={lastSync} navigate={navigate} />
       <LayerBackfillBanner />
+      <HealthKpis score={score} grade={grade} net={netProfit} businesses={businesses} catCount={catCount} dueToday={dueToday} highPr={highPr} cash={cashBal} alerts={alerts} navigate={navigate} />
+      <AttentionAdvisor attention={attn} best={best} riskiest={riskiest} navigate={navigate} />
+      <EnterprisePortfolio enterprises={enterprises} counts={entCounts} navigate={navigate} />
+      <div className="grid gap-3 lg:grid-cols-2">
+        <FinancialSnapshot revenue={revenue} expenses={expenses} net={netProfit} topRevenue={topRevenue} topExpense={topExpense} navigate={navigate} />
+        <div className="rounded-2xl border bg-white p-4" style={{ borderColor: C.border }}>
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-sm font-bold uppercase tracking-wide" style={{ color: C.soil }}>Recent Activity</span>
+            <button onClick={() => navigate("/farm/history")} className="text-[11px] font-semibold" style={{ color: C.greenDk }}>View all</button>
+          </div>
+          <RecentLoggedStrip farmId={farmId} />
+        </div>
+      </div>
 
       <section className="bg-white rounded-2xl px-4 py-4" style={{ border: `1px solid ${C.border}` }}>
         <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
@@ -485,8 +709,6 @@ function FarmOverview() {
         </div>
         <ActiveCyclesTable farmId={farmId} />
       </section>
-
-      <QuickActions navigate={navigate} />
 
       {(() => {
         const cd = chain.data?.data;
