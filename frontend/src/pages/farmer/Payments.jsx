@@ -31,6 +31,7 @@ const ST = { OPEN: "#9a8c6a", INSTRUCTED: "#2563eb", SETTLED: "var(--green-dk)",
 export default function Payments() {
   const [sum, setSum] = useState(null);
   const [payables, setPayables] = useState(null);
+  const [suggestions, setSuggestions] = useState([]);
   const [methods, setMethods] = useState([]);
   const [tab, setTab] = useState("COLLECT");
   const [form, setForm] = useState({ amount_fjd: "", category: "INPUTS", counterparty_label: "", due_date: "" });
@@ -41,6 +42,7 @@ export default function Payments() {
     fetch(`${API}/summary`, { headers: auth() }).then((r) => r.json()).then((d) => setSum(d?.data)).catch(() => setSum(null));
     fetch(`${API}/payables`, { headers: auth() }).then((r) => r.json()).then((d) => setPayables(d?.data || [])).catch(() => setPayables([]));
     fetch(`${API}/methods`, { headers: auth() }).then((r) => r.json()).then((d) => setMethods(d?.data || [])).catch(() => setMethods([]));
+    fetch(`${API}/suggestions`, { headers: auth() }).then((r) => r.json()).then((d) => setSuggestions(d?.data || [])).catch(() => setSuggestions([]));
   }, []);
   useEffect(() => { load(); }, [load]);
 
@@ -75,6 +77,7 @@ export default function Payments() {
     } catch (e) { toast(e.message, "error"); }
   };
   const cancel = async (p) => { if (!window.confirm("Cancel this item?")) return; try { await call("POST", `/payables/${p.obligation_id}/cancel`); load(); } catch (e) { toast(e.message, "error"); } };
+  const adopt = async (s) => { try { await call("POST", "/payables/adopt", { source_type: s.source_type, source_id: s.source_id }); toast("Added to payments ✓", "success"); load(); } catch (e) { toast(e.message, "error"); } };
 
   const addMethod = async () => {
     if (!mform.label.trim()) { toast("Give the method a name", "error"); return; }
@@ -84,6 +87,7 @@ export default function Payments() {
   const archiveMethod = async (m) => { if (!window.confirm(`Remove ${m.label}?`)) return; try { await call("DELETE", `/methods/${m.method_id}`); load(); } catch (e) { toast(e.message, "error"); } };
 
   const rows = (payables || []).filter((p) => p.direction === tab);
+  const sugg = suggestions.filter((s) => s.direction === tab);
 
   return (
     <TfpShell>
@@ -146,6 +150,24 @@ export default function Payments() {
             <button style={primary} onClick={create}>Add</button>
           </div>
         </div>
+
+        {/* suggestions from existing activity */}
+        {sugg.length > 0 && (
+          <div style={{ border: "1px dashed var(--green-dk)", borderRadius: 12, padding: 10, marginBottom: 14, background: "var(--cream)" }}>
+            <div style={{ fontSize: 11.5, fontWeight: 700, color: "var(--green-dk)", marginBottom: 6 }}>
+              Suggested from your activity {tab === "COLLECT" ? "(bills to pay)" : "(money owed to you)"}
+            </div>
+            {sugg.map((s) => (
+              <div key={`${s.source_type}-${s.source_id}`} style={{ display: "flex", alignItems: "center", gap: 10, padding: "5px 0" }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <span style={{ fontWeight: 700, color: "var(--soil)", fontSize: 13.5 }}>{fjd(s.amount_fjd)}</span>
+                  <span style={{ fontSize: 12, color: "var(--muted)" }}> · {s.counterparty_label} · {s.detail}</span>
+                </div>
+                <button style={primary} onClick={() => adopt(s)}>Add</button>
+              </div>
+            ))}
+          </div>
+        )}
 
         {/* list */}
         <div style={{ border: "1px solid var(--line)", borderRadius: 12, overflow: "hidden", background: "var(--paper)" }}>

@@ -329,6 +329,101 @@ async def list_transactions(obligation_id: Optional[str] = None, user: dict = De
     return {"data": [{**dict(r), "amount_fjd": _f(r["amount_fjd"])} for r in rows]}
 
 
+# ───────────────────── suggestions from existing rails ────────────────────
+# Surface unpaid obligations from other Teivaka systems without duplicating rows:
+# each is shown only until adopted into tenant.payables. Sources that already
+# self-settle into cash_ledger (orders → log_payment) are deliberately excluded
+# to avoid double-counting.
+@router.get("/suggestions")
+async def suggestions(user: dict = Depends(get_current_user)):
+    tid = str(user["tenant_id"])
+    uid = str(user["user_id"])
+    async with get_rls_db(tid) as db:
+        inv = (await db.execute(text("""
+            SELECT 'INVOICE' AS source_type, i.invoice_id AS source_id, i.total_fjd AS amount_fjd,
+                   'COLLECT' AS direction, 'SUBSCRIPTION' AS category, 'Teivaka' AS counterparty_label,
+                   ('Invoice ' || i.invoice_id) AS detail
+            FROM community.platform_invoices i
+            WHERE i.tenant_id = cast(:t AS uuid) AND i.status IN ('DRAFT','SENT')
+              AND NOT EXISTS (SELECT 1 FROM tenant.payables p
+                              WHERE p.source_type='INVOICE' AND p.source_id = i.invoice_id)
+        """), {"t": tid})).mappings().all()
+        jobs = (await db.execute(text("""
+            SELECT 'SERVICE_JOB' AS source_type, j.job_id AS source_id, j.agreed_price_fjd AS amount_fjd,
+                   'RECEIVE' AS direction, 'SERVICE' AS category, COALESCE(j.title,'Service job') AS counterparty_label,
+                   ('Job ' || j.job_id) AS detail
+            FROM community.service_jobs j
+            WHERE j.claimed_by_tenant_id = cast(:t AS uuid) AND j.status='COMPLETED'
+              AND j.agreed_price_fjd IS NOT NULL
+              AND NOT EXISTS (SELECT 1 FROM tenant.payables p
+                              WHERE p.source_type='SERVICE_JOB' AND p.source_id = j.job_id)
+        """), {"t": tid})).mappings().all()
+        aff = (await db.execute(text("""
+            SELECT 'AFFILIATE' AS source_type, c.commission_id AS source_id, c.amount_fjd AS amount_fjd,
+                   'RECEIVE' AS direction, 'COMMISSION' AS category,
+                   COALESCE(NULLIF(c.referee_name,''),'Referral') AS counterparty_label,
+                   ('Commission · ' || c.tier) AS detail
+            FROM community.affiliate_commissions c
+            WHERE c.affiliate_user_id = cast(:u AS uuid) AND c.status='ACCRUED' AND c.amount_fjd > 0
+              AND NOT EXISTS (SELECT 1 FROM tenant.payables p
+                              WHERE p.source_type='AFFILIATE' AND p.source_id = c.commission_id)
+        """), {"u": uid})).mappings().all()
+    items = [{**dict(r), "amount_fjd": _f(r["amount_fjd"])} for r in (list(inv) + list(jobs) + list(aff))]
+    return {"data": items}
+
+
+class Adopt(BaseModel):
+    source_type: str
+    source_id: str
+
+
+@router.post("/payables/adopt")
+async def adopt(body: Adopt, user: dict = Depends(get_current_user)):
+    """Materialize a derived obligation into tenant.payables (idempotent), so it
+    can run through the normal instruct/confirm flow. Records the farmer's cash
+    movement only — it does NOT mark the source paid in its native system (AR/
+    commission settlement stays with the system of record)."""
+    tid = str(user["tenant_id"])
+    uid = str(user["user_id"])
+    st = body.source_type.upper()
+    async with get_rls_db(tid) as db:
+        existing = (await db.execute(text(
+            "SELECT obligation_id FROM tenant.payables WHERE source_type=:st AND source_id=:sid LIMIT 1"),
+            {"st": st, "sid": body.source_id})).scalar()
+        if existing:
+            return {"data": {"obligation_id": existing, "adopted": False}}
+        if st == "INVOICE":
+            row = (await db.execute(text(
+                "SELECT total_fjd FROM community.platform_invoices WHERE invoice_id=:i AND tenant_id=cast(:t AS uuid)"),
+                {"i": body.source_id, "t": tid})).mappings().first()
+            direction, category, label, amount = "COLLECT", "SUBSCRIPTION", "Teivaka", (row and row["total_fjd"])
+        elif st == "SERVICE_JOB":
+            row = (await db.execute(text(
+                "SELECT agreed_price_fjd, title FROM community.service_jobs WHERE job_id=:i AND claimed_by_tenant_id=cast(:t AS uuid)"),
+                {"i": body.source_id, "t": tid})).mappings().first()
+            direction, category, amount = "RECEIVE", "SERVICE", (row and row["agreed_price_fjd"])
+            label = (row and row["title"]) or "Service job"
+        elif st == "AFFILIATE":
+            row = (await db.execute(text(
+                "SELECT amount_fjd, referee_name FROM community.affiliate_commissions WHERE commission_id=:i AND affiliate_user_id=cast(:u AS uuid)"),
+                {"i": body.source_id, "u": uid})).mappings().first()
+            direction, category, amount = "RECEIVE", "COMMISSION", (row and row["amount_fjd"])
+            label = (row and (row["referee_name"] or None)) or "Referral"
+        else:
+            raise HTTPException(status_code=400, detail="Unsupported source type")
+        if not row or amount is None:
+            raise HTTPException(status_code=404, detail="Source obligation not found")
+        oid = _nid("OBL")
+        await db.execute(text("""
+            INSERT INTO tenant.payables
+                (obligation_id, tenant_id, direction, counterparty_label, category, amount_fjd,
+                 source_type, source_id, status, created_by)
+            VALUES (:o, cast(:t AS uuid), :dir, :label, :cat, :amt, :st, :sid, 'OPEN', cast(:u AS uuid))
+        """), {"o": oid, "t": tid, "dir": direction, "label": label, "cat": category,
+               "amt": amount, "st": st, "sid": body.source_id, "u": uid})
+    return {"data": {"obligation_id": oid, "adopted": True, "direction": direction}}
+
+
 @router.get("/summary")
 async def summary(user: dict = Depends(get_current_user)):
     async with get_rls_db(str(user["tenant_id"])) as db:
