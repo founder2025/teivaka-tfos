@@ -39,10 +39,11 @@ export default function Payments() {
   const [showMethods, setShowMethods] = useState(false);
   const [mform, setMform] = useState({ method_type: "WALLET", label: "", masked_identifier: "" });
   // PIN gate
-  const [gate, setGate] = useState("loading");   // loading | setup | enter | locked | open
+  const [gate, setGate] = useState("loading");   // loading | setup | enter | locked | open | error
   const [pin, setPin] = useState("");
   const [pin2, setPin2] = useState("");
   const [gateMsg, setGateMsg] = useState("");
+  const [hasPin, setHasPin] = useState(false);   // progressive: section is open until a PIN exists
 
   const load = useCallback(() => {
     fetch(`${API}/summary`, { headers: auth() }).then((r) => r.json()).then((d) => setSum(d?.data)).catch(() => setSum(null));
@@ -55,9 +56,11 @@ export default function Payments() {
     try {
       const d = await call("GET", "/security/status");
       const s = d.data;
-      if (s.unlocked) { setGate("open"); load(); }
-      else if (s.locked) { setGate("locked"); setGateMsg("Too many attempts — locked. Try again shortly."); }
-      else setGate(s.pin_set ? "enter" : "setup");
+      setHasPin(!!s.pin_set);
+      if (s.locked) { setGate("locked"); setGateMsg("Too many attempts — locked. Try again shortly."); }
+      else if (s.unlocked) { setGate("open"); load(); }
+      else if (s.pin_set) { setGate("enter"); }
+      else { setGate("open"); load(); }   // no PIN yet → open until the owner secures it
     } catch { setGate("error"); setGateMsg("Couldn't load Payments security. Check your connection and try again."); }
   }, [load]);
   useEffect(() => { checkGate(); }, [checkGate]);
@@ -74,6 +77,7 @@ export default function Payments() {
       if (gate === "setup") {
         if (pin !== pin2) { setGateMsg("PINs don't match"); return; }
         await call("POST", "/security/set-pin", { pin });
+        setHasPin(true); toast("Payments PIN set ✓", "success");
       } else {
         await call("POST", "/security/unlock", { pin });
       }
@@ -88,7 +92,7 @@ export default function Payments() {
     if (!pw) return;
     const np = window.prompt("New 4–6 digit PIN");
     if (!np) return;
-    try { await call("POST", "/security/reset", { password: pw, new_pin: np }); toast("PIN reset ✓", "success"); setGate("open"); load(); }
+    try { await call("POST", "/security/reset", { password: pw, new_pin: np }); toast("PIN reset ✓", "success"); setHasPin(true); setGate("open"); load(); }
     catch (e) { toast(e.message, "error"); }
   };
   const lockNow = async () => { try { await call("POST", "/security/lock"); } catch { /* noop */ } setGate("enter"); };
@@ -128,8 +132,12 @@ export default function Payments() {
 
   const addMethod = async () => {
     if (!mform.label.trim()) { toast("Give the method a name", "error"); return; }
-    try { await call("POST", "/methods", { provider: "MANUAL", method_type: mform.method_type, label: mform.label.trim(), masked_identifier: mform.masked_identifier || null }); toast("Method added ✓", "success"); setMform({ method_type: "WALLET", label: "", masked_identifier: "" }); load(); }
-    catch (e) { toast(e.message, "error"); }
+    try {
+      await call("POST", "/methods", { provider: "MANUAL", method_type: mform.method_type, label: mform.label.trim(), masked_identifier: mform.masked_identifier || null });
+      toast("Method added ✓", "success"); setMform({ method_type: "WALLET", label: "", masked_identifier: "" }); load();
+      // The "locked in" moment: now there's something worth protecting — guide PIN setup.
+      if (!hasPin) { setShowMethods(false); setPin(""); setPin2(""); setGateMsg(""); setGate("setup"); }
+    } catch (e) { toast(e.message, "error"); }
   };
   const archiveMethod = async (m) => { if (!window.confirm(`Remove ${m.label}?`)) return; try { await call("DELETE", `/methods/${m.method_id}`); load(); } catch (e) { toast(e.message, "error"); } };
 
@@ -171,6 +179,7 @@ export default function Payments() {
                 {setup ? "Set PIN & open" : "Unlock"}
               </button>
               {!setup && <button style={{ ...btn, border: "none", marginTop: 10, color: "var(--green-dk)" }} onClick={forgotPin}>Forgot PIN?</button>}
+              {setup && <button style={{ ...btn, border: "none", marginTop: 10, color: "var(--muted)" }} onClick={() => { setPin(""); setPin2(""); setGateMsg(""); setGate("open"); load(); }}>Not now</button>}
             </>
           )}
           {(locked || errored) && <button style={{ ...btn, marginTop: 8 }} onClick={checkGate}>Try again</button>}
@@ -186,6 +195,17 @@ export default function Payments() {
         <p style={{ fontSize: 12.5, color: "var(--muted)", margin: "2px 0 14px" }}>
           You authorise and pay through your own M-PAiSA, bank or cash — Teivaka only records it for you (and into your farm cash flow if you manage a farm).
         </p>
+
+        {/* progressive security nudge — only until a PIN is established */}
+        {!hasPin && (
+          <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", marginBottom: 14, borderRadius: 12, border: "1px solid var(--amber, #d9a300)", background: "#fff8e6" }}>
+            <span style={{ fontSize: 18 }}>🔒</span>
+            <div style={{ flex: 1, minWidth: 0, fontSize: 12.5, color: "var(--soil)" }}>
+              Protect this section with a PIN so only you can open it on this device.
+            </div>
+            <button style={primary} onClick={() => { setPin(""); setPin2(""); setGateMsg(""); setGate("setup"); }}>Set a PIN</button>
+          </div>
+        )}
 
         {/* summary */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
@@ -205,7 +225,7 @@ export default function Payments() {
             <button key={k} onClick={() => setTab(k)} style={{ ...btn, fontWeight: 700, ...(tab === k ? { background: "var(--green)", color: "var(--paper)", borderColor: "var(--green-dk)" } : {}) }}>{label}</button>
           ))}
           <button onClick={() => setShowMethods((s) => !s)} style={{ ...btn, marginLeft: "auto" }}>Payment methods ({methods.length})</button>
-          <button onClick={lockNow} title="Lock Payments" style={btn}>🔒 Lock</button>
+          {hasPin && <button onClick={lockNow} title="Lock Payments" style={btn}>🔒 Lock</button>}
         </div>
 
         {/* methods */}

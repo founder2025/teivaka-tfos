@@ -70,8 +70,30 @@ async def clear_unlocked(user_id: str) -> None:
         await r.aclose()
 
 
+async def has_pin(tenant_id: str, user_id: str) -> bool:
+    """Whether this account has established a payments PIN. Fails OPEN (returns
+    False) if the security table is missing or unreadable, so the section degrades
+    to 'not yet secured' rather than hard-locking everyone on a deploy lag."""
+    from sqlalchemy import text
+    from app.db.session import get_rls_db
+    try:
+        async with get_rls_db(str(tenant_id)) as db:
+            return bool((await db.execute(text(
+                "SELECT 1 FROM tenant.payment_security WHERE user_id=cast(:u AS uuid)"),
+                {"u": str(user_id)})).scalar())
+    except Exception as e:  # noqa: BLE001
+        logger.warning("has_pin check failed (treating as no PIN): %s", e)
+        return False
+
+
 async def require_payment_unlock(user: dict = Depends(get_current_user)) -> dict:
-    """Dependency: 423 unless the caller has an active payments unlock."""
-    if not await is_unlocked(str(user["user_id"])):
+    """Progressive gate: the section is OPEN until the owner sets a PIN. Once a PIN
+    exists, every sensitive call needs an active unlock (423 otherwise). The
+    unlock check runs first (fast Redis hit); the PIN-existence check only runs on
+    the locked path, so an unlocked session pays no extra query."""
+    uid = str(user["user_id"])
+    if await is_unlocked(uid):
+        return user
+    if await has_pin(str(user["tenant_id"]), uid):
         raise HTTPException(status_code=423, detail="PAYMENTS_LOCKED")
-    return user
+    return user  # no PIN established yet → open until the owner secures it

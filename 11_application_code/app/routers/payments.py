@@ -467,9 +467,12 @@ async def security_status(user: dict = Depends(get_current_user)):
         row = (await db.execute(text(
             "SELECT pin_hash, locked_until FROM tenant.payment_security WHERE user_id=cast(:u AS uuid)"),
             {"u": uid})).mappings().first()
+        has_methods = bool((await db.execute(text(
+            "SELECT 1 FROM tenant.payment_methods WHERE status='ACTIVE' LIMIT 1"))).scalar())
     locked = bool(row and row["locked_until"] and row["locked_until"] > _now())
     return {"data": {"pin_set": bool(row), "locked": locked,
                      "locked_until": (row["locked_until"].isoformat() if locked else None),
+                     "has_methods": has_methods,
                      "unlocked": await is_unlocked(uid)}}
 
 
