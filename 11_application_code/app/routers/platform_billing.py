@@ -18,17 +18,24 @@ Routes (mounted at /api/v1):
   POST  /admin/billing/invoices/{id}/pay      -> PAID (flips source rows)
   POST  /admin/billing/invoices/{id}/void     -> VOID (releases source rows)
 """
+import io
 import logging
 import uuid
 from datetime import datetime, timedelta
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy import text
 from pydantic import BaseModel
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.units import cm
+from reportlab.lib import colors
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 
 from app.db.session import get_db_ctx
 from app.middleware.rls import get_current_user
+from app.utils.email import send_document_email
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -42,6 +49,81 @@ def _require_admin(user: dict):
 
 def _f(v):
     return float(v) if v is not None else 0.0
+
+
+async def _load_invoice(db, invoice_id: str):
+    inv = (await db.execute(text(
+        "SELECT * FROM community.platform_invoices WHERE invoice_id = :i"),
+        {"i": invoice_id})).mappings().first()
+    if not inv:
+        return None, None
+    lines = (await db.execute(text(
+        "SELECT source_type, source_id, description, amount_fjd "
+        "FROM community.platform_invoice_lines WHERE invoice_id = :i ORDER BY id"),
+        {"i": invoice_id})).mappings().all()
+    return inv, lines
+
+
+async def _billing_email(db, tenant_id) -> Optional[str]:
+    """Best billing recipient for an account — prefer the owner/founder user."""
+    return (await db.execute(text(
+        "SELECT email FROM tenant.users WHERE tenant_id = cast(:t AS uuid) AND email IS NOT NULL "
+        "ORDER BY CASE WHEN role IN ('OWNER','FOUNDER') THEN 0 ELSE 1 END, created_at LIMIT 1"),
+        {"t": str(tenant_id)})).scalar()
+
+
+def _build_invoice_pdf(inv, lines) -> bytes:
+    """Render a clean A4 tax invoice. inv is a row mapping, lines a list of them."""
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=A4, leftMargin=2 * cm, rightMargin=2 * cm,
+                            topMargin=2 * cm, bottomMargin=2 * cm, title=inv["invoice_id"])
+    s = getSampleStyleSheet()
+    soil = colors.HexColor("#3d3326")
+    green = colors.HexColor("#2f6b3a")
+    el = [
+        Paragraph("Teivaka PTE LTD", s["Title"]),
+        Paragraph("Tax Invoice", s["Heading2"]),
+        Spacer(1, 0.3 * cm),
+    ]
+    meta = [
+        ["Invoice", inv["invoice_id"]],
+        ["Account", inv["account_label"] or "—"],
+        ["Issued", str(inv["issued_at"])[:10]],
+        ["Due", str(inv["due_date"]) if inv["due_date"] else "—"],
+        ["Status", inv["status"]],
+    ]
+    mt = Table(meta, colWidths=[3.5 * cm, 12 * cm])
+    mt.setStyle(TableStyle([
+        ("FONTSIZE", (0, 0), (-1, -1), 9),
+        ("TEXTCOLOR", (0, 0), (0, -1), soil),
+        ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+    ]))
+    el += [mt, Spacer(1, 0.5 * cm)]
+
+    data = [["Description", "Amount (FJD)"]]
+    for ln in lines:
+        data.append([Paragraph(ln["description"], s["Normal"]), f"{_f(ln['amount_fjd']):,.2f}"])
+    data.append(["", ""])
+    data.append(["Total due (FJD)", f"{_f(inv['total_fjd']):,.2f}"])
+    lt = Table(data, colWidths=[12.5 * cm, 3 * cm])
+    lt.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), green),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTNAME", (0, -1), (-1, -1), "Helvetica-Bold"),
+        ("ALIGN", (1, 0), (1, -1), "RIGHT"),
+        ("FONTSIZE", (0, 0), (-1, -1), 9),
+        ("LINEBELOW", (0, 1), (-1, -3), 0.4, colors.HexColor("#e0d9c8")),
+        ("LINEABOVE", (0, -1), (-1, -1), 0.8, soil),
+        ("TOPPADDING", (0, 0), (-1, -1), 5),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+    ]))
+    el += [lt, Spacer(1, 0.6 * cm),
+           Paragraph("Payment by M-PAiSA or bank transfer. Please quote the invoice "
+                     "number as your payment reference.", s["Normal"])]
+    doc.build(el)
+    return buf.getvalue()
 
 
 @router.get("/admin/billing/outstanding")
@@ -189,22 +271,57 @@ async def generate_invoice(body: GenerateInvoice, user: dict = Depends(get_curre
                      "line_count": len(fees) + len(sponsors), "due_date": str(due)}}
 
 
-@router.post("/admin/billing/invoices/{invoice_id}/send")
-async def send_invoice(invoice_id: str, user: dict = Depends(get_current_user)):
+@router.get("/admin/billing/invoices/{invoice_id}/pdf")
+async def invoice_pdf(invoice_id: str, user: dict = Depends(get_current_user)):
     _require_admin(user)
     async with get_db_ctx() as db:
-        st = (await db.execute(text(
-            "SELECT status FROM community.platform_invoices WHERE invoice_id = :i"),
-            {"i": invoice_id})).scalar()
-        if st is None:
+        inv, lines = await _load_invoice(db, invoice_id)
+    if not inv:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+    pdf = _build_invoice_pdf(inv, lines)
+    return Response(content=pdf, media_type="application/pdf",
+                    headers={"Content-Disposition": f'inline; filename="{invoice_id}.pdf"'})
+
+
+@router.post("/admin/billing/invoices/{invoice_id}/send")
+async def send_invoice(invoice_id: str, user: dict = Depends(get_current_user)):
+    """Mark SENT and email the PDF to the account's billing contact. Email is
+    best-effort — the status flips regardless, and the response reports honestly
+    whether the email actually dispatched (PR.2: a 200 here is not a receipt)."""
+    _require_admin(user)
+    async with get_db_ctx() as db:
+        inv, lines = await _load_invoice(db, invoice_id)
+        if not inv:
             raise HTTPException(status_code=404, detail="Invoice not found")
-        if st != "DRAFT":
-            raise HTTPException(status_code=409, detail=f"Only a DRAFT invoice can be sent (is {st})")
+        if inv["status"] != "DRAFT":
+            raise HTTPException(status_code=409, detail=f"Only a DRAFT invoice can be sent (is {inv['status']})")
+        to_email = await _billing_email(db, inv["tenant_id"])
         await db.execute(text(
             "UPDATE community.platform_invoices SET status='SENT', sent_at=now() WHERE invoice_id=:i"),
             {"i": invoice_id})
         await db.commit()
-    return {"data": {"invoice_id": invoice_id, "status": "SENT"}}
+
+    emailed, reason = False, None
+    if not to_email:
+        reason = "no billing email on file for this account"
+    else:
+        try:
+            pdf = _build_invoice_pdf(inv, lines)
+            body = (f"Dear {inv['account_label'] or 'customer'},\n\n"
+                    f"Please find attached Teivaka invoice {invoice_id} for {inv['currency']} "
+                    f"{_f(inv['total_fjd']):,.2f}, due {inv['due_date'] or 'on receipt'}.\n\n"
+                    "Pay by M-PAiSA or bank transfer, quoting the invoice number as reference.\n\n"
+                    "— Teivaka PTE LTD")
+            emailed = send_document_email(
+                to_email, f"Teivaka invoice {invoice_id}", body,
+                attachment_bytes=pdf, attachment_filename=f"{invoice_id}.pdf")
+            if not emailed:
+                reason = "email not configured or dispatch failed (see logs)"
+        except Exception as e:  # noqa: BLE001
+            logger.exception("invoice email build/send failed for %s: %s", invoice_id, e)
+            reason = "email build/send error"
+    return {"data": {"invoice_id": invoice_id, "status": "SENT",
+                     "emailed": emailed, "email_to": to_email, "reason": reason}}
 
 
 class PayInvoice(BaseModel):

@@ -50,6 +50,23 @@ export default function AdminBilling() {
     catch (e) { toast(e.message, "error"); } finally { setBusy(false); }
   };
   const pay = (inv) => { const ref = window.prompt("Payment reference (M-PAiSA / bank ref, optional)", ""); if (ref === null) return; action(inv, "pay", { payment_ref: ref || null }); };
+  const sendInvoice = async (inv) => {
+    setBusy(true);
+    try {
+      const { data: r } = await call("POST", `/invoices/${inv.invoice_id}/send`, {});
+      toast(r.emailed ? `Sent ✓ — emailed to ${r.email_to}` : `Marked SENT — email not delivered (${r.reason || "unknown"})`, r.emailed ? "success" : "error");
+      load();
+    } catch (e) { toast(e.message, "error"); } finally { setBusy(false); }
+  };
+  const pdf = async (inv) => {
+    try {
+      const r = await fetch(`${API}/invoices/${inv.invoice_id}/pdf`, { headers: authHeader() });
+      if (!r.ok) throw new Error("Couldn't load PDF");
+      const url = URL.createObjectURL(await r.blob());
+      window.open(url, "_blank");
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+    } catch (e) { toast(e.message, "error"); }
+  };
   const toggle = async (inv) => {
     if (expanded?.id === inv.invoice_id) { setExpanded(null); return; }
     try { const d = await call("GET", `/invoices/${inv.invoice_id}`); setExpanded({ id: inv.invoice_id, lines: d.data.lines }); }
@@ -105,7 +122,8 @@ export default function AdminBilling() {
                     <td style={cell}>{inv.due_date || "—"}</td>
                     <td style={cell}>
                       <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                        {inv.status === "DRAFT" && <button disabled={busy} style={btn} onClick={() => action(inv, "send")}>Send</button>}
+                        <button style={btn} onClick={() => pdf(inv)}>PDF</button>
+                        {inv.status === "DRAFT" && <button disabled={busy} style={btn} onClick={() => sendInvoice(inv)}>Send</button>}
                         {["DRAFT", "SENT"].includes(inv.status) && <button disabled={busy} style={{ ...btn, borderColor: "var(--green-dk)", color: "var(--green-dk)" }} onClick={() => pay(inv)}>Mark paid</button>}
                         {inv.status !== "PAID" && inv.status !== "VOID" && <button disabled={busy} style={{ ...btn, color: "#b91c1c" }} onClick={() => { if (window.confirm("Void this invoice? Charges return to outstanding.")) action(inv, "void"); }}>Void</button>}
                       </div>

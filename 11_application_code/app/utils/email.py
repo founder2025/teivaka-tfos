@@ -561,3 +561,85 @@ def send_verification_email(to_email: str, token: str, name: str, uid: str | Non
         # Dispatch failure must not block registration.
         logger.exception("Failed to send verification email to %s: %s", to_email, exc)
         return False
+
+
+def send_document_email(
+    to_email: str,
+    subject: str,
+    text_body: str,
+    html_body: str | None = None,
+    attachment_bytes: bytes | None = None,
+    attachment_filename: str = "document.pdf",
+    attachment_mime: tuple[str, str] = ("application", "pdf"),
+) -> bool:
+    """Generic transactional email with an optional file attachment.
+
+    Prefers Resend's HTTPS API (most VPS hosts block SMTP); falls back to SMTP
+    STARTTLS/SSL. Returns True if dispatched, False if email is unconfigured or
+    the send fails (logged, never raised) — callers must keep working regardless.
+    """
+    import base64
+
+    if _is_resend():
+        try:
+            payload = {
+                "from": settings.smtp_from,
+                "to": [to_email],
+                "subject": subject,
+                "text": text_body,
+            }
+            if html_body:
+                payload["html"] = html_body
+            if attachment_bytes is not None:
+                payload["attachments"] = [{
+                    "filename": attachment_filename,
+                    "content": base64.b64encode(attachment_bytes).decode("ascii"),
+                }]
+            resp = httpx.post(
+                "https://api.resend.com/emails",
+                headers={"Authorization": f"Bearer {settings.smtp_password.strip()}",
+                         "Content-Type": "application/json"},
+                content=json.dumps(payload), timeout=20.0,
+            )
+            if resp.status_code in (200, 201):
+                logger.info("Document email sent to %s (%s)", to_email, subject)
+                return True
+            logger.error("Resend document email failed %s: %s", resp.status_code, resp.text[:300])
+            return False
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("Resend document email error to %s: %s", to_email, exc)
+            return False
+
+    if not _smtp_configured():
+        logger.warning("Email not configured — document email '%s' for %s not sent.", subject, to_email)
+        return False
+
+    try:
+        msg = EmailMessage()
+        msg["From"] = settings.smtp_from
+        msg["To"] = to_email
+        msg["Subject"] = subject
+        msg.set_content(text_body)
+        if html_body:
+            msg.add_alternative(html_body, subtype="html")
+        if attachment_bytes is not None:
+            msg.add_attachment(attachment_bytes, maintype=attachment_mime[0],
+                               subtype=attachment_mime[1], filename=attachment_filename)
+        context = ssl.create_default_context()
+        port = int(settings.smtp_port or 587)
+        if port == 465:
+            with smtplib.SMTP_SSL(settings.smtp_host, port, context=context, timeout=20) as server:
+                if settings.smtp_user:
+                    server.login(settings.smtp_user, settings.smtp_password)
+                server.send_message(msg)
+        else:
+            with smtplib.SMTP(settings.smtp_host, port, timeout=20) as server:
+                server.ehlo(); server.starttls(context=context); server.ehlo()
+                if settings.smtp_user:
+                    server.login(settings.smtp_user, settings.smtp_password)
+                server.send_message(msg)
+        logger.info("Document email sent to %s (%s)", to_email, subject)
+        return True
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("Failed to send document email to %s: %s", to_email, exc)
+        return False
