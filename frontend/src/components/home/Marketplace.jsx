@@ -72,12 +72,17 @@ function NewListingModal({ onClose, onCreated }) {
   const [gps, setGps] = useState([]);
   const fileRef = useRef();
   const set = (k, v) => setF((s) => ({ ...s, [k]: v }));
-  // Crop catalog (for the price-hint picker) — fetched once.
-  useEffect(() => { getJSON("/api/v1/productions").then((r) => setProds(r?.data || [])).catch(() => setProds([])); }, []);
+  // Crop catalog (for the price-hint picker) — fetched once. Shape-robust:
+  // the endpoint may return a bare array or {data:[...]}.
+  useEffect(() => {
+    getJSON("/api/v1/productions")
+      .then((r) => setProds(Array.isArray(r) ? r : (r?.data || [])))
+      .catch(() => setProds([]));
+  }, []);
   const onPickProd = async (id) => {
     set("production_id", id); setMkt(null);
     if (!id) return;
-    try { const r = await getJSON(`/api/v1/marketplace/market-prices/${id}`); setMkt(r?.stats || null); }
+    try { const r = await getJSON(`/api/v1/marketplace/market-prices/${id}`); setMkt(r?.stats || (r?.data?.stats) || null); }
     catch { setMkt(null); }
   };
   useEffect(() => {
