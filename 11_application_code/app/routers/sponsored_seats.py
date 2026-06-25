@@ -266,7 +266,13 @@ async def sponsor_portal(token: str):
         if not org or not org["portal_enabled"]:
             raise HTTPException(status_code=404, detail="This sponsor link is not active")
         data = await _build_impact(db, org)
-    # Public view: drop the internal org id from the payload.
+    # Privacy-safe public view: aggregate only — never expose farmer identities
+    # over the tokenized public URL. Keep an anonymous activation timeline (dates
+    # only) so the sponsor still sees momentum. Admin view keeps full names.
+    data["redeemed_farmers"] = [
+        {"redeemed_at": f.get("redeemed_at")} for f in data.get("redeemed_farmers", [])
+    ]
+    # Drop internal fields from the payload.
     data["org"].pop("id", None)
     data["org"].pop("portal_enabled", None)
     return {"data": data}

@@ -79,27 +79,29 @@ export default function SponsorPortal() {
           </div>
         </div>
 
-        {/* Redeemed farmers */}
+        {/* Anonymous activation timeline — privacy-safe (no farmer identities) */}
         <div style={{ background: C.paper, border: `1px solid ${C.line}`, borderRadius: 14, padding: 18 }}>
-          <strong style={{ color: C.soil, fontSize: 15 }}>Sponsored farmers</strong>
+          <strong style={{ color: C.soil, fontSize: 15 }}>Activation timeline</strong>
           {(!redeemed_farmers || redeemed_farmers.length === 0) ? (
             <p style={{ color: C.muted, fontSize: 13.5, marginTop: 10 }}>No seats redeemed yet — codes you’ve shared will appear here as farmers activate them.</p>
           ) : (
-            <div style={{ overflowX: "auto", marginTop: 10 }}>
-              <table style={{ width: "100%", fontSize: 13, borderCollapse: "collapse" }}>
-                <thead><tr>{["Farmer", "Farm", "Activated"].map((h) => (
-                  <th key={h} style={{ textAlign: "left", color: C.muted, fontSize: 10, textTransform: "uppercase", padding: "7px 8px", borderBottom: `1px solid ${C.line}` }}>{h}</th>))}</tr></thead>
-                <tbody>
-                  {redeemed_farmers.map((f, i) => (
-                    <tr key={i}>
-                      <td style={{ padding: "7px 8px", borderBottom: `1px solid ${C.line}`, color: C.soil }}>{f.redeemed_farmer_name || "—"}</td>
-                      <td style={{ padding: "7px 8px", borderBottom: `1px solid ${C.line}`, color: C.soil }}>{f.redeemed_farm_label || "—"}</td>
-                      <td style={{ padding: "7px 8px", borderBottom: `1px solid ${C.line}`, color: C.muted }}>{f.redeemed_at ? String(f.redeemed_at).slice(0, 10) : "—"}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <>
+              <p style={{ color: C.muted, fontSize: 12.5, margin: "6px 0 10px" }}>{redeemed_farmers.length} farmer{redeemed_farmers.length === 1 ? "" : "s"} activated their sponsored access. Identities are kept private.</p>
+              <div style={{ overflowX: "auto" }}>
+                <table style={{ width: "100%", fontSize: 13, borderCollapse: "collapse" }}>
+                  <thead><tr>{["", "Activated"].map((h) => (
+                    <th key={h} style={{ textAlign: "left", color: C.muted, fontSize: 10, textTransform: "uppercase", padding: "7px 8px", borderBottom: `1px solid ${C.line}` }}>{h}</th>))}</tr></thead>
+                  <tbody>
+                    {redeemed_farmers.map((f, i) => (
+                      <tr key={i}>
+                        <td style={{ padding: "7px 8px", borderBottom: `1px solid ${C.line}`, color: C.soil }}>Sponsored farmer #{redeemed_farmers.length - i}</td>
+                        <td style={{ padding: "7px 8px", borderBottom: `1px solid ${C.line}`, color: C.muted }}>{f.redeemed_at ? String(f.redeemed_at).slice(0, 10) : "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
           )}
         </div>
 
