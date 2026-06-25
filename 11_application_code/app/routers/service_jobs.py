@@ -64,18 +64,34 @@ async def _notify(db, user_id, actor_user_id, ntype: str, body: str):
         logger.warning("service-job notify failed: %s", e)
 
 
-async def _whatsapp_blast(phones: list, message: str):
+async def _whatsapp_blast(phones: list, message: str, template_params: Optional[list] = None):
     """Best-effort WhatsApp fan-out (mock-logs when Meta isn't configured).
-    Business-initiated alerts outside a 24h window need an approved template —
-    until that's set up + receipt-verified (PR.2), live delivery is limited."""
+
+    Uses the approved template (settings.whatsapp_job_alert_template) when set —
+    required for business-initiated alerts outside a 24h window — passing
+    template_params as the body {{1}},{{2}}... values. Falls back to a plain-text
+    message otherwise (delivers only inside an open 24h session / mock-logs).
+    Live delivery still requires creds + an approved template + receipt-verify (PR.2)."""
     phones = [p for p in {(p or "").strip() for p in phones} if p]
     if not phones:
         return
     try:
+        from app.config import settings
         from app.services.notification_service import whatsapp_service
-        await asyncio.gather(*[
-            whatsapp_service.send_alert(p, message, severity="INFO") for p in phones
-        ], return_exceptions=True)
+        tmpl = (getattr(settings, "whatsapp_job_alert_template", "") or "").strip()
+        lang = getattr(settings, "whatsapp_template_lang", "en") or "en"
+        components = None
+        if tmpl and template_params:
+            components = [{"type": "body", "parameters": [
+                {"type": "text", "text": str(x)} for x in template_params]}]
+
+        async def _send(p):
+            if tmpl:
+                return await whatsapp_service.send_template(
+                    p, tmpl, language_code=lang, components=components)
+            return await whatsapp_service.send_alert(p, message, severity="INFO")
+
+        await asyncio.gather(*[_send(p) for p in phones], return_exceptions=True)
     except Exception as e:  # noqa: BLE001
         logger.warning("service-job whatsapp blast failed: %s", e)
 
@@ -213,7 +229,11 @@ async def create_job(body: JobCreate, user: dict = Depends(get_current_user)):
         except Exception as e:  # noqa: BLE001
             logger.warning("provider notify failed for %s: %s", job_id, e)
         await db.commit()
-    await _whatsapp_blast(phones, f"New job on Teivaka: {body.title.strip()}. Open the app → Service hub to view and claim it.")
+    svc_label = st.replace("_", " ").lower()
+    await _whatsapp_blast(
+        phones,
+        f"New {svc_label} job on Teivaka: {body.title.strip()}. Open the app → Service hub to view and claim it.",
+        template_params=[svc_label, body.title.strip()])
     return {"data": {"job_id": job_id, "status": "OPEN", "providers_notified": len(phones)}}
 
 

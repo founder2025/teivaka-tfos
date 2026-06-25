@@ -58,6 +58,11 @@ class Settings(BaseSettings):
     # Your local Fiji number registered on WhatsApp Business
     # e.g. "+6799XXXXXXX" (Vodafone FJ) or "+6798XXXXXXX" (Digicel FJ)
     whatsapp_business_number: str = ""
+    # Service-job provider alert: approved Meta template name (empty = fall back to
+    # plain text, which only delivers within a 24h session / mock-logs). Body must
+    # take 2 params: {{1}} service type, {{2}} job title. Set once approved.
+    whatsapp_job_alert_template: str = ""
+    whatsapp_template_lang: str = "en"
 
     # ── Stripe ────────────────────────────────────────────────────────────────
     stripe_secret_key: str = ""
