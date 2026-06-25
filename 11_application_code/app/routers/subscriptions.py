@@ -129,6 +129,9 @@ async def request_upgrade(body: UpgradeRequest, user: dict = Depends(get_current
     # Any account holder may REQUEST a tier change for their own tenant —
     # nothing is charged in-app; an admin approves and applies the change.
 
+    if (body.target_tier or "").upper() == "SPONSORED":
+        # Granted via a sponsor code, never purchased here.
+        raise HTTPException(status_code=400, detail="The Sponsored plan is granted by a sponsor code, not requested here.")
     async with get_db_ctx() as _pdb:
         _plans = await get_active_plans(_pdb)
     if body.target_tier not in _plans:

@@ -115,11 +115,12 @@ export default function Subscription() {
           SPONSORED display card. */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(230px,1fr))", gap: 12 }}>
         {tiers == null ? <div style={{ color: C.muted }}>Loading plans…</div> : (() => {
-          const live = Object.entries(tiers)
+          const cards = Object.entries(tiers)
             .filter(([, p]) => p && p.is_active !== false)
             .sort((a, b) => (a[1].sort_order ?? 0) - (b[1].sort_order ?? 0))
-            .map(([code, p]) => ({ code, sponsored: false, ...p }));
-          const cards = [...live, { code: "SPONSORED", sponsored: true, ...SPONSORED_CARD }];
+            .map(([code, p]) => ({ code, sponsored: code === "SPONSORED", ...p }));
+          // Fallback for an un-migrated DB that has no SPONSORED row yet.
+          if (!cards.some((c) => c.code === "SPONSORED")) cards.push({ code: "SPONSORED", sponsored: true, ...SPONSORED_CARD });
           return cards.map((t) => {
             const isCur = t.code === cur;
             const price = t.sponsored ? "FJD 0" : (t.price_fjd_monthly === 0 ? "FJD 0" : (t.price_fjd_monthly != null ? `FJD ${t.price_fjd_monthly}/mo` : "—"));

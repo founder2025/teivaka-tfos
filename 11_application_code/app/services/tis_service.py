@@ -292,42 +292,49 @@ async def resolve_farmer_country(session: AsyncSession, tenant_id: str) -> str:
     return "FJI"
 
 
+async def resolve_tis_monthly_limit(session: AsyncSession, tier: str) -> int:
+    """Live monthly TIS cap for a tier — admin-editable in
+    community.subscription_plans.tis_monthly_limit, with a config fallback."""
+    try:
+        has = (await session.execute(text(
+            "SELECT to_regclass('community.subscription_plans') IS NOT NULL"))).scalar()
+        if has:
+            val = (await session.execute(text(
+                "SELECT tis_monthly_limit FROM community.subscription_plans WHERE tier = :t"),
+                {"t": (tier or "FREE").upper()})).scalar()
+            if val is not None:
+                return int(val)
+    except Exception as e:  # noqa: BLE001
+        logger.warning("resolve_tis_monthly_limit fell back to config: %s", e)
+    return settings.get_tis_monthly_limit(tier or "FREE")
+
+
 async def check_tis_rate_limit(
     redis_client: aioredis.Redis,
     tenant_id: str,
-    subscription_tier: str,
-    tis_daily_limit: int,
+    monthly_limit: int,
 ) -> dict:
     """
-    Redis-based rate limiting. Key: tis:rate:{tenant_id}:{date}
-    Returns {"allowed": bool, "calls_today": int, "calls_remaining": int}
+    Redis-based MONTHLY rate limiting (ratified 2026-06-25). Key self-resets by
+    name each calendar month: tis:rate:{tenant_id}:{YYYY-MM}. monthly_limit == 0
+    means unlimited. Returns {allowed, calls_used, calls_remaining, limit, period}.
     """
-    today = datetime.now().strftime("%Y-%m-%d")
-    key = f"tis:rate:{tenant_id}:{today}"
+    period = datetime.now().strftime("%Y-%m")
+    key = f"tis:rate:{tenant_id}:{period}"
 
-    calls_today = await redis_client.incr(key)
-    if calls_today == 1:
-        await redis_client.expire(key, 86400)  # TTL = 1 day
+    calls = await redis_client.incr(key)
+    if calls == 1:
+        await redis_client.expire(key, 35 * 86400)  # ~ one month + buffer
 
-    limit = settings.get_tis_limit(subscription_tier)
-    allowed = tis_daily_limit == 0 or calls_today <= limit  # 0 = unlimited
-
+    allowed = monthly_limit == 0 or calls <= monthly_limit
     if not allowed:
-        # Decrement since we pre-incremented
-        await redis_client.decr(key)
-        return {
-            "allowed": False,
-            "calls_today": calls_today - 1,
-            "calls_remaining": 0,
-            "limit": limit,
-        }
+        await redis_client.decr(key)  # undo the pre-increment
+        return {"allowed": False, "calls_used": calls - 1, "calls_remaining": 0,
+                "limit": monthly_limit, "period": period}
 
-    return {
-        "allowed": True,
-        "calls_today": calls_today,
-        "calls_remaining": max(0, limit - calls_today),
-        "limit": limit,
-    }
+    return {"allowed": True, "calls_used": calls,
+            "calls_remaining": (0 if monthly_limit == 0 else max(0, monthly_limit - calls)),
+            "limit": monthly_limit, "period": period}
 
 
 async def classify_intent(user_message: str) -> str:
@@ -611,14 +618,11 @@ async def execute_tis_query(
     def _mark(stage: str, t0: float) -> None:
         timings[stage] = int((time.perf_counter() - t0) * 1000)
 
-    # Rate limiting
+    # Rate limiting — monthly (ratified 2026-06-25); cap is the live, admin-
+    # editable plan value for this tenant's tier.
     _t = time.perf_counter()
-    rate = await check_tis_rate_limit(
-        redis_client,
-        tenant_id,
-        user["subscription_tier"],
-        user["tis_daily_limit"],
-    )
+    monthly_limit = await resolve_tis_monthly_limit(session, user["subscription_tier"])
+    rate = await check_tis_rate_limit(redis_client, tenant_id, monthly_limit)
     _mark("rate_limit", _t)
     if not rate["allowed"]:
         from fastapi import HTTPException
@@ -626,8 +630,8 @@ async def execute_tis_query(
             status_code=429,
             detail={
                 "error": "TIS_RATE_LIMIT_EXCEEDED",
-                "message": f"Daily TIS limit of {rate['limit']} calls reached. Resets at midnight Fiji time.",
-                "calls_today": rate["calls_today"],
+                "message": f"Monthly TIS limit of {rate['limit']} questions reached. Resets at the start of next month.",
+                "calls_used": rate["calls_used"],
                 "calls_remaining": 0,
             }
         )

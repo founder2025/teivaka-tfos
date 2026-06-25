@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import text
 from app.db.session import get_rls_db
 from app.middleware.rls import get_current_user
-from app.services.tis_service import execute_tis_query
+from app.services.tis_service import execute_tis_query, resolve_tis_monthly_limit
 from pydantic import BaseModel
 from typing import Optional
 import redis.asyncio as aioredis
@@ -49,10 +49,14 @@ async def get_rate_status(user: dict = Depends(get_current_user)):
     from datetime import datetime
     r = aioredis.from_url(settings.redis_url)
     try:
-        today = datetime.now().strftime("%Y-%m-%d")
-        key = f"tis:rate:{user['tenant_id']}:{today}"
-        calls_today = int(await r.get(key) or 0)
-        limit = settings.get_tis_limit(user["subscription_tier"])
-        return {"data": {"calls_today": calls_today, "limit": limit, "calls_remaining": max(0, limit - calls_today)}}
+        period = datetime.now().strftime("%Y-%m")
+        key = f"tis:rate:{user['tenant_id']}:{period}"
+        used = int(await r.get(key) or 0)
+        async with get_rls_db(str(user["tenant_id"])) as db:
+            limit = await resolve_tis_monthly_limit(db, user["subscription_tier"])
+        remaining = 0 if limit == 0 else max(0, limit - used)
+        # calls_today kept as a back-compat alias for older clients.
+        return {"data": {"calls_used": used, "calls_today": used, "limit": limit,
+                         "calls_remaining": remaining, "period": "month"}}
     finally:
         await r.aclose()

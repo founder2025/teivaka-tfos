@@ -76,9 +76,15 @@ class Settings(BaseSettings):
     default_timezone: str = "Pacific/Fiji"
 
     # ── TIS (Teivaka Intelligence System) rate limits ─────────────────────────
+    # Enforcement is per-MONTH (ratified 2026-06-25). These are fallbacks; the
+    # live caps come from community.subscription_plans.tis_monthly_limit.
     tis_daily_limit_free: int = 5
     tis_daily_limit_basic: int = 20
     tis_daily_limit_premium: int = 999999
+    tis_monthly_limit_free: int = 50
+    tis_monthly_limit_pro: int = 500        # BASIC code = Farm Pro
+    tis_monthly_limit_business: int = 5000  # PROFESSIONAL code = Farm Business
+    tis_monthly_limit_enterprise: int = 999999
     tis_rag_confidence_threshold: float = 0.65
     tis_public_rag_confidence_threshold: float = 0.47
     tis_voice_target_latency_ms: int = 5000
@@ -193,7 +199,7 @@ class Settings(BaseSettings):
     # ── Tier helpers ──────────────────────────────────────────────────────────
 
     def get_tis_limit(self, tier: str) -> int:
-        """Returns the daily TIS call limit for a given subscription tier."""
+        """Legacy daily TIS limit (retained for back-compat; enforcement is monthly)."""
         limits = {
             "FREE": self.tis_daily_limit_free,
             "BASIC": self.tis_daily_limit_basic,
@@ -201,6 +207,18 @@ class Settings(BaseSettings):
             "CUSTOM": self.tis_daily_limit_premium,
         }
         return limits.get(tier.upper(), self.tis_daily_limit_free)
+
+    def get_tis_monthly_limit(self, tier: str) -> int:
+        """Fallback monthly TIS cap per tier (live value is in subscription_plans)."""
+        limits = {
+            "FREE": self.tis_monthly_limit_free,
+            "BASIC": self.tis_monthly_limit_pro,
+            "PROFESSIONAL": self.tis_monthly_limit_business,
+            "ENTERPRISE": self.tis_monthly_limit_enterprise,
+            "PREMIUM": self.tis_monthly_limit_enterprise,
+            "CUSTOM": self.tis_monthly_limit_enterprise,
+        }
+        return limits.get(tier.upper(), self.tis_monthly_limit_free)
 
     TIER_ORDER: dict = {"FREE": 0, "BASIC": 1, "PREMIUM": 2, "CUSTOM": 3}
 
