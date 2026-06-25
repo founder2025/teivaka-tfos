@@ -58,6 +58,7 @@ const Members       = lazy(() => import("./pages/farmer/Members"));
 const Leaderboard   = lazy(() => import("./pages/farmer/Leaderboard"));
 const HarvestLog    = lazy(() => import("./pages/farmer/HarvestLog"));
 const CashLedger    = lazy(() => import("./pages/farmer/CashLedger"));
+const Payments      = lazy(() => import("./pages/farmer/Payments"));
 const Labor         = lazy(() => import("./pages/farmer/Labor"));
 const Buyers        = lazy(() => import("./pages/farmer/Buyers"));
 const ServiceHub    = lazy(() => import("./pages/farmer/ServiceHub"));
@@ -365,6 +366,7 @@ export default function App() {
             <Route path="/farm/library"      element={<FarmLibrary />} />
             <Route path="/farm/labor"        element={<Labor />} />
             <Route path="/farm/cash"         element={<CashLedger />} />
+            <Route path="/farm/payments"     element={<Payments />} />
             <Route path="/farm/buyers"       element={<Buyers />} />
             <Route path="/farm/services"     element={<ServiceHub />} />
             <Route path="/farm/equipment"    element={<Equipment />} />

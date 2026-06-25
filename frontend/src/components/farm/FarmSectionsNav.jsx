@@ -10,7 +10,7 @@ import { useNavigate } from "react-router-dom";
 import {
   Eye, Clock, CheckSquare, Crosshair, Layers, Sprout, Package, Users, Truck,
   DollarSign, Wrench, MapPin, ShieldCheck, BarChart3, FileText, Cloud,
-  BookOpen, Image as ImageIcon, Share2, Settings, Handshake,
+  BookOpen, Image as ImageIcon, Share2, Settings, Handshake, Wallet,
 } from "lucide-react";
 
 const C = { soil: "var(--soil)", greenDk: "var(--green-dk)", border: "var(--line)", muted: "var(--muted)", panel: "var(--paper)", cream: "var(--cream)" };
@@ -27,6 +27,7 @@ const SECTIONS = [
   ["Buyers", "/farm/buyers", Truck],
   ["Services", "/farm/services", Handshake],
   ["Cash", "/farm/cash", DollarSign],
+  ["Payments", "/farm/payments", Wallet],
   ["Equipment", "/farm/equipment", Wrench],
   ["Locations", "/farm/locations", MapPin],
   ["Compliance", "/farm/compliance", ShieldCheck],
