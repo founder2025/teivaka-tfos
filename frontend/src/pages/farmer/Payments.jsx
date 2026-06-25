@@ -58,7 +58,7 @@ export default function Payments() {
       if (s.unlocked) { setGate("open"); load(); }
       else if (s.locked) { setGate("locked"); setGateMsg("Too many attempts — locked. Try again shortly."); }
       else setGate(s.pin_set ? "enter" : "setup");
-    } catch { setGate("enter"); }
+    } catch { setGate("error"); setGateMsg("Couldn't load Payments security. Check your connection and try again."); }
   }, [load]);
   useEffect(() => { checkGate(); }, [checkGate]);
   // If the server unlock expires mid-session, any 423 re-shows the PIN screen.
@@ -139,20 +139,22 @@ export default function Payments() {
   if (gate !== "open") {
     const setup = gate === "setup";
     const locked = gate === "locked";
+    const errored = gate === "error";
     return (
       <TfpShell>
         <div style={{ maxWidth: 360, margin: "48px auto", padding: 24, border: "1px solid var(--line)", borderRadius: 16, background: "var(--paper)", textAlign: "center" }}>
           <div style={{ fontSize: 34, marginBottom: 6 }}>🔒</div>
           <h1 style={{ fontSize: 18, fontWeight: 800, color: "var(--soil)" }}>
-            {locked ? "Payments locked" : setup ? "Secure your Payments" : "Enter your PIN"}
+            {errored ? "Payments unavailable" : locked ? "Payments locked" : setup ? "Secure your Payments" : "Enter your PIN"}
           </h1>
           <p style={{ fontSize: 12.5, color: "var(--muted)", margin: "6px 0 16px" }}>
-            {locked ? "Too many attempts. Try again in a few minutes."
+            {errored ? (gateMsg || "Couldn't load Payments security. Check your connection and try again.")
+              : locked ? "Too many attempts. Try again in a few minutes."
               : setup ? "Set a 4–6 digit PIN. You'll enter it to open Payments — only you can get in."
               : "This area is protected. Enter your payments PIN to continue."}
           </p>
           {gate === "loading" && <div style={{ fontSize: 13, color: "var(--muted)" }}>Checking…</div>}
-          {!locked && gate !== "loading" && (
+          {!locked && !errored && gate !== "loading" && (
             <>
               <input autoFocus type="password" inputMode="numeric" maxLength={6} value={pin}
                 onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))}
@@ -171,7 +173,7 @@ export default function Payments() {
               {!setup && <button style={{ ...btn, border: "none", marginTop: 10, color: "var(--green-dk)" }} onClick={forgotPin}>Forgot PIN?</button>}
             </>
           )}
-          {locked && <button style={{ ...btn, marginTop: 8 }} onClick={checkGate}>Try again</button>}
+          {(locked || errored) && <button style={{ ...btn, marginTop: 8 }} onClick={checkGate}>Try again</button>}
         </div>
       </TfpShell>
     );
