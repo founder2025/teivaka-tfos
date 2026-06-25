@@ -16,20 +16,14 @@ async function send(method, url, body) {
 }
 
 /* Prototype tier copy (openTierPicker), keyed to the backend's tier codes.
-   Live numbers (price, limits) come from /subscriptions/tiers — copy is the
-   prototype's; SPONSORED is a display tier granted by admin, never chosen. */
-const TIER_CARDS = [
-  { code: "FREE", desc: "One farm · essentials · try the platform",
-    features: ["One farm", "Core record-keeping", "Public verify link", "TIS chat (limited)", "No Bank Evidence PDF"] },
-  { code: "BASIC", desc: "Every serious farmer",
-    features: ["More farms + team seats", "Unlimited records", "The Bank Evidence document", "Higher TIS limits", "M-PAiSA billing"] },
-  { code: "PROFESSIONAL", desc: "Commercial growers, managers, contractors",
-    features: ["Unlimited records + analytics", "More workers + partnerships", "Full reports & exports", "Bulk Bank Evidence", "Priority support"] },
-  { code: "ENTERPRISE", desc: "Ministries, NGOs, banks, co-ops, exporters",
-    features: ["Unlimited workers + teams", "API + webhooks", "White-label deployment", "Custom PDF templates", "Dedicated support + SLA"] },
-  { code: "SPONSORED", desc: "Paid by your sponsor · ministry / NGO / bank", sponsored: true,
-    features: ["Basic capability, no cost to you", "The Bank Evidence document", "Sponsor shown on your profile", "Your data always stays yours"] },
-];
+   Cards are fully driven by the admin-editable plans (/subscriptions/tiers):
+   name, subtitle, price, badge and feature bullets all come from the DB — edit
+   them in Admin Settings → Monetization, no deploy. SPONSORED is the only static
+   card: it's a display tier granted via a sponsor code, never purchased here. */
+const SPONSORED_CARD = {
+  name: "Sponsored", description: "Paid by your sponsor · ministry / NGO / bank",
+  features: ["Basic capability, no cost to you", "The Bank Evidence document", "Sponsor shown on your profile", "Your data always stays yours"],
+};
 
 export default function Subscription() {
   const [current, setCurrent] = useState(null);
@@ -117,38 +111,46 @@ export default function Subscription() {
         </div>
       )}
 
-      {/* Tier cards */}
+      {/* Tier cards — fully driven by the admin-editable plans, plus the static
+          SPONSORED display card. */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(230px,1fr))", gap: 12 }}>
-        {TIER_CARDS.map((t) => {
-          const live = tiers?.[t.code] || {};
-          const isCur = t.code === cur;
-          const price = t.sponsored ? "FJD 0" : (live.price_fjd_monthly != null ? (live.price_fjd_monthly === 0 ? "FJD 0" : `FJD ${live.price_fjd_monthly}/mo`) : (t.code === "ENTERPRISE" ? "Contact team" : "—"));
-          return (
-            <div key={t.code} style={{ ...card, marginBottom: 0, display: "flex", flexDirection: "column", borderColor: isCur ? C.green : C.line, borderWidth: isCur ? 2 : 1 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ fontWeight: 800, color: C.soil, fontSize: 15 }}>{live.name || t.code}</span>
-                {isCur && <span style={{ fontSize: 10, fontWeight: 800, background: "rgba(106,168,79,0.15)", color: C.greenDk, borderRadius: 999, padding: "3px 9px" }}>CURRENT</span>}
+        {tiers == null ? <div style={{ color: C.muted }}>Loading plans…</div> : (() => {
+          const live = Object.entries(tiers)
+            .filter(([, p]) => p && p.is_active !== false)
+            .sort((a, b) => (a[1].sort_order ?? 0) - (b[1].sort_order ?? 0))
+            .map(([code, p]) => ({ code, sponsored: false, ...p }));
+          const cards = [...live, { code: "SPONSORED", sponsored: true, ...SPONSORED_CARD }];
+          return cards.map((t) => {
+            const isCur = t.code === cur;
+            const price = t.sponsored ? "FJD 0" : (t.price_fjd_monthly === 0 ? "FJD 0" : (t.price_fjd_monthly != null ? `FJD ${t.price_fjd_monthly}/mo` : "—"));
+            return (
+              <div key={t.code} style={{ ...card, marginBottom: 0, display: "flex", flexDirection: "column", borderColor: isCur ? C.green : C.line, borderWidth: isCur ? 2 : 1 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                  <span style={{ fontWeight: 800, color: C.soil, fontSize: 15 }}>{t.name || t.code}</span>
+                  {isCur && <span style={{ fontSize: 10, fontWeight: 800, background: "rgba(106,168,79,0.15)", color: C.greenDk, borderRadius: 999, padding: "3px 9px" }}>CURRENT</span>}
+                  {!isCur && t.badge && <span style={{ fontSize: 10, fontWeight: 800, background: "rgba(191,144,0,0.15)", color: "#8a6a00", borderRadius: 999, padding: "3px 9px" }}>{t.badge}</span>}
+                </div>
+                <div style={{ fontSize: 12, color: C.muted, margin: "2px 0 6px" }}>{t.description || ""}</div>
+                <div style={{ fontWeight: 800, color: C.greenDk, fontSize: 17, marginBottom: 8 }}>{price}</div>
+                <ul style={{ margin: 0, padding: 0, listStyle: "none", fontSize: 12.5, color: C.soil, flex: 1 }}>
+                  {(t.features || []).map((f, i) => <li key={i} style={{ display: "flex", gap: 6, marginBottom: 5 }}><Check size={13} style={{ color: C.green, flexShrink: 0, marginTop: 2 }} />{f}</li>)}
+                </ul>
+                <div style={{ marginTop: 12 }}>
+                  {isCur ? (
+                    <button disabled style={{ width: "100%", border: `1px solid ${C.line}`, background: C.cream, color: C.muted, borderRadius: 8, padding: "10px 0", fontSize: 13, fontWeight: 700 }}><Check size={13} style={{ verticalAlign: "-2px" }} /> Current tier</button>
+                  ) : t.sponsored ? (
+                    <button disabled style={{ width: "100%", border: `1px solid ${C.line}`, background: C.cream, color: C.muted, borderRadius: 8, padding: "10px 0", fontSize: 13, fontWeight: 700 }}>By sponsorship</button>
+                  ) : (
+                    <button disabled={Boolean(pending) || busy === t.code} onClick={() => requestSwitch(t.code)}
+                      style={{ width: "100%", border: "none", background: pending ? C.line : C.green, color: pending ? C.muted : "var(--paper)", borderRadius: 8, padding: "10px 0", fontSize: 13, fontWeight: 700, cursor: pending ? "default" : "pointer" }}>
+                      {busy === t.code ? "Requesting…" : `Switch to ${t.name || t.code}`}
+                    </button>
+                  )}
+                </div>
               </div>
-              <div style={{ fontSize: 12, color: C.muted, margin: "2px 0 6px" }}>{t.desc}</div>
-              <div style={{ fontWeight: 800, color: C.greenDk, fontSize: 17, marginBottom: 8 }}>{price}</div>
-              <ul style={{ margin: 0, padding: 0, listStyle: "none", fontSize: 12.5, color: C.soil, flex: 1 }}>
-                {t.features.map((f, i) => <li key={i} style={{ display: "flex", gap: 6, marginBottom: 5 }}><Check size={13} style={{ color: C.green, flexShrink: 0, marginTop: 2 }} />{f}</li>)}
-              </ul>
-              <div style={{ marginTop: 12 }}>
-                {isCur ? (
-                  <button disabled style={{ width: "100%", border: `1px solid ${C.line}`, background: C.cream, color: C.muted, borderRadius: 8, padding: "10px 0", fontSize: 13, fontWeight: 700 }}><Check size={13} style={{ verticalAlign: "-2px" }} /> Current tier</button>
-                ) : t.sponsored ? (
-                  <button disabled style={{ width: "100%", border: `1px solid ${C.line}`, background: C.cream, color: C.muted, borderRadius: 8, padding: "10px 0", fontSize: 13, fontWeight: 700 }}>By sponsorship</button>
-                ) : (
-                  <button disabled={Boolean(pending) || busy === t.code} onClick={() => requestSwitch(t.code)}
-                    style={{ width: "100%", border: "none", background: pending ? C.line : C.green, color: pending ? C.muted : "var(--paper)", borderRadius: 8, padding: "10px 0", fontSize: 13, fontWeight: 700, cursor: pending ? "default" : "pointer" }}>
-                    {busy === t.code ? "Requesting…" : `Switch to ${live.name || t.code}`}
-                  </button>
-                )}
-              </div>
-            </div>
-          );
-        })}
+            );
+          });
+        })()}
       </div>
 
       <div style={{ ...card, marginTop: 14, color: C.muted, fontSize: 12.5, background: C.cream }}>

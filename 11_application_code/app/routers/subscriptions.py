@@ -20,6 +20,7 @@ logger = logging.getLogger(__name__)
 TIER_DEFINITIONS = {
     "FREE": {
         "name": "Free",
+        "description": "One farm · essentials · try the platform",
         "price_fjd_monthly": 0,
         "price_fjd_annual": 0,
         "tis_daily_limit": 5,
@@ -32,6 +33,7 @@ TIER_DEFINITIONS = {
     },
     "BASIC": {
         "name": "Farm Pro",
+        "description": "Every serious farmer",
         "price_fjd_monthly": 19,
         "price_fjd_annual": 180,
         "tis_daily_limit": 50,
@@ -44,6 +46,7 @@ TIER_DEFINITIONS = {
     },
     "PROFESSIONAL": {
         "name": "Farm Business",
+        "description": "Commercial growers, managers, contractors",
         "price_fjd_monthly": 69,
         "price_fjd_annual": 690,
         "tis_daily_limit": 500,
@@ -58,6 +61,7 @@ TIER_DEFINITIONS = {
     # any tenant still stamped ENTERPRISE; not offered as an upgrade target).
     "ENTERPRISE": {
         "name": "Enterprise (legacy)",
+        "description": "Retired on the farmer side",
         "price_fjd_monthly": 299,
         "price_fjd_annual": None,
         "tis_daily_limit": 500,
@@ -306,10 +310,13 @@ async def _load_plans_db(db):
     cols = (await db.execute(text(
         "SELECT column_name FROM information_schema.columns "
         "WHERE table_schema='community' AND table_name='subscription_plans'"))).scalars().all()
-    has_monthly = "tis_monthly_limit" in set(cols)
+    colset = set(cols)
+    has_monthly = "tis_monthly_limit" in colset
+    has_desc = "description" in colset
     monthly_sel = "tis_monthly_limit, " if has_monthly else ""
+    desc_sel = "description, " if has_desc else ""
     rows = (await db.execute(text(
-        f"SELECT tier, name, price_fjd_monthly, price_fjd_annual, tis_daily_limit, {monthly_sel}"
+        f"SELECT tier, name, {desc_sel}price_fjd_monthly, price_fjd_annual, tis_daily_limit, {monthly_sel}"
         "farms_limit, users_limit, features, badge, sort_order, is_active "
         "FROM community.subscription_plans ORDER BY sort_order, tier"))).mappings().all()
     if not rows:
@@ -322,6 +329,7 @@ async def _load_plans_db(db):
             except Exception: feats = []
         out[r["tier"]] = {
             "name": r["name"],
+            "description": (r["description"] if has_desc else None),
             "price_fjd_monthly": float(r["price_fjd_monthly"] or 0),
             "price_fjd_annual": (float(r["price_fjd_annual"]) if r["price_fjd_annual"] is not None else None),
             "tis_daily_limit": r["tis_daily_limit"],
@@ -345,6 +353,7 @@ async def get_active_plans(db):
 
 class PlanUpdate(BaseModel):
     name: Optional[str] = None
+    description: Optional[str] = None
     price_fjd_monthly: Optional[float] = None
     price_fjd_annual: Optional[float] = None
     tis_daily_limit: Optional[int] = None

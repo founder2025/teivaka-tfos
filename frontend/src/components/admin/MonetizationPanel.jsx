@@ -24,10 +24,11 @@ function PlanRow({ tier, plan, onSaved }) {
     setBusy(true);
     try {
       await send("PUT", `/api/v1/subscriptions/admin/plans/${tier}`, {
-        name: p.name, badge: p.badge || null,
+        name: p.name, description: p.description || null, badge: p.badge || null,
         price_fjd_monthly: num(p.price_fjd_monthly), price_fjd_annual: num(p.price_fjd_annual),
         tis_daily_limit: num(p.tis_daily_limit), tis_monthly_limit: num(p.tis_monthly_limit),
         farms_limit: num(p.farms_limit), users_limit: num(p.users_limit),
+        features: (p.features || []).map((f) => String(f).trim()).filter(Boolean),
         is_active: p.is_active !== false,
       });
       toast(`${tier} saved ✓`, "success"); onSaved?.();
@@ -36,13 +37,17 @@ function PlanRow({ tier, plan, onSaved }) {
   };
   return (
     <div style={{ border: `1px solid ${C.line}`, borderRadius: 10, padding: 12, marginBottom: 10 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
         <strong style={{ color: C.soil, fontSize: 14 }}>{tier}</strong>
         <input value={p.name || ""} onChange={(e) => set("name", e.target.value)} placeholder="Display name" style={{ ...inp, width: 160 }} />
         <input value={p.badge || ""} onChange={(e) => set("badge", e.target.value)} placeholder="Badge (e.g. Most popular)" style={{ ...inp, width: 180 }} />
         <label style={{ fontSize: 12, color: C.muted, display: "flex", alignItems: "center", gap: 5, marginLeft: "auto" }}>
           <input type="checkbox" checked={p.is_active !== false} onChange={(e) => set("is_active", e.target.checked)} /> Active
         </label>
+      </div>
+      <div style={{ marginBottom: 10 }}>
+        <span style={lbl}>Subtitle (the “outcome” line on the card)</span>
+        <input value={p.description || ""} onChange={(e) => set("description", e.target.value)} placeholder="e.g. Every serious farmer" style={inp} />
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 8 }}>
         <div><span style={lbl}>FJD / month</span><input type="number" value={p.price_fjd_monthly ?? ""} onChange={(e) => set("price_fjd_monthly", e.target.value)} style={inp} /></div>
@@ -52,6 +57,19 @@ function PlanRow({ tier, plan, onSaved }) {
         <div><span style={lbl}>Farms (−1=∞)</span><input type="number" value={p.farms_limit ?? ""} onChange={(e) => set("farms_limit", e.target.value)} style={inp} /></div>
         <div><span style={lbl}>Users (−1=∞)</span><input type="number" value={p.users_limit ?? ""} onChange={(e) => set("users_limit", e.target.value)} style={inp} /></div>
       </div>
+
+      {/* Feature bullets — the card's checklist; add / reword / remove freely */}
+      <div style={{ marginTop: 12 }}>
+        <span style={lbl}>Feature bullets (shown on the card)</span>
+        {(p.features || []).map((f, i) => (
+          <div key={i} style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 5 }}>
+            <input value={f} onChange={(e) => { const nf = [...(p.features || [])]; nf[i] = e.target.value; set("features", nf); }} style={inp} />
+            <button onClick={() => set("features", (p.features || []).filter((_, j) => j !== i))} title="Remove" style={{ background: "none", border: "none", cursor: "pointer", color: C.red, flexShrink: 0 }}><Trash2 size={14} /></button>
+          </div>
+        ))}
+        <button onClick={() => set("features", [...(p.features || []), ""])} style={{ background: "none", border: `1px dashed ${C.line}`, color: C.greenDk, borderRadius: 8, padding: "5px 10px", fontSize: 12, fontWeight: 600, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 5 }}><Plus size={12} />Add feature</button>
+      </div>
+
       <div style={{ marginTop: 10 }}>
         <button onClick={save} disabled={busy} style={{ ...btn, opacity: busy ? 0.6 : 1 }}><Save size={13} />{busy ? "Saving…" : "Save plan"}</button>
       </div>
