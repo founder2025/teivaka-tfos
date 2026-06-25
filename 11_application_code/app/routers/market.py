@@ -416,10 +416,26 @@ async def _compute_signals(db, country):
     Demand recurring quantities are normalised to a monthly figure so one-off and
     recurring demand are comparable."""
     cc = {"vc": country}
+    # B1: supply = projected harvests (supply_forecasts) + produce available NOW
+    # (active PRODUCE listings). Listings have no country column, so map via the
+    # owning tenant. Both feed one supply index so the market balance reflects real
+    # available stock, not just forecasts.
     supply = (await db.execute(text("""
-        SELECT production_id, COALESCE(SUM(projected_supply_kg),0) AS supply_kg
-        FROM community.supply_forecasts
-        WHERE status IN ('PLANNED','GROWING') AND (country = :vc OR country IS NULL)
+        SELECT production_id, SUM(supply_kg) AS supply_kg FROM (
+            SELECT production_id, COALESCE(SUM(projected_supply_kg),0) AS supply_kg
+            FROM community.supply_forecasts
+            WHERE status IN ('PLANNED','GROWING') AND (country = :vc OR country IS NULL)
+            GROUP BY production_id
+          UNION ALL
+            SELECT cl.production_id, COALESCE(SUM(cl.quantity_available_kg),0) AS supply_kg
+            FROM community.listings cl
+            LEFT JOIN tenant.tenants t ON t.tenant_id = cl.tenant_id
+            WHERE cl.category = 'PRODUCE' AND cl.listing_status = 'ACTIVE'
+              AND cl.production_id IS NOT NULL AND cl.quantity_available_kg IS NOT NULL
+              AND (t.country = :vc OR t.country IS NULL)
+            GROUP BY cl.production_id
+        ) u
+        WHERE production_id IS NOT NULL
         GROUP BY production_id
     """), cc)).mappings().all()
     demand = (await db.execute(text("""
