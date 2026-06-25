@@ -125,16 +125,11 @@
       rel="stylesheet"
     />
 
-    <!-- Leaflet CSS (for CommunityMap) -->
-    <link
-      rel="stylesheet"
-      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-    />
   </head>
   <body>
     <div id="root"></div>
-    <!-- Leaflet JS -->
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <!-- Leaflet is bundled (import L from "leaflet" + leaflet/dist/leaflet.css in
+         the map pages); the old unpkg.com CDN tags were redundant and CSP-blocked. -->
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>
