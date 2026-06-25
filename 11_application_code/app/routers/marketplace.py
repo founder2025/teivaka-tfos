@@ -180,18 +180,37 @@ async def order_from_listing(listing_id: str, body: ListingOrder, user: dict = D
 
     # 2) Create customer (if needed) + order + line item in the SELLER's tenant.
     async with get_rls_db(seller_tid) as db:
-        cust = (await db.execute(text(
-            "SELECT customer_id FROM tenant.customers WHERE tenant_id = cast(:t AS uuid) "
-            "AND customer_name = :n AND customer_type = 'DIRECT' LIMIT 1"),
-            {"t": seller_tid, "n": buyer_name})).scalar()
+        # Prefer the stable buyer_user_id link (migration 179); fall back to name
+        # match if the column isn't present yet (migration-tolerant).
+        has_buyer_col = bool((await db.execute(text(
+            "SELECT 1 FROM information_schema.columns WHERE table_schema='tenant' "
+            "AND table_name='customers' AND column_name='buyer_user_id'"))).scalar())
+        if has_buyer_col:
+            cust = (await db.execute(text(
+                "SELECT customer_id FROM tenant.customers WHERE tenant_id = cast(:t AS uuid) "
+                "AND buyer_user_id = cast(:bid AS uuid) LIMIT 1"),
+                {"t": seller_tid, "bid": buyer_uid})).scalar()
+        else:
+            cust = (await db.execute(text(
+                "SELECT customer_id FROM tenant.customers WHERE tenant_id = cast(:t AS uuid) "
+                "AND customer_name = :n AND customer_type = 'DIRECT' LIMIT 1"),
+                {"t": seller_tid, "n": buyer_name})).scalar()
         if not cust:
             cust = f"CST-{uuid.uuid4().hex[:6].upper()}"
-            await db.execute(text("""
-                INSERT INTO tenant.customers
-                    (customer_id, tenant_id, customer_name, customer_type, whatsapp_number, notes)
-                VALUES (:c, cast(:t AS uuid), :n, 'DIRECT', :wa, :notes)
-            """), {"c": cust, "t": seller_tid, "n": buyer_name, "wa": buyer_wa,
-                   "notes": f"Teivaka marketplace buyer (user {buyer_uid})"})
+            if has_buyer_col:
+                await db.execute(text("""
+                    INSERT INTO tenant.customers
+                        (customer_id, tenant_id, customer_name, customer_type, whatsapp_number, buyer_user_id, notes)
+                    VALUES (:c, cast(:t AS uuid), :n, 'DIRECT', :wa, cast(:bid AS uuid), :notes)
+                """), {"c": cust, "t": seller_tid, "n": buyer_name, "wa": buyer_wa,
+                       "bid": buyer_uid, "notes": "Teivaka marketplace buyer"})
+            else:
+                await db.execute(text("""
+                    INSERT INTO tenant.customers
+                        (customer_id, tenant_id, customer_name, customer_type, whatsapp_number, notes)
+                    VALUES (:c, cast(:t AS uuid), :n, 'DIRECT', :wa, :notes)
+                """), {"c": cust, "t": seller_tid, "n": buyer_name, "wa": buyer_wa,
+                       "notes": f"Teivaka marketplace buyer (user {buyer_uid})"})
         await db.execute(text("""
             INSERT INTO tenant.orders
                 (order_id, tenant_id, farm_id, customer_id, order_type, order_date,
