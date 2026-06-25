@@ -37,6 +37,7 @@ const NotificationsPage = lazy(() => import("./pages/home/NotificationsPage"));
 const MessagesPage = lazy(() => import("./pages/home/MessagesPage"));
 const ClassroomPillar = lazy(() => import("./pages/classroom/ClassroomPillar"));
 const AcceptInvite = lazy(() => import("./pages/AcceptInvite"));
+const SponsorPortal = lazy(() => import("./pages/SponsorPortal"));
 
 // ── Farmer pages (lazy — farmer bundle does NOT include admin code) ───────────
 const Landing       = lazy(() => import("./pages/Landing"));
@@ -197,6 +198,7 @@ export default function App() {
           <Route path="/reset-password"  element={<ResetPassword />} />
           <Route path="/verify-email"    element={<VerifyEmail />} />
           <Route path="/waitlist"        element={<Waitlist />} />
+          <Route path="/sponsor/:token"  element={<SponsorPortal />} />
 
           {/* Design-reference prototype (founder/admin only; backend require_admin
               gates the asset — the page just renders it in an iframe). */}

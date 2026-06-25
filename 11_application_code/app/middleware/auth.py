@@ -106,6 +106,8 @@ class AuthMiddleware:
         "/api/v1/verify/",
         "/verify/",
         "/api/v1/tis-public/",
+        # public sponsor impact portal — tokenized read-only (no account)
+        "/api/v1/sponsor-portal/",
         # Uploaded media (avatars, post photos): browsers fetch <img> with no
         # Authorization header, so the GET must be public or every image 401s.
         # Trailing slash keeps POST /api/v1/community/uploads (no slash) fully

@@ -6,7 +6,7 @@
  */
 import { useEffect, useState } from "react";
 import { getJSON, send } from "../../utils/api";
-import { HeartHandshake, Plus, Ticket, Copy, Ban, ChevronDown, ChevronRight } from "lucide-react";
+import { HeartHandshake, Plus, Ticket, Copy, Ban, ChevronDown, ChevronRight, ExternalLink, RefreshCw } from "lucide-react";
 
 const C = { soil: "var(--soil)", green: "var(--green)", greenDk: "var(--green-dk)", line: "var(--line)", muted: "var(--muted)", paper: "var(--paper)", red: "var(--red)" };
 const card = { background: C.paper, border: `1px solid ${C.line}`, borderRadius: 12, padding: 18, marginBottom: 16 };
@@ -44,6 +44,17 @@ function OrgCard({ org, onChanged }) {
   };
   const copy = (txt) => { try { navigator.clipboard.writeText(txt); toast("Copied ✓", "success"); } catch { /* noop */ } };
 
+  const portalUrl = org.portal_token ? `${window.location.origin}/sponsor/${org.portal_token}` : null;
+  const rotate = async () => {
+    if (!window.confirm("Rotate the portal link? The old link will stop working immediately.")) return;
+    try { await send("POST", `/api/v1/admin/sponsored-seats/orgs/${org.id}/rotate-portal`); toast("New portal link generated", "success"); onChanged?.(); }
+    catch (e) { toast(e.userMessage || e.message, "error"); }
+  };
+  const togglePortal = async () => {
+    try { await send("PATCH", `/api/v1/admin/sponsored-seats/orgs/${org.id}`, { portal_enabled: !(org.portal_enabled !== false) }); toast("Portal updated", "success"); onChanged?.(); }
+    catch (e) { toast(e.userMessage || e.message, "error"); }
+  };
+
   const redeemed = Number(org.seats_redeemed || 0);
   const monthly = redeemed * Number(org.price_per_seat_fjd || 0);
 
@@ -74,6 +85,22 @@ function OrgCard({ org, onChanged }) {
           {fresh.join("  ·  ")}
         </div>
       )}
+
+      {/* Self-serve sponsor portal link */}
+      <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 10, flexWrap: "wrap", fontSize: 12.5 }}>
+        <span style={{ color: C.muted }}>Sponsor portal:</span>
+        {portalUrl ? (
+          <>
+            <code style={{ background: "var(--cream)", borderRadius: 6, padding: "3px 7px", color: org.portal_enabled !== false ? C.soil : C.muted, textDecoration: org.portal_enabled !== false ? "none" : "line-through", maxWidth: 360, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{portalUrl}</code>
+            <button onClick={() => copy(portalUrl)} title="Copy link" style={{ background: "none", border: "none", cursor: "pointer", color: C.greenDk }}><Copy size={14} /></button>
+            <a href={portalUrl} target="_blank" rel="noreferrer" title="Open" style={{ color: C.greenDk }}><ExternalLink size={14} /></a>
+            <button onClick={rotate} title="Rotate link" style={{ background: "none", border: "none", cursor: "pointer", color: C.muted }}><RefreshCw size={14} /></button>
+            <button onClick={togglePortal} style={{ background: "none", border: `1px solid ${C.line}`, borderRadius: 6, padding: "2px 8px", fontSize: 11, fontWeight: 700, cursor: "pointer", color: org.portal_enabled !== false ? C.red : C.greenDk }}>
+              {org.portal_enabled !== false ? "Disable" : "Enable"}
+            </button>
+          </>
+        ) : <span style={{ color: C.muted }}>run migration 174 to enable</span>}
+      </div>
 
       {open && (
         <div style={{ marginTop: 12 }}>

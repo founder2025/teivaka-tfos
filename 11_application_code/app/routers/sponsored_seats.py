@@ -129,6 +129,7 @@ class OrgPatch(BaseModel):
     price_per_seat_fjd: Optional[float] = None
     notes: Optional[str] = None
     status: Optional[str] = None
+    portal_enabled: Optional[bool] = None
 
 
 @router.patch("/admin/sponsored-seats/orgs/{org_id}")
@@ -148,6 +149,21 @@ async def update_org(org_id: str, body: OrgPatch, user: dict = Depends(get_curre
             raise HTTPException(status_code=404, detail="Organisation not found")
         await db.commit()
     return {"data": {"id": org_id, "updated": True}}
+
+
+@router.post("/admin/sponsored-seats/orgs/{org_id}/rotate-portal")
+async def rotate_portal(org_id: str, user: dict = Depends(get_current_user)):
+    """Issue a fresh portal token (invalidates the old public link)."""
+    _require_admin(user)
+    async with get_db_ctx() as db:
+        tok = (await db.execute(text(
+            "UPDATE community.sponsor_orgs "
+            "SET portal_token = replace(gen_random_uuid()::text, '-', '') "
+            "WHERE id = :id RETURNING portal_token"), {"id": org_id})).scalar()
+        if not tok:
+            raise HTTPException(status_code=404, detail="Organisation not found")
+        await db.commit()
+    return {"data": {"id": org_id, "portal_token": tok}}
 
 
 # ── Admin: seat issuance ─────────────────────────────────────────────────────
@@ -195,6 +211,32 @@ async def list_seats(org_id: str, user: dict = Depends(get_current_user)):
     return {"data": [dict(r) for r in rows]}
 
 
+async def _build_impact(db, org) -> dict:
+    """Impact payload for an org row (shared by admin view + public portal)."""
+    counts = (await db.execute(text("""
+        SELECT COUNT(*)                                       AS issued,
+               COUNT(*) FILTER (WHERE status='REDEEMED')      AS redeemed,
+               COUNT(*) FILTER (WHERE status='AVAILABLE')     AS available,
+               COUNT(*) FILTER (WHERE status='REVOKED')       AS revoked
+        FROM community.sponsored_seats WHERE sponsor_org_id = :org
+    """), {"org": org["id"]})).mappings().first()
+    farmers = (await db.execute(text("""
+        SELECT redeemed_farmer_name, redeemed_farm_label, redeemed_at
+        FROM community.sponsored_seats
+        WHERE sponsor_org_id = :org AND status = 'REDEEMED'
+        ORDER BY redeemed_at DESC
+    """), {"org": org["id"]})).mappings().all()
+    redeemed = counts["redeemed"] or 0
+    monthly = float(org["price_per_seat_fjd"] or 0) * redeemed
+    return {
+        "org": dict(org),
+        "counts": dict(counts),
+        "monthly_value_fjd": round(monthly, 2),
+        "annual_value_fjd": round(monthly * 12, 2),
+        "redeemed_farmers": [dict(f) for f in farmers],
+    }
+
+
 @router.get("/admin/sponsored-seats/orgs/{org_id}/impact")
 async def org_impact(org_id: str, user: dict = Depends(get_current_user)):
     _require_admin(user)
@@ -204,28 +246,30 @@ async def org_impact(org_id: str, user: dict = Depends(get_current_user)):
             "FROM community.sponsor_orgs WHERE id = :id"), {"id": org_id})).mappings().first()
         if not org:
             raise HTTPException(status_code=404, detail="Organisation not found")
-        counts = (await db.execute(text("""
-            SELECT COUNT(*)                                       AS issued,
-                   COUNT(*) FILTER (WHERE status='REDEEMED')      AS redeemed,
-                   COUNT(*) FILTER (WHERE status='AVAILABLE')     AS available,
-                   COUNT(*) FILTER (WHERE status='REVOKED')       AS revoked
-            FROM community.sponsored_seats WHERE sponsor_org_id = :org
-        """), {"org": org_id})).mappings().first()
-        farmers = (await db.execute(text("""
-            SELECT redeemed_farmer_name, redeemed_farm_label, redeemed_at
-            FROM community.sponsored_seats
-            WHERE sponsor_org_id = :org AND status = 'REDEEMED'
-            ORDER BY redeemed_at DESC
-        """), {"org": org_id})).mappings().all()
-    redeemed = counts["redeemed"] or 0
-    monthly = float(org["price_per_seat_fjd"] or 0) * redeemed
-    return {"data": {
-        "org": dict(org),
-        "counts": dict(counts),
-        "monthly_value_fjd": round(monthly, 2),
-        "annual_value_fjd": round(monthly * 12, 2),
-        "redeemed_farmers": [dict(f) for f in farmers],
-    }}
+        return {"data": await _build_impact(db, org)}
+
+
+@router.get("/sponsor-portal/{token}")
+async def sponsor_portal(token: str):
+    """PUBLIC, read-only impact dashboard for one sponsor — reached by an
+    unguessable, rotatable token (no account). Allowlisted in auth middleware."""
+    token = (token or "").strip()
+    if not token:
+        raise HTTPException(status_code=404, detail="Not found")
+    async with get_db_ctx() as db:
+        if not (await db.execute(text(
+                "SELECT to_regclass('community.sponsor_orgs') IS NOT NULL"))).scalar():
+            raise HTTPException(status_code=404, detail="Not found")
+        org = (await db.execute(text(
+            "SELECT id, name, kind, granted_tier, price_per_seat_fjd, status, portal_enabled "
+            "FROM community.sponsor_orgs WHERE portal_token = :t"), {"t": token})).mappings().first()
+        if not org or not org["portal_enabled"]:
+            raise HTTPException(status_code=404, detail="This sponsor link is not active")
+        data = await _build_impact(db, org)
+    # Public view: drop the internal org id from the payload.
+    data["org"].pop("id", None)
+    data["org"].pop("portal_enabled", None)
+    return {"data": data}
 
 
 @router.post("/admin/sponsored-seats/seats/{seat_id}/revoke")
