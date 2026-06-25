@@ -50,8 +50,10 @@ const inp = { width: "100%", padding: "9px 11px", border: "1px solid var(--line)
 
 /* ---------------- new listing ---------------- */
 function NewListingModal({ onClose, onCreated }) {
-  const [f, setF] = useState({ listing_title: "", category: "PRODUCE", price_basis: "kg", listing_description: "", quantity_available_kg: "", price_per_kg_fjd: "", negotiable: true, island: "Viti Levu", pickup_location: "", contact_whatsapp: "", link_audit_hash: "" });
+  const [f, setF] = useState({ listing_title: "", category: "PRODUCE", price_basis: "kg", production_id: "", listing_description: "", quantity_available_kg: "", price_per_kg_fjd: "", negotiable: true, island: "Viti Levu", pickup_location: "", contact_whatsapp: "", link_audit_hash: "" });
   const [details, setDetails] = useState({});
+  const [prods, setProds] = useState([]);   // produce catalog for the crop picker
+  const [mkt, setMkt] = useState(null);      // market-price stats for the chosen crop
   const setD = (k, v) => setDetails((d) => ({ ...d, [k]: v }));
   // Profession-aware default category from /auth/me (default only — changeable).
   useEffect(() => {
@@ -68,6 +70,14 @@ function NewListingModal({ onClose, onCreated }) {
   const [gps, setGps] = useState([]);
   const fileRef = useRef();
   const set = (k, v) => setF((s) => ({ ...s, [k]: v }));
+  // Crop catalog (for the price-hint picker) — fetched once.
+  useEffect(() => { getJSON("/api/v1/productions").then((r) => setProds(r?.data || [])).catch(() => setProds([])); }, []);
+  const onPickProd = async (id) => {
+    set("production_id", id); setMkt(null);
+    if (!id) return;
+    try { const r = await getJSON(`/api/v1/marketplace/market-prices/${id}`); setMkt(r?.stats || null); }
+    catch { setMkt(null); }
+  };
   useEffect(() => {
     if (!navigator.geolocation) return;
     navigator.geolocation.getCurrentPosition(
@@ -92,6 +102,7 @@ function NewListingModal({ onClose, onCreated }) {
     try {
       await send("POST", `${API}/listings`, {
         ...f,
+        production_id: f.production_id || null,
         listing_title: f.listing_title.trim(),
         listing_description: f.listing_description.trim(),
         quantity_available_kg: f.quantity_available_kg === "" ? null : Number(f.quantity_available_kg),
@@ -137,6 +148,23 @@ function NewListingModal({ onClose, onCreated }) {
           {cfg.extras.map(([k, label]) => (
             <input key={k} style={inp} placeholder={label} maxLength={80} value={details[k] || ""} onChange={(e) => setD(k, e.target.value)} />
           ))}
+          {f.category === "PRODUCE" && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              <select style={inp} value={f.production_id} onChange={(e) => onPickProd(e.target.value)}>
+                <option value="">Which crop? (optional — shows the market price)</option>
+                {prods.map((p) => <option key={p.production_id} value={p.production_id}>{p.production_name}</option>)}
+              </select>
+              {mkt && mkt.avg_price_fjd != null && (
+                <div style={{ fontSize: 12, color: "var(--green-dk)", display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                  Recent market avg: <strong>{fjd(mkt.avg_price_fjd)}/kg</strong> · {mkt.observation_count} sale{mkt.observation_count === 1 ? "" : "s"}
+                  <button type="button" onClick={() => set("price_per_kg_fjd", String(mkt.avg_price_fjd))} style={{ border: "1px solid var(--green-dk)", background: "transparent", color: "var(--green-dk)", borderRadius: 6, padding: "1px 9px", cursor: "pointer", fontSize: 11.5, fontWeight: 600 }}>Use</button>
+                </div>
+              )}
+              {mkt && mkt.avg_price_fjd == null && (
+                <div style={{ fontSize: 11.5, color: "var(--muted)" }}>No market price logged for this crop yet — yours helps set the benchmark.</div>
+              )}
+            </div>
+          )}
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
             {cfg.qty && <input style={{ ...inp, flex: 1, minWidth: 120 }} type="number" min="0" placeholder={cfg.qty} value={f.quantity_available_kg} onChange={(e) => set("quantity_available_kg", e.target.value)} />}
             <input style={{ ...inp, flex: 1, minWidth: 120 }} type="number" min="0" step="0.01" placeholder={f.category === "WANTED" ? "Budget FJD (total)" : "Price FJD"} value={f.price_per_kg_fjd} onChange={(e) => set("price_per_kg_fjd", e.target.value)} />
