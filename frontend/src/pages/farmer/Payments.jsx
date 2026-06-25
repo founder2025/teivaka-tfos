@@ -18,6 +18,7 @@ const auth = () => { const t = localStorage.getItem("tfos_access_token"); return
 async function call(method, path, body) {
   const r = await fetch(`${API}${path}`, { method, headers: auth(), body: body ? JSON.stringify(body) : undefined });
   const d = await r.json().catch(() => ({}));
+  if (r.status === 423 && !path.startsWith("/security")) { try { window.dispatchEvent(new CustomEvent("tfos:payments-locked")); } catch { /* noop */ } throw new Error("Locked — enter your PIN"); }
   if (!r.ok) throw new Error(d?.detail || "Request failed");
   return d;
 }
@@ -60,6 +61,12 @@ export default function Payments() {
     } catch { setGate("enter"); }
   }, [load]);
   useEffect(() => { checkGate(); }, [checkGate]);
+  // If the server unlock expires mid-session, any 423 re-shows the PIN screen.
+  useEffect(() => {
+    const onLocked = () => { setGate("enter"); setGateMsg("Session expired — enter your PIN again."); };
+    window.addEventListener("tfos:payments-locked", onLocked);
+    return () => window.removeEventListener("tfos:payments-locked", onLocked);
+  }, []);
 
   const submitGate = async () => {
     setGateMsg("");
