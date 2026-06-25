@@ -204,6 +204,18 @@ function ListingDetail({ l, onClose, onChanged }) {
     chat.setDropdownOpen?.(false);
     onClose();
   };
+  const order = async () => {
+    const cap = l.quantity_available_kg ? Number(l.quantity_available_kg) : null;
+    const ans = window.prompt(cap ? `How many kg to order? (up to ${cap})` : "How many kg to order?", cap ? String(cap) : "");
+    if (ans == null) return;
+    const qty = Number(ans);
+    if (!qty || qty <= 0) { toast("Enter a valid quantity", "error"); return; }
+    try {
+      const r = await send("POST", `/api/v1/marketplace/listings/${l.listing_id}/order`, { quantity_kg: qty });
+      toast(`Order placed ✓ — seller notified (${fjd(r?.data?.total_fjd)})`, "success");
+      onChanged(); onClose();
+    } catch (e) { toast(`${e.userMessage || e.message}`, "error"); }
+  };
   return (
     <div className="overlay-backdrop show" style={{ alignItems: "center", padding: 16 }} onClick={onClose}>
       <div className="overlay-modal" style={{ maxWidth: 620, maxHeight: "92vh", overflowY: "auto" }} onClick={(e) => e.stopPropagation()}>
@@ -261,7 +273,10 @@ function ListingDetail({ l, onClose, onChanged }) {
             </>
           ) : (
             <>
-              <button className="btn btn-primary" onClick={message}><MessageCircle size={14} /> Message seller</button>
+              {l.category === "PRODUCE" && l.listing_status === "ACTIVE" && l.price_per_kg_fjd != null && (
+                <button className="btn btn-primary" onClick={order}><CheckCircle2 size={14} /> Order now</button>
+              )}
+              <button className="btn btn-secondary" onClick={message}><MessageCircle size={14} /> Message seller</button>
               <button className="btn btn-secondary" onClick={toggleSave}><Bookmark size={14} /> {saved ? "Saved ✓" : "Save"}</button>
               <button className="btn btn-secondary" onClick={shareToFeed}><Share2 size={14} /> Share to feed</button>
             </>
