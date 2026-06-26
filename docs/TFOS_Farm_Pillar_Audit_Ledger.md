@@ -9,7 +9,15 @@ Order: Overview → Tasks → Enterprise → Production → Field Events → Inv
 Labour → Buyers → Cash → Assets & Equipment → Locations → Compliance → Analytics →
 Reports → Weather → Library → Gallery → Partnerships → Settings.
 
-Legend: ✅ PASS · 🟡 improved, open items · ▢ not started
+Legend: 🔒 LOCKED (approved; no redesign without new evidence) · ✅ PASS · 🟡 improved, open items · ▢ not started
+
+---
+
+## 🔒 LOCKED PAGES
+- **Overview (/farm)** — LOCKED 2026-06-26 (Operator-approved). Audited → redesigned →
+  optimized ×2 → stress-tested ×3 → all page-local findings (F1–F9, M1–M28, S1–S8,
+  D1–D14, R1–R6) resolved; remainder are filed backend/cross-page slices. Do NOT
+  redesign again unless new evidence requires it. Deploy: frontend-only (Tier 1).
 
 ---
 
@@ -354,7 +362,53 @@ collapsible group memory + active-group force-expand intact. Build clean.
 
 ---
 
-## 2. Tasks (/farm/tasks) — 🟡 redesigned (Master Framework pass)
+## 2. Tasks (/farm/tasks) — FORMAL FRAMEWORK AUDIT (2026-06-26) — 🔴 audit done, redesign NOT started
+
+Forensic audit of `FarmTasks.jsx` (383 lines). Backend contracts verified
+(`/tasks`, `/crop-plan/farm-steps`, `taskBridge`, `/tasks/{id}/complete`). The page
+got the "Do this next" hero earlier but never a full audit — it predates the Overview
+fixes, so it carries the same class of defects + one verified functional bug.
+
+**FINDINGS (ranked).**
+- **T1 · 🔴 False "all caught up" on API error.** Raw fetch + local getJSON, retry:0,
+  no error state → token expiry / 500 / offline → `openTasks=[]` → renders
+  "Nothing to do — you're on top of it" (`:299-304`). Bypasses the refreshing api.js
+  client (D14/S1 — the exact defect fixed on Overview).
+- **T2 · 🔴 One-tap "Done" broken for input-requiring tasks.** `onDone` sends
+  `input_value: ""` when `input_hint !== "none"` (`:250`), but the backend 422s unless
+  the value matches the hint (`tasks.py:124-137`). The hero "Mark done" + card "Done"
+  FAIL for any weight/text/photo task lacking a taskTarget route → "Couldn't complete
+  (needs input?)" with no way to supply it.
+- **T3 · 🟠 UTC not Fiji** — `todayISO`/`whenOf` (`:37-49`) bucket Today/Overdue/
+  Tomorrow in UTC (D2). Mis-classifies near local midnight.
+- **T4 · 🟠 Tasks tenant-wide, not farm-scoped** — `/tasks?status=OPEN` has no farm_id
+  (`:221`, backend confirmed) yet the page is farm-selected; switching farms shows the
+  same tasks (S7/M25).
+- **T5 · 🟠 "Done" KPI mislabeled "Completed this session"** — actually lifetime
+  completed, capped 200 (`:222/232`). Inflated/misleading.
+- **T6 · 🟡 "Do this next" hero buried** — CropPlan renders above Board (`:367-368`),
+  so the single most important action sits below the crop-plan list.
+- **T7 · 🟡 200 COMPLETED tasks fetched just for a count** (`:222`). Needs a count.
+- **T8 · 🟡 No loading skeleton / no error state** (inconsistent with locked Overview).
+- **T9 · 🟡 nextTask ignores crop-plan "Do now" steps** (hero = task_queue only).
+- **T10 · 🟡 No worker assignment / "whose task"** (enterprise). T13 🟢 skip reason
+  hardcoded; icons lack aria-hidden.
+
+**Strengths.** Real task_queue + audit on complete/skip; honest no-fake-AI; the hero
+pattern; taskTarget routes actionable tasks to prefilled forms; crop-plan integration;
+quick-add; bounded 200; flat icons + theme.
+
+**Overall: 6/10** — good tool + right hero, dragged down by 2 🔴 (false-empty T1,
+broken Done T2) + tenant-wide (T4) + mislabeled KPI (T5) + buried hero (T6).
+
+**Proposed redesign scope (awaiting approval):** T2 (Done routes input tasks to an
+inline input/form, never submits ""), T1 (api.js + real error state), T3 (Fiji time),
+T5 (honest label), T6 (hero first), T7/T8 (count + skeleton); T4 farm-scope filed
+(backend). Mirrors the locked-Overview standard. **Redesign NOT started.**
+
+---
+
+## 2-prev. Tasks (/farm/tasks) — 🟡 redesigned (earlier "Do this next" pass, superseded by formal audit above)
 
 **Brutal truth.** Strong manager tool (kanban + KPIs + crop-plan + quick-add + real
 complete/skip with audit), but it FAILED the tired-farmer / 5-second / low-literacy
