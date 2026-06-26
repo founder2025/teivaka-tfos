@@ -494,10 +494,10 @@ function AttentionAdvisor({ attention, best, riskiest, navigate }) {
             <div className="text-sm font-bold mt-0.5" style={{ color: C.greenDk }}>{best ? best.name : "—"}</div>
             {best && <div className="text-[11px]" style={{ color: C.muted }}>{money(best.net)} net</div>}
           </div>
-          <div className="rounded-xl p-3" style={{ background: "#FBEAE6" }}>
+          <div className="rounded-xl p-3" style={{ background: riskiest ? "#FBEAE6" : C.greenTint }}>
             <div className="text-[10px] uppercase font-bold" style={{ color: C.muted }}>Watch</div>
-            <div className="text-sm font-bold mt-0.5" style={{ color: C.red }}>{riskiest ? riskiest.name : "—"}</div>
-            {riskiest && <div className="text-[11px]" style={{ color: C.muted }}>{money(riskiest.net)} net</div>}
+            <div className="text-sm font-bold mt-0.5" style={{ color: riskiest ? C.red : C.greenDk }}>{riskiest ? riskiest.name : "All healthy"}</div>
+            <div className="text-[11px]" style={{ color: C.muted }}>{riskiest ? `${money(riskiest.net)} net` : "no enterprise needs attention"}</div>
           </div>
         </div>
         <div className="text-[11px] mt-3" style={{ color: C.muted }}>Grounded advice (cited agronomy + decision signals) appears here as the engine learns your farm. <span className="font-semibold">Building</span> — ask TIS for guidance now.</div>
@@ -628,7 +628,8 @@ function FarmOverview() {
   const flockRows = flocks.data?.data?.items ?? [];
   const cycleRows = cycles.data?.data?.cycles ?? cycles.data?.cycles ?? [];
   const taskRows = tasks.data?.data?.tasks ?? tasks.data?.tasks ?? [];
-  const cashBal = cash.data?.data?.balance ?? cash.data?.data?.lifetime_balance_fjd ?? cash.data?.meta?.balance ?? null;
+  const cashBalRaw = cash.data?.data?.cash_balance_fjd ?? cash.data?.data?.balance ?? cash.data?.data?.lifetime_balance_fjd ?? cash.data?.meta?.balance;
+  const cashBal = cashBalRaw == null ? null : Number(cashBalRaw);
   const farmsArr = (farmsList.data?.data?.farms ?? farmsList.data?.farms ?? farmsList.data?.data ?? []).filter?.((x) => x && x.farm_id) ?? [];
 
   const activeCycles = cycleRows.filter((c) => ["ACTIVE", "HARVESTING"].includes((c.cycle_status || "").toUpperCase())).length;
@@ -677,7 +678,10 @@ function FarmOverview() {
 
   const cropWithNet = cropRows.map((r) => ({ name: r.production_name, net: n0(r.total_income_fjd) - n0(r.total_labor_fjd) - n0(r.total_input_cost_fjd) }));
   const best = cropWithNet.length ? cropWithNet.reduce((a, b) => (b.net > a.net ? b : a)) : null;
-  const riskiest = cropWithNet.length ? cropWithNet.reduce((a, b) => (b.net < a.net ? b : a)) : null;
+  // Only flag a "Watch" enterprise when there are ≥2 with signal and it's genuinely
+  // distinct from the best — never show the same crop as both best and riskiest.
+  const riskiestRaw = cropWithNet.length > 1 ? cropWithNet.reduce((a, b) => (b.net < a.net ? b : a)) : null;
+  const riskiest = riskiestRaw && best && riskiestRaw.name !== best.name ? riskiestRaw : null;
 
   const dueToday = taskRows.filter((x) => x.due_date && x.due_date <= t0).length;
   const highPr = taskRows.filter((x) => (x.task_rank ?? 999) < 300 && x.due_date && x.due_date <= t0).length;
