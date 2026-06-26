@@ -176,6 +176,40 @@ function TaskCard({ t, accent, busy, openMenu, setOpenMenu, onDone, onSkip, navi
   );
 }
 
+// ── "Do this next" hero — one clear action, why, and how (one-tap) ───────────
+function NextTaskHero({ t, busy, onDone, onSkip, navigate }) {
+  if (!t) {
+    return (
+      <div className="rounded-2xl border p-5 text-center" style={{ borderColor: C.border, background: C.greenTint }}>
+        <CheckCircle2 size={26} style={{ color: C.greenDk, margin: "0 auto" }} />
+        <div className="text-sm font-bold mt-2" style={{ color: C.soil }}>You're all caught up</div>
+        <div className="text-xs mt-0.5" style={{ color: C.muted }}>No open tasks right now — well done.</div>
+      </div>
+    );
+  }
+  const Icon = taskIcon(t);
+  const tgt = taskTarget(t);
+  const why = t.body_md || (isHighPriority(t) ? "High priority — best done first." : `Due ${timing(t.due_date).toLowerCase()}.`);
+  return (
+    <div className="rounded-2xl border p-4 sm:p-5" style={{ borderColor: "var(--green-dk)", background: `linear-gradient(135deg, ${C.greenTint}, #fff 75%)` }}>
+      <div className="text-[10px] font-bold uppercase tracking-wider" style={{ color: C.greenDk }}>Do this next</div>
+      <div className="flex items-start gap-3 mt-1.5">
+        <div className="grid place-items-center rounded-xl shrink-0" style={{ width: 44, height: 44, background: "#fff" }}><Icon size={22} style={{ color: C.greenDk }} /></div>
+        <div className="flex-1 min-w-0">
+          <div className="text-lg font-extrabold leading-snug" style={{ color: C.soil }}>{t.imperative}</div>
+          <div className="text-xs mt-0.5" style={{ color: C.muted }}>{why}</div>
+        </div>
+      </div>
+      <div className="flex gap-2 mt-3">
+        {tgt
+          ? <button onClick={() => navigate(tgt.route)} className="flex-1 px-3 py-2.5 rounded-xl text-white font-bold text-sm" style={{ background: C.greenDk }}>{tgt.label}</button>
+          : <button disabled={busy} onClick={() => onDone(t)} className="flex-1 px-3 py-2.5 rounded-xl text-white font-bold text-sm flex items-center justify-center gap-1.5" style={{ background: C.greenDk }}><CheckCircle2 size={16} />Mark done</button>}
+        <button disabled={busy} onClick={() => onSkip(t)} className="px-4 py-2.5 rounded-xl font-semibold text-sm" style={{ color: C.muted, border: `1px solid ${C.border}` }}>Skip</button>
+      </div>
+    </div>
+  );
+}
+
 // ── Board ───────────────────────────────────────────────────────────────────
 function Board({ farmId, navigate }) {
   const qc = useQueryClient();
@@ -202,6 +236,12 @@ function Board({ farmId, navigate }) {
     const m = { HIGH: [], TODAY: [], TOMORROW: [], WEEK: [], UPCOMING: [] };
     for (const t of openTasks) m[bucketOf(t)].push(t);
     return m;
+  }, [openTasks]);
+
+  // The single thing to do next: due-now first, then highest priority.
+  const nextTask = useMemo(() => {
+    const w = (t) => (["Overdue", "Today"].includes(whenOf(t.due_date)) ? 0 : 1);
+    return [...openTasks].sort((a, b) => (w(a) - w(b)) || ((a.task_rank ?? 999) - (b.task_rank ?? 999)))[0] || null;
   }, [openTasks]);
 
   async function onDone(t) {
@@ -240,6 +280,8 @@ function Board({ farmId, navigate }) {
 
   return (
     <div className="space-y-4">
+      {/* DO THIS NEXT — single most important action (tired-farmer / low-literacy first) */}
+      <NextTaskHero t={nextTask} busy={busy} onDone={onDone} onSkip={onSkip} navigate={navigate} />
       {/* KPI row */}
       <div className="grid gap-3 grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
         <Kpi label="Today's Focus" value={kpi.focus} sub={`${kpi.high} high priority`} accent={C.greenDk} focus />

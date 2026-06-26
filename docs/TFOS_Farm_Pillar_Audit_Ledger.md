@@ -118,3 +118,40 @@ by adding an `embedded` (hide-header) prop to child pages in a later pass.
 
 ---
 (remaining destinations pending — appended as each is audited)
+
+---
+
+## 2. Tasks (/farm/tasks) — 🟡 redesigned (Master Framework pass)
+
+**Brutal truth.** Strong manager tool (kanban + KPIs + crop-plan + quick-add + real
+complete/skip with audit), but it FAILED the tired-farmer / 5-second / low-literacy
+test: it opened to a 5-column board + 5 KPIs to parse, never answering "what do I do
+right now?" Great for a farm manager, overwhelming for a smallholder.
+
+**Fix shipped.** A "Do this next" hero at the very top — the single highest-priority
+task (due-now first, then rank), with the WHY (body_md / priority / due) and one-tap
+"Mark done" (or its log-target route) + Skip. Board/KPIs remain below for managers
+(progressive disclosure: one action first, depth after). All-caught-up state too.
+
+**Strengths.** Real task_queue + audit on complete/skip; crop-plan next steps; quick
+-add chips → /tasks/manual; due-bucket + priority logic; Array-guarded.
+
+**Weaknesses / missing (filed).** No voice/photo task logging (low literacy); no
+worker-assignment or bulk-complete (commercial); no snooze; AI auto-prioritise +
+weather/compliance-driven suggestions exist server-side (generator) but no on-page
+"AI suggest"; recurring tasks not surfaced.
+
+**AI opportunities.** Auto-rank next action; "you usually do X on Tuesdays"; surface
+weather spray-window + compliance auto-tasks inline. (Grounded — needs the generator
+wired to a suggest endpoint; not faked.)
+
+**Mobile.** Hero is one-handed + thumb-friendly; board stacks to single column.
+
+**Integration.** Tasks ↔ cycles (crop plan), compliance (auto-tasks), weather (spray
+window), labour (assign — future). Done emits audit → Records.
+
+**Scale breakpoint.** 2 list queries (OPEN+COMPLETED, limit 200) — fine; at 10k+
+tasks/farm add server-side pagination + filter (filed).
+
+**Status:** 🟡 — "Do this next" redesign shipped; worker-assign / voice-log / AI-suggest
+filed for backend slices.
