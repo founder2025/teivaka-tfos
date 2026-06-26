@@ -24,7 +24,7 @@ import { QueryClientProvider, QueryClient, useQuery } from "@tanstack/react-quer
 import { useFormModal } from "../../context/FormModalContext";
 import {
   Sprout, Plus, Search, Layers, Coins, AlertTriangle, Crosshair, ArrowRight,
-  Bird, RefreshCw,
+  Bird, RefreshCw, Sparkles,
 } from "lucide-react";
 import { CurrentFarmProvider, useCurrentFarm } from "../../context/CurrentFarmContext";
 import { VERTICAL_CONFIG } from "../../hooks/useActiveEnterprises";
@@ -377,11 +377,12 @@ function PortfolioTab({ D, ents, typeFilter, setTypeFilter, layerFilter, setLaye
         <Chip active={typeFilter === "all"} label="All" count={ents.length} onClick={() => setTypeFilter("all")} />
         {Object.entries(engines).map(([k, v]) => <Chip key={k} active={typeFilter === k} label={v.label} count={v.n} onClick={() => setTypeFilter(k)} />)}
       </div>
-      <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
-        <span className="text-[10px] uppercase tracking-wide shrink-0 mr-1" style={{ color: C.muted }}>Layer:</span>
-        <Chip active={layerFilter === "all"} label="All" onClick={() => setLayerFilter("all")} />
-        {LAYER_ORDER.map((k) => D.layerAgg[k] ? <Chip key={k} active={layerFilter === k} label={layerOf(k).label} count={D.layerAgg[k].n} onClick={() => setLayerFilter(k)} /> : null)}
-      </div>
+      {layerFilter !== "all" && (
+        <div className="text-[11px] flex items-center gap-2" style={{ color: C.muted }}>
+          Showing <span className="font-semibold" style={{ color: layerOf(layerFilter).color }}>{layerOf(layerFilter).label}</span> only
+          <button onClick={() => setLayerFilter("all")} className={`underline ${FOCUS}`} style={{ color: C.greenDk }}>clear</button>
+        </div>
+      )}
       <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
         <span className="text-[10px] uppercase tracking-wide shrink-0 mr-1" style={{ color: C.muted }}>Standing:</span>
         <Chip active={standingFilter === "all"} label="All" onClick={() => setStandingFilter("all")} />
@@ -472,13 +473,13 @@ function OutlookTab({ D, onOpen }) {
 
 // ── per-enterprise detail (4 real tabs — E4) ──────────────────────────
 function entFdate(iso) { if (!iso) return "—"; const d = new Date(iso); return isNaN(d) ? String(iso) : d.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "2-digit" }); }
-function EnterpriseDetail({ e, farmId, onBack, go }) {
+function EnterpriseDetail({ e, onBack, go, cycles, cyclesLoading, askAi }) {
   const { openFormModal } = useFormModal();
   const isAnimal = e.kind === "animal";
   const tabs = [["dashboard", "Dashboard"], ["production", isAnimal ? "Herd" : "Production"], ["finance", "Finance"], ["records", "Records"]];
   const [tab, setTab] = useState("dashboard");
-  const cyclesQ = useQuery({ queryKey: ["entcycles", e.id, farmId], queryFn: () => getJSON(`/api/v1/cycles?farm_id=${encodeURIComponent(farmId)}&limit=200`), enabled: !isAnimal && e.kind !== "vertical" && !!farmId && !e.sample });
-  const myCycles = useMemo(() => (cyclesQ.data?.data?.cycles || []).filter((c) => c.production_id === e.id), [cyclesQ.data, e.id]);
+  // Reuse the page's already-fetched cycles — no duplicate 200-row fetch on open (speed).
+  const myCycles = useMemo(() => (cycles || []).filter((c) => c.production_id === e.id), [cycles, e.id]);
   const cycleIds = useMemo(() => myCycles.map((c) => c.cycle_id), [myCycles]);
   const recordsQ = useQuery({
     queryKey: ["entrecords", e.id, cycleIds.join(",")], enabled: tab === "records" && cycleIds.length > 0 && !e.sample,
@@ -492,7 +493,10 @@ function EnterpriseDetail({ e, farmId, onBack, go }) {
           <h2 className="text-xl font-bold flex items-center gap-2" style={{ color: C.soil }}>{e.name}{e.sample && <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: C.cream, color: C.amber }}>Sample</span>}</h2>
           <div className="text-xs mt-0.5 flex items-center gap-1.5" style={{ color: C.muted }}>{e.engineLabel} · {e.status}<LayerBadge layer={e.layer} /></div>
         </div>
-        <span className="text-sm font-semibold text-white px-3.5 py-1.5 rounded-full" style={{ background: e.st.color }}>{e.st.label}</span>
+        <div className="flex items-center gap-2 shrink-0">
+          {!e.sample && <button onClick={() => askAi(`How can I improve my ${e.name} enterprise based on my records?`)} className={`text-[12px] font-semibold px-3 py-1.5 rounded-lg flex items-center gap-1.5 ${FOCUS}`} style={{ color: C.greenDk, border: `1px solid ${C.border}` }}><Sparkles size={13} aria-hidden="true" />Ask AI</button>}
+          <span className="text-sm font-semibold text-white px-3.5 py-1.5 rounded-full" style={{ background: e.st.color }}>{e.st.label}</span>
+        </div>
       </div>
       <div className="flex gap-1 overflow-x-auto border-b" style={{ borderColor: C.border }} role="tablist">
         {tabs.map(([id, label]) => (
@@ -518,7 +522,7 @@ function EnterpriseDetail({ e, farmId, onBack, go }) {
           </Section>
           {!isAnimal && e.kind !== "vertical" && (
             <Section title="Cycles" meta="Every run of this crop · live">
-              {cyclesQ.isLoading ? <div className="text-sm" style={{ color: C.muted }}>Loading cycles…</div>
+              {cyclesLoading ? <div className="text-sm" style={{ color: C.muted }}>Loading cycles…</div>
                 : myCycles.length === 0 ? <Build desc="No cycles logged for this crop yet." link="Start a cycle" onLink={() => openFormModal("cycle_new")} />
                 : (
                   <table className="w-full text-sm"><tbody>
@@ -646,7 +650,7 @@ function EnterprisesInner() {
   const D = useMemo(() => derive(ents), [ents]);
   const retry = () => { crops.refetch(); flocks.refetch(); unified.refetch(); cyclesLayer.refetch(); };
 
-  if (openEnt) return <div className="tfp"><EnterpriseDetail e={openEnt} farmId={farmId} onBack={() => setOpenEnt(null)} go={navigate} /></div>;
+  if (openEnt) return <div className="tfp"><EnterpriseDetail e={openEnt} onBack={() => setOpenEnt(null)} go={navigate} cycles={cyclesLayer.data?.data?.cycles} cyclesLoading={cyclesLayer.isLoading} askAi={(q) => rrNavigate(`/tis?q=${encodeURIComponent(q)}`)} /></div>;
 
   const tabBody = view === "portfolio"
     ? <PortfolioTab D={D} ents={ents} typeFilter={typeFilter} setTypeFilter={setTypeFilter} layerFilter={layerFilter} setLayerFilter={setLayerFilter} standingFilter={standingFilter} setStandingFilter={setStandingFilter} search={search} setSearch={setSearch} onOpen={openEntOrRoute} setView={setView} onAdd={() => setAddOpen(true)} layerError={cyclesLayer.isError} />
