@@ -24,6 +24,12 @@ Legend: 🔒 LOCKED (approved; no redesign without new evidence) · ✅ PASS · 
   assignment, voice/i18n, compliance tag, photo upload, QueryClient lift). TS4 decided:
   single prioritized list (no kanban/toggle). Do NOT redesign again unless new evidence
   requires it. Deploy: frontend-only.
+- **Weather (/farm/weather)** — LOCKED 2026-06-26 (Operator-approved). Audited → redesigned →
+  optimized → stress-tested ×2 → all page-local findings (W1–W9, WX1–WX10, WXS1–WXS6,
+  WS2-1–WS2-6) resolved; remainder filed (feed↔observations reconcile, push alerts, GDD/ET +
+  crop-specific disease, per-block microclimate, insurance export, regional aggregate,
+  thresholds→config, composite endpoint, voice/i18n). Verify-item: `tenant.weather_forecast`
+  migration in prod. Do NOT redesign again unless new evidence requires it. Deploy: frontend-only.
 
 ---
 
