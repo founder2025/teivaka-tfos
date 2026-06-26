@@ -29,6 +29,7 @@ import { CurrentFarmProvider, useCurrentFarm } from "../../context/CurrentFarmCo
 import FarmSelector from "../../components/farm/FarmSelector";
 import { useFarmName } from "../../utils/farmName";
 import { getJSON, send } from "../../utils/api";
+import { getCurrentUser } from "../../utils/auth";
 import { formatMoney } from "../../utils/money";
 
 function emitToast(m) { window.dispatchEvent(new CustomEvent("tfos:toast", { detail: { message: m } })); }
@@ -36,8 +37,19 @@ function todayISO() { return new Date().toLocaleDateString("en-CA", { timeZone: 
 function fjd0(v) { return formatMoney(Math.abs(Number(v ?? 0)), { decimals: 0 }); }
 function fjd2(v) { return formatMoney(Math.abs(Number(v ?? 0)), { decimals: 2 }); }
 function initials(name) { return (name || "?").split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join("").toUpperCase() || "?"; }
-function waLink(number, text) { const n = String(number || "").replace(/[^0-9]/g, ""); if (!n) return null; const full = n.startsWith("679") ? n : `679${n}`; return `https://wa.me/${full}?text=${encodeURIComponent(text)}`; }
+// Accept full international numbers; only prefix Fiji +679 for bare local mobiles (BS2).
+function waLink(number, text) {
+  const raw = String(number || "").trim(); if (!raw) return null;
+  const digits = raw.replace(/[^0-9]/g, ""); if (!digits) return null;
+  const intl = raw.startsWith("+") || digits.length >= 10; // already carries a country code
+  const full = intl ? digits : `679${digits}`;
+  return `https://wa.me/${full}?text=${encodeURIComponent(text)}`;
+}
+// Structural/destructive order actions (cancel) are management-only; fail-open if role unknown
+// (authoritative gate filed backend, BS5).
+function canManageSales() { const r = getCurrentUser()?.role; return !r || ["FOUNDER", "MANAGER", "ADMIN", "OWNER"].includes(r); }
 const STRIP = { gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))" };
+const STATUS_LABEL = { PENDING: "New", CONFIRMED: "Confirmed", PICKING: "Packing", DISPATCHED: "Out for delivery", DELIVERED: "Delivered", INVOICED: "Awaiting payment", PAID: "Paid", CANCELLED: "Cancelled" }; // friendly (BS4)
 
 // Must match tenant.customers.customer_type CHECK (migration 124).
 const TYPE_LABEL = {
@@ -200,6 +212,7 @@ function BuyersInner() {
   const qc = useQueryClient();
   const navigate = useNavigate();
   const { farmId } = useCurrentFarm();
+  const canManage = canManageSales();
   const [view, setView] = useState("directory");
   const [detailId, setDetailId] = useState(null);
   const [typeFilter, setTypeFilter] = useState("all");
@@ -283,7 +296,7 @@ function BuyersInner() {
       <main className="main-content">
         <div className="main-inner">
           {detailBuyer ? (
-            <BuyerDetail b={detailBuyer} orders={ordersByCust[detailBuyer.id] || []} onBack={() => setDetailId(null)}
+            <BuyerDetail b={detailBuyer} orders={ordersByCust[detailBuyer.id] || []} onBack={() => setDetailId(null)} canManage={canManage}
               onNewOrder={() => setOrderOpen(true)} advance={advance} onCancel={(o) => setCancelOrder(o)}
               onLogPayment={(o) => setPayOrder(o)} onLogComm={() => setCommFor(detailBuyer)} onEdit={() => setEditBuyer(detailBuyer.raw)} />
           ) : (
@@ -351,7 +364,7 @@ function BuyersInner() {
                   <div style={{ display: "flex", justifyContent: "flex-end", margin: "12px 0" }}>
                     <button className="btn btn-primary" onClick={() => setOrderOpen(true)}><Plus size={14} />New order</button>
                   </div>
-                  <OrderList orders={orders} loading={ordersQ.isLoading} isError={ordersQ.isError} onRetry={() => ordersQ.refetch()} advance={advance} onPay={(o) => setPayOrder(o)} onCancel={(o) => setCancelOrder(o)} />
+                  <OrderList orders={orders} loading={ordersQ.isLoading} isError={ordersQ.isError} onRetry={() => ordersQ.refetch()} advance={advance} onPay={(o) => setPayOrder(o)} onCancel={(o) => setCancelOrder(o)} canManage={canManage} />
                 </>
               )}
 
@@ -380,17 +393,17 @@ function BuyersInner() {
 
 // Forward-only status control — no PAID (use Log payment) / no CANCELLED (use Cancel). (B1/B30)
 function StatusControl({ status, onChange }) {
-  if (status === "PAID") return <span className="buyer-status-pill active" style={{ background: "rgba(106,168,79,0.18)", color: "var(--green-dk)" }}>PAID</span>;
-  if (status === "CANCELLED") return <span className="buyer-status-pill" style={{ background: "rgba(163,45,45,0.12)", color: "var(--red)" }}>CANCELLED</span>;
+  if (status === "PAID") return <span className="buyer-status-pill active" style={{ background: "rgba(106,168,79,0.18)", color: "var(--green-dk)" }}>Paid</span>;
+  if (status === "CANCELLED") return <span className="buyer-status-pill" style={{ background: "rgba(163,45,45,0.12)", color: "var(--red)" }}>Cancelled</span>;
   const color = { PENDING: "var(--amber)", CONFIRMED: "var(--green)", PICKING: "var(--green)", DISPATCHED: "var(--green)", DELIVERED: "var(--green-dk)", INVOICED: "var(--green-dk)" }[status] || "var(--muted)";
   return (
     <select value={status} onChange={(e) => onChange(e.target.value)} aria-label="Order status" style={{ fontSize: 12, fontWeight: 700, borderRadius: 999, padding: "3px 8px", border: "1px solid var(--line)", color, background: "var(--paper)" }}>
-      {ORDER_FLOW.map((s) => <option key={s} value={s}>{s}</option>)}
+      {ORDER_FLOW.map((s) => <option key={s} value={s}>{STATUS_LABEL[s] || s}</option>)}
     </select>
   );
 }
 
-function OrderRow({ o, advance, onPay, onCancel }) {
+function OrderRow({ o, advance, onPay, onCancel, canManage }) {
   const owed = OWED.includes(o.order_status);
   const terminal = o.order_status === "PAID" || o.order_status === "CANCELLED";
   return (
@@ -402,17 +415,38 @@ function OrderRow({ o, advance, onPay, onCancel }) {
       <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
         {owed && <button className="btn btn-primary btn-sm" onClick={() => onPay(o)}>Log payment</button>}
         <StatusControl status={o.order_status} onChange={(s) => advance(o.order_id, s)} />
-        {!terminal && <button className="btn btn-secondary btn-sm" title="Cancel order" aria-label="Cancel order" onClick={() => onCancel(o)}><Trash2 size={12} /></button>}
+        {!terminal && canManage && <button className="btn btn-secondary btn-sm" title="Cancel order" aria-label="Cancel order" onClick={() => onCancel(o)}><Trash2 size={12} /></button>}
       </div>
     </div>
   );
 }
 
-function OrderList({ orders, loading, isError, onRetry, advance, onPay, onCancel }) {
+const ORDER_FILTERS = [["all", "All"], ["todeliver", "To deliver"], ["owed", "Owed"], ["paid", "Paid"]];
+function orderMatchesFilter(o, f) {
+  if (f === "todeliver") return ["PENDING", "CONFIRMED", "PICKING"].includes(o.order_status);
+  if (f === "owed") return OWED.includes(o.order_status);
+  if (f === "paid") return o.order_status === "PAID";
+  return true;
+}
+function OrderList({ orders, loading, isError, onRetry, advance, onPay, onCancel, canManage }) {
+  const [filter, setFilter] = useState("all");
+  const [oq, setOq] = useState("");
   if (loading) return <div className="card" style={{ padding: 20, color: "var(--muted)" }}>Loading orders…</div>;
   if (isError && !orders.length) return <ErrorCard msg="Couldn't load orders." onRetry={onRetry} />;
   if (!orders.length) return <EmptyView title="No orders yet" note="Log an order from a buyer and it shows here with its status and value." />;
-  return <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>{orders.map((o) => <OrderRow key={o.order_id} o={o} advance={advance} onPay={onPay} onCancel={onCancel} />)}</div>;
+  const qq = oq.trim().toLowerCase();
+  const shown = orders.filter((o) => orderMatchesFilter(o, filter)).filter((o) => !qq || String(o.customer_name || "").toLowerCase().includes(qq));
+  return (
+    <>
+      <div className="gallery-filter-row" style={{ marginBottom: 8, display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
+        {ORDER_FILTERS.map(([id, l]) => <button key={id} className={`filter-pill ${filter === id ? "active" : ""}`} onClick={() => setFilter(id)}>{l}<span className="filter-pill-count">{orders.filter((o) => orderMatchesFilter(o, id)).length}</span></button>)}
+        <span style={{ flex: 1 }} />
+        <input type="search" value={oq} onChange={(e) => setOq(e.target.value)} placeholder="Search by buyer…" aria-label="Search orders" style={{ padding: "7px 10px", border: "1.5px solid var(--line)", borderRadius: 7, fontSize: 12.5, background: "var(--paper)", minWidth: 160 }} />
+      </div>
+      {shown.length === 0 ? <div className="card" style={{ padding: 30, textAlign: "center", color: "var(--muted)" }}>No orders match.</div>
+        : <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>{shown.map((o) => <OrderRow key={o.order_id} o={o} advance={advance} onPay={onPay} onCancel={onCancel} canManage={canManage} />)}</div>}
+    </>
+  );
 }
 
 function Receivables({ orders, loading, isError, onRetry, buyersById, onPay }) {
@@ -441,7 +475,7 @@ function Receivables({ orders, loading, isError, onRetry, buyersById, onPay }) {
         const wa = buyer && waLink(buyer.whatsapp || buyer.phone, `Hi${buyer.contact ? ` ${buyer.contact}` : ""}, a friendly reminder about the ${fjd2(amt(o))} for order ${o.order_id}. Thank you!`);
         return (
           <div key={o.order_id} className="card" style={{ padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap", rowGap: 8 }}>
-            <div><div style={{ fontWeight: 600, color: "var(--soil)" }}>{o.customer_name}</div><div style={{ fontSize: 11.5, color: "var(--muted)" }}>{o.order_status}{d != null ? ` · ${d}d outstanding` : ""}</div></div>
+            <div><div style={{ fontWeight: 600, color: "var(--soil)" }}>{o.customer_name}</div><div style={{ fontSize: 11.5, color: "var(--muted)" }}>{STATUS_LABEL[o.order_status] || o.order_status}{d != null ? ` · ${d}d outstanding` : ""}</div></div>
             <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
               <div style={{ fontWeight: 700, color: d != null && d > 30 ? "var(--red)" : "var(--soil)" }}>{fjd2(amt(o))}</div>
               {wa && <a className="btn btn-secondary btn-sm" href={wa} target="_blank" rel="noreferrer" style={{ textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 4 }}><MessageCircle size={12} />Chase</a>}
@@ -477,7 +511,7 @@ function Analytics({ ranked, totalRev, top3pct, concCls }) {
 
 const CHANNEL_LABEL = { whatsapp: "WhatsApp", call: "Call", visit: "Visit", email: "Email", sms: "SMS" };
 
-function BuyerDetail({ b, orders, onBack, onNewOrder, advance, onCancel, onLogPayment, onLogComm, onEdit }) {
+function BuyerDetail({ b, orders, onBack, onNewOrder, advance, onCancel, onLogPayment, onLogComm, onEdit, canManage }) {
   const { farmId } = useCurrentFarm();
   const qc = useQueryClient();
   const live = orders.filter((o) => o.order_status !== "CANCELLED");
@@ -539,7 +573,7 @@ function BuyerDetail({ b, orders, onBack, onNewOrder, advance, onCancel, onLogPa
                   <button className="btn btn-secondary btn-sm" title="Post a delivery job for nearby providers" onClick={() => postServiceJob(o, "TRANSPORT")}>Find transport</button>
                   <button className="btn btn-secondary btn-sm" title="Post a cold-storage job for nearby providers" onClick={() => postServiceJob(o, "COLD_STORAGE")}>Cold storage</button>
                   <StatusControl status={o.order_status} onChange={(s) => advance(o.order_id, s)} />
-                  {!terminal && <button className="btn btn-secondary btn-sm" title="Cancel order" aria-label="Cancel order" onClick={() => onCancel(o)}><Trash2 size={12} /></button>}
+                  {!terminal && canManage && <button className="btn btn-secondary btn-sm" title="Cancel order" aria-label="Cancel order" onClick={() => onCancel(o)}><Trash2 size={12} /></button>}
                 </div>
               </div>
             );
@@ -652,7 +686,7 @@ function PipelineView({ leads, loading, isError, onRetry, onAdd, onStage }) {
               <div className="pipeline-column-head"><span>{label}</span><span>{col.length}</span></div>
               {col.length === 0 ? <div style={{ fontSize: 11, color: "var(--muted)", textAlign: "center", padding: 14 }}>No leads</div>
                 : col.map((l) => (
-                  <div className="pipeline-card" key={l.lead_id} onClick={() => l.stage !== "won" && onStage(l.lead_id, NEXT_STAGE[l.stage])} title="Tap to advance stage">
+                  <div className="pipeline-card" key={l.lead_id} role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === "Enter" && l.stage !== "won") onStage(l.lead_id, NEXT_STAGE[l.stage]); }} onClick={() => l.stage !== "won" && onStage(l.lead_id, NEXT_STAGE[l.stage])} title="Tap to advance stage">
                     <div className="pipeline-card-name">{l.prospect_name}</div>
                     <div style={{ fontSize: 10.5, color: "var(--muted)" }}>{[l.city, l.prospect_type].filter(Boolean).join(" · ")}</div>
                     {l.potential_monthly_fjd != null && <div className="pipeline-card-value">{fjd0(l.potential_monthly_fjd)}/mo</div>}
@@ -796,12 +830,17 @@ function NewOrderModal({ farmId, customers, onClose, onSaved }) {
       <Field label="Buyer"><select value={customerId} onChange={(e) => setCustomerId(e.target.value)}><option value="">Pick a buyer…</option>{customers.map((c) => <option key={c.customer_id} value={c.customer_id}>{c.customer_name}</option>)}</select></Field>
       <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: ".5px", color: "var(--muted)", margin: "12px 0 6px" }}>Crops in this order</div>
       {lines.map((l, i) => (
-        <div key={i} className="form-row" style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 0.8fr auto", gap: 8, alignItems: "end", marginBottom: 8 }}>
-          <div><label>Crop</label><select value={l.production_id} onChange={(e) => setLine(i, "production_id", e.target.value)}><option value="">Pick…</option>{productions.map((p) => <option key={p.production_id} value={p.production_id}>{p.production_name || "Crop"}</option>)}</select></div>
-          <div><label>Qty kg</label><input type="number" min="0" value={l.qty} onChange={(e) => setLine(i, "qty", e.target.value)} /></div>
-          <div><label>Price/kg</label><input type="number" min="0" step="0.10" value={l.price} onChange={(e) => setLine(i, "price", e.target.value)} /></div>
-          <div><label>Grade</label><select value={l.grade} onChange={(e) => setLine(i, "grade", e.target.value)}><option>A</option><option>B</option><option>C</option></select></div>
-          <button className="btn btn-secondary btn-sm" title="Remove line" aria-label="Remove line" onClick={() => removeLine(i)} disabled={lines.length === 1} style={{ marginBottom: 2 }}><X size={12} /></button>
+        <div key={i} className="card" style={{ padding: 10, marginBottom: 8, background: "var(--paper)" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+            <span style={{ fontSize: 10.5, textTransform: "uppercase", letterSpacing: ".5px", color: "var(--muted)" }}>Crop {i + 1}</span>
+            {lines.length > 1 && <button className="btn btn-secondary btn-sm" title="Remove crop" aria-label="Remove crop" onClick={() => removeLine(i)}><X size={12} /></button>}
+          </div>
+          <div className="form-row" style={{ marginTop: 6 }}><select value={l.production_id} onChange={(e) => setLine(i, "production_id", e.target.value)}><option value="">Pick a crop…</option>{productions.map((p) => <option key={p.production_id} value={p.production_id}>{p.production_name || "Crop"}</option>)}</select></div>
+          <div className="form-row" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginTop: 8 }}>
+            <div><label>Qty kg</label><input type="number" min="0" value={l.qty} onChange={(e) => setLine(i, "qty", e.target.value)} /></div>
+            <div><label>Price/kg</label><input type="number" min="0" step="0.10" value={l.price} onChange={(e) => setLine(i, "price", e.target.value)} /></div>
+            <div><label>Grade</label><select value={l.grade} onChange={(e) => setLine(i, "grade", e.target.value)}><option>A</option><option>B</option><option>C</option></select></div>
+          </div>
         </div>
       ))}
       <button className="btn btn-secondary btn-sm" onClick={addLine}><Plus size={12} />Add another crop</button>
