@@ -1437,6 +1437,12 @@ function FieldEventsLog() {
             <div className="text-sm font-semibold" style={{ color: C.soil }}>Couldn't load field events</div>
             <button onClick={() => refetch()} className="mt-2 text-xs px-3 py-1.5 rounded-lg text-white" style={{ background: C.greenDk }}>Retry</button>
           </div>
+        ) : !farmId ? (
+          <div className="px-4 py-12 text-center">
+            <ListChecks size={26} style={{ color: C.green, margin: "0 auto" }} />
+            <div className="text-sm font-semibold mt-2" style={{ color: C.soil }}>Select a farm</div>
+            <div className="text-xs mt-1" style={{ color: C.muted }}>Choose or create a farm to log and see its field activity.</div>
+          </div>
         ) : allEvents.length === 0 ? (
           <div className="px-4 py-12 text-center">
             <ListChecks size={26} style={{ color: C.green, margin: "0 auto" }} />
@@ -1445,21 +1451,39 @@ function FieldEventsLog() {
           </div>
         ) : events.length === 0 ? (
           <div className="px-4 py-10 text-center text-sm" style={{ color: C.muted }}>No events match this filter.</div>
-        ) : events.map((e) => (
-          <div key={e.event_id} className="flex md:grid md:items-center gap-3 px-4 py-3"
-            style={{ gridTemplateColumns: "96px 120px 1fr 110px 70px 56px", borderTop: `1px solid rgba(92,64,51,0.06)` }}>
-            <span className="text-[11px] shrink-0" style={{ color: C.muted }}>{feDate(e.event_date)}</span>
-            <span className="text-sm font-medium md:font-normal" style={{ color: C.soil }}>{FE_HUMAN[e.event_type] || e.event_type}</span>
-            <span className="flex-1 min-w-0 text-[13px] md:truncate" style={{ color: C.soil }}>{feDetail(e)}</span>
-            <span className="text-[11px]" style={{ color: C.muted }}>{block(e)}</span>
-            <span className="text-[11px]" style={{ color: C.muted }}>{who(e)}</span>
-            {feWithin48h(e.created_at)
-              ? <button onClick={() => setEditEvt(e)} className="text-[11px] font-semibold text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--green)]" style={{ color: C.greenDk }}>Edit</button>
-              : <span title="Locked after 48 hours" aria-label="Locked" style={{ color: C.muted, display: "inline-flex" }}><Lock size={13} /></span>}
-          </div>
-        ))}
+        ) : events.map((e) => {
+          const editable = feWithin48h(e.created_at);
+          const editCell = editable
+            ? <button onClick={() => setEditEvt(e)} className="text-[11px] font-semibold text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--green)]" style={{ color: C.greenDk }}>Edit</button>
+            : <span title="Locked after 48 hours" aria-label="Locked" style={{ color: C.muted, display: "inline-flex" }}><Lock size={13} /></span>;
+          return (
+            <div key={e.event_id} style={{ borderTop: `1px solid rgba(92,64,51,0.06)` }}>
+              {/* desktop: aligned grid */}
+              <div className="hidden md:grid md:items-center gap-3 px-4 py-3" style={{ gridTemplateColumns: "96px 120px 1fr 110px 70px 56px" }}>
+                <span className="text-[11px]" style={{ color: C.muted }}>{feDate(e.event_date)}</span>
+                <span className="text-sm" style={{ color: C.soil }}>{FE_HUMAN[e.event_type] || e.event_type}</span>
+                <span className="min-w-0 text-[13px] truncate" style={{ color: C.soil }}>{feDetail(e)}</span>
+                <span className="text-[11px]" style={{ color: C.muted }} title={`Block ${block(e)}`}>{block(e)}</span>
+                <span className="text-[11px]" style={{ color: C.muted }}>{who(e)}</span>
+                {editCell}
+              </div>
+              {/* mobile: labelled stack */}
+              <div className="md:hidden px-4 py-3">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-sm font-semibold" style={{ color: C.soil }}>{FE_HUMAN[e.event_type] || e.event_type}</span>
+                  <span className="text-[11px] shrink-0" style={{ color: C.muted }}>{feDate(e.event_date)}</span>
+                </div>
+                <div className="text-[13px] mt-0.5" style={{ color: C.soil }}>{feDetail(e)}</div>
+                <div className="flex items-center justify-between gap-2 mt-1">
+                  <span className="text-[11px]" style={{ color: C.muted }}>Block {block(e)} · by {who(e)}</span>
+                  {editCell}
+                </div>
+              </div>
+            </div>
+          );
+        })}
       </div>
-      <p className="text-[11px]" style={{ color: C.muted }}>Showing the most recent {allEvents.length} event{allEvents.length === 1 ? "" : "s"}{allEvents.length >= 100 ? " (first 100)" : ""}. Entries can be corrected for 48 hours, then lock.</p>
+      <p className="text-[11px]" style={{ color: C.muted }}>Showing the most recent {allEvents.length} event{allEvents.length === 1 ? "" : "s"}{allEvents.length >= 100 ? " — search & filters cover these 100 only" : ""}. Entries can be corrected for 48 hours, then lock.</p>
       {editEvt && <FieldEventEditModal evt={editEvt} onClose={() => setEditEvt(null)} onSaved={() => { refetch(); setEditEvt(null); }} />}
     </div>
   );
