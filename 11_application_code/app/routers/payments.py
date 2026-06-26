@@ -39,6 +39,16 @@ from app.core.payment_lock import (
 def _now():
     return datetime.now(timezone.utc)
 
+
+# Fiji is UTC+12 (no DST since 2021). Cash-ledger transaction_date must be the
+# farmer's local day, never the server's UTC day (PA24/B89 class) — a payment
+# confirmed after midnight Fiji would otherwise book to the previous day.
+_FIJI_TZ = timezone(timedelta(hours=12))
+
+
+def _fiji_today() -> date:
+    return datetime.now(_FIJI_TZ).date()
+
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
@@ -221,6 +231,17 @@ async def instruct(obligation_id: str, body: Instruct, user: dict = Depends(requ
             raise HTTPException(status_code=404, detail="Obligation not found")
         if ob["status"] not in ("OPEN", "INSTRUCTED"):
             raise HTTPException(status_code=409, detail=f"Obligation is {ob['status']}")
+        # Idempotent instruct (PA18): if an instruction is already open for this
+        # obligation, return it instead of minting a duplicate INITIATED txn that
+        # would orphan when one is confirmed.
+        existing_tx = (await db.execute(text(
+            "SELECT txn_id, provider, provider_ref, instruction_payload FROM tenant.payment_transactions "
+            "WHERE obligation_id=:o AND state='INITIATED' ORDER BY created_at DESC LIMIT 1"),
+            {"o": obligation_id})).mappings().first()
+        if existing_tx:
+            return {"data": {"txn_id": existing_tx["txn_id"], "provider": existing_tx["provider"],
+                             "provider_ref": existing_tx["provider_ref"],
+                             "instruction": existing_tx["instruction_payload"]}}
         method = None
         provider_code = "MANUAL"
         if body.payment_method_id:
@@ -280,11 +301,21 @@ async def confirm_transaction(txn_id: str, body: Confirm, user: dict = Depends(r
         if tx["state"] in ("REVERSED", "FAILED"):
             raise HTTPException(status_code=409, detail=f"Transaction is {tx['state']}")
 
-        # Cash-flow link is for farm managers: if the account has a farm, record a
-        # cash_ledger row; otherwise (buyer/creator/provider with no farm) the
-        # payment + audit row IS the record. Universal — works for every role.
-        farm_id = tx["farm_id"] or (await db.execute(text(
-            "SELECT farm_id FROM tenant.farms ORDER BY created_at LIMIT 1"))).scalar()
+        # Cash-flow link is for farm managers: if the obligation is tied to a farm,
+        # book the cash_ledger row to THAT farm. If it isn't, only auto-resolve when
+        # the tenant has exactly one farm; with multiple farms we refuse rather than
+        # silently book to an arbitrary "first" farm (PA1 — was a real correctness
+        # bug that poisoned multi-farm Bank Evidence).
+        farm_id = tx["farm_id"]
+        if not farm_id:
+            farms = (await db.execute(text(
+                "SELECT farm_id FROM tenant.farms ORDER BY created_at LIMIT 2"))).scalars().all()
+            if len(farms) == 1:
+                farm_id = farms[0]
+            elif len(farms) > 1:
+                raise HTTPException(status_code=409,
+                                    detail="Link this payment to a farm before confirming")
+            # 0 farms → farm_id stays None: the payment + audit row IS the record.
 
         # Single-writer guard: never double-post a ledger row for this payment.
         existing = (await db.execute(text(
@@ -295,13 +326,14 @@ async def confirm_transaction(txn_id: str, body: Confirm, user: dict = Depends(r
         descr = f"{'Payment to' if ttype == 'EXPENSE' else 'Payment from'} {who} · {tx['provider']} {body.confirmation_ref or tx['provider_ref'] or ''}".strip()
         ledger_id = None
         if farm_id and not existing:
-            ledger_id = f"CSH-{date.today():%Y%m%d}-{uuid.uuid4().hex[:4].upper()}"
+            _today = _fiji_today()
+            ledger_id = f"CSH-{_today:%Y%m%d}-{uuid.uuid4().hex[:4].upper()}"
             await db.execute(text("""
                 INSERT INTO tenant.cash_ledger
                     (ledger_id, tenant_id, farm_id, transaction_date, transaction_type, category,
                      description, amount_fjd, payment_method, reference_id, reference_type, created_by)
                 VALUES (:l, cast(:t AS uuid), :farm, :d, :tt, :cat, :descr, :amt, :pm, :rid, 'PAYMENT', cast(:u AS uuid))
-            """), {"l": ledger_id, "t": tid, "farm": farm_id, "d": date.today(), "tt": ttype,
+            """), {"l": ledger_id, "t": tid, "farm": farm_id, "d": _today, "tt": ttype,
                    "cat": tx["category"], "descr": descr, "amt": tx["amount_fjd"],
                    "pm": tx["method_label"] or tx["provider"], "rid": txn_id, "u": str(user["user_id"])})
 

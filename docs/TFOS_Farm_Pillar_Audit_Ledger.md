@@ -805,3 +805,33 @@ tenant-scoped Buyers & sales (the `community.*` → Community / `tenant.*` → F
 - Farm `Market.jsx`: dropped the Jobs + Services tabs → **Buyers & sales** + a thin
   **"Hiring & logistics"** shortcut tab that deep-links to `/home/work`.
 - Frontend-only; no backend/migration change. Build clean. Deploy: `npm run build`.
+
+## 9. Payments (/farm/payments → Money tab) — AUDITED + REDESIGNED (2026-06-26, approved) — ✅ shipped, backend STAGED
+Audited (PA1–PA16) → deepened 8-persona (PA1 revised + PA17–PA29) → redesigned. Backend money
+loop is genuinely good (idempotent, hash-chained, server-enforced PIN); the weak half was the
+frontend + three real backend correctness bugs. Spec: `docs/TFOS_Payments_Redesign_Wireframe.md`.
+- **#1 workflow win (PA2/PA3/PA18):** the two-step "Generate instruction → Confirm paid" is GONE.
+  One **Settle modal** ("Mark paid"/"Mark received") generates/loads the instruction, shows the
+  **reference + instruction text persistently** (no more disappearing toast), offers a method
+  chooser, captures the confirmation ref, and books it. Two taps, instruction always visible.
+- **Backend fixes bundled (NO migration — columns exist), `routers/payments.py` → STAGE:**
+  **PA1** confirm no longer blind-books to the oldest farm — uses the obligation's farm; if none,
+  auto-resolves only when the tenant has exactly 1 farm, else **409 "link a farm first"** (was a
+  real multi-farm Bank-Evidence corruption). Frontend now sends the current `farm_id` on create.
+  **PA18** `instruct` reuses an open INITIATED txn instead of minting duplicates. **PA24** booked
+  `transaction_date` uses **Fiji** date (UTC+12), not server UTC `date.today()`.
+- **Frontend (`Payments.jsx`):** api.js wrapper that KEEPS the 423 PIN-lock but stops swallowing
+  errors (PA4/PA17 — the silent-empty-unlocked-page bug); cached-on-error → ErrorCard/Degraded;
+  **Overdue** total + overdue-first sort + red flags + "due in Nd" (PA25); shared `<Modal>` for
+  settle/cancel/forgot-PIN (PA9/PA12 — no more window.prompt/confirm); lucide icons, zero emoji
+  (PA8); drop redundant `<h1>` (PA10); view-aware **Ask AI** (PA11); **submit-locks** on
+  create/instruct/confirm (PA20); **retry-safe confirm** — 409 "already confirmed" treated as
+  success (PA19); counterparty `<datalist>` from the existing master (PA21); per-method **default**
+  toggle + method chooser at settle (PA26/PA28); Fiji dates.
+- **Filed (honest, NOT faked):** PA22 partial settlement (`settled_fjd` + amount-at-settle),
+  PA23 Evidence v2 on confirmation (photo/GPS — highest-value Bank Evidence row; needs txn evidence
+  cols + migration), PA27 single AR truth (Buyers+Cash+Payments), PA1-hardening (farm on adopt +
+  backfill NULL-farm payables → `farm_id NOT NULL`), FNPF/tax mapping, payment register export,
+  due-date reminders.
+- Deploy: frontend `npm run build`; **backend STAGED** (build --no-cache + verify-deploy.sh) —
+  not applied from this cloned env. No migration.
