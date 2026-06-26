@@ -1,28 +1,28 @@
 /**
  * FarmTasks.jsx — /farm/tasks
  *
- * Redesigned 2026-06-26 (audit-approved). One decision first (Do this next), one
- * reliable completion, progressive disclosure, honest under failure. Real
- * task_queue data; complete/skip emit audit. Routed tasks open their prefilled
- * form (which closes the task via completeLinkedTask — verified). Input-required
- * non-routed tasks now collect the value inline instead of posting "" (was T2's
- * 422). Crop-plan is a clearly-labelled secondary "coming up", not a competing
- * action list (N2).
+ * Redesigned + optimized 2026-06-26 (audit-approved; stress-test pass 1 fixes).
+ * One decision first (Do this next), one reliable completion, progressive
+ * disclosure, honest under failure. Real task_queue data; complete/skip emit
+ * audit. Routed tasks open their prefilled form (which closes the task via
+ * completeLinkedTask — verified). Input-required non-routed tasks collect the
+ * value inline (full-width row) instead of posting "" (T2).
  *
- * Fixed: T1 (api.js token-refresh + real error state, no false "all caught up");
- * T2 (inline input completion); T3 (Fiji-time bucketing); T5/T7 (session "done"
- * count, dropped the 200-row COMPLETED fetch); T6 (hero first); N3 (removed dup
- * KPIs; orphan Tasks.jsx deleted); N5 (icon from task.icon_key); N7 (refetch on
- * reconnect/focus); a11y (aria-live, reduced-motion, keyboard rows, menu Esc).
- * Filed: farm_id on /tasks (T4, today tenant-wide); worker assignment; AI suggest.
+ * Pass-1 stress fixes: TS1 cached tasks stay visible on a refetch error (degraded
+ * banner, not blanked); TS2 single empty state; TS3 honest "all farms" label
+ * (the list is tenant-wide until /tasks takes farm_id); TS6 inline input drops to
+ * its own full-width row; TS7 no refetch-on-focus churn; TS8 dead import removed;
+ * more AI (Ask-AI per task in the row menu); bigger tap targets.
+ * Filed: farm_id on /tasks (T4); worker assignment; recurring; photo upload UI;
+ * voice/i18n (low-literacy); AI-suggest endpoint.
  */
-import { useMemo, useState, useEffect, useRef } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { QueryClientProvider, QueryClient, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import {
   CheckCircle2, Plus, Sprout, ListChecks, Leaf, Droplet, FlaskConical, Bug,
   Wheat, Bird, Stethoscope, Wrench, DollarSign, Calendar, ClipboardList,
-  ChevronDown, Sparkles, WifiOff,
+  ChevronDown, Sparkles, WifiOff, MoreHorizontal,
 } from "lucide-react";
 import { useFormModal } from "../../context/FormModalContext";
 import { CurrentFarmProvider, useCurrentFarm } from "../../context/CurrentFarmContext";
@@ -55,8 +55,6 @@ function timing(due) {
   return `In ${days} day${days === 1 ? "" : "s"}`;
 }
 
-// Icon: prefer the backend-provided icon_key, then a guarded keyword match, then
-// a neutral default (N5 — no more "check the pump" → Stethoscope).
 const ICON_KEY = { water: Droplet, irrigation: Droplet, droplet: Droplet, fertilizer: FlaskConical, flask: FlaskConical, nutrient: FlaskConical, weed: Sprout, sprout: Sprout, pest: Bug, bug: Bug, spray: Bug, scout: Bug, harvest: Wheat, wheat: Wheat, feed: Bird, bird: Bird, poultry: Bird, health: Stethoscope, vaccine: Stethoscope, mortality: Stethoscope, maintenance: Wrench, wrench: Wrench, repair: Wrench, money: DollarSign, cash: DollarSign, sale: DollarSign, plan: Calendar, calendar: Calendar, seed: Calendar };
 function iconFor(t) {
   if (t.icon_key && ICON_KEY[String(t.icon_key).toLowerCase()]) return ICON_KEY[String(t.icon_key).toLowerCase()];
@@ -73,41 +71,40 @@ function iconFor(t) {
   if (/review|plan|seed/.test(s)) return Calendar;
   return ClipboardList;
 }
-const needsInput = (t) => t.input_hint && t.input_hint !== "none";
+// inline-completable hints (require a typed value); others one-tap or routed.
+const INLINE = new Set(["decimal", "text_short", "photo"]);
+const needsInline = (t) => t.input_hint && INLINE.has(t.input_hint);
 const QUICK = [["Irrigation", Droplet], ["Fertilizer", FlaskConical], ["Weeding", Sprout], ["Pest control", Bug], ["Harvest", Wheat], ["Feeding", Bird], ["Maintenance", Wrench], ["Record keeping", DollarSign], ["Custom task", Plus]];
 
-// Inline completion control: route → form; input-required → inline field; else one-tap.
-function CompleteControl({ t, busy, big, inputFor, inputVal, setInputVal, onComplete, navigate }) {
+// Trigger only (route / open-inline / one-tap). The inline field renders on its
+// own full-width row beneath, so it's never cramped (TS6).
+function CompleteTrigger({ t, big, busy, onComplete, navigate }) {
   const tgt = taskTarget(t);
-  const asking = inputFor === t.task_id;
-  const base = big ? "px-3 py-2.5 rounded-xl text-sm font-bold" : "px-2.5 py-1.5 rounded-lg text-[11px] font-semibold";
-  if (tgt) return <button onClick={() => navigate(tgt.route)} className={`${base} text-white ${FOCUS} ${big ? "flex-1" : ""}`} style={{ background: C.greenDk }}>{tgt.label}</button>;
-  if (asking) {
-    const hint = t.input_hint === "decimal" ? "Enter a number" : t.input_hint === "photo" ? "Photo URL" : "Enter a value";
-    return (
-      <span className="flex items-center gap-1.5 flex-1">
-        <input autoFocus value={inputVal} onChange={(e) => setInputVal(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") onComplete(t, inputVal); }}
-          inputMode={t.input_hint === "decimal" ? "decimal" : "text"} placeholder={hint} aria-label={hint}
-          className="flex-1 min-w-0 px-2 py-1.5 rounded-lg border text-[13px]" style={{ borderColor: C.border }} />
-        <button disabled={busy} onClick={() => onComplete(t, inputVal)} className={`${base} text-white ${FOCUS}`} style={{ background: C.greenDk }}><CheckCircle2 size={big ? 16 : 13} /></button>
-      </span>
-    );
-  }
+  const base = big ? "px-3 py-2.5 rounded-xl text-sm font-bold flex-1" : "px-2.5 py-1.5 rounded-lg text-[12px] font-semibold";
+  if (tgt) return <button onClick={() => navigate(tgt.route)} className={`${base} text-white ${FOCUS}`} style={{ background: C.greenDk }}>{tgt.label}</button>;
+  if (needsInline(t)) return <button onClick={() => onComplete(t)} className={`${base} text-white ${FOCUS} flex items-center justify-center gap-1.5`} style={{ background: C.greenDk }}><CheckCircle2 size={big ? 16 : 14} aria-hidden="true" />{big ? "Log & done" : "Log"}</button>;
+  return <button disabled={busy} onClick={() => onComplete(t, null)} aria-label={`Mark "${t.imperative}" done`} className={`${base} text-white ${FOCUS} flex items-center justify-center gap-1.5`} style={{ background: C.greenDk }}><CheckCircle2 size={big ? 16 : 14} aria-hidden="true" />{big ? "Mark done" : ""}</button>;
+}
+function InlineInput({ t, val, setVal, busy, onComplete, onCancel }) {
+  const hint = t.input_hint === "decimal" ? "Enter the amount (number)" : t.input_hint === "photo" ? "Paste a photo link" : "Type a short note";
   return (
-    <button disabled={busy} onClick={() => onComplete(t)} aria-label={`Mark "${t.imperative}" done`}
-      className={`${base} text-white ${FOCUS} flex items-center justify-center gap-1.5 ${big ? "flex-1" : ""}`} style={{ background: C.greenDk }}>
-      <CheckCircle2 size={big ? 16 : 14} />{big ? "Mark done" : ""}
-    </button>
+    <div className="mt-2 flex items-center gap-2">
+      <input autoFocus value={val} onChange={(e) => setVal(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") onComplete(t, val); if (e.key === "Escape") onCancel(); }}
+        inputMode={t.input_hint === "decimal" ? "decimal" : "text"} placeholder={hint} aria-label={hint}
+        className="flex-1 min-w-0 px-3 py-2 rounded-lg border text-[13px]" style={{ borderColor: C.border }} />
+      <button disabled={busy} onClick={() => onComplete(t, val)} className={`px-3 py-2 rounded-lg text-white text-sm font-semibold ${FOCUS}`} style={{ background: C.greenDk }}>Done</button>
+      <button onClick={onCancel} className={`px-2 py-2 rounded-lg text-sm ${FOCUS}`} style={{ color: C.muted }} aria-label="Cancel">✕</button>
+    </div>
   );
 }
 
-function Hero({ t, ctl, onSkip, askAi, navigate }) {
+function Hero({ t, asking, val, setVal, busy, onComplete, onCancel, onSkip, askAi, navigate }) {
   if (!t) {
     return (
-      <div className="rounded-2xl border p-5 text-center" style={{ borderColor: C.border, background: C.greenTint }} role="status" aria-live="polite">
-        <CheckCircle2 size={26} style={{ color: C.greenDk, margin: "0 auto" }} aria-hidden="true" />
+      <div className="rounded-2xl border p-6 text-center" style={{ borderColor: C.border, background: C.greenTint }} role="status" aria-live="polite">
+        <CheckCircle2 size={28} style={{ color: C.greenDk, margin: "0 auto" }} aria-hidden="true" />
         <div className="text-sm font-bold mt-2" style={{ color: C.soil }}>You're all caught up</div>
-        <div className="text-xs mt-0.5" style={{ color: C.muted }}>No open tasks right now — well done.</div>
+        <div className="text-xs mt-0.5" style={{ color: C.muted }}>No open tasks right now — well done. New tasks appear as cycles, compliance and rotations need action.</div>
       </div>
     );
   }
@@ -126,37 +123,49 @@ function Hero({ t, ctl, onSkip, askAi, navigate }) {
           <div className="text-xs mt-0.5" style={{ color: C.muted }}>{why}</div>
         </div>
       </div>
-      <div className="flex gap-2 mt-3 items-center">
-        {ctl(t, true)}
-        <button onClick={() => onSkip(t)} className={`px-4 py-2.5 rounded-xl font-semibold text-sm ${FOCUS}`} style={{ color: C.muted, border: `1px solid ${C.border}` }}>Skip</button>
-      </div>
+      {asking
+        ? <InlineInput t={t} val={val} setVal={setVal} busy={busy} onComplete={onComplete} onCancel={onCancel} />
+        : (
+          <div className="flex gap-2 mt-3 items-center">
+            <CompleteTrigger t={t} big busy={busy} onComplete={onComplete} navigate={navigate} />
+            <button onClick={() => onSkip(t)} className={`px-4 py-2.5 rounded-xl font-semibold text-sm ${FOCUS}`} style={{ color: C.muted, border: `1px solid ${C.border}` }}>Skip</button>
+          </div>
+        )}
     </div>
   );
 }
 
-function TaskRow({ t, ctl, onSkip, openMenu, setOpenMenu }) {
+function TaskRow({ t, asking, val, setVal, busy, onComplete, onCancel, onSkip, askAi, openMenu, setOpenMenu, navigate }) {
   const Icon = iconFor(t);
   const w = whenOf(t.due_date);
   const accent = w === "Overdue" ? C.red : w === "Today" ? C.amber : C.green;
   const menu = openMenu === t.task_id;
   return (
-    <div className="rounded-xl border p-2.5 flex items-center gap-2.5" style={{ borderColor: C.border, background: "white", borderLeft: `3px solid ${accent}` }}>
-      <div className="grid place-items-center rounded-lg shrink-0" style={{ width: 30, height: 30, background: C.greenTint }}><Icon size={15} style={{ color: C.greenDk }} aria-hidden="true" /></div>
-      <div className="flex-1 min-w-0">
-        <div className="text-[13px] font-semibold leading-snug truncate" style={{ color: C.soil }}>{t.imperative}</div>
-        <div className="text-[11px]" style={{ color: w === "Overdue" ? C.red : C.muted }}>{timing(t.due_date)}</div>
-      </div>
-      <div className="shrink-0 flex items-center gap-1.5">{ctl(t, false)}
-        <div className="relative">
-          <button onClick={() => setOpenMenu(menu ? null : t.task_id)} className={`p-1 rounded ${FOCUS}`} style={{ color: C.muted }} aria-label="More actions" aria-expanded={menu}>⋯</button>
-          {menu && <button onClick={() => { onSkip(t); setOpenMenu(null); }} className="absolute right-0 top-7 z-10 text-[11px] px-3 py-1.5 rounded-lg font-semibold bg-white" style={{ border: `1px solid ${C.border}`, color: C.soil }}>Skip</button>}
+    <div role="listitem" className="rounded-xl border p-2.5" style={{ borderColor: C.border, background: "white", borderLeft: `3px solid ${accent}` }}>
+      <div className="flex items-center gap-2.5">
+        <div className="grid place-items-center rounded-lg shrink-0" style={{ width: 30, height: 30, background: C.greenTint }}><Icon size={15} style={{ color: C.greenDk }} aria-hidden="true" /></div>
+        <div className="flex-1 min-w-0">
+          <div className="text-[13px] font-semibold leading-snug truncate" style={{ color: C.soil }}>{t.imperative}</div>
+          <div className="text-[11px]" style={{ color: w === "Overdue" ? C.red : C.muted }}>{timing(t.due_date)}</div>
+        </div>
+        <div className="shrink-0 flex items-center gap-1">
+          <CompleteTrigger t={t} busy={busy} onComplete={onComplete} navigate={navigate} />
+          <div className="relative">
+            <button onClick={(e) => { e.stopPropagation(); setOpenMenu(menu ? null : t.task_id); }} className={`grid place-items-center rounded ${FOCUS}`} style={{ width: 36, height: 36, color: C.muted }} aria-label="More actions" aria-expanded={menu}><MoreHorizontal size={16} /></button>
+            {menu && (
+              <div className="absolute right-0 top-9 z-10 bg-white rounded-lg overflow-hidden" style={{ border: `1px solid ${C.border}`, minWidth: 120 }}>
+                <button onClick={() => { askAi(t); setOpenMenu(null); }} className="w-full text-left text-[12px] px-3 py-2 hover:brightness-95 flex items-center gap-1.5" style={{ color: C.soil }}><Sparkles size={12} />Ask AI</button>
+                <button onClick={() => { onSkip(t); setOpenMenu(null); }} className="w-full text-left text-[12px] px-3 py-2 hover:brightness-95" style={{ color: C.soil, borderTop: `1px solid ${C.border}` }}>Skip</button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
+      {asking && <InlineInput t={t} val={val} setVal={setVal} busy={busy} onComplete={onComplete} onCancel={onCancel} />}
     </div>
   );
 }
 
-// ── Crop-plan: secondary, clearly labelled "coming up" (NOT a competing list) ──
 function CropPlanSecondary({ farmId, navigate }) {
   const { openFormModal } = useFormModal();
   const { data } = useQuery({ queryKey: ["crop-plan", farmId], queryFn: () => getJSON(`/api/v1/crop-plan/farm-steps?farm_id=${encodeURIComponent(farmId)}`), enabled: !!farmId });
@@ -169,7 +178,7 @@ function CropPlanSecondary({ farmId, navigate }) {
       </div>
       {steps.slice(0, 6).map((s) => (
         <div key={s.cycle_id} className="flex items-center gap-3 px-4 py-2.5" style={{ borderTop: `1px solid rgba(31,41,55,0.05)` }}>
-          <div className="grid place-items-center rounded-lg shrink-0" style={{ width: 32, height: 32, background: C.greenTint }}>{(s.category === "HARVEST" ? <Wheat size={15} style={{ color: C.greenDk }} /> : <Leaf size={15} style={{ color: C.greenDk }} />)}</div>
+          <div className="grid place-items-center rounded-lg shrink-0" style={{ width: 32, height: 32, background: C.greenTint }}>{s.category === "HARVEST" ? <Wheat size={15} style={{ color: C.greenDk }} aria-hidden="true" /> : <Leaf size={15} style={{ color: C.greenDk }} aria-hidden="true" />}</div>
           <div className="flex-1 min-w-0"><div className="text-[13px] font-semibold truncate" style={{ color: C.soil }}>{s.crop} · {s.text}</div><div className="text-[11px] truncate" style={{ color: C.muted }}>{[s.stage, s.when].filter(Boolean).join(" · ")}</div></div>
           <button onClick={() => (s.category === "HARVEST" ? openFormModal("harvest_new") : navigate("/farm/cycles"))} className={`text-[11px] px-3 py-1.5 rounded-lg font-semibold shrink-0 ${FOCUS}`} style={{ color: C.greenDk, border: `1px solid ${C.border}` }}>{s.category === "HARVEST" ? "Log harvest" : "View cycle"}</button>
         </div>
@@ -178,15 +187,15 @@ function CropPlanSecondary({ farmId, navigate }) {
   );
 }
 
-function Group({ title, count, accent, children, defaultOpen }) {
+function Group({ title, count, children, defaultOpen }) {
   const [open, setOpen] = useState(!!defaultOpen);
   return (
     <div className="rounded-2xl border bg-white" style={{ borderColor: C.border }}>
       <button onClick={() => setOpen((v) => !v)} className={`w-full flex items-center justify-between px-4 py-3 ${FOCUS}`} aria-expanded={open}>
-        <span className="text-sm font-bold uppercase tracking-wide flex items-center gap-2" style={{ color: C.soil }}>{title}<span className="text-[10px] px-1.5 py-0.5 rounded-full" style={{ background: C.greenTint, color: accent || C.greenDk }}>{count}</span></span>
+        <span className="text-sm font-bold uppercase tracking-wide flex items-center gap-2" style={{ color: C.soil }}>{title}<span className="text-[10px] px-1.5 py-0.5 rounded-full" style={{ background: C.greenTint, color: C.greenDk }}>{count}</span></span>
         <ChevronDown size={16} className="motion-reduce:!transition-none" style={{ color: C.muted, transform: open ? "rotate(180deg)" : "none", transition: "transform 160ms ease" }} aria-hidden="true" />
       </button>
-      {open && <div className="px-3 pb-3 flex flex-col gap-2">{children}</div>}
+      {open && <div className="px-3 pb-3 flex flex-col gap-2" role="list">{children}</div>}
     </div>
   );
 }
@@ -207,9 +216,9 @@ function TasksInner() {
   const open = useQuery({ queryKey: ["tasks-open"], queryFn: () => getJSON(`/api/v1/tasks?status=OPEN&limit=200`) });
   const allTasks = Array.isArray(open.data?.data?.tasks) ? open.data.data.tasks : [];
   const tasks = useMemo(() => allTasks.filter((t) => !doneIds.has(t.task_id)), [allTasks, doneIds]);
+  const hasData = !!open.data;
   const refresh = () => qc.invalidateQueries({ queryKey: ["tasks-open"] });
 
-  // close menu on outside click / Esc
   useEffect(() => {
     if (!openMenu) return undefined;
     const off = () => setOpenMenu(null);
@@ -233,16 +242,17 @@ function TasksInner() {
     return [...tasks].sort((a, b) => (w(a) - w(b)) || ((a.task_rank ?? 999) - (b.task_rank ?? 999)))[0] || null;
   }, [tasks]);
 
+  // value === undefined → trigger (route / open inline); value provided (incl null) → submit
   async function onComplete(t, value) {
     const tgt = taskTarget(t);
-    if (tgt) { navigate(tgt.route); return; }                          // form closes the task
-    if (needsInput(t) && value == null) { setInputFor(t.task_id); setInputVal(""); return; }  // ask inline
+    if (tgt && value === undefined) { navigate(tgt.route); return; }
+    if (needsInline(t) && value === undefined) { setInputFor(t.task_id); setInputVal(""); return; }
     let input_value = null;
-    if (needsInput(t)) {
+    if (needsInline(t)) {
       input_value = String(value ?? "").trim();
       if (!input_value) { emitToast("Enter a value"); return; }
       if (t.input_hint === "decimal" && !/^\d+(\.\d+)?$/.test(input_value)) { emitToast("Enter a number"); return; }
-      if (t.input_hint === "photo" && !/^https?:\/\//.test(input_value)) { emitToast("Enter a photo URL"); return; }
+      if (t.input_hint === "photo" && !/^https?:\/\//.test(input_value)) { emitToast("Paste a valid photo link"); return; }
       if (t.input_hint === "text_short" && input_value.length > 200) { emitToast("Keep it under 200 characters"); return; }
     }
     setBusy(t.task_id); setDoneIds((s) => new Set(s).add(t.task_id));
@@ -251,7 +261,7 @@ function TasksInner() {
     finally { setBusy(null); }
   }
   async function onSkip(t) {
-    setBusy(t.task_id); setDoneIds((s) => new Set(s).add(t.task_id));
+    setBusy(t.task_id); setDoneIds((s) => new Set(s).add(t.task_id)); setInputFor(null);
     try { await send("POST", `/api/v1/tasks/${t.task_id}/skip`, { reason: "will_do_later" }); emitToast("Skipped — it'll come back later"); refresh(); }
     catch (e) { setDoneIds((s) => { const n = new Set(s); n.delete(t.task_id); return n; }); emitToast(e?.userMessage || "Couldn't skip"); }
     finally { setBusy(null); }
@@ -265,8 +275,7 @@ function TasksInner() {
   const openAdd = (prefill = "") => { setMImp(prefill === "Custom task" ? "" : prefill); setMDue(""); setAddOpen(true); };
   const askAi = (t) => navigate(`/tis?q=${encodeURIComponent(`How do I: ${t.imperative}?`)}`);
 
-  const ctl = (t, big) => <CompleteControl t={t} big={big} busy={busy === t.task_id} inputFor={inputFor} inputVal={inputVal} setInputVal={setInputVal} onComplete={onComplete} navigate={navigate} />;
-
+  const rowProps = (t) => ({ t, asking: inputFor === t.task_id, val: inputVal, setVal: setInputVal, busy: busy === t.task_id, onComplete, onCancel: () => setInputFor(null), onSkip, askAi, openMenu, setOpenMenu, navigate });
   const todayTotal = todayList.length + session;
   const pct = todayTotal > 0 ? Math.round((session / todayTotal) * 100) : 0;
 
@@ -275,7 +284,7 @@ function TasksInner() {
       <div className="flex items-start justify-between gap-2 flex-wrap">
         <div>
           <h1 className="text-2xl font-bold" style={{ color: C.soil }}>Tasks</h1>
-          <div className="text-xs mt-0.5" style={{ color: C.muted }}>Your plan for today.</div>
+          <div className="text-xs mt-0.5" style={{ color: C.muted }}>Your plan for today · across all your farms.</div>
         </div>
         <div className="flex items-center gap-2">
           <FarmSelector />
@@ -283,20 +292,28 @@ function TasksInner() {
         </div>
       </div>
 
-      {open.isError && (
-        <div className="rounded-xl border p-3 flex items-center justify-between gap-2 flex-wrap" style={{ background: "#FEF6E6", borderColor: C.border }}>
-          <span className="text-[12px] flex items-center gap-1.5" style={{ color: C.amber }}><WifiOff size={13} aria-hidden="true" />Couldn't load your tasks.</span>
+      {/* TS1: cached tasks stay visible on a refetch error — degraded banner, not blanked. */}
+      {open.isError && hasData && (
+        <div className="rounded-xl border p-2.5 flex items-center justify-between gap-2 flex-wrap" style={{ background: "#FEF6E6", borderColor: C.border }}>
+          <span className="text-[12px] flex items-center gap-1.5" style={{ color: C.amber }}><WifiOff size={13} aria-hidden="true" />Couldn't refresh — showing your last saved tasks.</span>
           <button onClick={refresh} className={`text-[11px] font-semibold px-2.5 py-1 rounded-lg ${FOCUS}`} style={{ color: C.greenDk, border: `1px solid ${C.border}`, background: "white" }}>Retry</button>
         </div>
       )}
 
-      {open.isLoading ? (
+      {open.isLoading && !hasData ? (
         <div className="space-y-3">{[0, 1, 2].map((i) => <div key={i} className="h-20 rounded-2xl animate-pulse motion-reduce:animate-none" style={{ background: C.paper }} />)}</div>
-      ) : open.isError ? null : (
+      ) : open.isError && !hasData ? (
+        <div className="rounded-2xl border bg-white p-10 text-center" style={{ borderColor: C.border }}>
+          <WifiOff size={26} style={{ color: C.amber, margin: "0 auto" }} aria-hidden="true" />
+          <div className="text-sm font-semibold mt-2" style={{ color: C.soil }}>Couldn't load your tasks</div>
+          <div className="text-xs mt-1" style={{ color: C.muted }}>Check your connection.</div>
+          <button onClick={refresh} className={`mt-4 text-sm px-4 py-2 rounded-lg text-white font-semibold ${FOCUS}`} style={{ background: C.greenDk }}>Retry</button>
+        </div>
+      ) : (
         <>
-          <Hero t={nextTask} ctl={ctl} onSkip={onSkip} askAi={askAi} navigate={navigate} />
+          <Hero {...rowProps(nextTask || {})} t={nextTask} />
 
-          {(todayTotal > 0) && (
+          {todayTotal > 0 && (
             <div>
               <div className="flex items-center justify-between text-[11px] mb-1" style={{ color: C.muted }}>
                 <span>Today's progress</span><span>{session} of {todayTotal} done</span>
@@ -310,9 +327,7 @@ function TasksInner() {
           {todayList.length > 0 && (
             <div className="rounded-2xl border bg-white p-3" style={{ borderColor: C.border }}>
               <div className="text-sm font-bold uppercase tracking-wide mb-2 px-1" style={{ color: C.soil }}>Today &amp; overdue</div>
-              <div className="flex flex-col gap-2">
-                {todayList.map((t) => <TaskRow key={t.task_id} t={t} ctl={ctl} onSkip={onSkip} openMenu={openMenu} setOpenMenu={setOpenMenu} />)}
-              </div>
+              <div className="flex flex-col gap-2" role="list">{todayList.map((t) => <TaskRow key={t.task_id} {...rowProps(t)} />)}</div>
             </div>
           )}
 
@@ -321,18 +336,10 @@ function TasksInner() {
               {["Tomorrow", "This week", "Later"].map((k) => groups[k].length > 0 && (
                 <div key={k}>
                   <div className="text-[10px] font-bold uppercase tracking-wide px-1 mb-1 mt-1" style={{ color: C.muted }}>{k}</div>
-                  <div className="flex flex-col gap-2">{groups[k].map((t) => <TaskRow key={t.task_id} t={t} ctl={ctl} onSkip={onSkip} openMenu={openMenu} setOpenMenu={setOpenMenu} />)}</div>
+                  <div className="flex flex-col gap-2">{groups[k].map((t) => <TaskRow key={t.task_id} {...rowProps(t)} />)}</div>
                 </div>
               ))}
             </Group>
-          )}
-
-          {tasks.length === 0 && !nextTask && (
-            <div className="rounded-2xl border bg-white p-10 text-center" style={{ borderColor: C.border }}>
-              <ListChecks size={26} style={{ color: C.green, margin: "0 auto" }} aria-hidden="true" />
-              <div className="text-sm font-semibold mt-2" style={{ color: C.soil }}>Nothing to do — you're on top of it</div>
-              <div className="text-xs mt-1" style={{ color: C.muted }}>New tasks appear as cycles, compliance and rotations need action.</div>
-            </div>
           )}
 
           <CropPlanSecondary farmId={farmId} navigate={navigate} />
@@ -366,7 +373,7 @@ function TasksInner() {
   );
 }
 
-const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: true, refetchOnReconnect: true, staleTime: 30_000 } } });
+const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false, refetchOnReconnect: true, staleTime: 30_000 } } });
 export default function FarmTasks() {
   return (
     <QueryClientProvider client={queryClient}>
