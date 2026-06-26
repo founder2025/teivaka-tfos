@@ -277,6 +277,8 @@ async def instruct(obligation_id: str, body: Instruct, user: dict = Depends(requ
 
 class Confirm(BaseModel):
     confirmation_ref: Optional[str] = None
+    farm_id: Optional[str] = None          # book to THIS farm when the obligation has none (PA1/ST-P2)
+    payment_method_id: Optional[str] = None  # which rail it was actually paid from (ST-P3)
 
 
 @router.post("/transactions/{txn_id}/confirm")
@@ -301,12 +303,12 @@ async def confirm_transaction(txn_id: str, body: Confirm, user: dict = Depends(r
         if tx["state"] in ("REVERSED", "FAILED"):
             raise HTTPException(status_code=409, detail=f"Transaction is {tx['state']}")
 
-        # Cash-flow link is for farm managers: if the obligation is tied to a farm,
-        # book the cash_ledger row to THAT farm. If it isn't, only auto-resolve when
-        # the tenant has exactly one farm; with multiple farms we refuse rather than
-        # silently book to an arbitrary "first" farm (PA1 — was a real correctness
-        # bug that poisoned multi-farm Bank Evidence).
-        farm_id = tx["farm_id"]
+        # Cash-flow link is for farm managers: book the cash_ledger row to the
+        # obligation's farm, else the caller-supplied farm (the page sends the
+        # current farm), else — only when the tenant has exactly one farm — that
+        # one. With multiple farms and no hint we refuse rather than silently book
+        # to an arbitrary "first" farm (PA1 — poisoned multi-farm Bank Evidence).
+        farm_id = tx["farm_id"] or body.farm_id
         if not farm_id:
             farms = (await db.execute(text(
                 "SELECT farm_id FROM tenant.farms ORDER BY created_at LIMIT 2"))).scalars().all()
@@ -316,6 +318,18 @@ async def confirm_transaction(txn_id: str, body: Confirm, user: dict = Depends(r
                 raise HTTPException(status_code=409,
                                     detail="Link this payment to a farm before confirming")
             # 0 farms → farm_id stays None: the payment + audit row IS the record.
+        if farm_id:  # reject a bogus / other-tenant farm (RLS makes it invisible → 404)
+            if not (await db.execute(text("SELECT 1 FROM tenant.farms WHERE farm_id=:f LIMIT 1"),
+                                     {"f": farm_id})).scalar():
+                raise HTTPException(status_code=404, detail="farm_id not found for tenant")
+
+        # Which rail was it actually paid from? Honour an override (ST-P3) so the
+        # method chooser at settle is real, not cosmetic.
+        pm_label = tx["method_label"]
+        if body.payment_method_id and body.payment_method_id != tx.get("payment_method_id"):
+            pm_label = (await db.execute(text(
+                "SELECT label FROM tenant.payment_methods WHERE method_id=:m AND status='ACTIVE'"),
+                {"m": body.payment_method_id})).scalar() or pm_label
 
         # Single-writer guard: never double-post a ledger row for this payment.
         existing = (await db.execute(text(
@@ -335,7 +349,7 @@ async def confirm_transaction(txn_id: str, body: Confirm, user: dict = Depends(r
                 VALUES (:l, cast(:t AS uuid), :farm, :d, :tt, :cat, :descr, :amt, :pm, :rid, 'PAYMENT', cast(:u AS uuid))
             """), {"l": ledger_id, "t": tid, "farm": farm_id, "d": _today, "tt": ttype,
                    "cat": tx["category"], "descr": descr, "amt": tx["amount_fjd"],
-                   "pm": tx["method_label"] or tx["provider"], "rid": txn_id, "u": str(user["user_id"])})
+                   "pm": pm_label or tx["provider"], "rid": txn_id, "u": str(user["user_id"])})
 
         _, this_hash = await emit_audit_event(
             db=db, tenant_id=user["tenant_id"], actor_user_id=user["user_id"],
@@ -348,9 +362,9 @@ async def confirm_transaction(txn_id: str, body: Confirm, user: dict = Depends(r
         await db.execute(text("""
             UPDATE tenant.payment_transactions
                SET state='CONFIRMED', confirmation_ref=:r, confirmed_via='USER',
-                   cash_ledger_id=:l, updated_at=now()
+                   cash_ledger_id=:l, payment_method_id=COALESCE(:pm, payment_method_id), updated_at=now()
              WHERE txn_id=:x
-        """), {"r": body.confirmation_ref, "l": ledger_id, "x": txn_id})
+        """), {"r": body.confirmation_ref, "l": ledger_id, "pm": body.payment_method_id, "x": txn_id})
         await db.execute(text("UPDATE tenant.payables SET status='SETTLED', updated_at=now() WHERE obligation_id=:o"),
                          {"o": tx["obligation_id"]})
     return {"data": {"txn_id": txn_id, "state": "CONFIRMED", "ledger_id": ledger_id,
@@ -416,6 +430,7 @@ async def suggestions(user: dict = Depends(require_payment_unlock)):
 class Adopt(BaseModel):
     source_type: str
     source_id: str
+    farm_id: Optional[str] = None   # tag the adopted obligation to a farm so it can be settled (ST-P2)
 
 
 @router.post("/payables/adopt")
@@ -454,13 +469,17 @@ async def adopt(body: Adopt, user: dict = Depends(require_payment_unlock)):
             raise HTTPException(status_code=400, detail="Unsupported source type")
         if not row or amount is None:
             raise HTTPException(status_code=404, detail="Source obligation not found")
+        farm_id = body.farm_id
+        if farm_id and not (await db.execute(
+                text("SELECT 1 FROM tenant.farms WHERE farm_id=:f LIMIT 1"), {"f": farm_id})).scalar():
+            farm_id = None   # ignore a stale/foreign farm hint rather than 404 the adopt
         oid = _nid("OBL")
         await db.execute(text("""
             INSERT INTO tenant.payables
-                (obligation_id, tenant_id, direction, counterparty_label, category, amount_fjd,
+                (obligation_id, tenant_id, farm_id, direction, counterparty_label, category, amount_fjd,
                  source_type, source_id, status, created_by)
-            VALUES (:o, cast(:t AS uuid), :dir, :label, :cat, :amt, :st, :sid, 'OPEN', cast(:u AS uuid))
-        """), {"o": oid, "t": tid, "dir": direction, "label": label, "cat": category,
+            VALUES (:o, cast(:t AS uuid), :farm, :dir, :label, :cat, :amt, :st, :sid, 'OPEN', cast(:u AS uuid))
+        """), {"o": oid, "t": tid, "farm": farm_id, "dir": direction, "label": label, "cat": category,
                "amt": amount, "st": st, "sid": body.source_id, "u": uid})
     return {"data": {"obligation_id": oid, "adopted": True, "direction": direction}}
 
