@@ -47,6 +47,14 @@ Legend: 🔒 LOCKED (approved; no redesign without new evidence) · ✅ PASS · 
   remainder filed (list endpoint pu_name+author-name join [real FE1 fix], Capture Engine cycle-state
   rules FX2, WHD nudge at spray-log FE6, pest/disease severity+GPS FX4, server-side log filter,
   whole-farm feed). Do NOT redesign again unless new evidence requires it. Deploy: frontend-only.
+- **Inventory (/farm/inventory → Resources tab)** — LOCKED 2026-06-26 (Operator-approved). Audited →
+  redesigned → optimized → stress-tested ×1 → all page-local findings (I1–I7, I-T1–I-T3, IX1–IX7,
+  INS1–INS5) resolved or filed; remainder filed (**IX1 keystone: backend auto-deduct on consumption**
+  spray/feed-use → input-transaction USAGE [B37 generalized]; weighted-avg cost basis; server limit +
+  date filter; item detail/movement-history; PO/awaiting-delivery; inline add-supplier; batch/lot/expiry
+  traceability; seasonal days-left; QueryClient lift). On-hand is **honest** (note: sprays don't
+  auto-deduct yet; flags when usage data fails to load). Do NOT redesign again unless new evidence
+  requires it. Deploy: frontend-only.
 
 ---
 
