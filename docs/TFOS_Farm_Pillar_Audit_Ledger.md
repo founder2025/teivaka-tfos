@@ -55,6 +55,17 @@ Legend: 🔒 LOCKED (approved; no redesign without new evidence) · ✅ PASS · 
   traceability; seasonal days-left; QueryClient lift). On-hand is **honest** (note: sprays don't
   auto-deduct yet; flags when usage data fails to load). Do NOT redesign again unless new evidence
   requires it. Deploy: frontend-only.
+- **Labour (/farm/labor → Resources tab)** — LOCKED 2026-06-26 (Operator-approved). Audited →
+  deepened (8-persona) → redesigned → stress-tested ×1 → optimized — all page-local findings
+  (L1–L32, L-BUG1, LS1/LS3/LS8/LS10/LS11b/LS13) resolved or filed. Fixed: removed crash landmine
+  (undefined onSiteIds) + fabricated "Next payday" tile; pay defaults to this-week (no overpay
+  anchor); min-wage soft guard; api.js + Fiji-day + cached-on-error; shared a11y <Modal>
+  (Esc/focus/role) + arrow-key tabs; submit-lock vs double-booked wages; responsive wrap;
+  real first-run; view-aware Ask AI. **Filed backend keystones (NOT faked):** payroll-period
+  settlement + worker_id FK on payments (L3/L21/L22), single labour-cost source (L29), piece-rate
+  (L17), REI clock-in safety (L19), FNPF/DOB statutory (L31), offline write queue (LS2), /labor
+  server limit (LS6/L14), true request idempotency. On-hand pay numbers are **honest** ("Wages
+  logged", settlement on roadmap). Do NOT redesign again unless new evidence requires it. Deploy: frontend-only.
 
 ---
 
