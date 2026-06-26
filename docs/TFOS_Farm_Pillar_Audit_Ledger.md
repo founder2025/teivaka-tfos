@@ -30,6 +30,12 @@ Legend: 🔒 LOCKED (approved; no redesign without new evidence) · ✅ PASS · 
   crop-specific disease, per-block microclimate, insurance export, regional aggregate,
   thresholds→config, composite endpoint, voice/i18n). Verify-item: `tenant.weather_forecast`
   migration in prod. Do NOT redesign again unless new evidence requires it. Deploy: frontend-only.
+- **Enterprise (/farm/enterprises)** — LOCKED 2026-06-26 (Operator-approved). Audited → redesigned →
+  optimized → stress-tested ×1 → all page-local findings (E1–E10, EX1–EX10, ES1–ES7) resolved;
+  remainder filed (real enterprise entity for Pause/Close/Worth/roles, animal financials,
+  per-enterprise task count, per-block P&L grain, layer for animals/verticals, composite endpoint,
+  grounded standing, certifications, ES3 200-cycle layer cap). 3-Layer doctrine surfaced. Do NOT
+  redesign again unless new evidence requires it. Deploy: frontend-only.
 
 ---
 
