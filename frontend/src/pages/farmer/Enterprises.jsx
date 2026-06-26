@@ -51,8 +51,10 @@ const LAYER = {
   CASH_FLOW: { label: "Cash flow", color: "var(--green)", blurb: "Sells fast — pays the bills" },
   FOOD_SECURITY: { label: "Food security", color: "var(--amber)", blurb: "Feeds the family & community" },
   LONG_TERM_ASSET: { label: "Long-term asset", color: "#2E6BB8", blurb: "Builds wealth over years" },
+  MIXED: { label: "Mixed layers", color: "var(--soil)", blurb: "Grown across more than one layer" },
   UNCLASSIFIED: { label: "Not yet classified", color: "var(--muted)", blurb: "Set a layer when you create a cycle" },
 };
+const LAYER_ORDER = ["CASH_FLOW", "FOOD_SECURITY", "LONG_TERM_ASSET", "MIXED", "UNCLASSIFIED"];
 const layerOf = (k) => LAYER[k] || LAYER.UNCLASSIFIED;
 
 const useCrops = (id) => useQuery({ queryKey: ["entcrops", id], queryFn: () => getJSON(`/api/v1/financials/crops/${encodeURIComponent(id)}`), enabled: !!id });
@@ -74,6 +76,7 @@ function cropStanding(income, net) {
   return { label: "Building", color: C.soil };
 }
 function entCategory(e) {
+  if (e.kind === "vertical") return e.engineLabel || "Other"; // ES7: vertical-aware grouping
   const n = String(e.name || "").toLowerCase();
   if (e.kind === "animal") {
     if (/cattle|cow|beef|dairy/.test(n)) return "Cattle";
@@ -116,8 +119,12 @@ function buildUnifiedEnterprises(unifiedData) {
   });
 }
 function buildLayerMap(cyclesData) {
+  // Collect every distinct layer per production; mark MIXED when a crop spans
+  // more than one (ES4 — never silently pick one and mis-attribute its economics).
+  const seen = {};
+  (cyclesData?.cycles ?? []).forEach((c) => { if (c.production_id && c.layer) (seen[c.production_id] = seen[c.production_id] || new Set()).add(c.layer); });
   const map = {};
-  (cyclesData?.cycles ?? []).forEach((c) => { if (c.production_id && c.layer && !map[c.production_id]) map[c.production_id] = c.layer; });
+  Object.entries(seen).forEach(([pid, set]) => { map[pid] = set.size > 1 ? "MIXED" : [...set][0]; });
   return map;
 }
 function buildEnterprises(cropData, flockData, unifiedData, layerMap = {}) {
@@ -241,9 +248,13 @@ function Chip({ active, label, count, onClick }) {
 }
 
 // ── 3-axis layer summary (EX1) ────────────────────────────────────────
-function LayerStrip({ D, layerFilter, setLayerFilter }) {
-  const order = ["CASH_FLOW", "FOOD_SECURITY", "LONG_TERM_ASSET", "UNCLASSIFIED"];
-  const present = order.filter((k) => D.layerAgg[k]);
+function LayerStrip({ D, layerFilter, setLayerFilter, layerError }) {
+  const present = LAYER_ORDER.filter((k) => D.layerAgg[k]);
+  if (layerError) return (
+    <Section title="By layer" meta="3-axis credit picture">
+      <div className="text-sm" style={{ color: C.muted }}>Layer breakdown couldn't load — your enterprises are below; pull to refresh to see the layer split.</div>
+    </Section>
+  );
   if (present.length === 0) return null;
   return (
     <Section title="By layer" meta="Your 3-axis credit picture — tap to filter">
@@ -313,7 +324,7 @@ function GlanceTile({ icon: Icon, q, a, color, onClick }) {
 }
 
 // ── Portfolio tab ─────────────────────────────────────────────────────
-function PortfolioTab({ D, ents, typeFilter, setTypeFilter, layerFilter, setLayerFilter, standingFilter, setStandingFilter, search, setSearch, onOpen, setView, onAdd }) {
+function PortfolioTab({ D, ents, typeFilter, setTypeFilter, layerFilter, setLayerFilter, standingFilter, setStandingFilter, search, setSearch, onOpen, setView, onAdd, layerError }) {
   const engines = useMemo(() => { const m = {}; ents.forEach((e) => { m[e.kind] = m[e.kind] || { label: e.engineLabel, n: 0 }; m[e.kind].n++; }); return m; }, [ents]);
   let rows = ents;
   if (typeFilter !== "all") rows = rows.filter((r) => r.kind === typeFilter);
@@ -350,7 +361,7 @@ function PortfolioTab({ D, ents, typeFilter, setTypeFilter, layerFilter, setLaye
         <KpiTile label="Standing" value={`${D.profitable} profitable`} sub={D.losing.length ? `${D.losing.length} sold at a loss` : "none losing"} color={D.losing.length ? C.amber : C.green} low={D.losing.length > 0} onClick={() => setView("money")} />
       </div>
 
-      <LayerStrip D={D} layerFilter={layerFilter} setLayerFilter={setLayerFilter} />
+      <LayerStrip D={D} layerFilter={layerFilter} setLayerFilter={setLayerFilter} layerError={layerError} />
 
       <Section title="Quick answers" meta="Your farm in one look">
         <div className="grid gap-2.5 grid-cols-1 sm:grid-cols-2">
@@ -369,7 +380,7 @@ function PortfolioTab({ D, ents, typeFilter, setTypeFilter, layerFilter, setLaye
       <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
         <span className="text-[10px] uppercase tracking-wide shrink-0 mr-1" style={{ color: C.muted }}>Layer:</span>
         <Chip active={layerFilter === "all"} label="All" onClick={() => setLayerFilter("all")} />
-        {["CASH_FLOW", "FOOD_SECURITY", "LONG_TERM_ASSET", "UNCLASSIFIED"].map((k) => D.layerAgg[k] ? <Chip key={k} active={layerFilter === k} label={layerOf(k).label} count={D.layerAgg[k].n} onClick={() => setLayerFilter(k)} /> : null)}
+        {LAYER_ORDER.map((k) => D.layerAgg[k] ? <Chip key={k} active={layerFilter === k} label={layerOf(k).label} count={D.layerAgg[k].n} onClick={() => setLayerFilter(k)} /> : null)}
       </div>
       <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
         <span className="text-[10px] uppercase tracking-wide shrink-0 mr-1" style={{ color: C.muted }}>Standing:</span>
@@ -628,6 +639,8 @@ function EnterprisesInner() {
   const realEnts = useMemo(() => buildEnterprises(crops.data?.data, flocks.data?.data?.items, unified.data?.data, layerMap), [crops.data, flocks.data, unified.data, layerMap]);
   const loading = crops.isLoading || flocks.isLoading;
   const bothErrored = crops.isError && flocks.isError;
+  const hasData = realEnts.length > 0; // cached or live — something to show (ES1)
+  const anyErr = crops.isError || flocks.isError || unified.isError || cyclesLayer.isError;
   const isPreview = !loading && !bothErrored && realEnts.length === 0;
   const ents = isPreview ? SAMPLE_ENTS : realEnts;
   const D = useMemo(() => derive(ents), [ents]);
@@ -636,7 +649,7 @@ function EnterprisesInner() {
   if (openEnt) return <div className="tfp"><EnterpriseDetail e={openEnt} farmId={farmId} onBack={() => setOpenEnt(null)} go={navigate} /></div>;
 
   const tabBody = view === "portfolio"
-    ? <PortfolioTab D={D} ents={ents} typeFilter={typeFilter} setTypeFilter={setTypeFilter} layerFilter={layerFilter} setLayerFilter={setLayerFilter} standingFilter={standingFilter} setStandingFilter={setStandingFilter} search={search} setSearch={setSearch} onOpen={openEntOrRoute} setView={setView} onAdd={() => setAddOpen(true)} />
+    ? <PortfolioTab D={D} ents={ents} typeFilter={typeFilter} setTypeFilter={setTypeFilter} layerFilter={layerFilter} setLayerFilter={setLayerFilter} standingFilter={standingFilter} setStandingFilter={setStandingFilter} search={search} setSearch={setSearch} onOpen={openEntOrRoute} setView={setView} onAdd={() => setAddOpen(true)} layerError={cyclesLayer.isError} />
     : view === "money" ? <MoneyTab D={D} onOpen={openEntOrRoute} navigate={navigate} />
     : <OutlookTab D={D} onOpen={openEntOrRoute} />;
 
@@ -659,7 +672,7 @@ function EnterprisesInner() {
       </div>
 
       {loading ? <Skeleton />
-        : bothErrored ? <ErrorState onRetry={retry} />
+        : bothErrored && !hasData ? <ErrorState onRetry={retry} />
         : isPreview ? (
           <div className="space-y-3">
             <div className="rounded-2xl border-2 border-dashed p-4 flex items-start justify-between gap-3 flex-wrap" style={{ borderColor: C.amber, background: "rgba(191,144,0,0.06)" }}>
@@ -680,11 +693,17 @@ function EnterprisesInner() {
             </div>
           </div>
         )
-        : tabBody}
-
-      {(crops.isError !== flocks.isError) && !isPreview && !loading && (
-        <div className="text-[11px]" style={{ color: C.muted }}>{crops.isError ? "Crop financials didn't load — showing animals only." : "Flocks didn't load — showing crops only."}</div>
-      )}
+        : (
+          <>
+            {anyErr && hasData && (
+              <div className="rounded-xl border p-2.5 flex items-center justify-between gap-2 flex-wrap mb-3" style={{ background: "#FEF6E6", borderColor: C.border }}>
+                <span className="text-[12px]" style={{ color: C.amber }}>Couldn't refresh everything — showing your last saved data.</span>
+                <button onClick={retry} className={`text-[11px] font-semibold px-2.5 py-1 rounded-lg ${FOCUS}`} style={{ color: C.greenDk, border: `1px solid ${C.border}`, background: "white" }}>Retry</button>
+              </div>
+            )}
+            {tabBody}
+          </>
+        )}
 
       <AddModal open={addOpen} onClose={() => setAddOpen(false)} />
     </div>
