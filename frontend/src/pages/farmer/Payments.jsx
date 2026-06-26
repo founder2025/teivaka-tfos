@@ -46,6 +46,15 @@ async function fetchFarms() {
   if (!r.ok) throw new Error("farms"); return (await r.json())?.farms ?? [];
 }
 
+// One-tap rails for Fiji — tapping pre-fills the name + maps to the right type.
+// Covers wallet / bank / card; "Other" is free-text so ANY method is supported.
+const PROVIDERS = [
+  { name: "M-PAiSA", type: "WALLET" }, { name: "MyCash", type: "WALLET" }, { name: "Digicel Money", type: "WALLET" },
+  { name: "BSP", type: "BANK" }, { name: "ANZ", type: "BANK" }, { name: "Westpac", type: "BANK" }, { name: "HFC Bank", type: "BANK" }, { name: "Bred Bank", type: "BANK" },
+  { name: "Visa", type: "CARD" }, { name: "Mastercard", type: "CARD" },
+  { name: "Other", type: "WALLET" },
+];
+const idHint = (t) => (t === "WALLET" ? "Phone number (optional)" : t === "BANK" ? "Acc. last 4 (optional)" : "Card last 4 (optional)");
 const CATS = ["INPUTS", "LABOUR", "SUBSCRIPTION", "SALE", "COMMISSION", "OTHER"];
 const CAT_LABEL = { INPUTS: "Inputs", LABOUR: "Labour", SUBSCRIPTION: "Subscription", SALE: "Sale", COMMISSION: "Commission", OTHER: "Other", SERVICE: "Service" };
 const catLabel = (c) => CAT_LABEL[c] || (c ? c[0] + c.slice(1).toLowerCase() : "Other");
@@ -90,7 +99,7 @@ function PaymentsInner() {
   const [query, setQuery] = useState("");
   const [showDone, setShowDone] = useState(false);
   const [showMethods, setShowMethods] = useState(false);
-  const [mform, setMform] = useState({ method_type: "WALLET", label: "", masked_identifier: "", is_default: false });
+  const [mform, setMform] = useState({ method_type: "WALLET", label: "", masked_identifier: "", is_default: false, picked: null });
   const [loadErr, setLoadErr] = useState(false);
   const [degraded, setDegraded] = useState(false);
   const busy = useRef(false);
@@ -211,7 +220,7 @@ function PaymentsInner() {
     busy.current = true;
     try {
       await pcall("POST", "/methods", { provider: "MANUAL", method_type: mform.method_type, label: mform.label.trim(), masked_identifier: mform.masked_identifier || null, is_default: mform.is_default });
-      toast("Method added", "success"); setMform({ method_type: "WALLET", label: "", masked_identifier: "", is_default: false }); await load();
+      toast("Method added", "success"); setMform({ method_type: "WALLET", label: "", masked_identifier: "", is_default: false, picked: null }); await load();
       if (!hasPin) { setShowMethods(false); setPin(""); setPin2(""); setGateMsg(""); setGate("setup"); }
     } catch (e) { toast(errMsg(e), "error"); } finally { busy.current = false; }
   };
@@ -326,21 +335,39 @@ function PaymentsInner() {
           <button onClick={() => setShowMethods((s) => !s)} style={{ ...btn, marginLeft: "auto" }}><CreditCard size={13} style={{ verticalAlign: -2, marginRight: 4 }} />Methods ({methods.length})</button>
         </div>
 
-        {/* methods */}
+        {/* methods — one-tap provider quick-picks (supports every rail) */}
         {showMethods && (
           <div style={{ border: "1px solid var(--line)", borderRadius: 12, padding: 12, marginBottom: 14, background: "var(--cream)" }}>
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-              <select style={{ ...inp, width: "auto" }} value={mform.method_type} onChange={(e) => setMform({ ...mform, method_type: e.target.value })}><option value="WALLET">Wallet (M-PAiSA/MyCash)</option><option value="BANK">Bank</option><option value="CARD">Card</option></select>
-              <input style={{ ...inp, flex: 1, minWidth: 140 }} placeholder="Name, e.g. My M-PAiSA" value={mform.label} onChange={(e) => setMform({ ...mform, label: e.target.value })} />
-              <input style={{ ...inp, width: 140 }} placeholder="Last 4 / masked" value={mform.masked_identifier} onChange={(e) => setMform({ ...mform, masked_identifier: e.target.value })} />
-              <label style={{ fontSize: 12, color: "var(--soil)", display: "flex", alignItems: "center", gap: 4 }}><input type="checkbox" checked={mform.is_default} onChange={(e) => setMform({ ...mform, is_default: e.target.checked })} />Default</label>
-              <button style={primary} onClick={addMethod}><Plus size={13} style={{ verticalAlign: -2 }} />Add</button>
+            <div style={{ fontSize: 11.5, fontWeight: 700, color: "var(--soil)", marginBottom: 8 }}>Add a way you pay or get paid</div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: mform.picked ? 12 : 0 }}>
+              {PROVIDERS.map((pv) => {
+                const sel = mform.picked === pv.name;
+                return (
+                  <button key={pv.name} onClick={() => setMform({ method_type: pv.type, label: pv.name === "Other" ? "" : pv.name, masked_identifier: "", is_default: mform.is_default, picked: pv.name })}
+                    style={{ ...btn, padding: "5px 11px", ...(sel ? { background: "var(--green)", color: "var(--paper)", borderColor: "var(--green-dk)" } : {}) }}>{pv.name}</button>
+                );
+              })}
             </div>
-            <div style={{ marginTop: 8 }}>
-              {methods.length === 0 && <span style={{ fontSize: 12, color: "var(--muted)" }}>No methods yet — add the wallet or bank you pay with.</span>}
+            {mform.picked && (
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                {mform.picked === "Other" && (
+                  <>
+                    <select style={{ ...inp, width: "auto" }} value={mform.method_type} onChange={(e) => setMform({ ...mform, method_type: e.target.value })}><option value="WALLET">Mobile wallet</option><option value="BANK">Bank</option><option value="CARD">Card</option></select>
+                    <input autoFocus style={{ ...inp, flex: 1, minWidth: 140 }} placeholder="Name, e.g. Vodafone M-PAiSA" value={mform.label} onChange={(e) => setMform({ ...mform, label: e.target.value })} />
+                  </>
+                )}
+                {mform.picked !== "Other" && <span style={{ fontSize: 13, fontWeight: 700, color: "var(--soil)" }}>{mform.label}</span>}
+                <input style={{ ...inp, width: 170 }} placeholder={idHint(mform.method_type)} value={mform.masked_identifier} onChange={(e) => setMform({ ...mform, masked_identifier: e.target.value })} onKeyDown={(e) => e.key === "Enter" && addMethod()} />
+                <label style={{ fontSize: 12, color: "var(--soil)", display: "flex", alignItems: "center", gap: 4 }}><input type="checkbox" checked={mform.is_default} onChange={(e) => setMform({ ...mform, is_default: e.target.checked })} />Default</label>
+                <button style={primary} onClick={addMethod}><Plus size={13} style={{ verticalAlign: -2 }} />Add {mform.picked === "Other" ? "method" : mform.label}</button>
+                <button style={{ ...btn, border: "none", color: "var(--muted)" }} onClick={() => setMform({ method_type: "WALLET", label: "", masked_identifier: "", is_default: false, picked: null })}>Clear</button>
+              </div>
+            )}
+            <div style={{ marginTop: mform.picked ? 12 : 8, paddingTop: methods.length ? 8 : 0, borderTop: methods.length ? "1px solid var(--line)" : "none" }}>
+              {methods.length === 0 && !mform.picked && <span style={{ fontSize: 12, color: "var(--muted)" }}>Tap a provider above — or "Other" for anything not listed.</span>}
               {methods.map((m) => (
                 <div key={m.method_id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 12.5, padding: "3px 0", color: "var(--soil)" }}>
-                  <span>{m.is_default && <Star size={11} fill="var(--green-dk)" stroke="var(--green-dk)" style={{ verticalAlign: -1, marginRight: 4 }} />}{m.label} {m.masked_identifier ? `· ${m.masked_identifier}` : ""} <span style={{ color: "var(--muted)" }}>({m.method_type})</span></span>
+                  <span>{m.is_default && <Star size={11} fill="var(--green-dk)" stroke="var(--green-dk)" style={{ verticalAlign: -1, marginRight: 4 }} />}{m.label} {m.masked_identifier ? `· ${m.masked_identifier}` : ""} <span style={{ color: "var(--muted)" }}>({m.method_type === "WALLET" ? "wallet" : m.method_type === "BANK" ? "bank" : "card"})</span></span>
                   <button style={{ ...btn, padding: "1px 7px", fontSize: 11 }} onClick={() => archiveMethod(m)} aria-label={`Remove ${m.label}`}><Trash2 size={12} /></button>
                 </div>
               ))}
