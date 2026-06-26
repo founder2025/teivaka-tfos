@@ -106,6 +106,7 @@ export default function Jobs() {
   const myId = getCurrentUser()?.sub;
   const [tab, setTab] = useState("find");
   const [empFilter, setEmpFilter] = useState("");
+  const [regionQ, setRegionQ] = useState("");
   const [available, setAvailable] = useState(undefined);
   const [hasProfile, setHasProfile] = useState(true);
   const [myApps, setMyApps] = useState(undefined);
@@ -129,8 +130,9 @@ export default function Jobs() {
   };
   const loadProfile = () => getJSON("/api/v1/worker-profile").then((r) => { const d = r?.data; if (d) { setProf((o) => ({ ...o, ...d, skills: d.skills || [], desired_types: d.desired_types || [], base_lat: d.base_lat ?? "", base_lng: d.base_lng ?? "", available_from: d.available_from ? String(d.available_from).slice(0, 10) : "" })); setSkillsText((d.skills || []).join(", ")); } }).catch(() => {});
   const loadHire = () => { setErrHire(false); getJSON("/api/v1/job-listings/mine").then((r) => setMine(r?.data || [])).catch(() => { setMine([]); setErrHire(true); }); };
-  useEffect(() => { loadFind(); loadProfile(); }, []); // eslint-disable-line
-  useEffect(() => { loadFind(); }, [empFilter]); // eslint-disable-line
+  useEffect(() => { loadProfile(); }, []); // eslint-disable-line
+  useEffect(() => { loadFind(); }, [empFilter]); // eslint-disable-line  (single load; region filters client-side)
+  const regionMatch = (l) => { const q = regionQ.trim().toLowerCase(); return !q || `${l.region || ""} ${l.location || ""}`.toLowerCase().includes(q); };
   const goTab = (t) => { setTab(t); if (t === "hire" && !hireLoaded) { loadHire(); setHireLoaded(true); } };
 
   const askAi = () => navigate("/tis?q=" + encodeURIComponent(tab === "hire" ? "How do I write a good job listing and hire reliable farm workers?" : "How do I find farm or agri-sector work near me and apply well?"));
@@ -196,15 +198,17 @@ export default function Jobs() {
                 )}
               </div>
 
-              <div className="gallery-filter-row" style={{ marginBottom: 10, display: "flex", gap: 6, flexWrap: "wrap" }}>
+              <div className="gallery-filter-row" style={{ marginBottom: 10, display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
                 <button className={`filter-pill ${empFilter === "" ? "active" : ""}`} onClick={() => setEmpFilter("")}>All</button>
                 {EMP.map(([k, l]) => <button key={k} className={`filter-pill ${empFilter === k ? "active" : ""}`} onClick={() => setEmpFilter(k)}>{l}</button>)}
+                <span style={{ flex: 1 }} />
+                <input type="search" value={regionQ} onChange={(e) => setRegionQ(e.target.value)} placeholder="Region / town…" aria-label="Filter by region" style={{ padding: "6px 10px", border: "1.5px solid var(--line)", borderRadius: 7, fontSize: 12.5, background: "var(--paper)", minWidth: 150 }} />
               </div>
 
               {available === undefined ? <div className="card" style={{ padding: 20, color: C.muted }}>Loading…</div>
                 : errFind && available.length === 0 ? <ErrorCard msg="Couldn't load jobs." onRetry={loadFind} />
-                : available.length === 0 ? <div className="card" style={{ padding: 24, textAlign: "center", color: C.muted }}>No open jobs{empFilter ? " of this type" : ""} right now.</div>
-                : available.map((l) => (
+                : available.filter(regionMatch).length === 0 ? <div className="card" style={{ padding: 24, textAlign: "center", color: C.muted }}>No open jobs{empFilter || regionQ.trim() ? " match" : " right now"}.</div>
+                : available.filter(regionMatch).map((l) => (
                   <ListingCard key={l.listing_id} l={l}>
                     {myId && String(l.poster_user_id) === String(myId) ? <span style={{ fontSize: 11.5, color: C.muted }}>Your listing</span>
                       : l.already_applied ? <span style={{ fontSize: 11.5, color: C.greenDk, fontWeight: 700 }}><Check size={12} style={{ verticalAlign: "-2px" }} /> Applied</span>
@@ -303,7 +307,7 @@ function PostListingModal({ onClose, onSaved }) {
         <div><label>Sector</label><select value={f.sector} onChange={set("sector")}>{SECTOR.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></div>
         <div><label>Employment type</label><select value={f.employment_type} onChange={set("employment_type")}>{EMP.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></div>
       </div>
-      <div className="form-row" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginTop: 10 }}>
+      <div className="form-row" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(110px, 1fr))", gap: 10, marginTop: 10 }}>
         <div><label>Pay (FJD)</label><input type="number" min="0" step="0.50" value={f.pay_rate_fjd} onChange={set("pay_rate_fjd")} disabled={f.pay_negotiable} /></div>
         <div><label>Period</label><select value={f.pay_period} onChange={set("pay_period")} disabled={f.pay_negotiable}>{PERIOD.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></div>
         <div style={{ display: "flex", alignItems: "flex-end" }}><label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12 }}><input type="checkbox" checked={f.pay_negotiable} onChange={(e) => setF((s) => ({ ...s, pay_negotiable: e.target.checked }))} />Negotiable</label></div>
@@ -314,7 +318,7 @@ function PostListingModal({ onClose, onSaved }) {
         <div><label>Employer / org (optional)</label><input value={f.poster_org_name} onChange={set("poster_org_name")} /></div>
       </div>
       <div className="form-row" style={{ marginTop: 10 }}><label>Skills (comma-separated, optional)</label><input value={f.skills_required} onChange={set("skills_required")} placeholder="e.g. spraying, driving" /></div>
-      <div className="form-row" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginTop: 10 }}>
+      <div className="form-row" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: 10, marginTop: 10 }}>
         <div><label>Start date</label><input type="date" value={f.start_date} onChange={set("start_date")} /></div>
         <div><label>Duration</label><input value={f.duration_note} onChange={set("duration_note")} placeholder="e.g. 3 months" /></div>
         <div><label>Apply by</label><input type="date" value={f.apply_deadline} onChange={set("apply_deadline")} /></div>
@@ -335,11 +339,13 @@ function ApplicantsModal({ listing, onClose, onHire, onChanged }) {
     try { await send("PATCH", `/api/v1/job-applications/${id}/decide?status=${status}`); emitToast(status === "SHORTLISTED" ? "Shortlisted" : "Declined"); load(); onChanged?.(); }
     catch (e) { emitToast(e?.userMessage || "Failed"); } finally { setBusy(false); }
   }
+  const RANK = { SHORTLISTED: 0, APPLIED: 1, ACCEPTED: 2, DECLINED: 3 };
+  const sorted = (rows || []).slice().sort((a, b) => (RANK[a.status] ?? 9) - (RANK[b.status] ?? 9));
   return (
     <Modal title={`Applicants — ${listing.role_title}`} onClose={onClose} maxWidth={620} foot={<button className="btn btn-primary" onClick={onClose}>Close</button>}>
       {rows === undefined ? <div style={{ color: C.muted }}>Loading…</div>
         : rows.length === 0 ? <div style={{ color: C.muted, fontSize: 12.5 }}>No applicants yet. They'll appear here as members apply.</div>
-        : rows.map((a) => (
+        : sorted.map((a) => (
           <div key={a.application_id} className="card" style={{ padding: "10px 13px", marginBottom: 8 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
               <strong style={{ color: C.soil }}>{a.display_name || "Applicant"}</strong>
@@ -385,9 +391,11 @@ function HireModal({ listing, application, onClose, onSaved }) {
   }
   return (
     <Modal title={`Hire — ${application.display_name || "applicant"}`} onClose={onClose} maxWidth={480} foot={<><button className="btn btn-secondary" onClick={onClose}>Cancel</button><button className="btn btn-primary" onClick={submit} disabled={busy}>{busy ? "Hiring…" : "Confirm hire"}</button></>}>
-      <div style={{ fontSize: 12.5, color: C.muted, marginBottom: 12 }}>Accepts this applicant for <strong>{listing.role_title}</strong>. Their contact is then shared with you. Optionally add them straight to your Labour page as a worker.</div>
-      <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: C.soil }}><input type="checkbox" checked={addToLabour} onChange={(e) => setAddToLabour(e.target.checked)} />Add to my Labour workers (attendance + wages)</label>
-      {addToLabour && (
+      <div style={{ fontSize: 12.5, color: C.muted, marginBottom: 12 }}>Accepts this applicant for <strong>{listing.role_title}</strong>. Their contact is then shared with you.{farms.length > 0 ? " Optionally add them straight to your Labour page as a worker." : ""}</div>
+      {farms.length === 0
+        ? <div style={{ fontSize: 11.5, color: C.muted }}>Add-to-Labour becomes available once you have a farm set up.</div>
+        : <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: C.soil }}><input type="checkbox" checked={addToLabour} onChange={(e) => setAddToLabour(e.target.checked)} />Add to my Labour workers (attendance + wages)</label>}
+      {farms.length > 0 && addToLabour && (
         <>
           <div className="form-row" style={{ marginTop: 10 }}><label>Farm</label><select value={farmId} onChange={(e) => setFarmId(e.target.value)}>{farms.length === 0 ? <option value="">No farms found</option> : farms.map((f) => <option key={f.farm_id} value={f.farm_id}>{f.farm_name || f.name || f.farm_id}</option>)}</select></div>
           <div className="form-row" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 10 }}>

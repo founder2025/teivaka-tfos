@@ -33,6 +33,7 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
 
 from app.db.session import get_db_ctx
 from app.middleware.rls import get_current_user
@@ -162,17 +163,20 @@ async def create_listing(body: ListingCreate, user: dict = Depends(get_current_u
 
 @router.get("/job-listings/available")
 async def available_listings(employment_type: str = Query(None), sector: str = Query(None),
-                             user: dict = Depends(get_current_user)):
-    """OPEN listings, newest first; distance-annotated when the seeker has profile coords."""
+                             region: str = Query(None), user: dict = Depends(get_current_user)):
+    """OPEN, not-expired listings, newest first; distance-annotated when the seeker has coords."""
     async with get_db_ctx() as db:
         prof = (await db.execute(text(
             "SELECT base_lat, base_lng FROM community.worker_profiles WHERE user_id = :u"),
             {"u": str(user["user_id"])})).mappings().first()
-        cl, p = ["status = 'OPEN'"], {}
+        # JB2: hide listings whose apply-by date has passed.
+        cl, p = ["status = 'OPEN'", "(apply_deadline IS NULL OR apply_deadline >= CURRENT_DATE)"], {}
         if employment_type:
             cl.append("employment_type = :et"); p["et"] = employment_type
         if sector:
             cl.append("sector = :sec"); p["sec"] = sector
+        if region:
+            cl.append("(region ILIKE :reg OR location ILIKE :reg)"); p["reg"] = f"%{region}%"
         rows = _rows(await db.execute(text(
             f"SELECT * FROM community.job_listings WHERE {' AND '.join(cl)} ORDER BY created_at DESC LIMIT 200"), p))
         my_apps = {r["listing_id"] for r in _rows(await db.execute(text(
@@ -220,14 +224,21 @@ class ApplyBody(BaseModel):
 async def apply_to_listing(listing_id: str, body: ApplyBody, user: dict = Depends(get_current_user)):
     async with get_db_ctx() as db:
         listing = (await db.execute(text(
-            "SELECT poster_user_id, status FROM community.job_listings WHERE listing_id = :l"),
+            "SELECT poster_user_id, status, apply_deadline FROM community.job_listings WHERE listing_id = :l"),
             {"l": listing_id})).mappings().first()
         if not listing:
             raise HTTPException(404, detail="Listing not found")
         if listing["status"] != "OPEN":
             raise HTTPException(409, detail="This listing is no longer open")
+        if listing["apply_deadline"] is not None and listing["apply_deadline"] < date.today():
+            raise HTTPException(409, detail="The application deadline for this listing has passed")
         if str(listing["poster_user_id"]) == str(user["user_id"]):
             raise HTTPException(400, detail="You can't apply to your own listing")
+        dup = (await db.execute(text(
+            "SELECT 1 FROM community.job_applications WHERE listing_id=:l AND applicant_user_id=:u"),
+            {"l": listing_id, "u": str(user["user_id"])})).first()
+        if dup:
+            raise HTTPException(409, detail="You've already applied to this listing")
         aid = f"APP-{uuid.uuid4().hex[:8].upper()}"
         try:
             await db.execute(text("""
@@ -237,7 +248,7 @@ async def apply_to_listing(listing_id: str, body: ApplyBody, user: dict = Depend
             """), {"a": aid, "l": listing_id, "t": str(user["tenant_id"]), "u": str(user["user_id"]),
                    "cn": (body.cover_note or None)})
             await db.commit()
-        except Exception:  # noqa: BLE001 — unique(listing_id, applicant) → already applied
+        except IntegrityError:  # unique(listing_id, applicant) race
             raise HTTPException(409, detail="You've already applied to this listing")
     return {"data": {"application_id": aid, "status": "APPLIED"}}
 
@@ -343,6 +354,13 @@ async def hire_applicant(listing_id: str, body: HireBody, user: dict = Depends(g
         await db.execute(text(
             "UPDATE community.job_applications SET status='ACCEPTED', decided_at=now() WHERE application_id=:a"),
             {"a": body.application_id})
+        # JB1: once accepted hires reach the advertised positions, mark the listing FILLED.
+        await db.execute(text("""
+            UPDATE community.job_listings SET status='FILLED', updated_at=now()
+            WHERE listing_id=:l AND status='OPEN'
+              AND (SELECT count(*) FROM community.job_applications
+                   WHERE listing_id=:l AND status='ACCEPTED') >= positions
+        """), {"l": listing_id})
         await db.commit()
 
     worker_result = None
