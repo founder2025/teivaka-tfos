@@ -101,10 +101,10 @@ function ListingCard({ l, children }) {
   );
 }
 
-export default function Jobs() {
+export default function Jobs({ embedded = false, initialTab }) {
   const navigate = useNavigate();
   const myId = getCurrentUser()?.sub;
-  const [tab, setTab] = useState("find");
+  const [tab, setTab] = useState(initialTab || "find");
   const [empFilter, setEmpFilter] = useState("");
   const [regionQ, setRegionQ] = useState("");
   const [available, setAvailable] = useState(undefined);
@@ -157,14 +157,14 @@ export default function Jobs() {
   const useMyGps = () => { if (!navigator.geolocation) return emitToast("No GPS on this device"); navigator.geolocation.getCurrentPosition((p) => setProf((o) => ({ ...o, base_lat: p.coords.latitude.toFixed(6), base_lng: p.coords.longitude.toFixed(6) })), () => emitToast("Couldn't get location")); };
   const withdraw = async (id) => { try { await send("PATCH", `/api/v1/job-applications/${id}/withdraw`); emitToast("Application withdrawn"); loadFind(); } catch (e) { emitToast(e?.userMessage || "Could not withdraw"); } };
 
-  return (
-    <TfpShell>
-      <main className="main-content">
-        <div className="main-inner" style={{ maxWidth: 860 }}>
-          <div className="page-header">
-            <div className="subtitle">Find agri-sector work near you, or post roles and hire — across the Teivaka network.</div>
-            <div className="page-actions"><button className="btn btn-secondary" onClick={askAi}><Sparkles size={14} />Ask AI</button></div>
-          </div>
+  const content = (
+    <>
+      {!embedded && (
+        <div className="page-header">
+          <div className="subtitle">Find agri-sector work near you, or post roles and hire — across the Teivaka network.</div>
+          <div className="page-actions"><button className="btn btn-secondary" onClick={askAi}><Sparkles size={14} />Ask AI</button></div>
+        </div>
+      )}
 
           <div className="cycle-view-tabs" role="tablist" aria-label="Jobs views">
             <button role="tab" aria-selected={tab === "find"} tabIndex={tab === "find" ? 0 : -1} className={`task-tab ${tab === "find" ? "active" : ""}`} style={{ background: "none", border: "none", font: "inherit", cursor: "pointer" }} onClick={() => goTab("find")} onKeyDown={onTabKey}>Find work</button>
@@ -262,13 +262,23 @@ export default function Jobs() {
                 ))}
             </>
           )}
-        </div>
-      </main>
-
+    </>
+  );
+  const overlays = (
+    <>
       {applyFor && <ApplyModal listing={applyFor} weak={profileWeak} onClose={() => setApplyFor(null)} onSaved={() => { loadFind(); setApplyFor(null); }} />}
       {(postOpen || postEdit) && <PostListingModal edit={postEdit} onClose={() => { setPostOpen(false); setPostEdit(null); }} onSaved={() => { loadHire(); setPostOpen(false); setPostEdit(null); }} />}
       {applicantsFor && <ApplicantsModal listing={applicantsFor} onClose={() => setApplicantsFor(null)} onHire={(app) => { setHireFor({ listing: applicantsFor, application: app }); }} onChanged={loadHire} />}
       {hireFor && <HireModal listing={hireFor.listing} application={hireFor.application} onClose={() => setHireFor(null)} onSaved={() => { setHireFor(null); setApplicantsFor(null); loadHire(); }} />}
+    </>
+  );
+  if (embedded) return (<>{content}{overlays}</>);
+  return (
+    <TfpShell>
+      <main className="main-content">
+        <div className="main-inner" style={{ maxWidth: 860 }}>{content}</div>
+      </main>
+      {overlays}
     </TfpShell>
   );
 }

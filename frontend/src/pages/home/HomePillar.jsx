@@ -27,6 +27,7 @@ import Directory from "../../components/home/Directory";
 import Groups from "../../components/home/Groups";
 import { useFlags, DisabledNotice } from "../../utils/useFlags.jsx";
 import Marketplace from "../../components/home/Marketplace";
+import WorkHub from "./WorkHub";
 import { StoriesRow, NewsCard } from "../../components/home/FeedExtras";
 import SponsorCorner from "../../components/home/SponsorCorner";
 import { useIsNarrow } from "../../hooks/useIsNarrow";
@@ -213,6 +214,9 @@ export default function HomePillar() {
   }[view]), [view]);
 
   const flagOn = useFlags();
+  // "Work & hire" (Jobs + Services, re-homed from Farm) owns its own shell — render it directly.
+  // Placed after all hooks so hook order stays stable across view changes.
+  if (view === "work") return <WorkHub />;
   const FLAG_FOR = { feed: "home_feed", following: "home_feed", marketplace: "marketplace", prices: "marketplace", groups: "groups" };
   const gateFlag = FLAG_FOR[view];
 

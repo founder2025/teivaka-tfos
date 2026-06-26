@@ -17,7 +17,7 @@ import {
   Sparkles, Clock, Mic, Activity,
   User, Settings, RefreshCw, CreditCard, Gift, Download,
   Eye, CheckSquare, LayoutGrid, DollarSign, Wrench, Map, Cloud, Image, Share2,
-  GraduationCap, Home, Plus, Wallet,
+  GraduationCap, Home, Plus, Wallet, Briefcase,
 } from "lucide-react";
 
 export const PILLAR_SUB_NAV = {
@@ -27,6 +27,7 @@ export const PILLAR_SUB_NAV = {
       { path: "/home",             label: "Feed",          icon: Users },
       { path: "/home/following",   label: "Following",     icon: UsersRound },
       { path: "/home/marketplace", label: "Marketplace",   icon: Store },
+      { path: "/home/work",        label: "Work & hire",   icon: Briefcase },
       { path: "/home/prices",      label: "Market prices", icon: TrendingUp },
       { path: "/home/directory",   label: "Directory",     icon: Contact },
       { path: "/members",          label: "Network map",   icon: MapPin },

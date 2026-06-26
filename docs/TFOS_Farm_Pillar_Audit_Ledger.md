@@ -791,3 +791,17 @@ the commit + rebuild; migration down = `alembic downgrade -1`.
 
 **Status:** ✅ code shipped to branch + build-verified (frontend npm build, backend py_compile).
 Migration STAGED (needs apply-as-owner on prod). Awaiting deploy + stress pass.
+
+## JA1 — Community re-home of Jobs + Services (2026-06-26)
+
+Operator-approved: cross-tenant marketplaces move to the Community pillar; Farm keeps the
+tenant-scoped Buyers & sales (the `community.*` → Community / `tenant.*` → Farm principle).
+- New Community surface **"Work & hire"** (`/home/work`, `pillarSubNavMap` + `HomePillar`
+  early-return → `pages/home/WorkHub.jsx`): sub-tabs Jobs | Services + ONE "Post to the
+  network" launcher (chooser → hire-a-role / get-a-task / find-work / offer-service, routes to
+  the right inner tab via remount key).
+- `Jobs.jsx` + `ServiceHub.jsx` gained an `embedded` + `initialTab` prop (skip own TfpShell/
+  page-header when hosted by WorkHub; legacy standalone path preserved).
+- Farm `Market.jsx`: dropped the Jobs + Services tabs → **Buyers & sales** + a thin
+  **"Hiring & logistics"** shortcut tab that deep-links to `/home/work`.
+- Frontend-only; no backend/migration change. Build clean. Deploy: `npm run build`.

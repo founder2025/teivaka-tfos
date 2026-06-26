@@ -80,10 +80,10 @@ function JobCard({ j, children }) {
 }
 
 const MY_FILTERS = [["active", "Active"], ["all", "All"], ["done", "Done"]];
-export default function ServiceHub() {
+export default function ServiceHub({ embedded = false, initialTab }) {
   const navigate = useNavigate();
   const myId = getCurrentUser()?.sub;
-  const [tab, setTab] = useState("requests");
+  const [tab, setTab] = useState(initialTab || "requests");
   const [profile, setProfile] = useState(undefined); // undefined=loading, null=none
   const [available, setAvailable] = useState(undefined);
   const [claimed, setClaimed] = useState(undefined);
@@ -131,14 +131,14 @@ export default function ServiceHub() {
     .filter((j) => myFilter === "all" || (myFilter === "done" ? j.status === "COMPLETED" : j.status !== "COMPLETED" && j.status !== "CANCELLED"))
     .filter((j) => !mq || `${j.title || ""} ${j.pickup_location || ""} ${j.dropoff_location || ""}`.toLowerCase().includes(mq));
 
-  return (
-    <TfpShell>
-      <main className="main-content">
-        <div className="main-inner" style={{ maxWidth: 820 }}>
-          <div className="page-header">
-            <div className="subtitle">Connect the gaps — get produce moved or stored, or earn by filling jobs near you.</div>
-            <div className="page-actions"><button className="btn btn-secondary" onClick={askAi}><Sparkles size={14} />Ask AI</button></div>
-          </div>
+  const content = (
+    <>
+      {!embedded && (
+        <div className="page-header">
+          <div className="subtitle">Connect the gaps — get produce moved or stored, or earn by filling jobs near you.</div>
+          <div className="page-actions"><button className="btn btn-secondary" onClick={askAi}><Sparkles size={14} />Ask AI</button></div>
+        </div>
+      )}
 
           <div className="cycle-view-tabs" role="tablist" aria-label="Services views">
             <button role="tab" aria-selected={tab === "requests"} tabIndex={tab === "requests" ? 0 : -1} className={`task-tab ${tab === "requests" ? "active" : ""}`} style={{ background: "none", border: "none", font: "inherit", cursor: "pointer" }} onClick={() => goTab("requests")} onKeyDown={onTabKey}>My jobs</button>
@@ -218,11 +218,21 @@ export default function ServiceHub() {
               )}
             </>
           )}
-        </div>
-      </main>
-
+    </>
+  );
+  const overlays = (
+    <>
       {postOpen && <PostJobModal onClose={() => setPostOpen(false)} onSaved={() => { loadMine(); setPostOpen(false); }} />}
       {completeFor && <CompletePriceModal job={completeFor} onClose={() => setCompleteFor(null)} onSaved={() => { loadMine(); setCompleteFor(null); }} />}
+    </>
+  );
+  if (embedded) return (<>{content}{overlays}</>);
+  return (
+    <TfpShell>
+      <main className="main-content">
+        <div className="main-inner" style={{ maxWidth: 820 }}>{content}</div>
+      </main>
+      {overlays}
     </TfpShell>
   );
 }
