@@ -15,8 +15,8 @@
  */
 
 import { useState, useRef, useEffect } from "react";
-import { NavLink, useNavigate, Link } from "react-router-dom";
-import { clearStoredTokens, getCurrentUser } from "../../utils/auth";
+import { NavLink, Link } from "react-router-dom";
+import { logout, getCurrentUser } from "../../utils/auth";
 import TISWidget from "../TISWidget";
 
 const TABS = [
@@ -132,12 +132,12 @@ function UserDropdown({ user, onLogout }) {
 }
 
 export default function FarmerLayout({ children }) {
-  const navigate = useNavigate();
   const user = getCurrentUser();
 
   function handleLogout() {
-    clearStoredTokens();
-    navigate("/login");
+    // D1: clear all auth state (incl. farm selection) + hard-reload so no
+    // in-memory cache carries to the next user on a shared device.
+    logout();
   }
 
   return (

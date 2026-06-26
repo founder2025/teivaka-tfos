@@ -92,10 +92,20 @@ aria-labels on rings + `aria-hidden` on decorative icons; tab row uses role=tab.
 (D2). MultiFarmCompare capped to 6 + "view all" (S4/500-farm). pu_name (not raw pu_id)
 + author dropped in the activity strip (D4/M21).
 
-**STILL OPEN (deliberately staged — touches auth, not this page):**
-- **D1 🔴 shared-device cache** — module-level QueryClient + localStorage farm_id persist
-  across logout → next user briefly sees cached data. Fix = clear cache + farm_id on
-  logout (and namespace keys by user_id) in the auth/shell layer. NOT done here.
+**D1 🔴 shared-device cache — CLOSED (2026-06-26).** Root cause: both user-initiated
+sign-outs (`FarmerLayout.handleLogout`, `MeMenu.handleSignOut`) did a SOFT router
+navigate + only cleared the two token keys — leaving `tfos_current_farm_id` behind and
+the SPA's in-memory caches (module-level React Query clients, context) alive, so the
+next user on a shared device briefly saw the previous user's data. Fix: new
+`utils/auth.logout()` clears ALL auth localStorage (tokens + onboarding +
+`tfos_current_farm_id`) then HARD-navigates (`window.location.assign("/login")`) — a
+full reload guarantees every in-memory cache is wiped (mirrors the 401 path). Both
+sign-out handlers now call it. `clearAllAuth()` also drops `tfos_current_farm_id`.
+FarmerLayout edit = explicit DO-NOT-TOUCH override (2-line security fix to the logout
+handler only, not the protected trial-chip/`/auth/me` logic). Removed the now-dead
+`useNavigate` in both files. Build ✓.
+
+**STILL OPEN (backend / cross-page, filed — not page-local):**
 - Backend keystones unchanged: composite `/farm/overview` (Inviolable #3), `farm_id`
   on /tasks (D-tasks tenant-wide), whole-farm activity feed, role-based view (S5),
   voice/i18n for low-literacy (S6).

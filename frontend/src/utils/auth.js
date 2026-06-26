@@ -112,4 +112,21 @@ export function clearAllAuth() {
   localStorage.removeItem("tfos_access_token");
   localStorage.removeItem("tfos_refresh_token");
   localStorage.removeItem("tfos_onboarding_complete");
+  // D1: don't leak the previous user's farm selection to the next user on a
+  // shared device.
+  localStorage.removeItem("tfos_current_farm_id");
+}
+
+/**
+ * Full sign-out. Clears all auth state, then HARD-navigates to /login.
+ *
+ * The hard reload is intentional and load-bearing (D1): a soft router navigate
+ * keeps the SPA's in-memory caches alive — module-level React Query clients,
+ * context state — so the next user on a shared device would briefly see the
+ * previous user's cached data. A hard nav guarantees a clean session.
+ * (Mirrors the 401 path in utils/api.js logoutToLogin.)
+ */
+export function logout() {
+  clearAllAuth();
+  window.location.assign("/login");
 }

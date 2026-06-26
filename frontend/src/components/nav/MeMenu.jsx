@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { Lock, LogOut, Shield, Sun, Moon } from "lucide-react";
 import { ME_MENU_ITEMS } from "./pillarSubNavMap";
-import { getCurrentUser } from "../../utils/auth";
+import { getCurrentUser, logout } from "../../utils/auth";
 import { hasRole } from "../../utils/roles";
 import { getTheme, toggleTheme } from "../../utils/theme";
 import Avatar from "../ui/Avatar";
@@ -49,7 +49,6 @@ export default function MeMenu({ onClose }) {
   const [me, setMe] = useState(null);
   const [theme, setThemeState] = useState(getTheme());
   const rootRef = useRef(null);
-  const navigate = useNavigate();
 
   useEffect(() => {
     const token = localStorage.getItem("tfos_access_token");
@@ -105,9 +104,9 @@ export default function MeMenu({ onClose }) {
     } catch {
       /* stateless — proceed regardless */
     }
-    localStorage.removeItem("tfos_access_token");
-    localStorage.removeItem("tfos_refresh_token");
-    navigate("/login", { replace: true });
+    // Clear ALL auth state (incl. farm selection) + hard-reload so no in-memory
+    // cache carries to the next user on a shared device (D1).
+    logout();
   }
 
   const displayName = me?.display_name || me?.full_name || me?.email || "User";
