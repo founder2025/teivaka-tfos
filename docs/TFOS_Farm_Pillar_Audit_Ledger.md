@@ -73,4 +73,33 @@ inventory stock value; receivables/payables split.
 financial aggregate + trend chart filed for a backend slice.
 
 ---
+
+## IA RESTRUCTURE (pillar-wide) — 🟡 nav grouped (this pass)
+
+**Finding:** the pillar had ~22 flat destinations, in no workflow order, and the
+farm nav (FarmSectionsNav) had been dropped from the rebuilt Overview — so there was
+NO organized in-pillar navigation. FarmerLayout tabs are app-level, not farm
+destinations.
+
+**Done:** FarmSectionsNav rewritten into 6 natural-farming-order groups —
+PLAN (Overview·Tasks·Weather) · GROW (Enterprises·Production·Inventory·Labour·
+Equipment·Locations) · SELL (Buyers·Services·Cash·Payments) · PROVE (Compliance·
+History·Reports·Gallery) · IMPROVE (Analytics·Decisions) · ACCOUNT (Library·
+Partnerships·Settings). Same 22 real routes (no dead links). Re-surfaced on Overview.
+
+**Page-merge plan (executed per-destination during each audit, with route redirects
+so nothing breaks):**
+- Cash + Payments → Money (tabs)        · Buyers + Services + Marketplace → Market
+- Analytics + Decisions + Insights → Insights  · History + Reports + Gallery → Records
+- Inventory + Labour + Equipment + Locations → Resources (group)
+- Library → Settings/Help · Partnerships → Business/Settings
+Target: 22 → ~12 destinations once merges land.
+
+**Missing (Plan side) — filed:** Calendar/Plan view, Budget-vs-actual,
+Notifications inbox, surfaced Verify/traceability entry.
+
+**Status:** 🟡 — nav grouped + workflow-ordered + re-surfaced; tab-merges + redirects
+happen as each merged destination is audited.
+
+---
 (remaining destinations pending — appended as each is audited)

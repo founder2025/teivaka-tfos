@@ -839,6 +839,8 @@ function FarmOverview() {
         <ActiveCyclesTable farmId={farmId} />
       </section>
 
+      <FarmSectionsNav />
+
       {(() => {
         const cd = chain.data?.data;
         const ok = cd?.integrity_ok;
