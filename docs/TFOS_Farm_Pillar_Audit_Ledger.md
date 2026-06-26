@@ -80,6 +80,20 @@ Legend: 🔒 LOCKED (approved; no redesign without new evidence) · ✅ PASS · 
   parts on repair (EQ26/EQ19), rental income (EQ27), implements (EQ28), km unit on create (EQ12),
   calibration/hygiene logs (EQ29/EQ30), location/holder (EQ35), utilization/ROA (EQ38), offline
   write queue (ES9), pagination past 200 (ES10). Do NOT redesign again unless new evidence requires it. Deploy: frontend-only.
+- **Locations (/farm/locations → Resources tab)** — LOCKED 2026-06-26 (Operator-approved). Audited →
+  deepened (8-persona) → redesigned → stress-tested ×1 → optimized — all page-local findings
+  (LOC1–LOC34, LS1–LS12) resolved or filed. Fixed: removed printed farm UUID (×2) + retired
+  ModeDropdown + emoji + redundant h1; api.js reads + write-failure toasts; map is the hero;
+  **no-draw manual Add-block** (POST /production-units on-ramp); land summary (total/zones/blocks/
+  unmapped); honest "Not mapped yet" for animals; collapsible More-tools; page + per-block Ask AI;
+  shared a11y <Modal>; first-run card; friendly type labels. **LS1 honesty catch: removed a status
+  legend the map didn't actually render (map colours by kind) — legend moved to the block list.**
+  Filed (backend/FarmMap, NOT faked): colour map by block status (LOC23), feature-level edits +
+  manual↔draw reconcile vs destructive PUT replace-all/duplicate PUs (LOC24/LS3), PostGIS spatial
+  index (LOC30), area-by-3-Layer (LOC33 full), soil/water per block (LOC27/28), tenure/lease +
+  verifiable GPS (LOC20/34), multi-parcel/subdivision (LOC25/26), delete/edit-area (LOC18), offline
+  map (LOC19), reliable enterprise↔block binding (LS7), bulk import (LS11). Do NOT redesign again
+  unless new evidence requires it. Deploy: frontend-only.
 
 ---
 
