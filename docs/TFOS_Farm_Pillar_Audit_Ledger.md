@@ -66,6 +66,20 @@ Legend: 🔒 LOCKED (approved; no redesign without new evidence) · ✅ PASS · 
   (L17), REI clock-in safety (L19), FNPF/DOB statutory (L31), offline write queue (LS2), /labor
   server limit (LS6/L14), true request idempotency. On-hand pay numbers are **honest** ("Wages
   logged", settlement on roadmap). Do NOT redesign again unless new evidence requires it. Deploy: frontend-only.
+- **Equipment (/farm/equipment → Resources tab)** — LOCKED 2026-06-26 (Operator-approved). Audited →
+  deepened (8-persona) → redesigned → stress-tested ×1 → optimized — all page-local findings
+  (EQ1–EQ40, ES1–ES15) resolved or filed. Fixed: removed printed farm UUID; honest cost labels
+  ("operating cost/hr excl. depreciation" + "Value written down (book)" — nothing auto-depreciates);
+  DECOMMISSIONED split to `retired` (excluded from down/service/book value); api.js + cached-on-error;
+  Parts adjust modal (no window.prompt); resolve-with-condition; shared a11y <Modal> + arrow-key tabs;
+  Fiji time; view-aware + per-asset ("repair or replace?") Ask AI; responsive KPI strips; Fleet sort;
+  FirstRun; submit-locks; th scope. **ES5 (HIGH, FILED backend): no role gate on /equipment
+  create+patch — any tenant user can decommission a capital asset; frontend hides Add/Edit for
+  non-managers (fail-open) but the authoritative gate must be server-side.** Other filed keystones
+  (NOT faked): fuel+maintenance → cash_ledger (EQ4), real depreciation + in cost/hr (EQ25), consume
+  parts on repair (EQ26/EQ19), rental income (EQ27), implements (EQ28), km unit on create (EQ12),
+  calibration/hygiene logs (EQ29/EQ30), location/holder (EQ35), utilization/ROA (EQ38), offline
+  write queue (ES9), pagination past 200 (ES10). Do NOT redesign again unless new evidence requires it. Deploy: frontend-only.
 
 ---
 
