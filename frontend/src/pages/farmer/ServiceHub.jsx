@@ -93,6 +93,7 @@ export default function ServiceHub() {
   const [showProvider, setShowProvider] = useState(false);
   const [workLoaded, setWorkLoaded] = useState(false);
   const [myFilter, setMyFilter] = useState("active");
+  const [mySearch, setMySearch] = useState("");
   const [postOpen, setPostOpen] = useState(false);
   const [completeFor, setCompleteFor] = useState(null);
   const [p, setP] = useState({ display_name: "", service_types: [], base_location: "", base_lat: "", base_lng: "", service_radius_km: 25, phone: "", capacity_note: "", is_active: true });
@@ -123,9 +124,12 @@ export default function ServiceHub() {
   const act = async (url, ok) => { try { await send("POST", url); emitToast(ok); loadWork(); loadMine(); } catch (e) { emitToast(e?.userMessage || "Failed"); } };
   const claim = (id) => act(`/api/v1/service-jobs/${id}/claim`, "Job claimed");
   const cancel = (id) => act(`/api/v1/service-jobs/${id}/cancel`, "Job cancelled");
-  const askAi = () => navigate("/tis?q=" + encodeURIComponent("How can I arrange affordable transport or cold storage for my farm produce?"));
+  const askAi = () => navigate("/tis?q=" + encodeURIComponent(tab === "work" ? "How can I earn money offering transport or cold storage to nearby farms?" : "How can I arrange affordable transport or cold storage for my farm produce?"));
   const onTabKey = (e) => { if (e.key === "ArrowRight" || e.key === "ArrowLeft") { e.preventDefault(); goTab(tab === "requests" ? "work" : "requests"); } };
-  const myShown = (mine || []).filter((j) => myFilter === "all" || (myFilter === "done" ? j.status === "COMPLETED" : j.status !== "COMPLETED" && j.status !== "CANCELLED"));
+  const mq = mySearch.trim().toLowerCase();
+  const myShown = (mine || [])
+    .filter((j) => myFilter === "all" || (myFilter === "done" ? j.status === "COMPLETED" : j.status !== "COMPLETED" && j.status !== "CANCELLED"))
+    .filter((j) => !mq || `${j.title || ""} ${j.pickup_location || ""} ${j.dropoff_location || ""}`.toLowerCase().includes(mq));
 
   return (
     <TfpShell>
@@ -137,15 +141,16 @@ export default function ServiceHub() {
           </div>
 
           <div className="cycle-view-tabs" role="tablist" aria-label="Services views">
-            <button role="tab" aria-selected={tab === "requests"} tabIndex={tab === "requests" ? 0 : -1} className={`task-tab ${tab === "requests" ? "active" : ""}`} style={{ background: "none", border: "none", font: "inherit", cursor: "pointer" }} onClick={() => goTab("requests")} onKeyDown={onTabKey}>My jobs<span className="task-tab-count" style={{ fontSize: 10 }}>Get moved/stored</span></button>
-            <button role="tab" aria-selected={tab === "work"} tabIndex={tab === "work" ? 0 : -1} className={`task-tab ${tab === "work" ? "active" : ""}`} style={{ background: "none", border: "none", font: "inherit", cursor: "pointer" }} onClick={() => goTab("work")} onKeyDown={onTabKey}>Earn<span className="task-tab-count" style={{ fontSize: 10 }}>Fill jobs near you</span></button>
+            <button role="tab" aria-selected={tab === "requests"} tabIndex={tab === "requests" ? 0 : -1} className={`task-tab ${tab === "requests" ? "active" : ""}`} style={{ background: "none", border: "none", font: "inherit", cursor: "pointer" }} onClick={() => goTab("requests")} onKeyDown={onTabKey}>My jobs</button>
+            <button role="tab" aria-selected={tab === "work"} tabIndex={tab === "work" ? 0 : -1} className={`task-tab ${tab === "work" ? "active" : ""}`} style={{ background: "none", border: "none", font: "inherit", cursor: "pointer" }} onClick={() => goTab("work")} onKeyDown={onTabKey}>Earn</button>
           </div>
 
           {tab === "requests" && (
             <>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
-                <div className="gallery-filter-row" style={{ display: "flex", gap: 6 }}>
+                <div className="gallery-filter-row" style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
                   {MY_FILTERS.map(([id, l]) => <button key={id} className={`filter-pill ${myFilter === id ? "active" : ""}`} onClick={() => setMyFilter(id)}>{l}<span className="filter-pill-count">{(mine || []).filter((j) => id === "all" || (id === "done" ? j.status === "COMPLETED" : j.status !== "COMPLETED" && j.status !== "CANCELLED")).length}</span></button>)}
+                  {(mine || []).length > 4 && <input type="search" value={mySearch} onChange={(e) => setMySearch(e.target.value)} placeholder="Search jobs…" aria-label="Search jobs" style={{ padding: "6px 10px", border: "1.5px solid var(--line)", borderRadius: 7, fontSize: 12.5, background: "var(--paper)", minWidth: 150 }} />}
                 </div>
                 <button className="btn btn-primary" onClick={() => setPostOpen(true)}><Plus size={14} />Post a job</button>
               </div>
@@ -200,6 +205,7 @@ export default function ServiceHub() {
               <div style={{ marginTop: 8 }}>
                 {available === undefined ? <div className="card" style={{ padding: 20, color: C.muted }}>Loading…</div>
                   : errWork && available.length === 0 ? <ErrorCard msg="Couldn't load nearby jobs." onRetry={loadWork} />
+                  : profile === null ? <div className="card" style={{ padding: 20, color: C.muted }}>Set up your provider profile above (with a base location) to see jobs near you, sorted by distance.</div>
                   : available.length === 0 ? <div className="card" style={{ padding: 20, color: C.muted }}>No open jobs match your profile right now.</div>
                   : available.map((j) => <JobCard key={j.job_id} j={j}>{myId && String(j.requester_user_id) === String(myId) ? <span style={{ fontSize: 11.5, color: C.muted }}>Your own job</span> : <button className="btn btn-primary btn-sm" onClick={() => claim(j.job_id)}>Claim job</button>}</JobCard>)}
               </div>
