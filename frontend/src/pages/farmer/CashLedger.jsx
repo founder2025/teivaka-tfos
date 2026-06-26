@@ -98,10 +98,13 @@ function Tile({ label, value, sub, color, onClick }) {
   return <div className="capital-tile" onClick={onClick} style={onClick ? { cursor: "pointer" } : null}>
     <div className="capital-tile-label">{label}</div><div className="capital-tile-value" style={color ? { color } : null}>{value}</div><div className="capital-tile-sub">{sub}</div></div>;
 }
-function Building({ title, body }) {
-  return <div className="card" style={{ padding: "16px 18px" }}>
-    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}><span style={{ fontWeight: 700, color: "var(--soil)" }}>{title}</span><span style={{ fontSize: 11.5, fontWeight: 700, color: "var(--muted)" }}>Building</span></div>
-    <div style={{ fontSize: 12.5, color: "var(--muted)", marginTop: 6, lineHeight: 1.5 }}>{body}</div></div>;
+// Honest-empty for a BUILT feature with no data yet (no "Building" badge — that implies unbuilt).
+function EmptyState({ title, body, onAdd, addLabel }) {
+  return <div className="card" style={{ padding: "28px 22px", textAlign: "center" }}>
+    <div style={{ fontWeight: 700, color: "var(--soil)" }}>{title}</div>
+    <div style={{ fontSize: 12.5, color: "var(--muted)", margin: "6px auto 14px", maxWidth: 380, lineHeight: 1.5 }}>{body}</div>
+    {onAdd && <button className="btn btn-primary btn-sm" onClick={onAdd}><Plus size={13} />{addLabel || "Log cash"}</button>}
+  </div>;
 }
 
 function CashEventCard({ e, onEdit, onDelete, canManage }) {
@@ -305,8 +308,8 @@ function CashInner() {
                 {filtered.length === 0 ? <div className="card" style={{ padding: 40, textAlign: "center", color: "var(--muted)" }}>No cash events match these filters.</div>
                   : filtered.map((e) => <CashEventCard key={e.ledger_id} e={e} canManage={canManage} onEdit={(x) => setForm({ mode: "edit", type: x.transaction_type, entry: x })} onDelete={setDel} />)}
               </>
-            ) : view === "categories" ? <CategoriesView entries={entries} capNote={capNote} />
-            : view === "forecast" ? <ForecastView farmId={farmId} balance={balance} />
+            ) : view === "categories" ? <CategoriesView entries={entries} capNote={capNote} onAdd={() => setForm({ mode: "create", type: "EXPENSE" })} />
+            : view === "forecast" ? <ForecastView farmId={farmId} balance={balance} onAdd={() => setForm({ mode: "create", type: "INCOME" })} />
             : view === "reconciliation" ? <ReconcileView balance={balance} railBal={railBal} atCap={atCap} onAdd={() => setForm({ mode: "create", type: "INCOME" })} />
             : (
               <div className="card" style={{ padding: "18px 20px" }}>
@@ -328,13 +331,13 @@ function CashInner() {
   );
 }
 
-function CategoriesView({ entries, capNote }) {
+function CategoriesView({ entries, capNote, onAdd }) {
   const byCat = useMemo(() => {
     const m = {};
     entries.forEach((e) => { const k = e.category || "—"; (m[k] = m[k] || { cat: k, income: 0, expense: 0 }); if (isInflow(e)) m[k].income += amt(e); else m[k].expense += amt(e); });
     return Object.values(m).sort((a, b) => (b.income + b.expense) - (a.income + a.expense));
   }, [entries]);
-  if (!byCat.length) return <Building title="Category spend trends" body="Income and expense by category appear here once you log cash." />;
+  if (!byCat.length) return <EmptyState title="No cash logged yet" body="Log a cash-in or an expense and your spending by category — with your biggest cost — appears here." onAdd={onAdd} addLabel="Log cash" />;
   const totalIncome = byCat.reduce((s, r) => s + r.income, 0);
   const totalExpense = byCat.reduce((s, r) => s + r.expense, 0);
   const net = totalIncome - totalExpense;
@@ -371,7 +374,7 @@ function CategoriesView({ entries, capNote }) {
 
 // Real cash forecast — runway + 8-week projection + upcoming income, strictly from
 // /analytics/{farm}/forecasts (balance + recent avg weekly net + live harvest dates). Honest-empty.
-function ForecastView({ farmId, balance }) {
+function ForecastView({ farmId, balance, onAdd }) {
   const q = useQuery({ queryKey: ["cash-forecast", farmId], queryFn: () => getJSON(`/api/v1/analytics/${encodeURIComponent(farmId)}/forecasts`), enabled: !!farmId, retry: 1 });
   if (q.isLoading) return <div className="card" style={{ padding: 20, color: "var(--muted)" }}>Loading forecast…</div>;
   if (q.isError) return <ErrorCard msg="Couldn't load the forecast." onRetry={() => q.refetch()} />;
@@ -379,7 +382,7 @@ function ForecastView({ farmId, balance }) {
   const avg = d.avg_weekly_net_fjd;
   const proj = d.cash_projection || [];
   const harvests = d.harvest_windows || [];
-  if (avg == null) return <Building title="Cash forecast" body="Log a few weeks of cash in and out and your runway + projection appear here — projected only from your real history, never invented." />;
+  if (avg == null) return <EmptyState title="Forecast needs a little history" body="Log a few weeks of cash in and out and your runway + projection appear here — projected only from your real numbers, never invented." onAdd={onAdd} addLabel="Log cash" />;
   const burning = avg < 0;
   const runwayWeeks = burning ? Math.max(0, Math.floor(balance / Math.abs(avg))) : null;
   const longRunway = burning && runwayWeeks > 52; // SF2: cap absurd numbers
