@@ -16,11 +16,14 @@
  * agronomic BBCH stage isn't tracked in prod, so the progress strip shows the
  * real cycle LIFECYCLE (Planned→Active→Harvesting→Closing→Closed).
  */
-import { useEffect, useState, useCallback } from "react";
+import { useState } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
+import { QueryClient, QueryClientProvider, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useFormModal } from "../../context/FormModalContext";
 import { getJSON, send } from "../../utils/api";
 import { formatMoney } from "../../utils/money";
+
+const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false, refetchOnReconnect: true, staleTime: 30_000 } } });
 
 const C = {
   soil: "var(--soil)", green: "var(--green)", greenDk: "var(--green-dk)", greenTint: "var(--green-tint)",
@@ -67,28 +70,19 @@ function MiniStat({ label, value, color }) {
   );
 }
 
-export default function CycleDetail() {
+function CycleDetailInner() {
   const { cycleId } = useParams();
   const navigate = useNavigate();
+  const qc = useQueryClient();
   const { openFormModal } = useFormModal();
-  const [cycle, setCycle] = useState(null);
-  const [fin, setFin] = useState(null);
-  const [events, setEvents] = useState([]);
-  const [harvests, setHarvests] = useState([]);
-  const [block, setBlock] = useState(null);     // WHD block for this cycle
-  const [history, setHistory] = useState([]);   // prior cycles in same PU
-  const [openTasks, setOpenTasks] = useState([]);
-  const [complianceUnknown, setComplianceUnknown] = useState(false); // PD-A: fail closed
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
   const [acting, setActing] = useState("");
 
-  const load = useCallback(async () => {
-    setLoading(true); setError("");
-    try {
+  // One cached query for the whole detail (PS3 — caching + reconnect refetch).
+  const detailQ = useQuery({
+    queryKey: ["cycle-detail", cycleId],
+    queryFn: async () => {
       const cRes = await getJSON(`/api/v1/cycles/${encodeURIComponent(cycleId)}`);
       const c = cRes?.data || cRes;
-      setCycle(c);
       const [finR, evR, hvR, cmR, hiR, tkR] = await Promise.allSettled([
         getJSON(`/api/v1/cycles/${encodeURIComponent(cycleId)}/financials`),
         getJSON(`/api/v1/field-events?cycle_id=${encodeURIComponent(cycleId)}&limit=100`),
@@ -97,23 +91,20 @@ export default function CycleDetail() {
         c?.pu_id ? getJSON(`/api/v1/cycles?pu_id=${encodeURIComponent(c.pu_id)}&limit=50`) : Promise.resolve(null),
         getJSON(`/api/v1/tasks?entity_id=${encodeURIComponent(cycleId)}&status=OPEN&limit=100`),
       ]);
-      setFin(finR.status === "fulfilled" ? (finR.value?.data || finR.value) : null);
-      setEvents(evR.status === "fulfilled" ? (evR.value?.data?.events || []) : []);
-      setHarvests(hvR.status === "fulfilled" ? (hvR.value?.data?.harvests || []) : []);
       const blocks = cmR.status === "fulfilled" ? (cmR.value?.data?.active_blocks || []) : [];
-      setBlock(blocks.find((b) => b.cycle_id === cycleId) || null);
-      setComplianceUnknown(cmR.status !== "fulfilled"); // PD-A: only "clear" when verified
       const allCyc = hiR.status === "fulfilled" ? (hiR.value?.data?.cycles || []) : [];
-      setHistory(allCyc.filter((x) => x.cycle_id !== cycleId));
-      setOpenTasks(tkR.status === "fulfilled" ? (tkR.value?.data?.tasks || []) : []); // P1: read .data.tasks
-    } catch (e) {
-      setError(e.message === "404" ? "Cycle not found." : "Couldn't load this cycle.");
-    } finally {
-      setLoading(false);
-    }
-  }, [cycleId]);
-
-  useEffect(() => { load(); }, [load]);
+      return {
+        cycle: c,
+        fin: finR.status === "fulfilled" ? (finR.value?.data || finR.value) : null,
+        events: evR.status === "fulfilled" ? (evR.value?.data?.events || []) : [],
+        harvests: hvR.status === "fulfilled" ? (hvR.value?.data?.harvests || []) : [],
+        block: blocks.find((b) => b.cycle_id === cycleId) || null,
+        complianceUnknown: cmR.status !== "fulfilled", // PD-A: only "clear" when verified
+        history: allCyc.filter((x) => x.cycle_id !== cycleId),
+        openTasks: tkR.status === "fulfilled" ? (tkR.value?.data?.tasks || []) : [], // P1
+      };
+    },
+  });
 
   async function transition(next) {
     if (acting) return;
@@ -122,18 +113,20 @@ export default function CycleDetail() {
     setActing(next);
     try {
       await send("PATCH", `/api/v1/cycles/${encodeURIComponent(cycleId)}`, { cycle_status: next });
-      await load();
+      await qc.invalidateQueries({ queryKey: ["cycle-detail", cycleId] });
     } catch (e) { alert(e?.userMessage || e.message); } finally { setActing(""); }
   }
 
-  if (loading) return <div className="max-w-5xl mx-auto p-4"><div className="rounded-2xl animate-pulse" style={{ height: 180, background: C.cream }} /></div>;
-  if (error) return (
+  if (detailQ.isLoading) return <div className="max-w-5xl mx-auto p-4"><div className="rounded-2xl animate-pulse motion-reduce:animate-none" style={{ height: 180, background: C.cream }} /></div>;
+  if (detailQ.isError) return (
     <div className="max-w-5xl mx-auto p-4 space-y-3">
       <Link to="/farm/cycles" className="text-xs underline" style={{ color: C.greenDk }}>← Back to cycles</Link>
-      <div className="rounded-2xl border p-4 text-sm" style={{ borderColor: C.border, color: C.muted }}>{error}</div>
+      <div className="rounded-2xl border p-4 text-sm" style={{ borderColor: C.border, color: C.muted }}>{detailQ.error?.status === 404 ? "Cycle not found." : "Couldn't load this cycle."} <button onClick={() => detailQ.refetch()} className="underline" style={{ color: C.greenDk }}>Retry</button></div>
     </div>
   );
 
+  const d = detailQ.data;
+  const cycle = d.cycle, fin = d.fin, events = d.events, harvests = d.harvests, block = d.block, complianceUnknown = d.complianceUnknown, history = d.history, openTasks = d.openTasks;
   const c = cycle || {};
   const status = (c.cycle_status || "").toUpperCase();
   const sc = STATUS_COLORS[status] || STATUS_COLORS.PLANNED;
@@ -331,6 +324,14 @@ export default function CycleDetail() {
         </Panel>
       </div>
     </div>
+  );
+}
+
+export default function CycleDetail() {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <CycleDetailInner />
+    </QueryClientProvider>
   );
 }
 

@@ -54,7 +54,8 @@ function ProductionInner() {
   const { farmId } = useCurrentFarm();
   const [statusFilter, setStatusFilter] = useState("active");
 
-  const cyclesQ = useQuery({ queryKey: ["prod-cycles", farmId], queryFn: () => getJSON(`/api/v1/cycles?farm_id=${encodeURIComponent(farmId)}&limit=200`), enabled: !!farmId });
+  const CAP = 500;
+  const cyclesQ = useQuery({ queryKey: ["prod-cycles", farmId], queryFn: () => getJSON(`/api/v1/cycles?farm_id=${encodeURIComponent(farmId)}&limit=${CAP}`), enabled: !!farmId });
   const finQ = useQuery({ queryKey: ["prod-fin", farmId], queryFn: () => getJSON(`/api/v1/financials/crops/${encodeURIComponent(farmId)}`), enabled: !!farmId });
   const compQ = useQuery({ queryKey: ["prod-comp", farmId], queryFn: () => getJSON(`/api/v1/crops/compliance/${encodeURIComponent(farmId)}`), enabled: !!farmId });
 
@@ -64,6 +65,8 @@ function ProductionInner() {
   const complianceUnknown = compQ.isError; // PD-A: couldn't verify → fail closed, never green
   const loading = cyclesQ.isLoading || finQ.isLoading;
   const err = cyclesQ.isError;
+  const hasData = cycles.length > 0;        // PS1: keep showing cached cycles on a refetch error
+  const truncated = cycles.length >= CAP;   // PS2: be honest when the list is capped
 
   const blockedCycle = useMemo(() => new Set(blocks.map((b) => b.cycle_id)), [blocks]);
   const statusOf = (c) => (c.cycle_status || c.status || "").toUpperCase();
@@ -110,10 +113,17 @@ function ProductionInner() {
           </div>
 
           {!farmId ? <div className="card" style={{ padding: 20, color: "var(--muted)" }}>Select a farm to see its production.</div>
-            : loading ? <div className="card" style={{ padding: 20, color: "var(--muted)" }}>Loading…</div>
-            : err ? <div className="card" style={{ padding: 20, color: "var(--red)" }}>Couldn't load production. <button onClick={() => cyclesQ.refetch()} style={{ color: "var(--green-dk)", textDecoration: "underline" }}>Retry</button></div>
+            : loading && !hasData ? <div className="card" style={{ padding: 20, color: "var(--muted)" }}>Loading…</div>
+            : err && !hasData ? <div className="card" style={{ padding: 20, color: "var(--red)" }}>Couldn't load production. <button onClick={() => cyclesQ.refetch()} style={{ color: "var(--green-dk)", textDecoration: "underline" }}>Retry</button></div>
             : (
               <>
+                {cyclesQ.isError && hasData && (
+                  <div className="card" style={{ marginTop: 14, padding: "10px 14px", display: "flex", alignItems: "center", gap: 8, background: "#FEF6E6", border: "1px solid var(--line)" }}>
+                    <AlertTriangle size={15} style={{ color: "var(--amber)" }} />
+                    <span style={{ fontSize: 12.5, color: "var(--soil)" }}>Couldn't refresh — showing your last saved production.</span>
+                    <button onClick={() => cyclesQ.refetch()} style={{ marginLeft: "auto", fontSize: 11, color: "var(--green-dk)", textDecoration: "underline" }}>Retry</button>
+                  </div>
+                )}
                 <NurseryRegister farmId={farmId} />
 
                 {complianceUnknown && (
@@ -168,8 +178,9 @@ function ProductionInner() {
                 <div className="card" style={{ marginTop: 10 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 16px", borderBottom: "1px solid var(--line)" }}>
                     <strong style={{ color: "var(--soil)", display: "flex", gap: 8, alignItems: "center" }}><Sprout size={15} />{STATUS_TABS.find((t) => t[0] === statusFilter)[1]} production units</strong>
-                    <span className="card-meta" style={{ color: "var(--muted)", fontSize: 12 }}>{shown.length} shown</span>
+                    <span className="card-meta" style={{ color: "var(--muted)", fontSize: 12 }}>{shown.length} shown{truncated ? ` · first ${CAP}` : ""}</span>
                   </div>
+                  {truncated && <div style={{ padding: "8px 16px 0", fontSize: 11, color: "var(--muted)" }}>Showing the most recent {CAP} cycles — counts above may understate very large histories.</div>}
                   <div style={{ padding: "12px 16px", display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(240px,1fr))", gap: 12 }}>
                     {shown.length === 0 && <div style={{ color: "var(--muted)", fontSize: 13 }}>Nothing here. {statusFilter === "active" ? "Start a crop run to see it in production." : "No cycles with this status."}</div>}
                     {shown.map((c) => {
