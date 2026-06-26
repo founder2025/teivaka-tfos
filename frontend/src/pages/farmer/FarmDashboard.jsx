@@ -392,12 +392,12 @@ function QuickActions({ navigate }) {
 const money = (v) => (v == null ? "—" : formatMoney(v));
 function dayPart() { const h = new Date().getHours(); return h < 12 ? "morning" : h < 17 ? "afternoon" : "evening"; }
 
-function OvHeader({ name, lastSync, navigate }) {
+function OvHeader({ name, lastSync, summary, navigate }) {
   return (
     <div className="flex items-start justify-between gap-3 flex-wrap">
       <div>
         <h1 className="text-2xl font-bold flex items-center gap-2" style={{ color: C.soil }}>Good {dayPart()}, {name || "there"} <Sun size={18} style={{ color: C.amber }} /></h1>
-        <div className="text-xs mt-0.5" style={{ color: C.muted }}>Here's what's happening on your farm today.</div>
+        <div className="text-sm mt-0.5 font-medium" style={{ color: C.soil }}>{summary}</div>
       </div>
       <div className="flex items-center gap-2 flex-wrap">
         {lastSync && <span className="text-[11px] flex items-center gap-1" style={{ color: C.muted }}><RefreshCw size={12} />Last sync: {lastSync}</span>}
@@ -800,16 +800,21 @@ function FarmOverview() {
     attn.push({ icon: ListChecks, bg: C.greenTint, fg: C.greenDk, title: tk.imperative, sub: null, tag: w, route: "/farm/tasks" });
   });
 
+  const needsAttn = attn.length;
+  const summaryLine = (dueToday || needsAttn)
+    ? `${dueToday} task${dueToday === 1 ? "" : "s"} today${needsAttn ? ` · ${needsAttn} need${needsAttn === 1 ? "s" : ""} attention` : ""}.`
+    : "All clear today — nothing needs you right now.";
+
   const handleCycleCreated = () => { ["ov-cycles", "ov-crops", "ov-fin"].forEach((k) => qc.invalidateQueries({ queryKey: [k, farmId] })); qc.invalidateQueries({ queryKey: ["ov-tasks"] }); };
   const taskAction = async (id, action) => { try { await postJSON(`/api/v1/tasks/${id}/${action}`); emitToast(action === "complete" ? "Task done" : "Task skipped"); qc.invalidateQueries({ queryKey: ["ov-tasks"] }); } catch { emitToast("Couldn't update the task — try again"); } };
 
   return (
     <div className="tfp space-y-4">
-      <OvHeader name={meName} lastSync={lastSync} navigate={navigate} />
+      <OvHeader name={meName} lastSync={lastSync} summary={summaryLine} navigate={navigate} />
       <LayerBackfillBanner />
       <HealthKpis score={score} grade={grade} net={netProfit} businesses={businesses} catCount={catCount} dueToday={dueToday} highPr={highPr} cash={cashBal} alerts={alerts} navigate={navigate} />
-      <OpsRow totalKg={totalKg} workers={team} hours={hours} wageWeek={wageWeek} avgCostPerKg={avgCostPerKg} farmCount={farmsArr.length || 1} navigate={navigate} />
       <AttentionAdvisor attention={attn} best={best} riskiest={riskiest} navigate={navigate} />
+      <OpsRow totalKg={totalKg} workers={team} hours={hours} wageWeek={wageWeek} avgCostPerKg={avgCostPerKg} farmCount={farmsArr.length || 1} navigate={navigate} />
       <EnterprisePortfolio enterprises={enterprises} counts={entCounts} navigate={navigate} />
       <div className="grid gap-3 lg:grid-cols-2">
         <EnterpriseCompare crops={cropRows} navigate={navigate} />
