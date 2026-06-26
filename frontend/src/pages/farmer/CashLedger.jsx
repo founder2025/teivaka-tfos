@@ -307,7 +307,7 @@ function CashInner() {
               </>
             ) : view === "categories" ? <CategoriesView entries={entries} capNote={capNote} />
             : view === "forecast" ? <ForecastView farmId={farmId} balance={balance} />
-            : view === "reconciliation" ? <ReconcileView railBal={railBal} atCap={atCap} onAdd={() => setForm({ mode: "create", type: "INCOME" })} />
+            : view === "reconciliation" ? <ReconcileView balance={balance} railBal={railBal} atCap={atCap} onAdd={() => setForm({ mode: "create", type: "INCOME" })} />
             : (
               <div className="card" style={{ padding: "18px 20px" }}>
                 <div style={{ fontWeight: 700, color: "var(--soil)", display: "flex", alignItems: "center", gap: 6 }}><ShieldCheck size={15} />Bank Evidence</div>
@@ -382,6 +382,7 @@ function ForecastView({ farmId, balance }) {
   if (avg == null) return <Building title="Cash forecast" body="Log a few weeks of cash in and out and your runway + projection appear here — projected only from your real history, never invented." />;
   const burning = avg < 0;
   const runwayWeeks = burning ? Math.max(0, Math.floor(balance / Math.abs(avg))) : null;
+  const longRunway = burning && runwayWeeks > 52; // SF2: cap absurd numbers
   const firstNeg = proj.find((p) => p.projected_balance < 0);
   const maxAbs = Math.max(1, ...proj.map((p) => Math.abs(p.projected_balance)));
   return (
@@ -389,9 +390,9 @@ function ForecastView({ farmId, balance }) {
       <div className="cash-balance-card">
         <div className="cash-balance-label">{burning ? "Cash runway" : "Cash trend"}</div>
         <div className="cash-balance-value" style={{ color: burning ? (runwayWeeks <= 4 ? "var(--red)" : "var(--amber)") : "var(--green-dk)" }}>
-          {burning ? `≈ ${runwayWeeks} week${runwayWeeks === 1 ? "" : "s"}` : "Cash-positive"}
+          {!burning ? "Cash-positive" : longRunway ? "Over a year" : `≈ ${runwayWeeks} week${runwayWeeks === 1 ? "" : "s"}`}
         </div>
-        <div className="cash-balance-sub">{burning ? `at your current burn of ${fjd2(Math.abs(avg))}/week` : `building reserves at +${fjd2(avg)}/week`}</div>
+        <div className="cash-balance-sub">{burning ? (longRunway ? `more than 52 weeks of cash at the moment — you're spending ${fjd2(Math.abs(avg))} more than you earn each week` : `you're spending ${fjd2(Math.abs(avg))} more than you earn each week`) : `building reserves at +${fjd2(avg)} a week`}</div>
       </div>
       <div className="card" style={{ padding: 16 }}>
         <div style={{ fontWeight: 700, color: "var(--soil)", marginBottom: 4 }}>Projected balance</div>
@@ -423,40 +424,42 @@ function ForecastView({ farmId, balance }) {
 // Real reconciliation — compare your logged rail balances against what's actually in M-PAiSA,
 // the bank and cash on hand, to catch missed entries. Client-side check; statement import + saved
 // reconciliations are the next slice (honestly named).
-function ReconcileView({ railBal, atCap, onAdd }) {
+function ReconcileView({ balance, railBal, atCap, onAdd }) {
   const [a, setA] = useState({ mpaisa: "", cash: "", bank: "" });
   const rows = [["mpaisa", "M-PAiSA"], ["cash", "Cash on hand"], ["bank", "Bank"]];
-  const entered = rows.some(([k]) => a[k] !== "");
   const set = (k) => (e) => setA((s) => ({ ...s, [k]: e.target.value }));
-  const diffOf = (k) => (a[k] === "" ? null : Number(a[k]) - (railBal[k] || 0));
-  const totalActual = rows.reduce((s, [k]) => s + (a[k] === "" ? (railBal[k] || 0) : Number(a[k] || 0)), 0);
-  const loggedTotal = railBal.mpaisa + railBal.cash + railBal.bank + (railBal.other || 0);
-  const totalDiff = entered ? totalActual - (railBal.mpaisa + railBal.cash + railBal.bank) : null;
+  const allEntered = rows.every(([k]) => a[k] !== "");
+  const totalActual = rows.reduce((s, [k]) => s + Number(a[k] || 0), 0);
+  // SF1: the trustworthy check is total-actual vs the whole-ledger balance (correct at any size).
+  const totalDiff = allEntered ? totalActual - balance : null;
+  // Per-rail diff is only valid when the breakdown is whole-ledger (not at the 200 cap).
+  const diffOf = (k) => (!atCap && a[k] !== "") ? Number(a[k]) - (railBal[k] || 0) : null;
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      <div className="calendar-banner">Enter what's actually in each place — your M-PAiSA, bank and cash on hand — and we'll show any gap versus what you've logged, so you can catch a missed entry.{atCap ? " Compares against your latest 200 entries." : ""}</div>
+      <div className="calendar-banner">Enter what's actually in M-PAiSA, your bank and cash on hand. We compare your total to your logged balance to catch a missed entry.{atCap ? " (You have 200+ entries, so the per-rail check is hidden — the total below is the accurate one.)" : ""}</div>
       <div className="card" style={{ padding: 16 }}>
-        <div className="form-row" style={{ display: "grid", gridTemplateColumns: "1.3fr 1fr 1fr 1fr", gap: 10, fontSize: 10.5, textTransform: "uppercase", letterSpacing: ".5px", color: "var(--muted)" }}>
-          <span>Rail</span><span style={{ textAlign: "right" }}>Logged</span><span style={{ textAlign: "right" }}>Actual</span><span style={{ textAlign: "right" }}>Difference</span>
-        </div>
         {rows.map(([k, label]) => { const dv = diffOf(k); return (
-          <div key={k} className="form-row" style={{ display: "grid", gridTemplateColumns: "1.3fr 1fr 1fr 1fr", gap: 10, alignItems: "center", marginTop: 8 }}>
-            <span style={{ fontSize: 13, color: "var(--soil)", fontWeight: 600 }}>{label}</span>
-            <span style={{ textAlign: "right", fontFamily: "Menlo,monospace", fontSize: 12.5 }}>{fjd0(railBal[k] || 0)}</span>
-            <input type="number" step="0.01" value={a[k]} onChange={set(k)} placeholder="0" style={{ textAlign: "right", padding: "6px 8px", border: "1.5px solid var(--line)", borderRadius: 6, fontSize: 12.5 }} />
-            <span style={{ textAlign: "right", fontFamily: "Menlo,monospace", fontSize: 12.5, color: dv == null ? "var(--muted)" : dv === 0 ? "var(--green-dk)" : "var(--red)" }}>{dv == null ? "—" : `${dv > 0 ? "+" : dv < 0 ? "−" : ""}${fjd0(Math.abs(dv))}`}</span>
+          <div key={k} style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", padding: "8px 0", borderBottom: "1px solid rgba(92,64,51,0.08)" }}>
+            <span style={{ fontSize: 13, color: "var(--soil)", fontWeight: 600, minWidth: 110 }}>{label}</span>
+            <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginLeft: "auto" }}>
+              {!atCap && <span style={{ fontSize: 11.5, color: "var(--muted)" }}>logged {fjd0(railBal[k] || 0)}</span>}
+              <label style={{ fontSize: 11.5, color: "var(--muted)", display: "flex", alignItems: "center", gap: 5 }}>actual <input type="number" step="0.01" value={a[k]} onChange={set(k)} placeholder="0" style={{ width: 100, textAlign: "right", padding: "6px 8px", border: "1.5px solid var(--line)", borderRadius: 6, fontSize: 12.5 }} /></label>
+              {dv != null && <span style={{ fontFamily: "Menlo,monospace", fontSize: 12.5, color: dv === 0 ? "var(--green-dk)" : "var(--red)", minWidth: 64, textAlign: "right" }}>{dv > 0 ? "+" : dv < 0 ? "−" : ""}{fjd0(Math.abs(dv))}</span>}
+            </div>
           </div>
         ); })}
         {railBal.other ? <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 8 }}>Plus {fjd0(railBal.other)} logged as credit/other (not a cash rail).</div> : null}
       </div>
-      {entered && (
-        totalDiff === 0
-          ? <div className="card" style={{ padding: "12px 16px", color: "var(--green-dk)", fontWeight: 600 }}>Matched — your ledger is in sync with reality.</div>
-          : <div className="card" style={{ padding: "12px 16px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+      <div className="card" style={{ padding: "12px 16px" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5, color: "var(--soil)" }}><span>Logged balance (all-time)</span><strong style={{ fontFamily: "Menlo,monospace" }}>{fjd0(balance)}</strong></div>
+        {!allEntered ? <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 6 }}>Enter all three actual balances to check your total.</div>
+          : totalDiff === 0
+          ? <div style={{ color: "var(--green-dk)", fontWeight: 600, marginTop: 8 }}>Matched — your ledger is in sync with reality.</div>
+          : <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap", marginTop: 8 }}>
               <div style={{ color: "var(--soil)", fontSize: 13 }}>Off by <strong style={{ color: "var(--red)" }}>{fjd0(Math.abs(totalDiff))}</strong> — {totalDiff > 0 ? "you have more than logged (a sale not recorded?)" : "you have less than logged (an expense not recorded?)"}</div>
               <button className="btn btn-secondary btn-sm" onClick={onAdd}><Plus size={12} />Add the missing entry</button>
-            </div>
-      )}
+            </div>}
+      </div>
       <div style={{ fontSize: 11, color: "var(--muted)" }}>This is a quick check — it isn't saved yet. Statement import and saved reconciliation history are the next slice.</div>
     </div>
   );
