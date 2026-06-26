@@ -54,7 +54,23 @@ call. Not built this pass (additive backend work; no fabrication).
 
 **Security.** All queries auth + farm-scoped; RLS enforced server-side. OK.
 
-**Status:** 🟡 — two defects fixed + shipped; composite-endpoint scale work filed.
+**Owner-completeness pass (what an owner of 1 farm or many, 0 or 100s of workers
+wants):** added — all real, no fabrication:
+- OPS row tiles: Harvested (total kg this season), Workforce (workers · hours · wages
+  this week), Cost/kg (labour+inputs ÷ kg), Farms (count). From financials/crops
+  (total_harvest_kg, cokg_fjd_per_kg), labor, /farms.
+- ENTERPRISE COMPARISON tile: every enterprise ranked by net, with income / net / kg
+  / cost-per-kg + a relative bar. From financials/crops.
+- MULTI-FARM COMPARISON tile (shows only when >1 farm): per farm active cycles /
+  workers / crop types / open alerts — straight from the single /farms aggregate
+  (no extra calls). NOTE: per-farm NET comparison needs per-farm financials → filed
+  as a /farms/portfolio aggregate (operational comparison shipped now).
+Still-missing for a future pass (flagged, not faked): per-farm net/health in the
+multi-farm table; income/ROI trend-over-time mini-chart (MV monthly rows exist);
+inventory stock value; receivables/payables split.
+
+**Status:** 🟡 — defects fixed + owner comparison/analytics tiles shipped; per-farm
+financial aggregate + trend chart filed for a backend slice.
 
 ---
 (remaining destinations pending — appended as each is audited)

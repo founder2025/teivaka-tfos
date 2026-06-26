@@ -21,7 +21,7 @@ import { useFormModal } from "../../context/FormModalContext";
 import {
   Sprout, Bird, Plus, ArrowRight, ShieldCheck, Link2, FileText, Crosshair, Cloud, CloudRain, Sun, CloudSun,
   Coins, DollarSign, Camera, Users, ListChecks, Activity, TrendingUp, Award, Truck, Sparkles,
-  Zap, Leaf, LayoutGrid, Bell, TriangleAlert, RefreshCw, Wallet, Trees, CheckCircle2,
+  Zap, Leaf, LayoutGrid, Bell, TriangleAlert, RefreshCw, Wallet, Trees, CheckCircle2, Wheat, BarChart3,
 } from "lucide-react";
 import { formatMoney } from "../../utils/money";
 
@@ -595,6 +595,95 @@ function FinancialSnapshot({ revenue, expenses, net, topRevenue, topExpense, nav
   );
 }
 
+// Operations summary row (real): production volume, workforce, cost efficiency, farms
+function OpsRow({ totalKg, workers, hours, wageWeek, avgCostPerKg, farmCount, navigate }) {
+  return (
+    <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
+      <KpiTile icon={Wheat} label="Harvested" value={`${(totalKg || 0).toLocaleString()} kg`} sub="this season" color={C.soil} accent={C.green} tint={TINT.green} go={() => navigate("/farm/cycles")} />
+      <KpiTile icon={Users} label="Workforce" value={workers} sub={`${hours} hrs · ${money(wageWeek)} this week`} color={C.soil} accent={C.soil} tint="#F1EFEA" go={() => navigate("/farm/labor")} />
+      <KpiTile icon={Coins} label="Cost / kg" value={avgCostPerKg != null ? money(avgCostPerKg) : "—"} sub="labour + inputs per kg" color={C.soil} accent={C.amber} tint={TINT.amber} go={() => navigate("/farm/analytics")} />
+      <KpiTile icon={LayoutGrid} label="Farms" value={farmCount} sub={farmCount === 1 ? "this farm" : "you manage"} color={C.soil} accent={C.green} tint={TINT.green} go={() => navigate("/farm/enterprises")} />
+    </div>
+  );
+}
+
+// Enterprise comparison — ranked by net, with income / net / kg / cost-per-kg (real)
+function EnterpriseCompare({ crops, navigate }) {
+  const rows = (Array.isArray(crops) ? crops : []).map((r) => ({
+    name: r.production_name, income: n0(r.total_income_fjd), kg: n0(r.total_harvest_kg),
+    net: n0(r.total_income_fjd) - n0(r.total_labor_fjd) - n0(r.total_input_cost_fjd),
+    costkg: r.cokg_fjd_per_kg != null ? Number(r.cokg_fjd_per_kg) : null,
+  })).sort((a, b) => b.net - a.net);
+  if (!rows.length) return null;
+  const maxAbs = Math.max(1, ...rows.map((r) => Math.abs(r.net)));
+  return (
+    <div className="rounded-2xl border bg-white p-4" style={{ borderColor: C.border }}>
+      <div className="flex items-center justify-between mb-3">
+        <span className="text-sm font-bold uppercase tracking-wide flex items-center gap-1.5" style={{ color: C.soil }}><BarChart3 size={15} style={{ color: C.greenDk }} />Enterprise comparison</span>
+        <button onClick={() => navigate("/farm/analytics")} className="text-[11px] font-semibold" style={{ color: C.greenDk }}>Full analytics</button>
+      </div>
+      <div className="space-y-2.5">
+        {rows.map((r) => {
+          const pos = r.net >= 0; const w = Math.round((Math.abs(r.net) / maxAbs) * 100);
+          return (
+            <div key={r.name} className="text-[12px]">
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-semibold truncate" style={{ color: C.soil }}>{r.name}</span>
+                <span className="font-bold shrink-0" style={{ color: pos ? C.greenDk : C.red }}>{money(r.net)}</span>
+              </div>
+              <div className="h-2 rounded-full mt-1 overflow-hidden" style={{ background: "#EEF2F6" }}>
+                <div style={{ width: `${w}%`, height: "100%", background: pos ? C.green : C.red }} />
+              </div>
+              <div className="flex items-center gap-3 mt-1 text-[10px]" style={{ color: C.muted }}>
+                <span>Income {money(r.income)}</span><span>· {r.kg.toLocaleString()} kg</span>{r.costkg != null && <span>· {money(r.costkg)}/kg</span>}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// Multi-farm comparison — only when the owner manages >1 farm (from /farms aggregate)
+function MultiFarmCompare({ farms, currentFarmId, navigate }) {
+  const list = Array.isArray(farms) ? farms : [];
+  if (list.length < 2) return null;
+  return (
+    <div className="rounded-2xl border bg-white p-4" style={{ borderColor: C.border }}>
+      <div className="flex items-center justify-between mb-3">
+        <span className="text-sm font-bold uppercase tracking-wide flex items-center gap-1.5" style={{ color: C.soil }}><Trees size={15} style={{ color: C.greenDk }} />Your farms</span>
+        <button onClick={() => navigate("/farm/locations")} className="text-[11px] font-semibold" style={{ color: C.greenDk }}>Map &amp; manage</button>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-[12px]" style={{ borderCollapse: "collapse" }}>
+          <thead><tr style={{ color: C.muted }}>
+            <th className="text-left font-bold uppercase text-[9px] pb-1.5">Farm</th>
+            <th className="text-right font-bold uppercase text-[9px] pb-1.5">Active cycles</th>
+            <th className="text-right font-bold uppercase text-[9px] pb-1.5">Workers</th>
+            <th className="text-right font-bold uppercase text-[9px] pb-1.5">Crops</th>
+            <th className="text-right font-bold uppercase text-[9px] pb-1.5">Alerts</th>
+          </tr></thead>
+          <tbody>
+            {list.map((f) => {
+              const cur = f.farm_id === currentFarmId;
+              return (
+                <tr key={f.farm_id} style={{ borderTop: `1px solid rgba(31,41,55,0.06)` }}>
+                  <td className="py-2 font-semibold" style={{ color: cur ? C.greenDk : C.soil }}>{f.farm_name || f.farm_id}{cur ? " ·" : ""}</td>
+                  <td className="py-2 text-right" style={{ color: C.soil }}>{n0(f.active_cycles)}</td>
+                  <td className="py-2 text-right" style={{ color: C.soil }}>{n0(f.member_count)}</td>
+                  <td className="py-2 text-right" style={{ color: C.soil }}>{n0(f.crop_types)}</td>
+                  <td className="py-2 text-right font-semibold" style={{ color: n0(f.open_alerts) ? C.red : C.muted }}>{n0(f.open_alerts)}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 // ── page ─────────────────────────────────────────────────────────────
 function FarmOverview() {
   const { farmId } = useCurrentFarm();
@@ -675,6 +764,9 @@ function FarmOverview() {
   const expenses = Math.max(0, revenue - netProfit);
   const topRevenue = cropRows.length ? cropRows.slice().sort((a, b) => n0(b.total_income_fjd) - n0(a.total_income_fjd))[0].production_name : null;
   const topExpense = (totInput || totLabor) ? (totInput >= totLabor ? "Inputs" : "Labour") : null;
+  const totalKg = cropRows.reduce((a, r) => a + n0(r.total_harvest_kg), 0);
+  const wageWeek = laborWeek.reduce((a, r) => a + Number(r.total_pay_fjd || 0), 0);
+  const avgCostPerKg = totalKg > 0 ? Math.round(((totLabor + totInput) / totalKg) * 100) / 100 : null;
 
   const cropWithNet = cropRows.map((r) => ({ name: r.production_name, net: n0(r.total_income_fjd) - n0(r.total_labor_fjd) - n0(r.total_input_cost_fjd) }));
   const best = cropWithNet.length ? cropWithNet.reduce((a, b) => (b.net > a.net ? b : a)) : null;
@@ -716,8 +808,13 @@ function FarmOverview() {
       <OvHeader name={meName} lastSync={lastSync} navigate={navigate} />
       <LayerBackfillBanner />
       <HealthKpis score={score} grade={grade} net={netProfit} businesses={businesses} catCount={catCount} dueToday={dueToday} highPr={highPr} cash={cashBal} alerts={alerts} navigate={navigate} />
+      <OpsRow totalKg={totalKg} workers={team} hours={hours} wageWeek={wageWeek} avgCostPerKg={avgCostPerKg} farmCount={farmsArr.length || 1} navigate={navigate} />
       <AttentionAdvisor attention={attn} best={best} riskiest={riskiest} navigate={navigate} />
       <EnterprisePortfolio enterprises={enterprises} counts={entCounts} navigate={navigate} />
+      <div className="grid gap-3 lg:grid-cols-2">
+        <EnterpriseCompare crops={cropRows} navigate={navigate} />
+        <MultiFarmCompare farms={farmsArr} currentFarmId={farmId} navigate={navigate} />
+      </div>
       <div className="grid gap-3 lg:grid-cols-2">
         <FinancialSnapshot revenue={revenue} expenses={expenses} net={netProfit} topRevenue={topRevenue} topExpense={topExpense} navigate={navigate} />
         <div className="rounded-2xl border bg-white p-4" style={{ borderColor: C.border }}>
