@@ -98,8 +98,23 @@ Target: 22 → ~12 destinations once merges land.
 **Missing (Plan side) — filed:** Calendar/Plan view, Budget-vs-actual,
 Notifications inbox, surfaced Verify/traceability entry.
 
-**Status:** 🟡 — nav grouped + workflow-ordered + re-surfaced; tab-merges + redirects
-happen as each merged destination is audited.
+**Status:** 🟡 — nav grouped + workflow-ordered + re-surfaced.
+
+### Page merges EXECUTED (tabbed destinations + redirects) — ✅
+New `FarmTabs` shell lazy-loads existing pages as sub-tabs (no rewrite, no lost
+function); ?tab syncs so redirects land on the right tab. 22 → ~12 destinations:
+- **/farm/money** = Cash · Payments
+- **/farm/market** = Buyers & sales · Services
+- **/farm/records** = History · Reports · Gallery
+- **/farm/insights** = Analytics · Decisions
+- **/farm/resources** = Inventory · Labour · Equipment · Locations
+Old routes (cash/payments/buyers/services/history/reports/gallery/analytics/
+decisions/inventory/labor/equipment/locations) now `<Navigate>`-redirect to their
+merged home+tab — every deep link + internal navigate() still works. Nav GROUPS
+updated to the merged set. Foundation ready for a persistent grouped sidebar.
+KNOWN COSMETIC FOLLOW-UP: each child page still renders its own header/FarmSelector,
+so a merged page shows the tab strip + the child's title (mild redundancy). Clean
+by adding an `embedded` (hide-header) prop to child pages in a later pass.
 
 ---
 (remaining destinations pending — appended as each is audited)

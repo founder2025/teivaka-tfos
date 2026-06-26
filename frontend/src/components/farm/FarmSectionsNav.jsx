@@ -18,12 +18,14 @@ const C = { soil: "var(--soil)", greenDk: "var(--green-dk)", border: "var(--line
 // Grouped in natural farming order — Plan → Grow → Sell → Prove → Improve →
 // Account. Same 22 real routes (no dead links); page merges into tabs happen
 // per-destination during the audit, then old routes redirect into their group.
+// Consolidated to ~12 destinations (merges land as tabbed pages: Money, Market,
+// Records, Insights, Resources). Natural farming order.
 const GROUPS = [
   ["Plan", [["Overview", "/farm", Eye], ["Tasks", "/farm/tasks", CheckSquare], ["Weather", "/farm/weather", Cloud]]],
-  ["Grow", [["Enterprises", "/farm/enterprises", Layers], ["Production", "/farm/cycles", Sprout], ["Inventory", "/farm/inventory", Package], ["Labour", "/farm/labor", Users], ["Equipment", "/farm/equipment", Wrench], ["Locations", "/farm/locations", MapPin]]],
-  ["Sell", [["Buyers", "/farm/buyers", Truck], ["Services", "/farm/services", Handshake], ["Cash", "/farm/cash", DollarSign], ["Payments", "/farm/payments", Wallet]]],
-  ["Prove", [["Compliance", "/farm/compliance", ShieldCheck], ["History", "/farm/history", Clock], ["Reports", "/farm/reports", FileText], ["Gallery", "/farm/gallery", ImageIcon]]],
-  ["Improve", [["Analytics", "/farm/analytics", BarChart3], ["Decisions", "/farm/decisions", Crosshair]]],
+  ["Grow", [["Enterprises", "/farm/enterprises", Layers], ["Production", "/farm/cycles", Sprout], ["Resources", "/farm/resources", Package]]],
+  ["Sell", [["Market", "/farm/market", Truck], ["Money", "/farm/money", Wallet]]],
+  ["Prove", [["Compliance", "/farm/compliance", ShieldCheck], ["Records", "/farm/records", FileText]]],
+  ["Improve", [["Insights", "/farm/insights", BarChart3]]],
   ["Account", [["Library", "/farm/library", BookOpen], ["Partnerships", "/farm/partnerships", Share2], ["Settings", "/farm/settings", Settings]]],
 ];
 

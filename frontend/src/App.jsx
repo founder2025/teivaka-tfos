@@ -70,6 +70,12 @@ const Enterprises   = lazy(() => import("./pages/farmer/Enterprises"));
 const FarmHistory   = lazy(() => import("./pages/farmer/FarmHistory"));
 const WeatherPage   = lazy(() => import("./pages/farmer/WeatherPage"));
 const LocationsPage = lazy(() => import("./pages/farmer/LocationsPage"));
+// Merged farm destinations (tabbed) — consolidate 22 → ~12 in natural order
+const Money = lazy(() => import("./pages/farmer/Money"));
+const Market = lazy(() => import("./pages/farmer/Market"));
+const Records = lazy(() => import("./pages/farmer/Records"));
+const Insights = lazy(() => import("./pages/farmer/Insights"));
+const Resources = lazy(() => import("./pages/farmer/Resources"));
 const FarmTasks     = lazy(() => import("./pages/farmer/FarmTasks"));
 
 // ── Phase 4b Week 1 shell + pages (5-tab FarmerShell) ─────────────────────────
@@ -362,25 +368,33 @@ export default function App() {
             <Route path="/farm/harvests"     element={<HarvestList />} />
             <Route path="/farm/field-events" element={<FieldEventNew />} />
             <Route path="/farm/capture"      element={<CaptureEngine />} />
-            <Route path="/farm/inventory"    element={<InventoryList />} />
             <Route path="/farm/library"      element={<FarmLibrary />} />
-            <Route path="/farm/labor"        element={<Labor />} />
-            <Route path="/farm/cash"         element={<CashLedger />} />
-            <Route path="/farm/payments"     element={<Payments />} />
-            <Route path="/farm/buyers"       element={<Buyers />} />
-            <Route path="/farm/services"     element={<ServiceHub />} />
-            <Route path="/farm/equipment"    element={<Equipment />} />
             <Route path="/farm/compliance"   element={<CropCompliance />} />
             <Route path="/farm/compliance/poultry" element={<PoultryCompliance />} />
-            <Route path="/farm/analytics"    element={<Analytics />} />
-            <Route path="/farm/reports"      element={<Reports />} />
-            <Route path="/farm/decisions"    element={<DecisionCenter />} />
-            <Route path="/farm/history"      element={<FarmHistory />} />
             <Route path="/farm/enterprises"  element={<Enterprises />} />
             <Route path="/farm/weather"      element={<WeatherPage />} />
-            <Route path="/farm/gallery"      element={<FarmGallery />} />
             <Route path="/farm/partnerships" element={<FarmPartnerships />} />
             <Route path="/farm/settings"     element={<FarmSettings />} />
+            {/* Merged destinations (tabbed) */}
+            <Route path="/farm/money"        element={<Money />} />
+            <Route path="/farm/market"       element={<Market />} />
+            <Route path="/farm/records"      element={<Records />} />
+            <Route path="/farm/insights"     element={<Insights />} />
+            <Route path="/farm/resources"    element={<Resources />} />
+            {/* Old routes → merged destinations (deep links + internal navigate stay working) */}
+            <Route path="/farm/cash"         element={<Navigate to="/farm/money" replace />} />
+            <Route path="/farm/payments"     element={<Navigate to="/farm/money?tab=payments" replace />} />
+            <Route path="/farm/buyers"       element={<Navigate to="/farm/market" replace />} />
+            <Route path="/farm/services"     element={<Navigate to="/farm/market?tab=services" replace />} />
+            <Route path="/farm/history"      element={<Navigate to="/farm/records" replace />} />
+            <Route path="/farm/reports"      element={<Navigate to="/farm/records?tab=reports" replace />} />
+            <Route path="/farm/gallery"      element={<Navigate to="/farm/records?tab=gallery" replace />} />
+            <Route path="/farm/analytics"    element={<Navigate to="/farm/insights" replace />} />
+            <Route path="/farm/decisions"    element={<Navigate to="/farm/insights?tab=decisions" replace />} />
+            <Route path="/farm/inventory"    element={<Navigate to="/farm/resources" replace />} />
+            <Route path="/farm/labor"        element={<Navigate to="/farm/resources?tab=labour" replace />} />
+            <Route path="/farm/equipment"    element={<Navigate to="/farm/resources?tab=equipment" replace />} />
+            <Route path="/farm/locations"    element={<Navigate to="/farm/resources?tab=locations" replace />} />
             {/* Slice E — universal "establish a production unit" */}
             <Route path="/farm/unit/new"     element={<EstablishUnitNew />} />
             {/* Slice C — honest stub dashboards for not-yet-deep verticals */}
@@ -390,7 +404,6 @@ export default function App() {
             <Route path="/farm/livestock"    element={<VerticalStub vertical="LIVESTOCK" />} />
             <Route path="/farm/apiculture"   element={<VerticalStub vertical="APICULTURE" />} />
             <Route path="/farm/specialty"    element={<VerticalStub vertical="SPECIALTY" />} />
-            <Route path="/farm/locations"    element={<LocationsPage />} />
             <Route path="/farm/manage"       element={<FarmsManage />} />
 
             <Route path="/tis/plan"    element={<PlanMyFarm />} />
