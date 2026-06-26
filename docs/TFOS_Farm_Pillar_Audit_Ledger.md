@@ -835,3 +835,26 @@ frontend + three real backend correctness bugs. Spec: `docs/TFOS_Payments_Redesi
   due-date reminders.
 - Deploy: frontend `npm run build`; **backend STAGED** (build --no-cache + verify-deploy.sh) —
   not applied from this cloned env. No migration.
+
+### 9-stress + optimize (2026-06-26)
+Stress-tested across 11 scenarios; **found a self-introduced white-screen crash** (ST-P1: the page
+consumed `useCurrentFarm` without a `CurrentFarmProvider` — `FarmTabs`/`Money` don't supply it;
+fixed by wrapping `PaymentsInner`, mirroring CashLedger). Optimize pass fixes:
+- **ST-P2 (multi-farm dead-end, my PA1 regression):** adopted obligations had no farm → my PA1
+  guard 409'd them with no way to link a farm. Closed: `confirm` accepts `farm_id` (page sends the
+  current farm) + validates it belongs to the tenant; `adopt` tags `farm_id`. The page now shows a
+  **"Books to: <farm>"** selector (switchable when >1 farm; static when 1; auto-picks first).
+- **ST-P3 (fake method chooser):** `confirm` now accepts `payment_method_id` and records THAT rail's
+  label (and updates the txn) — the chooser is real, not cosmetic.
+- **ST-P4 (fragile load):** `Promise.allSettled` — one flaky companion call (counterparties/farms)
+  no longer blanks the whole page; payables drives ErrorCard vs DegradedBanner.
+- **ST-P5** errors use `userMessage` (no "Request failed"). **ST-P6/P15** booking farm visible +
+  per-row farm chip. **ST-P8/P9** search + show-settled toggle (>6 rows) + 300-cap note + datalist
+  capped 50. **ST-P11** friendly category/status labels (no ALL-CAPS codes / "INSTRUCTED").
+  **ST-P13** honest recorded-in-cashflow toast. **ST-P14** arrow-key tabs. **ST-P17** label
+  truncation. **ST-P18** dead error-gate branch removed. **ST-P19** openSettle submit-locked.
+- **Still filed (honest):** ST-P10 server role gate / maker-checker; ST-P12 receipt/verify view +
+  register export + FNPF/tax; ST-P7 dedicated `PATCH /methods/{id}/default` (set-default removed
+  from UI this pass rather than ship the non-atomic create-then-delete hack); PA22 partial
+  settlement; PA23 Evidence-v2 on confirmation; PA27 single AR truth; offline write-queue.
+- Deploy: frontend `npm run build`; backend STAGED (no migration — `farm_id`/method columns exist).
