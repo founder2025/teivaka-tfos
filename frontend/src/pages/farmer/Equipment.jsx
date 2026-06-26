@@ -24,12 +24,22 @@
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { QueryClient, QueryClientProvider, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
 import { Plus, Search, X, Pencil, Tractor, Droplets, Wrench, Truck, Factory, Warehouse, Package, AlertTriangle, Sparkles } from "lucide-react";
 import TfpShell from "../../components/farm/TfpShell";
 import { CurrentFarmProvider, useCurrentFarm } from "../../context/CurrentFarmContext";
 import FarmSelector from "../../components/farm/FarmSelector";
 import { getJSON, send } from "../../utils/api";
+import { getCurrentUser } from "../../utils/auth";
 import { formatMoney } from "../../utils/money";
+
+// Responsive KPI strip — wraps to 2-up on phones instead of forcing 4 tiny columns (ES6).
+const STRIP = { gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))" };
+// Structural asset changes (add/edit/decommission) are management-only. Fail-open if role
+// is unknown — the authoritative gate is filed backend (ES5); this just curbs accidents.
+function canManageAssets() { const r = getCurrentUser()?.role; return !r || ["FOUNDER", "MANAGER", "ADMIN", "OWNER"].includes(r); }
+const SORTS = [["status", "Status"], ["cost", "Cost/hr"], ["value", "Book value"], ["name", "Name"]];
+const STATUS_RANK = { down: 0, overdue: 1, "due-soon": 2, ok: 3, retired: 4 };
 
 function emitToast(m) { window.dispatchEvent(new CustomEvent("tfos:toast", { detail: { message: m } })); }
 function todayISO() { return new Date().toLocaleDateString("en-CA", { timeZone: "Pacific/Fiji" }); } // Fiji day (EQ6)
@@ -113,8 +123,18 @@ function DegradedBanner({ msg }) {
   return <div className="calendar-banner" style={{ background: "#FBF4E6", borderColor: "var(--amber)", color: "var(--soil)" }}><AlertTriangle size={13} style={{ verticalAlign: "-2px", marginRight: 6 }} />{msg || "Couldn't refresh — showing the last saved data."}</div>;
 }
 function CapNote({ n }) { return n >= 200 ? <div style={{ fontSize: 11, color: "var(--muted)", margin: "6px 2px 0" }}>Showing the latest 200 records.</div> : null; }
+function FirstRun({ canManage, onAdd }) {
+  return (
+    <div className="card" style={{ padding: "36px 24px", textAlign: "center", marginTop: 14 }}>
+      <Tractor size={30} style={{ color: "var(--muted)", marginBottom: 10 }} />
+      <div style={{ fontWeight: 700, color: "var(--soil)", fontSize: 16 }}>Put your equipment on the books</div>
+      <div style={{ fontSize: 12.5, color: "var(--muted)", margin: "6px auto 16px", maxWidth: 380, lineHeight: 1.5 }}>Add your tractors, pumps, sprayers, tools and vehicles. Log hours, fuel and service to see real cost-per-hour and keep them running — all hash-chained for Bank Evidence.</div>
+      {canManage && <button className="btn btn-primary" onClick={onAdd}><Plus size={14} />Add equipment</button>}
+    </div>
+  );
+}
 
-function EquipCard({ e, cph, onOpen, onMaint, onFault, onResolve, onEdit }) {
+function EquipCard({ e, cph, canManage, onOpen, onMaint, onFault, onResolve, onEdit }) {
   const st = effStatus(e); const Icon = TYPE_ICON[e.equipment_type] || Package;
   const sub = [e.brand, e.model, yearOf(e.purchase_date)].filter(Boolean).join(" ");
   const hrs = num(e.current_hours);
@@ -130,7 +150,7 @@ function EquipCard({ e, cph, onOpen, onMaint, onFault, onResolve, onEdit }) {
           </div>
           <div className="equip-card-sub">{sub || "—"}{e.serial_number ? ` · ${e.serial_number}` : ""}</div>
         </div>
-        <button className="btn btn-secondary btn-sm" title="Edit" aria-label="Edit" onClick={(ev) => { ev.stopPropagation(); onEdit(e); }}><Pencil size={12} /></button>
+        {canManage && <button className="btn btn-secondary btn-sm" title="Edit" aria-label="Edit" onClick={(ev) => { ev.stopPropagation(); onEdit(e); }}><Pencil size={12} /></button>}
       </div>
       {st === "down" ? <div className="down-banner"><AlertTriangle size={14} /><div><strong>DOWN · fault reported</strong>{e.notes ? <><br />{e.notes}</> : null}</div></div>
         : st === "retired" ? <div className="service-countdown" style={{ background: "var(--cream-2,#efe7d6)", color: "var(--muted)" }}>RETIRED · decommissioned</div>
@@ -152,10 +172,13 @@ function EquipCard({ e, cph, onOpen, onMaint, onFault, onResolve, onEdit }) {
 
 function EquipmentInner() {
   const qc = useQueryClient();
+  const navigate = useNavigate();
   const { farmId } = useCurrentFarm();
+  const canManage = canManageAssets();
   const [view, setView] = useState("fleet");
   const [type, setType] = useState("all");
   const [status, setStatus] = useState("all");
+  const [sort, setSort] = useState("status");
   const [q, setQ] = useState("");
   const [costsMode, setCostsMode] = useState("per-hour");
   const [form, setForm] = useState(null);
@@ -189,6 +212,12 @@ function EquipmentInner() {
   if (type !== "all") rows = rows.filter((e) => e.equipment_type === type);
   if (status !== "all") rows = rows.filter((e) => effStatus(e) === status);
   if (q.trim()) { const qq = q.toLowerCase(); rows = rows.filter((e) => `${e.equipment_name} ${e.brand || ""} ${e.model || ""} ${e.serial_number || ""}`.toLowerCase().includes(qq)); }
+  rows.sort((a, b) => {
+    if (sort === "cost") return (cphMap[b.equipment_id] || 0) - (cphMap[a.equipment_id] || 0);
+    if (sort === "value") return num(b.current_value_fjd) - num(a.current_value_fjd);
+    if (sort === "name") return String(a.equipment_name).localeCompare(String(b.equipment_name));
+    return (STATUS_RANK[effStatus(a)] ?? 9) - (STATUS_RANK[effStatus(b)] ?? 9); // status: down/overdue first
+  });
 
   const refetch = () => { qc.invalidateQueries({ queryKey: ["equipment", farmId] }); qc.invalidateQueries({ queryKey: ["equip-usage", farmId] }); qc.invalidateQueries({ queryKey: ["equip-maint", farmId] }); };
   async function patch(id, body, okMsg) {
@@ -205,7 +234,7 @@ function EquipmentInner() {
   const totalFuelCost = usage.reduce((s, u) => s + num(u.fuel_cost_fjd), 0);
   const allocated = usage.filter((u) => u.cycle_id).reduce((s, u) => s + num(u.hours_run), 0);
 
-  const askAi = () => window.location.assign("/tis?q=" + encodeURIComponent(AI_PROMPTS[view] || AI_PROMPTS.fleet));
+  const askAi = () => navigate("/tis?q=" + encodeURIComponent(AI_PROMPTS[view] || AI_PROMPTS.fleet));
   const onTabKey = (e, id) => {
     if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
     e.preventDefault();
@@ -213,7 +242,7 @@ function EquipmentInner() {
     const ni = e.key === "ArrowRight" ? (i + 1) % VIEWS.length : (i - 1 + VIEWS.length) % VIEWS.length;
     setView(VIEWS[ni][0]);
   };
-  const dataDegraded = equipQ.isError && equip.length > 0;
+  const dataDegraded = (equipQ.isError || usageQ.isError || maintQ.isError) && equip.length > 0; // ES1
 
   return (
     <TfpShell>
@@ -221,7 +250,7 @@ function EquipmentInner() {
         <div className="main-inner">
           <div className="page-header">
             <div className="subtitle">Crops + animals · {equip.length} asset{equip.length === 1 ? "" : "s"}{down > 0 ? ` · ${down} down` : ""}{retired > 0 ? ` · ${retired} retired` : ""}</div>
-            <div className="page-actions" style={{ flexWrap: "wrap", gap: 8 }}><FarmSelector /><button className="btn btn-secondary" onClick={askAi}><Sparkles size={13} />Ask AI</button><button className="btn btn-primary" onClick={() => setForm({ mode: "add" })}><Plus size={13} />Add equipment</button></div>
+            <div className="page-actions" style={{ flexWrap: "wrap", gap: 8 }}><FarmSelector /><button className="btn btn-secondary" onClick={askAi}><Sparkles size={13} />Ask AI</button>{canManage && <button className="btn btn-primary" onClick={() => setForm({ mode: "add" })}><Plus size={13} />Add equipment</button>}</div>
           </div>
 
           <div className="cycle-view-tabs" role="tablist" aria-label="Equipment views">
@@ -233,14 +262,15 @@ function EquipmentInner() {
             : equipQ.isError && equip.length === 0 ? <ErrorCard msg="Couldn't load your fleet." onRetry={() => equipQ.refetch()} />
             : (
             <>
-              {dataDegraded && <DegradedBanner />}
+              {dataDegraded && <DegradedBanner msg={(usageQ.isError || maintQ.isError) && !equipQ.isError ? "Couldn't load usage/maintenance — cost-per-hour may be incomplete." : undefined} />}
               {view === "fleet" ? (
-              <>
+              equip.length === 0 ? <FirstRun canManage={canManage} onAdd={() => setForm({ mode: "add" })} />
+              : <>
                 {!hintDismissed && <div className="card" style={{ marginBottom: 14, padding: "12px 16px", display: "flex", justifyContent: "space-between", gap: 10, alignItems: "flex-start" }}>
                   <div style={{ fontSize: 12.5, color: "var(--soil)", lineHeight: 1.6 }}>Machines and tools aren't tied to one crop — log each asset once and work it across every enterprise (the pump waters beds and fills troughs; the ute hauls produce and stock). Animal-specific gear registers here the same way.</div>
                   <button className="btn btn-secondary btn-sm" onClick={dismissHint} aria-label="Dismiss">Got it</button>
                 </div>}
-                <div className="capital-strip" style={{ gridTemplateColumns: "repeat(4,1fr)" }}>
+                <div className="capital-strip" style={STRIP}>
                   <div className="capital-tile"><div className="capital-tile-label">Total assets</div><div className="capital-tile-value">{equip.length}</div><div className="capital-tile-sub">{active.length} active{retired ? ` · ${retired} retired` : ""}</div></div>
                   <div className="capital-tile" onClick={() => setView("costs")} style={{ cursor: "pointer" }}><div className="capital-tile-label">Book value</div><div className="capital-tile-value">{fjd0(bookValue)}</div><div className="capital-tile-sub">active assets</div></div>
                   <div className="capital-tile" onClick={() => setView("maintenance")} style={{ cursor: "pointer" }}><div className="capital-tile-label">Service due</div><div className="capital-tile-value" style={{ color: serviceDue > 0 ? "var(--amber)" : null }}>{serviceDue}</div><div className="capital-tile-sub">due soon + overdue</div></div>
@@ -251,21 +281,22 @@ function EquipmentInner() {
                   <button className={`filter-pill ${type === "all" ? "active" : ""}`} onClick={() => setType("all")}>All<span className="filter-pill-count">{equip.length}</span></button>
                   {Object.entries(typesPresent).map(([t, n]) => <button key={t} className={`filter-pill ${type === t ? "active" : ""}`} onClick={() => setType(t)}>{TYPE_LABEL[t] || t}<span className="filter-pill-count">{n}</span></button>)}
                 </div>
-                <div className="gallery-filter-row" style={{ marginBottom: 8 }}>
+                <div className="gallery-filter-row" style={{ marginBottom: 8, display: "flex", flexWrap: "wrap", alignItems: "center", gap: 6 }}>
                   <span style={{ fontSize: 10.5, color: "var(--muted)", textTransform: "uppercase", letterSpacing: ".5px", marginRight: 6, alignSelf: "center" }}>Status:</span>
                   {[["all", "All"], ["ok", "OK"], ["due-soon", "Due soon"], ["overdue", "Overdue"], ["down", "Down"], ["retired", "Retired"]].map(([id, l]) => <button key={id} className={`filter-pill ${status === id ? "active" : ""}`} onClick={() => setStatus(id)}>{l}</button>)}
+                  <span style={{ flex: 1 }} />
+                  <label style={{ fontSize: 11, color: "var(--muted)", display: "flex", alignItems: "center", gap: 5 }}>Sort<select value={sort} onChange={(e) => setSort(e.target.value)} style={{ fontSize: 12, padding: "3px 6px", borderRadius: 6, border: "1.5px solid var(--line)" }}>{SORTS.map(([id, l]) => <option key={id} value={id}>{l}</option>)}</select></label>
                 </div>
                 <div style={{ marginBottom: 14, position: "relative" }}>
                   <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search equipment by name, make, serial..." aria-label="Search equipment" style={{ width: "100%", padding: "9px 12px 9px 38px", border: "1.5px solid var(--line)", borderRadius: 7, fontSize: 13, background: "var(--paper)" }} />
                   <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "var(--muted)", pointerEvents: "none" }}><Search size={14} /></span>
                 </div>
-                {equip.length === 0 ? <div className="card" style={{ padding: 28, textAlign: "center", color: "var(--muted)" }}>No equipment yet — add your tractors, pumps, sprayers, tools and vehicles to put them on the books.</div>
-                  : rows.length === 0 ? <div className="card" style={{ padding: 40, textAlign: "center", color: "var(--muted)" }}>No equipment matches these filters.</div>
-                  : <div className="equip-fleet-grid">{rows.map((e) => <EquipCard key={e.equipment_id} e={e} cph={cphMap[e.equipment_id]} onOpen={() => setDetail(e)} onEdit={(x) => setForm({ mode: "edit", equip: x })} onMaint={setMaint} onFault={setFault} onResolve={setResolve} />)}</div>}
+                {rows.length === 0 ? <div className="card" style={{ padding: 40, textAlign: "center", color: "var(--muted)" }}>No equipment matches these filters.</div>
+                  : <div className="equip-fleet-grid">{rows.map((e) => <EquipCard key={e.equipment_id} e={e} cph={cphMap[e.equipment_id]} canManage={canManage} onOpen={() => setDetail(e)} onEdit={(x) => setForm({ mode: "edit", equip: x })} onMaint={setMaint} onFault={setFault} onResolve={setResolve} />)}</div>}
               </>
             ) : view === "maintenance" ? (
               <>
-                <div className="capital-strip" style={{ gridTemplateColumns: "repeat(4,1fr)" }}>
+                <div className="capital-strip" style={STRIP}>
                   <div className="capital-tile"><div className="capital-tile-label">Due soon</div><div className="capital-tile-value" style={{ color: dueSoon.length ? "var(--amber)" : null }}>{dueSoon.length}</div></div>
                   <div className="capital-tile"><div className="capital-tile-label">Overdue</div><div className="capital-tile-value" style={{ color: overdue.length ? "var(--red)" : null }}>{overdue.filter((e) => effStatus(e) === "overdue").length}</div></div>
                   <div className="capital-tile"><div className="capital-tile-label">Down</div><div className="capital-tile-value" style={{ color: down ? "var(--red)" : null }}>{down}</div></div>
@@ -281,7 +312,7 @@ function EquipmentInner() {
                 <div style={{ fontSize: 13, fontWeight: 600, color: "var(--soil)", margin: "16px 0 8px" }}>Maintenance log</div>
                 {maintQ.isError && maintLog.length === 0 ? <ErrorCard msg="Couldn't load the maintenance log." onRetry={() => maintQ.refetch()} />
                   : maintLog.length === 0 ? <div className="card" style={{ padding: 20, color: "var(--muted)" }}>No maintenance logged yet — use “Log service” on a card or here.</div>
-                  : <><div className="inventory-table-wrap"><table className="equip-table"><thead><tr><th>Date</th><th>Equipment</th><th>Type</th><th>Description</th><th>Parts</th><th>Labor</th><th>Total</th><th>Downtime</th></tr></thead>
+                  : <><div className="inventory-table-wrap"><table className="equip-table"><thead><tr><th scope="col">Date</th><th scope="col">Equipment</th><th scope="col">Type</th><th scope="col">Description</th><th scope="col">Parts</th><th scope="col">Labor</th><th scope="col">Total</th><th scope="col">Downtime</th></tr></thead>
                     <tbody>{maintLog.map((m) => (
                       <tr key={m.maint_id}>
                         <td style={{ fontSize: 11 }}>{String(m.maint_date).slice(0, 10)}</td><td>{m.equipment_name}</td>
@@ -294,7 +325,7 @@ function EquipmentInner() {
               </>
             ) : view === "usage" ? (
               <>
-                <div className="capital-strip" style={{ gridTemplateColumns: "repeat(4,1fr)" }}>
+                <div className="capital-strip" style={STRIP}>
                   <div className="capital-tile"><div className="capital-tile-label">Total hours</div><div className="capital-tile-value">{totalHours.toFixed(1)}h</div><div className="capital-tile-sub">logged</div></div>
                   <div className="capital-tile"><div className="capital-tile-label">Fuel used</div><div className="capital-tile-value">{totalFuel.toFixed(1)}L</div></div>
                   <div className="capital-tile"><div className="capital-tile-label">Fuel cost</div><div className="capital-tile-value">{fjd0(totalFuelCost)}</div></div>
@@ -303,7 +334,7 @@ function EquipmentInner() {
                 <div style={{ display: "flex", justifyContent: "flex-end", margin: "12px 0" }}><button className="btn btn-primary" onClick={() => setUsageFor(null)}><Plus size={14} />Log usage</button></div>
                 {usageQ.isError && usage.length === 0 ? <ErrorCard msg="Couldn't load usage." onRetry={() => usageQ.refetch()} />
                   : usage.length === 0 ? <div className="card" style={{ padding: 24, textAlign: "center", color: "var(--muted)" }}>No usage logged yet — log running hours + fuel to drive cost-per-hour and cycle allocation.</div>
-                  : <><div className="inventory-table-wrap"><table className="equip-table"><thead><tr><th>Date</th><th>Equipment</th><th>Hours</th><th>Cycle</th><th>Task</th><th>Fuel</th><th>By</th></tr></thead>
+                  : <><div className="inventory-table-wrap"><table className="equip-table"><thead><tr><th scope="col">Date</th><th scope="col">Equipment</th><th scope="col">Hours</th><th scope="col">Cycle</th><th scope="col">Task</th><th scope="col">Fuel</th><th scope="col">By</th></tr></thead>
                     <tbody>{usage.map((u) => (
                       <tr key={u.usage_id}>
                         <td style={{ fontSize: 11 }}>{String(u.usage_date).slice(0, 10)}</td><td>{u.equipment_name}</td>
@@ -329,10 +360,10 @@ function EquipmentInner() {
       {maint && <MaintModal equip={maint} onClose={() => setMaint(null)} farmId={farmId} onSaved={() => { refetch(); setMaint(null); }} />}
       {fault && <FaultModal equip={fault} onClose={() => setFault(null)} onSave={(notes) => { patch(fault.equipment_id, { condition: "POOR", notes }, "Fault reported · marked down"); setFault(null); }} />}
       {resolve && <ResolveModal equip={resolve} onClose={() => setResolve(null)} onSave={(condition) => { patch(resolve.equipment_id, { condition }, "Marked resolved"); setResolve(null); }} />}
-      {usageFor !== undefined && <UsageModal farmId={farmId} equip={active} onClose={() => setUsageFor(undefined)} onSaved={() => { refetch(); qc.invalidateQueries({ queryKey: ["equip-usage", farmId] }); setUsageFor(undefined); }} />}
+      {usageFor !== undefined && <UsageModal farmId={farmId} equip={active} preset={usageFor || null} onClose={() => setUsageFor(undefined)} onSaved={() => { refetch(); qc.invalidateQueries({ queryKey: ["equip-usage", farmId] }); setUsageFor(undefined); }} />}
       {partOpen && <PartModal farmId={farmId} equip={equip} onClose={() => setPartOpen(false)} onSaved={() => { qc.invalidateQueries({ queryKey: ["equip-parts", farmId] }); setPartOpen(false); }} />}
       {partAdjust && <PartAdjustModal part={partAdjust} onClose={() => setPartAdjust(null)} onSaved={() => { qc.invalidateQueries({ queryKey: ["equip-parts", farmId] }); setPartAdjust(null); }} />}
-      {detail && <DetailModal e={detail} usage={usage.filter((u) => u.equipment_id === detail.equipment_id)} maint={maintLog.filter((m) => m.equipment_id === detail.equipment_id)} cph={cphMap[detail.equipment_id]} onClose={() => setDetail(null)} onEdit={() => { setForm({ mode: "edit", equip: detail }); setDetail(null); }} onLogUsage={() => { setUsageFor(detail); setDetail(null); }} onLogMaint={() => { setMaint(detail); setDetail(null); }} />}
+      {detail && <DetailModal e={detail} usage={usage.filter((u) => u.equipment_id === detail.equipment_id)} maint={maintLog.filter((m) => m.equipment_id === detail.equipment_id)} cph={cphMap[detail.equipment_id]} canManage={canManage} onAskAi={(x) => navigate("/tis?q=" + encodeURIComponent(`Should I repair or replace my ${x.equipment_name}${cphMap[x.equipment_id] != null ? ` (operating cost about ${fjd2(cphMap[x.equipment_id])}/hr)` : ""}? What should I consider?`))} onClose={() => setDetail(null)} onEdit={() => { setForm({ mode: "edit", equip: detail }); setDetail(null); }} onLogUsage={() => { setUsageFor(detail); setDetail(null); }} onLogMaint={() => { setMaint(detail); setDetail(null); }} />}
     </TfpShell>
   );
 }
@@ -344,7 +375,7 @@ function CostsView({ equip, usage, maint, cphMap, mode, setMode }) {
   const book = equip.reduce((s, e) => s + num(e.current_value_fjd), 0);
   return (
     <>
-      <div className="capital-strip" style={{ gridTemplateColumns: "repeat(3,1fr)" }}>
+      <div className="capital-strip" style={STRIP}>
         <div className="capital-tile"><div className="capital-tile-label">Avg op. cost/hour</div><div className="capital-tile-value">{hourable.length ? fjd2(avg) : "—"}</div><div className="capital-tile-sub">excl. depreciation</div></div>
         <div className="capital-tile"><div className="capital-tile-label">Value written down</div><div className="capital-tile-value">{fjd0(writtenDown)}</div><div className="capital-tile-sub">from book value set</div></div>
         <div className="capital-tile"><div className="capital-tile-label">Fleet book value</div><div className="capital-tile-value">{fjd0(book)}</div></div>
@@ -365,7 +396,7 @@ function CostsView({ equip, usage, maint, cphMap, mode, setMode }) {
           </div>
       ) : (
         <><div style={{ fontSize: 11, color: "var(--muted)", margin: "0 2px 8px" }}>“Written down” = purchase cost − the book value you’ve set. TFOS doesn’t auto-depreciate yet — keep book value current.</div>
-        <div className="inventory-table-wrap"><table className="equip-table"><thead><tr><th>Asset</th><th>Purchase</th><th>Book value</th><th>Written down</th><th>% down</th></tr></thead>
+        <div className="inventory-table-wrap"><table className="equip-table"><thead><tr><th scope="col">Asset</th><th scope="col">Purchase</th><th scope="col">Book value</th><th scope="col">Written down</th><th scope="col">% down</th></tr></thead>
           <tbody>{equip.map((e) => { const pc = num(e.purchase_cost_fjd); const dep = Math.max(0, pc - num(e.current_value_fjd)); const pct = pc > 0 ? Math.round((dep / pc) * 100) : 0; return (
             <tr key={e.equipment_id}><td>{e.equipment_name}</td><td style={{ fontFamily: "Menlo,monospace" }}>{pc ? fjd0(pc) : "—"}</td><td style={{ fontFamily: "Menlo,monospace" }}>{e.current_value_fjd ? fjd0(e.current_value_fjd) : "—"}</td><td style={{ fontFamily: "Menlo,monospace" }}>{pc ? fjd0(dep) : "—"}</td><td>{pc ? `${pct}%` : "—"}</td></tr>
           ); })}</tbody></table></div></>
@@ -380,7 +411,7 @@ function PartsView({ parts, loading, isError, onRetry, onAdd, onAdjust }) {
   const ferry = parts.filter((p) => p.ferry_dependent).length;
   return (
     <>
-      <div className="capital-strip" style={{ gridTemplateColumns: "repeat(4,1fr)" }}>
+      <div className="capital-strip" style={STRIP}>
         <div className="capital-tile"><div className="capital-tile-label">Out of stock</div><div className="capital-tile-value" style={{ color: critical ? "var(--red)" : null }}>{critical}</div></div>
         <div className="capital-tile"><div className="capital-tile-label">On-hand value</div><div className="capital-tile-value">{fjd0(value)}</div></div>
         <div className="capital-tile"><div className="capital-tile-label">Ferry-dependent</div><div className="capital-tile-value">{ferry}</div><div className="capital-tile-sub">14-day lead</div></div>
@@ -390,7 +421,7 @@ function PartsView({ parts, loading, isError, onRetry, onAdd, onAdjust }) {
       {loading ? <div className="card" style={{ padding: 16, color: "var(--muted)" }}>Loading…</div>
         : isError && parts.length === 0 ? <ErrorCard msg="Couldn't load spare parts." onRetry={onRetry} />
         : parts.length === 0 ? <div className="card" style={{ padding: 24, textAlign: "center", color: "var(--muted)" }}>No spare parts tracked yet — add the parts you keep on hand and their lead time.</div>
-        : <div className="inventory-table-wrap"><table className="equip-table"><thead><tr><th>Part</th><th>On hand</th><th>Reorder</th><th>Unit cost</th><th>Lead</th><th>Ferry</th><th>Adjust</th></tr></thead>
+        : <div className="inventory-table-wrap"><table className="equip-table"><thead><tr><th scope="col">Part</th><th scope="col">On hand</th><th scope="col">Reorder</th><th scope="col">Unit cost</th><th scope="col">Lead</th><th scope="col">Ferry</th><th scope="col">Adjust</th></tr></thead>
           <tbody>{parts.map((p) => (
             <tr key={p.part_id}>
               <td style={{ fontWeight: 600, color: "var(--soil)" }}>{p.part_name}</td>
@@ -494,8 +525,9 @@ function MaintModal({ equip, farmId, onClose, onSaved }) {
   );
 }
 
-function UsageModal({ farmId, equip, onClose, onSaved }) {
-  const [f, setF] = useState({ equipment_id: equip[0]?.equipment_id || "", usage_date: todayISO(), hours_run: "", fuel_litres: "", fuel_cost_fjd: "", cycle_id: "", task: "", operator: "" });
+function UsageModal({ farmId, equip, preset, onClose, onSaved }) {
+  const initId = (preset && equip.some((e) => e.equipment_id === preset.equipment_id)) ? preset.equipment_id : (equip[0]?.equipment_id || ""); // ES15 preselect
+  const [f, setF] = useState({ equipment_id: initId, usage_date: todayISO(), hours_run: "", fuel_litres: "", fuel_cost_fjd: "", cycle_id: "", task: "", operator: "" });
   const [busy, setBusy] = useState(false);
   const lock = useRef(false);
   const cyclesQ = useQuery({ queryKey: ["cycles-eq"], queryFn: getCycles });
@@ -606,15 +638,15 @@ function ResolveModal({ equip, onClose, onSave }) { // EQ13: pick condition inst
   );
 }
 
-function DetailModal({ e, usage, maint, cph, onClose, onEdit, onLogUsage, onLogMaint }) {
+function DetailModal({ e, usage, maint, cph, canManage, onAskAi, onClose, onEdit, onLogUsage, onLogMaint }) {
   const st = effStatus(e);
   return (
-    <Modal title={e.equipment_name} onClose={onClose} maxWidth={640} foot={<button className="btn btn-primary" onClick={onClose}>Close</button>}>
+    <Modal title={e.equipment_name} onClose={onClose} maxWidth={640} foot={<><button className="btn btn-secondary" onClick={() => onAskAi(e)}><Sparkles size={12} />Repair or replace?</button><button className="btn btn-primary" onClick={onClose}>Close</button></>}>
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12, flexWrap: "wrap", rowGap: 8 }}>
         <span className={`equip-cat-pill ${(e.equipment_type || "").toLowerCase()}`}>{TYPE_LABEL[e.equipment_type] || e.equipment_type}</span>
         <span className={`equip-status-pill ${st}`}><span className={`equip-status-dot ${st}`} />{STATUS_LABEL[st]}</span>
         <span style={{ flex: 1 }} />
-        <button className="btn btn-secondary btn-sm" onClick={onEdit}><Pencil size={12} />Edit</button>
+        {canManage && <button className="btn btn-secondary btn-sm" onClick={onEdit}><Pencil size={12} />Edit</button>}
         <button className="btn btn-secondary btn-sm" onClick={onLogUsage}>Log usage</button>
         <button className="btn btn-primary btn-sm" onClick={onLogMaint}>Log service</button>
       </div>
