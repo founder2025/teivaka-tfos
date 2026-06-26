@@ -18,6 +18,12 @@ Legend: 🔒 LOCKED (approved; no redesign without new evidence) · ✅ PASS · 
   optimized ×2 → stress-tested ×3 → all page-local findings (F1–F9, M1–M28, S1–S8,
   D1–D14, R1–R6) resolved; remainder are filed backend/cross-page slices. Do NOT
   redesign again unless new evidence requires it. Deploy: frontend-only (Tier 1).
+- **Tasks (/farm/tasks)** — LOCKED 2026-06-26 (Operator-approved). Audited → redesigned →
+  optimized → stress-tested ×2 → all page-local findings (T1–T8, N1–N8 [N1 retracted as a
+  false alarm], TS1–TS9, U1–U5) resolved; remainder filed (T4 farm_id on /tasks, worker
+  assignment, voice/i18n, compliance tag, photo upload, QueryClient lift). TS4 decided:
+  single prioritized list (no kanban/toggle). Do NOT redesign again unless new evidence
+  requires it. Deploy: frontend-only.
 
 ---
 
