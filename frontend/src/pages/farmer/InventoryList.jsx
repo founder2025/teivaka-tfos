@@ -11,11 +11,13 @@
  * Analytics = value by category, derived. Honest-empty where there's nothing logged.
  */
 import { useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { QueryClient, QueryClientProvider, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, Search, X, ArrowDownToLine, ArrowUpFromLine, Pencil } from "lucide-react";
+import { Plus, Search, X, ArrowDownToLine, ArrowUpFromLine, Pencil, AlertTriangle, Sparkles } from "lucide-react";
 import TfpShell from "../../components/farm/TfpShell";
 import { CurrentFarmProvider, useCurrentFarm } from "../../context/CurrentFarmContext";
 import FarmSelector from "../../components/farm/FarmSelector";
+import { getJSON } from "../../utils/api";
 
 function authHeaders() { const t = localStorage.getItem("tfos_access_token"); return t ? { "Content-Type": "application/json", Authorization: `Bearer ${t}` } : { "Content-Type": "application/json" }; }
 function emitToast(m) { window.dispatchEvent(new CustomEvent("tfos:toast", { detail: { message: m } })); }
@@ -32,9 +34,10 @@ const statusBand = (s) => CRITICAL.has(s) ? "critical" : s === "LOW_STOCK" ? "lo
 const STATUS_COLOR = { critical: "var(--red)", low: "var(--amber)", ok: "var(--green-dk)", unset: "var(--muted)" };
 const itemValue = (i) => num(i.current_stock_qty) * num(i.unit_cost_fjd);
 
-async function getInputs(farmId) { const r = await fetch(`/api/v1/inputs${farmId ? `?farm_id=${encodeURIComponent(farmId)}` : ""}`, { headers: authHeaders() }); if (!r.ok) throw new Error(r.status); return (await r.json())?.data ?? []; }
-async function getMovements() { const r = await fetch("/api/v1/input-transactions", { headers: authHeaders() }); if (!r.ok) return []; return (await r.json())?.data ?? []; }
-async function getSuppliers() { const r = await fetch("/api/v1/suppliers", { headers: authHeaders() }); if (!r.ok) return []; const b = await r.json(); return b?.data ?? []; }
+// via utils/api → token refresh + honest errors (I-T1). Movements farm-scoped (I-T2).
+async function getInputs(farmId) { return (await getJSON(`/api/v1/inputs${farmId ? `?farm_id=${encodeURIComponent(farmId)}` : ""}`))?.data ?? []; }
+async function getMovements(farmId) { return (await getJSON(`/api/v1/input-transactions${farmId ? `?farm_id=${encodeURIComponent(farmId)}` : ""}`))?.data ?? []; }
+async function getSuppliers() { return (await getJSON("/api/v1/suppliers"))?.data ?? []; } // suppliers are tenant-level by design
 
 function StockBar({ i }) {
   const cur = num(i.current_stock_qty), rop = num(i.reorder_point_qty);
@@ -63,8 +66,9 @@ function InventoryInner() {
   const [editItem, setEditItem] = useState(null);
   const [move, setMove] = useState(null); // {input|null, kind:'PURCHASE'|'USAGE'}
 
+  const navigate = useNavigate();
   const inputsQ = useQuery({ queryKey: ["inputs", farmId], queryFn: () => getInputs(farmId), enabled: !!farmId });
-  const movesQ = useQuery({ queryKey: ["moves"], queryFn: getMovements, enabled: !!farmId });
+  const movesQ = useQuery({ queryKey: ["moves", farmId], queryFn: () => getMovements(farmId), enabled: !!farmId });
   const supsQ = useQuery({ queryKey: ["suppliers"], queryFn: getSuppliers, enabled: !!farmId });
   const items = inputsQ.data ?? [];
   const movements = movesQ.data ?? [];
@@ -110,34 +114,49 @@ function InventoryInner() {
       <main className="main-content">
         <div className="main-inner">
           <div className="page-header">
-            <div><h1>Inventory</h1><div className="subtitle">Seed, fertilizer, chemicals, fuel · what you hold and what to reorder</div></div>
+            <div><div className="subtitle">Seed, fertilizer, chemicals, fuel · what you hold and what to reorder</div></div>
             <div className="page-actions">
               <FarmSelector />
+              <button className="btn" onClick={() => navigate(`/tis?q=${encodeURIComponent("What inventory should I reorder before planting season, based on my usage?")}`)}><Sparkles size={13} />Ask AI</button>
               <button className="btn btn-primary" onClick={() => setAddOpen(true)}><Plus size={13} />Add item</button>
             </div>
           </div>
 
           <div className="capital-strip" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))" }}>
-            <div className="capital-tile total"><div className="capital-tile-label">Total inventory value</div><div className="capital-tile-value">{fjd0(totalValue)}</div><div className="capital-tile-sub">capital tied up</div></div>
+            <div className="capital-tile total"><div className="capital-tile-label">Total inventory value</div><div className="capital-tile-value">{fjd0(totalValue)}</div><div className="capital-tile-sub">at last cost</div></div>
             <div className="capital-tile critical"><div className="capital-tile-label">Critical items</div><div className={`capital-tile-value ${critical > 0 ? "critical" : ""}`} style={{ color: critical > 0 ? "var(--red)" : null }}>{critical}</div><div className="capital-tile-sub">order now</div></div>
             <div className="capital-tile low"><div className="capital-tile-label">Low items</div><div className="capital-tile-value" style={{ color: low > 0 ? "var(--amber)" : null }}>{low}</div><div className="capital-tile-sub">in buffer</div></div>
             <div className="capital-tile"><div className="capital-tile-label">In chemicals</div><div className="capital-tile-value">{fjd0(chemValue)}</div><div className="capital-tile-sub">WHD-tracked</div></div>
             <div className="capital-tile"><div className="capital-tile-label">Expiring</div><div className="capital-tile-value" style={{ color: expiringCount > 0 ? "var(--amber)" : null }}>{expiringCount}</div><div className="capital-tile-sub">within 30 days</div></div>
           </div>
 
-          {recentMoves.length > 0 && (
-            <div style={{ background: "rgba(106,168,79,0.07)", border: "1px solid var(--line)", borderLeft: "3px solid var(--green)", borderRadius: 9, padding: "9px 13px", margin: "12px 0", display: "flex", gap: 14, flexWrap: "wrap", alignItems: "center" }}>
-              <span style={{ fontSize: 11, fontWeight: 700, color: "var(--green-dk)", textTransform: "uppercase", letterSpacing: ".4px" }}>Recent events</span>
-              {recentMoves.map((m) => <span key={m.txn_id} style={{ fontSize: 11.5, color: "var(--soil)" }}>{m.txn_type === "PURCHASE" ? "↓" : "↑"} {m.input_name} · {num(m.quantity)}{m.unit}</span>)}
+          {/* IX1 — honest: inventory reflects logged stock movements, not field sprays (yet) */}
+          <div style={{ display: "flex", gap: 8, alignItems: "flex-start", background: "rgba(191,144,0,0.06)", border: "1px solid var(--line)", borderRadius: 9, padding: "9px 13px", margin: "12px 0" }}>
+            <AlertTriangle size={14} style={{ color: "var(--amber)", flexShrink: 0, marginTop: 1 }} />
+            <span style={{ fontSize: 11.5, color: "var(--soil)" }}>On-hand reflects stock you <b>receive/use here</b>. Logging a spray in Field Events doesn't deduct chemical stock yet — tap <b>Use stock</b> after spraying to keep counts accurate.</span>
+          </div>
+
+          {inputsQ.isError && items.length > 0 && (
+            <div style={{ display: "flex", gap: 8, alignItems: "center", justifyContent: "space-between", background: "#FEF6E6", border: "1px solid var(--line)", borderRadius: 9, padding: "9px 13px", margin: "12px 0", flexWrap: "wrap" }}>
+              <span style={{ fontSize: 11.5, color: "var(--amber)", display: "flex", gap: 6, alignItems: "center" }}><AlertTriangle size={13} />Couldn't refresh — showing your last saved inventory.</span>
+              <button className="btn btn-secondary btn-sm" onClick={() => inputsQ.refetch()}>Retry</button>
             </div>
           )}
 
-          <div className="cycle-view-tabs">
-            {VIEWS.map(([id, l, s]) => <div key={id} className={`task-tab ${view === id ? "active" : ""}`} onClick={() => setView(id)}>{l}<span className="task-tab-count" style={{ fontSize: 10 }}>{s}</span></div>)}
+          {recentMoves.length > 0 && (
+            <div style={{ background: "rgba(106,168,79,0.07)", border: "1px solid var(--line)", borderLeft: "3px solid var(--green)", borderRadius: 9, padding: "9px 13px", margin: "12px 0", display: "flex", gap: 14, flexWrap: "wrap", alignItems: "center" }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: "var(--green-dk)", textTransform: "uppercase", letterSpacing: ".4px" }}>Recent events</span>
+              {recentMoves.map((m) => <span key={m.txn_id} style={{ fontSize: 11.5, color: "var(--soil)", display: "inline-flex", alignItems: "center", gap: 3 }}>{m.txn_type === "PURCHASE" ? <ArrowDownToLine size={11} /> : <ArrowUpFromLine size={11} />} {m.input_name} · {num(m.quantity)}{m.unit}</span>)}
+            </div>
+          )}
+
+          <div className="cycle-view-tabs" role="tablist">
+            {VIEWS.map(([id, l, s]) => <button key={id} type="button" role="tab" aria-selected={view === id} className={`task-tab ${view === id ? "active" : ""}`} onClick={() => setView(id)}>{l}<span className="task-tab-count" style={{ fontSize: 10 }}>{s}</span></button>)}
           </div>
 
           {!farmId ? <div className="card" style={{ padding: 20, color: "var(--muted)" }}>Select a farm to see its inventory.</div>
-            : inputsQ.isLoading ? <div className="card" style={{ padding: 20, color: "var(--muted)" }}>Loading…</div>
+            : inputsQ.isLoading && items.length === 0 ? <div className="card" style={{ padding: 20, color: "var(--muted)" }}>Loading…</div>
+            : inputsQ.isError && items.length === 0 ? <div className="card" style={{ padding: 24, textAlign: "center" }}><div style={{ color: "var(--soil)", fontWeight: 600, fontSize: 13 }}>Couldn't load inventory</div><button className="btn btn-primary btn-sm" style={{ marginTop: 8 }} onClick={() => inputsQ.refetch()}>Retry</button></div>
             : view === "stock" ? (
               <>
                 <div className="gallery-filter-row" style={{ marginBottom: 8 }}>
@@ -167,27 +186,57 @@ function InventoryInner() {
                 </div>
                 {items.length === 0 ? <div className="card" style={{ padding: 28, textAlign: "center", color: "var(--muted)" }}>No items yet — add your seed, fertilizer, chemicals or fuel to track stock.</div>
                   : rows.length === 0 ? <div className="card" style={{ padding: 40, textAlign: "center", color: "var(--muted)" }}>No items match these filters.</div>
-                  : <><div className="inventory-table-wrap"><table className="inventory-table">
-                    <thead><tr><th>SKU</th><th>Item</th><th>Category</th><th>Storage</th><th>Stock</th><th>Min/Max</th><th>Burn rate</th><th>Days left</th><th>Value</th><th>Status</th></tr></thead>
+                  : <>
+                  {/* desktop table */}
+                  <div className="inventory-table-wrap hidden md:block"><table className="inventory-table">
+                    <thead><tr><th>SKU</th><th>Item</th><th>Category</th><th>Storage</th><th>Stock</th><th>Min/Max</th><th>Burn rate</th><th title="At current 30-day use">Days left</th><th>Value</th><th>Status</th><th></th></tr></thead>
                     <tbody>{rows.map((i) => {
                       const band = statusBand(i.stock_status); const dl = daysLeft(i); const b30 = burn30(i);
                       const rop = num(i.reorder_point_qty); const max = rop ? rop + num(i.reorder_qty || rop) : 0;
                       return (
-                        <tr key={i.input_id} onClick={() => setMove({ input: i, kind: "PURCHASE" })} style={{ cursor: "pointer" }}>
+                        <tr key={i.input_id} onClick={() => setEditItem(i)} style={{ cursor: "pointer" }} title="View / edit item">
                           <td className="sku-cell" style={{ fontSize: 10.5, fontFamily: "Menlo,monospace", color: "var(--muted)" }}>{i.input_id}</td>
-                          <td className="name-cell"><span style={{ fontWeight: 600, color: "var(--soil)" }}>{i.input_name}</span>{i.expiring_soon && <span className="compliance-badge expired" style={{ marginLeft: 6 }}>EXPIRING</span>}{i.is_chemical && <span className="compliance-badge restricted" style={{ marginLeft: 6 }}>CHEM</span>}<button className="btn btn-secondary btn-sm" title="Edit item" style={{ marginLeft: 8 }} onClick={(ev) => { ev.stopPropagation(); setEditItem(i); }}><Pencil size={11} /></button></td>
+                          <td className="name-cell"><span style={{ fontWeight: 600, color: "var(--soil)" }}>{i.input_name}</span>{i.expiring_soon && <span className="compliance-badge expired" style={{ marginLeft: 6 }}>EXPIRING</span>}{i.is_chemical && <span className="compliance-badge restricted" style={{ marginLeft: 6 }}>CHEM</span>}</td>
                           <td><span className={`inv-category-pill ${(i.input_category || "").toLowerCase()}`}>{CAT_LABEL[i.input_category] || i.input_category}</span></td>
                           <td>{i.storage_location ? <span className="storage-chip">{i.storage_location}</span> : <span style={{ color: "var(--muted)", fontSize: 11 }}>—</span>}</td>
                           <td><StockBar i={i} /></td>
                           <td className="value-cell" style={{ fontSize: 10.5, color: "var(--muted)" }}>{rop ? `${rop}/${max}` : "—"}</td>
                           <td><span className="burn-rate-display">{b30 > 0 ? `${b30.toFixed(1)}${i.unit_of_measure}/30d` : "—"}</span></td>
-                          <td className="value-cell">{dl == null ? "∞" : `${dl}d`}</td>
+                          <td className="value-cell">{dl == null ? "—" : `${dl}d`}</td>
                           <td className="value-cell">{i.unit_cost_fjd ? fjd2(itemValue(i)) : "—"}</td>
                           <td><span className={`inv-status-pill ${band}`}><span className="inv-status-dot" />{band}</span></td>
+                          <td onClick={(ev) => ev.stopPropagation()} style={{ whiteSpace: "nowrap" }}>
+                            <button className="btn btn-secondary btn-sm" title="Receive stock" onClick={() => setMove({ input: i, kind: "PURCHASE" })}><ArrowDownToLine size={11} /></button>
+                            <button className="btn btn-secondary btn-sm" title="Use stock" style={{ marginLeft: 4 }} onClick={() => setMove({ input: i, kind: "USAGE" })}><ArrowUpFromLine size={11} /></button>
+                          </td>
                         </tr>
                       );
                     })}</tbody>
                   </table></div>
+                  {/* mobile cards (IX3) */}
+                  <div className="md:hidden flex flex-col gap-2">
+                    {rows.map((i) => {
+                      const band = statusBand(i.stock_status); const dl = daysLeft(i);
+                      return (
+                        <div key={i.input_id} className="card" style={{ padding: "11px 13px" }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "flex-start" }}>
+                            <button onClick={() => setEditItem(i)} className="text-left" style={{ fontWeight: 700, color: "var(--soil)", fontSize: 13.5, background: "none", border: "none", padding: 0, textAlign: "left" }}>{i.input_name}{i.is_chemical && <span className="compliance-badge restricted" style={{ marginLeft: 6 }}>CHEM</span>}{i.expiring_soon && <span className="compliance-badge expired" style={{ marginLeft: 6 }}>EXPIRING</span>}</button>
+                            <span className={`inv-status-pill ${band}`} style={{ flexShrink: 0 }}><span className="inv-status-dot" />{band}</span>
+                          </div>
+                          <div style={{ margin: "6px 0" }}><StockBar i={i} /></div>
+                          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11.5, color: "var(--muted)" }}>
+                            <span>{CAT_LABEL[i.input_category] || i.input_category}{i.storage_location ? ` · ${i.storage_location}` : ""}</span>
+                            <span>{dl == null ? "—" : `${dl}d left`}{i.unit_cost_fjd ? ` · ${fjd2(itemValue(i))}` : ""}</span>
+                          </div>
+                          <div style={{ display: "flex", gap: 6, marginTop: 9 }}>
+                            <button className="btn btn-secondary btn-sm" style={{ flex: 1 }} onClick={() => setMove({ input: i, kind: "PURCHASE" })}><ArrowDownToLine size={12} />Receive</button>
+                            <button className="btn btn-secondary btn-sm" style={{ flex: 1 }} onClick={() => setMove({ input: i, kind: "USAGE" })}><ArrowUpFromLine size={12} />Use</button>
+                            <button className="btn btn-secondary btn-sm" onClick={() => setEditItem(i)}><Pencil size={12} /></button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                   <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 14 }}>
                     <button className="btn btn-secondary" onClick={() => setMove({ input: null, kind: "USAGE" })}><ArrowUpFromLine size={14} />Use stock</button>
                     <button className="btn btn-primary" onClick={() => setMove({ input: null, kind: "PURCHASE" })}><ArrowDownToLine size={14} />Receive stock</button>
@@ -346,7 +395,7 @@ function MoveModal({ farmId, input, kind, items, suppliers, onClose, onSaved }) 
   );
 }
 
-const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false, staleTime: 60_000 } } });
+const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false, refetchOnReconnect: true, staleTime: 60_000 } } });
 export default function InventoryList() {
   return (
     <QueryClientProvider client={queryClient}>

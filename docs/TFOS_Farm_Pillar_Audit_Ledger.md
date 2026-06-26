@@ -650,3 +650,37 @@ dead legacy form source (tree-shaken from the bundle already).
 banner; Edit within 48h still opens the WHD-aware modal.
 
 **Status:** ✅ redesign shipped. Awaiting stress pass / approval to lock.
+
+---
+
+## 7. Inventory (/farm/inventory → Resources tab) — AUDITED + REDESIGNED (2026-06-26, approved) — ✅ shipped
+
+Audit I-T1/2/3 + I1–I7 + IX1–IX7 (chat); approved → InventoryList.jsx redesigned per
+`docs/TFOS_Inventory_Redesign_Wireframe.md`. Build ✓. Frontend-only.
+
+**Honesty-first (IX1):** logging a spray doesn't deduct chemical stock (verified — backend
+gap; B37 generalized). Can't fix on the frontend → made HONEST: a prominent note that
+on-hand = stock you receive/use here, and field-sprays don't auto-deduct yet ("tap Use
+stock to keep counts accurate"). The real fix (auto-deduct on consumption) is FILED.
+
+**Fixed:** I-T1 GETs via utils/api (token refresh); I-T2 Movements farm-scoped (`?farm_id=`,
+verified) + farm-keyed (suppliers tenant-level by design); I-T3 real error/cached state
+(no false "no items" — error card when empty, degraded banner when cached); I1 dropped the
+redundant `<h1>Inventory</h1>` (tab labels it); I2 row click → Edit item (+ explicit
+Receive/Use per row), not the surprise purchase form; **IX3 mobile card layout** (the 10-col
+table is desktop-only now); IX4/I3 days-left shows "—" not "∞" + "at current 30-day use";
+IX2 value labelled "at last cost"; I5 lucide arrows in Recent events; AI "Ask AI" restock;
+a11y tabs as role=tab buttons.
+
+**Filed (backend/cross-page — the keystone first):** auto-deduct inventory on consumption
+(spray/feed-use → input-transaction USAGE) — real IX1 fix (B37 generalized); weighted-avg/
+FIFO cost basis (IX2); `/input-transactions` server limit + date filter (scale); item
+detail/movement-history view; PO/awaiting-delivery state (IX5); add-supplier inline (IX6);
+batch/lot/expiry + chemical traceability (IX7); seasonal-aware days-left (IX4); nested
+QueryClient lift (B31).
+
+**DEPLOY:** frontend-only → `cd /opt/teivaka/frontend && npm run build`. Verify: honesty note
+shows; kill /inputs → "Couldn't load · Retry" (not "no items"); a row → Edit modal; per-row
+Receive/Use; on a phone → stacked cards (no 10-col scroll); days-left "—" when no burn.
+
+**Status:** ✅ redesign shipped. Awaiting stress pass / approval to lock.
