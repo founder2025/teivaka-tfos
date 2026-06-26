@@ -17,7 +17,7 @@ import { Plus, Search, X, ArrowDownToLine, ArrowUpFromLine, Pencil, AlertTriangl
 import TfpShell from "../../components/farm/TfpShell";
 import { CurrentFarmProvider, useCurrentFarm } from "../../context/CurrentFarmContext";
 import FarmSelector from "../../components/farm/FarmSelector";
-import { getJSON } from "../../utils/api";
+import { getJSON, send } from "../../utils/api";
 
 function authHeaders() { const t = localStorage.getItem("tfos_access_token"); return t ? { "Content-Type": "application/json", Authorization: `Bearer ${t}` } : { "Content-Type": "application/json" }; }
 function emitToast(m) { window.dispatchEvent(new CustomEvent("tfos:toast", { detail: { message: m } })); }
@@ -130,11 +130,13 @@ function InventoryInner() {
             <div className="capital-tile"><div className="capital-tile-label">Expiring</div><div className="capital-tile-value" style={{ color: expiringCount > 0 ? "var(--amber)" : null }}>{expiringCount}</div><div className="capital-tile-sub">within 30 days</div></div>
           </div>
 
-          {/* IX1 — honest: inventory reflects logged stock movements, not field sprays (yet) */}
-          <div style={{ display: "flex", gap: 8, alignItems: "flex-start", background: "rgba(191,144,0,0.06)", border: "1px solid var(--line)", borderRadius: 9, padding: "9px 13px", margin: "12px 0" }}>
-            <AlertTriangle size={14} style={{ color: "var(--amber)", flexShrink: 0, marginTop: 1 }} />
-            <span style={{ fontSize: 11.5, color: "var(--soil)" }}>On-hand reflects stock you <b>receive/use here</b>. Logging a spray in Field Events doesn't deduct chemical stock yet — tap <b>Use stock</b> after spraying to keep counts accurate.</span>
-          </div>
+          {/* IX1 — honest: inventory reflects logged stock movements, not field sprays (yet). Stock/Reorder only (INS2). */}
+          {farmId && (view === "stock" || view === "reorder") && (
+            <div style={{ display: "flex", gap: 8, alignItems: "flex-start", background: "rgba(191,144,0,0.06)", border: "1px solid var(--line)", borderRadius: 9, padding: "9px 13px", margin: "12px 0" }}>
+              <AlertTriangle size={14} style={{ color: "var(--amber)", flexShrink: 0, marginTop: 1 }} />
+              <span style={{ fontSize: 11.5, color: "var(--soil)" }}>On-hand reflects stock you <b>receive/use here</b>. Logging a spray in Field Events doesn't deduct chemical stock yet — tap <b>Use stock</b> after spraying to keep counts accurate.{movesQ.isError && <> <b style={{ color: "var(--amber)" }}>Usage data couldn't load — burn-rate &amp; days-left may be missing.</b></>}</span>
+            </div>
+          )}
 
           {inputsQ.isError && items.length > 0 && (
             <div style={{ display: "flex", gap: 8, alignItems: "center", justifyContent: "space-between", background: "#FEF6E6", border: "1px solid var(--line)", borderRadius: 9, padding: "9px 13px", margin: "12px 0", flexWrap: "wrap" }}>
@@ -254,6 +256,7 @@ function InventoryInner() {
                 ))}</div>
             ) : view === "movements" ? (
               movesQ.isLoading ? <div className="card" style={{ padding: 16, color: "var(--muted)" }}>Loading…</div>
+                : movesQ.isError ? <div className="card" style={{ padding: 24, textAlign: "center" }}><div style={{ color: "var(--soil)", fontWeight: 600, fontSize: 13 }}>Couldn't load movements</div><button className="btn btn-primary btn-sm" style={{ marginTop: 8 }} onClick={() => movesQ.refetch()}>Retry</button></div>
                 : (movesQ.data ?? []).length === 0 ? <div className="card" style={{ padding: 24, textAlign: "center", color: "var(--muted)" }}>No stock movements yet — receiving or using stock records here.</div>
                 : <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>{(movesQ.data ?? []).map((m) => (
                   <div key={m.txn_id} className="card" style={{ padding: "9px 13px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -262,6 +265,7 @@ function InventoryInner() {
                 ))}</div>
             ) : view === "suppliers" ? (
               supsQ.isLoading ? <div className="card" style={{ padding: 16, color: "var(--muted)" }}>Loading…</div>
+                : supsQ.isError ? <div className="card" style={{ padding: 24, textAlign: "center" }}><div style={{ color: "var(--soil)", fontWeight: 600, fontSize: 13 }}>Couldn't load suppliers</div><button className="btn btn-primary btn-sm" style={{ marginTop: 8 }} onClick={() => supsQ.refetch()}>Retry</button></div>
                 : suppliers.length === 0 ? <div className="card" style={{ padding: 24, textAlign: "center", color: "var(--muted)" }}>No suppliers added yet.</div>
                 : <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(220px,1fr))", gap: 10 }}>{suppliers.map((s) => (
                   <div key={s.supplier_id} className="card" style={{ padding: "12px 14px" }}><div style={{ fontWeight: 700, color: "var(--soil)" }}>{s.supplier_name}</div><div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 2 }}>{s.supplier_type || "—"}{s.island ? ` · ${s.island}` : ""}{s.phone ? ` · ${s.phone}` : ""}</div></div>
@@ -318,12 +322,10 @@ function AddInputModal({ farmId, suppliers, edit, onClose, onSaved }) {
         reorder_point_qty: f.reorder_point_qty ? Number(f.reorder_point_qty) : null, reorder_qty: f.reorder_qty ? Number(f.reorder_qty) : null,
         unit_cost_fjd: f.unit_cost_fjd ? Number(f.unit_cost_fjd) : null, preferred_supplier_id: f.preferred_supplier_id || null, storage_location: f.storage_location.trim() || null,
       };
-      const r = edit
-        ? await fetch(`/api/v1/inputs/${encodeURIComponent(edit.input_id)}`, { method: "PATCH", headers: authHeaders(), body: JSON.stringify(base) })
-        : await fetch("/api/v1/inputs", { method: "POST", headers: authHeaders(), body: JSON.stringify({ farm_id: farmId, current_stock_qty: Number(f.current_stock_qty) || 0, ...base }) });
-      if (!r.ok) { let m = edit ? "Could not save item" : "Could not add item"; try { const b = await r.json(); m = b?.detail || m; } catch {} emitToast(typeof m === "string" ? m : "Could not save"); return; }
+      if (edit) await send("PATCH", `/api/v1/inputs/${encodeURIComponent(edit.input_id)}`, base);
+      else await send("POST", "/api/v1/inputs", { farm_id: farmId, current_stock_qty: Number(f.current_stock_qty) || 0, ...base });
       emitToast(edit ? "Item updated" : "Item added"); onSaved?.();
-    } catch { emitToast("Could not save"); } finally { setBusy(false); }
+    } catch (e) { emitToast(e?.userMessage || (edit ? "Could not save item" : "Could not add item")); } finally { setBusy(false); }
   }
   return (
     <div className="overlay-backdrop show" onClick={onClose}>
@@ -368,13 +370,12 @@ function MoveModal({ farmId, input, kind, items, suppliers, onClose, onSaved }) 
     if (!Number(qty)) { emitToast("Enter a quantity"); return; }
     setBusy(true);
     try {
-      const r = await fetch("/api/v1/input-transactions", { method: "POST", headers: authHeaders(), body: JSON.stringify({
+      await send("POST", "/api/v1/input-transactions", {
         input_id: sel.input_id, farm_id: farmId, transaction_type: kind, transaction_date: todayISO(),
         quantity: Number(qty), unit,
-        ...(receive ? { unit_cost_fjd: cost ? Number(cost) : null, supplier_id: supplier || null } : {}) }) });
-      if (!r.ok) throw new Error();
+        ...(receive ? { unit_cost_fjd: cost ? Number(cost) : null, supplier_id: supplier || null } : {}) });
       emitToast(receive ? "Stock received" : "Stock used"); onSaved?.();
-    } catch { emitToast("Could not record movement"); } finally { setBusy(false); }
+    } catch (e) { emitToast(e?.userMessage || "Could not record movement"); } finally { setBusy(false); }
   }
   return (
     <div className="overlay-backdrop show" onClick={onClose}>
