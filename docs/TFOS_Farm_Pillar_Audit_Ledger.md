@@ -116,6 +116,25 @@ KNOWN COSMETIC FOLLOW-UP: each child page still renders its own header/FarmSelec
 so a merged page shows the tab strip + the child's title (mild redundancy). Clean
 by adding an `embedded` (hide-header) prop to child pages in a later pass.
 
+### Persistent grouped sidebar BUILT — ✅
+The farm rail (`LeftRail` desktop + `PillarSubNavStrip` mobile/tablet) now renders
+the consolidated nav from a single source of truth (`pillarSubNavMap.js`). Both
+`FARM_NAV_GROUPS` (desktop collapsible) and `PILLAR_SUB_NAV["/farm"]` (mobile flat
+strip) rewritten to the **merged destinations in natural farming order**:
+- **Overview** (item, /farm)
+- **Plan** — Tasks · Weather
+- **Grow** — Enterprises · Production · Field log · Resources
+- **Sell** — Market · Money
+- **Prove** — Compliance · Records
+- **Insights** (item, /farm/insights)
+- **Account** — Library · Partnerships · Settings
+- Quick Add (+) launcher
+Every link points at a LIVE merged route (verified against App.jsx :379-397 — the 5
+merged pages exist + 13 old routes redirect into them). No dead links. Task-count
+badge preserved on the Plan group (collapsed-state surfaces open-task count). Desktop
+collapsible group memory + active-group force-expand intact. Build clean.
+22 flat routes → 15 destinations in 5 workflow groups + 2 standalone items.
+
 ---
 (remaining destinations pending — appended as each is audited)
 
