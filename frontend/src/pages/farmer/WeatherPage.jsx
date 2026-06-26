@@ -42,6 +42,7 @@ const PULSE = "animate-pulse motion-reduce:animate-none";
 function num(v) { return v == null || v === "" ? null : Number(v); }
 function emitToast(m) { window.dispatchEvent(new CustomEvent("tfos:toast", { detail: { message: m } })); }
 function fijiToday() { try { return new Date().toLocaleDateString("en-CA", { timeZone: "Pacific/Fiji" }); } catch { return new Date().toISOString().slice(0, 10); } }
+function daysAgoStr(n) { const d = new Date(); d.setDate(d.getDate() - n); try { return d.toLocaleDateString("en-CA", { timeZone: "Pacific/Fiji" }); } catch { return d.toISOString().slice(0, 10); } }
 function dOf(s) { return String(s || "").slice(0, 10); }
 const round1 = (v) => (v == null || v === "" ? null : Math.round(Number(v) * 10) / 10);
 const has = (v) => v != null && v !== "";
@@ -152,6 +153,7 @@ function WeatherInner() {
   const [logPrefill, setLogPrefill] = useState(null);
   const [histOpen, setHistOpen] = useState(false);
   const [prep, setPrep] = useState("idle"); // idle | busy | done — guards duplicate prep tasks (WXS4)
+  useEffect(() => { setPrep("idle"); }, [farmId]); // reset per farm so another farm's cyclone can get its own prep task (WS2-2)
 
   const on = !!farmId;
   const current = useQuery({ queryKey: ["wx-cur", farmId], queryFn: () => getJSON(`/api/v1/weather/current/${encodeURIComponent(farmId)}`), enabled: on });
@@ -175,9 +177,12 @@ function WeatherInner() {
   // unified "today" signal: live feed preferred, else latest manual observation (WX1)
   const obsRows = useMemo(() => (obs.data?.data ?? []).slice().sort((a, b) => dOf(b.observation_date).localeCompare(dOf(a.observation_date))), [obs.data]);
   const latest = obsRows[0] || null;
+  // only fall back to a manual log if it's recent (≤2 days) — never improvise
+  // today's guidance from stale weather (WS2-1).
+  const recentObs = latest && dOf(latest.observation_date) >= daysAgoStr(2) ? latest : null;
   const sig = cur
     ? { rain: num(cur.precip_mm) ?? 0, humid: num(cur.humidity_pct) ?? 0, wind: num(cur.wind_kmh) ?? 0 }
-    : latest ? { rain: num(latest.rainfall_mm) ?? 0, humid: num(latest.humidity_pct) ?? 0, wind: num(latest.wind_speed_kmh) ?? 0 } : null;
+    : recentObs ? { rain: num(recentObs.rainfall_mm) ?? 0, humid: num(recentObs.humidity_pct) ?? 0, wind: num(recentObs.wind_speed_kmh) ?? 0 } : null;
 
   const onLogged = () => { ["wx-sum", "wx-obs"].forEach((k) => qc.invalidateQueries({ queryKey: [k, farmId] })); };
   const openLogFromNow = () => {
@@ -243,6 +248,8 @@ function WeatherInner() {
           </div>
         ) : noFeedError ? (
           <div className="flex items-center gap-2 text-sm" style={{ color: C.muted }}><WifiOff size={15} style={{ color: C.amber }} aria-hidden="true" />Couldn't load live weather. <button onClick={() => { current.refetch(); daily.refetch(); }} className={`underline ${FOCUS}`} style={{ color: C.greenDk }}>Retry</button></div>
+        ) : !farmId ? (
+          <div className="text-sm" style={{ color: C.muted }}>Add a farm to see live weather for it.</div>
         ) : (
           <div className="text-sm" style={{ color: C.muted }}>
             Live conditions update automatically every 3 hours. If this stays empty, your farm may need its map location set.
@@ -258,7 +265,9 @@ function WeatherInner() {
           <Section icon={CloudSun} title="This week">
             {daily.isError
               ? <div className="flex items-center gap-2 text-sm" style={{ color: C.muted }}><WifiOff size={15} style={{ color: C.amber }} aria-hidden="true" />Couldn't load the forecast. <button onClick={() => daily.refetch()} className={`underline ${FOCUS}`} style={{ color: C.greenDk }}>Retry</button></div>
-              : <div className="text-sm" style={{ color: C.muted }}>The 7-day outlook updates automatically every 3 hours. If it stays empty, your farm may need its map location set. <button onClick={() => navigate("/farm/resources?tab=locations")} className={`underline ${FOCUS}`} style={{ color: C.greenDk }}>Set location</button></div>}
+              : !farmId
+                ? <div className="text-sm" style={{ color: C.muted }}>Add a farm to see its 7-day forecast.</div>
+                : <div className="text-sm" style={{ color: C.muted }}>The 7-day outlook updates automatically every 3 hours. If it stays empty, your farm may need its map location set. <button onClick={() => navigate("/farm/resources?tab=locations")} className={`underline ${FOCUS}`} style={{ color: C.greenDk }}>Set location</button></div>}
           </Section>
         );
         const wet = dailyRows.slice(0, 3).find((d) => Number(d.precip_prob_pct) >= 60 || Number(d.precip_mm) >= 25);
@@ -335,9 +344,9 @@ function WeatherInner() {
       )}
 
       {/* WHAT THIS WEATHER MEANS — one shared crop card + per-animal (W3) */}
-      <Section icon={Activity} title="What this weather means" meta={cur ? "from live conditions" : latest ? `from ${fmtDate(latest.observation_date)}` : ""}>
+      <Section icon={Activity} title="What this weather means" meta={cur ? "from live conditions" : recentObs ? `from ${fmtDate(recentObs.observation_date)}` : ""}>
         {!sig ? (
-          <div className="text-sm" style={{ color: C.muted }}>Live conditions or a logged reading will turn on tailored guidance here.</div>
+          <div className="text-sm" style={{ color: C.muted }}>{!farmId ? "Add a farm to get tailored guidance." : "Log today's weather, or set your farm location for live conditions, to get tailored guidance for each crop and animal."}</div>
         ) : (
           <div className="space-y-3">
             <div className="rounded-xl p-3 flex items-start gap-2.5" style={{ background: "var(--paper)", border: `1px solid ${C.border}` }}>
@@ -383,6 +392,7 @@ function WeatherInner() {
               <div className="flex items-center gap-2 text-sm" style={{ color: C.muted }}><WifiOff size={15} style={{ color: C.amber }} aria-hidden="true" />Couldn't load — <button onClick={() => { summary.refetch(); obs.refetch(); }} className={`underline ${FOCUS}`} style={{ color: C.greenDk }}>retry</button></div>
             ) : (
               <>
+                {summary.isError && <div className="text-[11px]" style={{ color: C.amber }}>Couldn't refresh the 30-day summary — showing what loaded.</div>}
                 <div className="grid gap-2 grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">
                   {[["Total rainfall", has(summary.data?.data?.total_rainfall_mm) ? `${Math.round(Number(summary.data.data.total_rainfall_mm))} mm` : "—", "last 30 days"],
                     ["Avg temp", has(summary.data?.data?.avg_temp_c) ? `${summary.data.data.avg_temp_c}°C` : "—", "daily average"],
