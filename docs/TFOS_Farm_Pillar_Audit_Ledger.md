@@ -13,7 +13,50 @@ Legend: ✅ PASS · 🟡 improved, open items · ▢ not started
 
 ---
 
-## 1. Overview (/farm) — FORMAL FRAMEWORK AUDIT (2026-06-26) — 🔴 audit done, redesign NOT started
+## 1. Overview (/farm) — REDESIGNED (2026-06-26) — ✅ shipped to branch, awaiting deploy
+
+Audit approved → full redesign of `FarmDashboard.jsx` executed per
+`docs/TFOS_Overview_Redesign_Wireframe.md`. Build clean (`npm run build` ✓,
+i18n guard ✓). Frontend-only; no backend changed (safe slice).
+
+**New structure (cognitive-load first):** Header (real updated-time) → Needs-you-now
+band (the ONE decision) → 4 glance tiles (Cash · Net · Tasks today · Watch) →
+Farm health + Decide pair → Enterprise portfolio → Money snapshot + Recent field
+activity → owner depth (Ops row, Enterprise/Multi-farm compare, conditional) →
+Active cycles (ACTIVE+HARVESTING) → real audit-chain footer. + Skeleton loading +
+first-run "create your first farm" state.
+
+**Fixed (verified in new code):** F1 dead code removed (881→~470 lines, 13 dead
+components + dead imports gone) · F2 health copy reflects grade · F4 "watch" only
+when an enterprise sold at a loss (income>0 && net<0) · F5 in-page nav dropped
+(sidebar owns it) · M1 real `dataUpdatedAt` not render time · M2/M3/M28 first-run +
+skeleton states · M4 single net source (financials/farm summary) · M5 poultry cards
+→ /farm/poultry · M6 health uses flock survival + holds (no more always-100) ·
+M9 aria-labels on score rings · M18 dedupe — `["farms"]` shared with FarmSelector +
+active cycles inlined from page data (no second /cycles or /farms fetch) ·
+M21 no UUID author in activity feed · M22 no-op `||"Crop"||"—"` fallback gone ·
+M23 HARVESTING cycles shown · upcoming WHD clearances now drive Needs-you-now +
+decisions. Internal links point at merged routes (F9).
+
+**Filed (labelled honestly in-page, NOT faked):** composite `GET /farm/overview/{id}`
+reading pre-computed signals (Inviolable #3 / M27, keystone next slice); `farm_id`
+on `/tasks` (M25 — page labels tasks "across all farms"); whole-farm activity feed
+(M20 — page labels the strip "Recent field activity · crop field events"); lift
+CurrentFarmProvider to FarmerShell (M24/B31); bound list queries server-side (M26).
+
+**Note:** bundle barely shrank (53→51 KB) — Rollup already tree-shook the unused
+components; the real win is correctness + maintainability, not size (honest).
+
+**DEPLOY:** frontend-only → `cd /opt/teivaka/frontend && npm run build` (Caddy serves
+dist). No migration, no API rebuild. Verify: open teivaka.com/farm — skeleton then
+Needs-you-now band; tap a flock card → poultry dashboard; "Updated HH:MM" is real.
+
+**Status:** ✅ redesign shipped to `claude/beautiful-fermi-F0dLX`. Backend keystone
+(composite endpoint) is the next slice when you want the query fan-out collapsed.
+
+---
+
+## 1-audit. Overview (/farm) — FORMAL FRAMEWORK AUDIT (2026-06-26) — audit record (superseded by redesign above)
 
 Forensic audit of `frontend/src/pages/farmer/FarmDashboard.jsx` (881 lines) under the
 ratified TFOS Review Framework. Backend contracts for all 12 live queries verified

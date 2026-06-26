@@ -100,7 +100,10 @@ export default function RecentLoggedStrip({ farmId }) {
       {events.map((e, i) => {
         const label = EVENT_LABEL[e.event_type] || e.event_type || "Activity";
         const where = e.pu_id || "whole-farm";
-        const meta = [where, e.created_by, whenLabel(e.event_date)]
+        // created_by is a raw user_id (UUID) — never show it to the farmer (M21).
+        // Prefer a resolved name if the API ever provides one; otherwise omit.
+        const who = e.created_by_name || e.logged_by_name || null;
+        const meta = [where, who, whenLabel(e.event_date)]
           .filter(Boolean).join(" · ");
         return (
           <div
