@@ -362,7 +362,41 @@ collapsible group memory + active-group force-expand intact. Build clean.
 
 ---
 
-## 2. Tasks (/farm/tasks) — FORMAL FRAMEWORK AUDIT (2026-06-26) — 🔴 audit done, redesign NOT started
+## 2. Tasks (/farm/tasks) — REDESIGNED (2026-06-26, audit-approved) — ✅ shipped to branch
+
+Full rebuild of `FarmTasks.jsx` per the approved audit + `docs/TFOS_Tasks_Redesign_Wireframe.md`.
+Build ✓ (chunk 53→19 KB). Frontend-only.
+
+**CORRECTION ON RECORD (integrity):** the audit's **N1 "completion loop broken
+end-to-end" was WRONG** — I grepped `completeTaskFromUrl` (a comment phrase) not the
+real export `completeLinkedTask`, which HarvestNew (:279), CycleNew (:239) and poultry
+HealthObservationNew (:78) all call. Routed tasks DO close. Retracted. The real gap was
+only **T2** (input-required, non-routed tasks posting `""` → 422). Score corrected 4.5 → 6.
+
+**New structure (cognitive-load-first):** header → **Do this next hero (FIRST, T6)** →
+one honest progress bar (replaces 5 KPIs incl. the duplicate "Today's Focus"/"Todo
+Today", T5/N3) → **Today & overdue** list with always-visible complete (no 2-tap menu) →
+**Coming up** collapsible (Tomorrow/This week/Later — replaces the 5-col kanban) →
+crop-plan demoted to a labelled secondary section (N2) → quick-add.
+
+**Fixed (verified):** T1 (`utils/api` token-refresh + real error banner, no false "all
+caught up"); **T2 completion always works** (routed→form; input-required→inline typed
+field w/ validation; else one-tap — no blind `""`); T3 (Fiji time); T5/T7 (session
+progress, dropped 200-row COMPLETED fetch); N3 (dup KPIs gone; **orphan Tasks.jsx
+deleted**); N5 (icon from `icon_key`); N7 (refetch on reconnect/focus); a11y (aria-live,
+progressbar, reduced-motion, keyboard, menu Esc/outside-click); AI ("Ask AI" per task
+via `/tis?q=`); optimistic complete/skip with revert-on-failure.
+
+**Filed (backend/cross-page):** `farm_id` on `/tasks` (T4 tenant-wide); worker
+assignment/roles; recurring tasks; surfaced AI-suggest.
+
+**DEPLOY:** frontend-only → `cd /opt/teivaka/frontend && npm run build`. Verify: hero
+first; one-tap no-input task; input task shows inline field (no error); routed task opens
+form + closes on submit; kill network → error banner not "all caught up".
+
+---
+
+## 2-audit. Tasks (/farm/tasks) — FORMAL FRAMEWORK AUDIT (2026-06-26) — audit record (superseded by redesign above)
 
 Forensic audit of `FarmTasks.jsx` (383 lines). Backend contracts verified
 (`/tasks`, `/crop-plan/farm-steps`, `taskBridge`, `/tasks/{id}/complete`). The page
