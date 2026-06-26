@@ -335,15 +335,31 @@ function CategoriesView({ entries, capNote }) {
     return Object.values(m).sort((a, b) => (b.income + b.expense) - (a.income + a.expense));
   }, [entries]);
   if (!byCat.length) return <Building title="Category spend trends" body="Income and expense by category appear here once you log cash." />;
+  const totalIncome = byCat.reduce((s, r) => s + r.income, 0);
+  const totalExpense = byCat.reduce((s, r) => s + r.expense, 0);
+  const net = totalIncome - totalExpense;
   const max = byCat.reduce((m, r) => Math.max(m, r.income, r.expense), 0) || 1;
+  const topCost = byCat.filter((r) => r.expense > 0).sort((a, b) => b.expense - a.expense)[0];
+  const pct = (v) => (totalExpense > 0 ? Math.round((v / totalExpense) * 100) : 0);
+  const label = (c) => (c || "—").replace(/_/g, " ").toLowerCase();
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      <div className="capital-strip" style={{ gridTemplateColumns: "repeat(3,1fr)" }}>
+        <Tile label="Income" value={fjd0(totalIncome)} sub={`${byCat.filter((r) => r.income > 0).length} categories`} color="var(--green-dk)" />
+        <Tile label="Spending" value={fjd0(totalExpense)} sub={`${byCat.filter((r) => r.expense > 0).length} categories`} color="var(--amber)" />
+        <Tile label="Net" value={`${net < 0 ? "−" : "+"}${fjd0(Math.abs(net))}`} sub="income − spending" color={net < 0 ? "var(--red)" : "var(--green-dk)"} />
+      </div>
+      {topCost && totalExpense > 0 && (
+        <div className="card" style={{ padding: "10px 14px", fontSize: 12.5, color: "var(--soil)" }}>
+          Biggest cost: <strong>{label(topCost.cat)}</strong> — {fjd0(topCost.expense)} ({pct(topCost.expense)}% of your spending).
+        </div>
+      )}
       {capNote && <div style={{ fontSize: 11, color: "var(--muted)" }}>{capNote}</div>}
       {byCat.map((r) => (
         <div key={r.cat}>
           <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5, color: "var(--soil)", fontWeight: 600, marginBottom: 4 }}>
-            <span>{(r.cat).replace(/_/g, " ").toLowerCase()}</span>
-            <span>{r.income ? `+${fjd0(r.income)}` : ""}{r.expense ? ` −${fjd0(r.expense)}` : ""}</span>
+            <span>{label(r.cat)}</span>
+            <span>{r.income ? `+${fjd0(r.income)}` : ""}{r.expense ? ` −${fjd0(r.expense)}${totalExpense > 0 ? ` · ${pct(r.expense)}%` : ""}` : ""}</span>
           </div>
           {r.income > 0 && <div style={{ height: 7, borderRadius: 999, background: "var(--cream-2,#efe7d6)", marginBottom: 3 }}><div style={{ height: 7, borderRadius: 999, width: `${(r.income / max) * 100}%`, background: "var(--green-dk)" }} /></div>}
           {r.expense > 0 && <div style={{ height: 7, borderRadius: 999, background: "var(--cream-2,#efe7d6)" }}><div style={{ height: 7, borderRadius: 999, width: `${(r.expense / max) * 100}%`, background: "var(--amber)" }} /></div>}
