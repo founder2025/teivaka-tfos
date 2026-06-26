@@ -568,3 +568,38 @@ Pause/Close buttons; open an enterprise → 4 tabs only, Layer KPI (no fake "0 o
 a mid-cycle crop is NOT flagged as losing money; empty farm → watermarked Example preview.
 
 **Status:** ✅ redesign shipped. Awaiting stress pass / approval to lock.
+
+---
+
+## 5. Production (/farm/cycles) — AUDITED + REDESIGNED (2026-06-26, approved) — ✅ shipped
+
+Audit P1–P8 + PD-A–PD-H (chat); approved → CycleList.jsx rebuilt + CycleDetail.jsx fixed
+per `docs/TFOS_Production_Redesign_Wireframe.md`. Build ✓. Frontend-only.
+
+**Headline (PD-A 🔴 safety):** the WHD harvest-hold now **fails CLOSED** — green only when
+compliance is verified clear; a grey "?" marker + amber banner when `/crops/compliance`
+can't load (was: silently green = false "clear to harvest" on the Inviolable #2 gate).
+Same in CycleDetail's compliance panel ("Couldn't verify withholding — do not harvest").
+
+**Also fixed:** P1 "Pending (open)" reads `data.tasks` (real count, was always 0); P2 unit
+cards keyboard-operable (role=button + Enter/Space); P3 CycleDetail money via formatMoney
+(FJD, was `$`); P-T1 both via `utils/api` (token refresh); P5/PD-E KPIs active-scoped +
+honest "to date"; **PD-B status filter (Active/Closed/Failed/All)** — closed/failed now
+reachable; PD-C KPI strip responsive (auto-fit, was forced 5-col on mobile); PD-F
+"Day -N"→"Not yet planted", ">100%"→"Past expected harvest"; P4 no-op fallback removed;
+PD-H single breadcrumb; P6 CycleList → react-query (caching + reconnect); AI "Ask AI about
+this cycle" on detail; a11y.
+
+**Confirmed correct (not touched):** create flow enforces layer-at-creation (Strike #104a);
+NurseryRegister live + honest.
+
+**Filed (backend/cross-page):** Tasks page to honor `?cycle=` (P7); per-cycle buyer
+commitments (order↔cycle link); agronomic BBCH stage; rotation disease-risk warning;
+CycleDetail → react-query; certifications; weather/GDD-aware progress.
+
+**DEPLOY:** frontend-only → `cd /opt/teivaka/frontend && npm run build`. Verify: kill
+/crops/compliance → hold dots show "?" + amber banner (NOT green); status filter shows
+closed/failed cycles; open a cycle → "Pending (open)" real count, money in FJD, keyboard-
+openable cards; KPI strip wraps on mobile.
+
+**Status:** ✅ redesign shipped. Awaiting stress pass / approval to lock.

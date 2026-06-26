@@ -19,24 +19,20 @@
 import { useEffect, useState, useCallback } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { useFormModal } from "../../context/FormModalContext";
+import { getJSON, send } from "../../utils/api";
+import { formatMoney } from "../../utils/money";
 
 const C = {
   soil: "var(--soil)", green: "var(--green)", greenDk: "var(--green-dk)", greenTint: "var(--green-tint)",
   amber: "var(--amber)", amberTint: "#FBF1D6", red: "#B00020", redTint: "#FBEAE6",
   cream: "var(--cream)", border: "var(--line)", muted: "var(--muted)", ink: "var(--soil)", panel: "var(--paper)",
 };
-function authHeaders() {
-  const t = localStorage.getItem("tfos_access_token");
-  return t ? { "Content-Type": "application/json", Authorization: `Bearer ${t}` }
-           : { "Content-Type": "application/json" };
-}
-async function getJSON(u) { const r = await fetch(u, { headers: authHeaders() }); if (!r.ok) throw new Error(String(r.status)); return r.json(); }
 const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 function fmtDate(iso) { if (!iso) return "—"; const d = new Date(iso); return isNaN(d) ? String(iso) : `${String(d.getUTCDate()).padStart(2,"0")} ${MONTHS[d.getUTCMonth()]} ${String(d.getUTCFullYear()).slice(2)}`; }
 function dnum(iso) { if (!iso) return null; const d = new Date(iso); return isNaN(d) ? null : d.getTime(); }
 function daysBetween(a, b) { const x = dnum(a), y = dnum(b); return x == null || y == null ? null : Math.round((y - x) / 86400000); }
 function daysIn(iso) { const t = dnum(iso); return t == null ? null : Math.floor((Date.now() - t) / 86400000); }
-function fmtMoney(v) { if (v == null || v === "") return null; const n = Number(v); return isNaN(n) ? null : `$${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`; }
+function fmtMoney(v) { if (v == null || v === "") return null; const n = Number(v); return isNaN(n) ? null : formatMoney(n, { decimals: 2 }); }
 function fmtKg(v) { if (v == null || v === "") return null; const n = Number(v); return isNaN(n) ? null : `${Number(n).toLocaleString()} kg`; }
 
 const LIFECYCLE = ["PLANNED", "ACTIVE", "HARVESTING", "CLOSING", "CLOSED"];
@@ -82,6 +78,7 @@ export default function CycleDetail() {
   const [block, setBlock] = useState(null);     // WHD block for this cycle
   const [history, setHistory] = useState([]);   // prior cycles in same PU
   const [openTasks, setOpenTasks] = useState([]);
+  const [complianceUnknown, setComplianceUnknown] = useState(false); // PD-A: fail closed
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [acting, setActing] = useState("");
@@ -105,9 +102,10 @@ export default function CycleDetail() {
       setHarvests(hvR.status === "fulfilled" ? (hvR.value?.data?.harvests || []) : []);
       const blocks = cmR.status === "fulfilled" ? (cmR.value?.data?.active_blocks || []) : [];
       setBlock(blocks.find((b) => b.cycle_id === cycleId) || null);
+      setComplianceUnknown(cmR.status !== "fulfilled"); // PD-A: only "clear" when verified
       const allCyc = hiR.status === "fulfilled" ? (hiR.value?.data?.cycles || []) : [];
       setHistory(allCyc.filter((x) => x.cycle_id !== cycleId));
-      setOpenTasks(tkR.status === "fulfilled" ? (Array.isArray(tkR.value?.data) ? tkR.value.data : []) : []);
+      setOpenTasks(tkR.status === "fulfilled" ? (tkR.value?.data?.tasks || []) : []); // P1: read .data.tasks
     } catch (e) {
       setError(e.message === "404" ? "Cycle not found." : "Couldn't load this cycle.");
     } finally {
@@ -123,10 +121,9 @@ export default function CycleDetail() {
     if (next === "CLOSED" && !window.confirm("Close this cycle? This is terminal and computes final CoKG.")) return;
     setActing(next);
     try {
-      const r = await fetch(`/api/v1/cycles/${encodeURIComponent(cycleId)}`, { method: "PATCH", headers: authHeaders(), body: JSON.stringify({ cycle_status: next }) });
-      if (!r.ok) { const b = await r.json().catch(() => ({})); throw new Error(b?.detail?.message || b?.detail || `Transition failed (${r.status})`); }
+      await send("PATCH", `/api/v1/cycles/${encodeURIComponent(cycleId)}`, { cycle_status: next });
       await load();
-    } catch (e) { alert(e.message); } finally { setActing(""); }
+    } catch (e) { alert(e?.userMessage || e.message); } finally { setActing(""); }
   }
 
   if (loading) return <div className="max-w-5xl mx-auto p-4"><div className="rounded-2xl animate-pulse" style={{ height: 180, background: C.cream }} /></div>;
@@ -164,14 +161,14 @@ export default function CycleDetail() {
     <div className="max-w-5xl mx-auto p-4 space-y-4">
       {/* breadcrumb + header */}
       <div className="text-xs" style={{ color: C.muted }}>
-        <Link to="/farm/cycles" style={{ color: C.greenDk }}>Crops</Link> › <Link to="/farm/cycles" style={{ color: C.greenDk }}>Cycles</Link> › <span style={{ color: C.soil }}>{c.production_name || "Crop"} · {c.pu_farmer_label || "Block"} · {c.farmer_label || "Crop run"}</span>
+        <Link to="/farm/cycles" style={{ color: C.greenDk }}>Production</Link> › <span style={{ color: C.soil }}>{c.production_name || "Crop"} · {c.pu_farmer_label || "Block"}</span>
       </div>
       <div className="flex items-start justify-between gap-2 flex-wrap">
         <div>
           <h1 className="text-2xl font-bold" style={{ color: C.soil }}>{c.production_name || "Crop"} · {c.pu_farmer_label || "Block"}</h1>
           <div className="text-xs mt-0.5" style={{ color: C.muted }}>
-            Day {since ?? "—"}{expLen ? ` of expected ${expLen}` : ""} · {LIFECYCLE_LABEL[status] || status}
-            {toHarvest != null && status !== "CLOSED" && status !== "FAILED" ? ` · ${toHarvest > 0 ? `${toHarvest} days to harvest` : "past expected harvest"}` : ""}
+            {since != null && since >= 0 ? `Day ${since}${expLen ? ` of expected ${expLen}` : ""}` : "Not yet planted"} · {LIFECYCLE_LABEL[status] || status}
+            {since != null && since >= 0 && toHarvest != null && status !== "CLOSED" && status !== "FAILED" ? ` · ${toHarvest > 0 ? `${toHarvest} days to harvest` : "past expected harvest"}` : ""}
           </div>
         </div>
         <div className="flex items-center gap-1.5 flex-wrap">
@@ -185,6 +182,7 @@ export default function CycleDetail() {
         <ActionBtn onClick={() => navigate("/farm/cycles")}>← Back to list</ActionBtn>
         <ActionBtn onClick={() => openFormModal("crops", { cycleId })}>+ Log event</ActionBtn>
         <ActionBtn onClick={() => navigate(`/farm/tasks?cycle=${encodeURIComponent(cycleId)}`)}>View tasks</ActionBtn>
+        <ActionBtn onClick={() => navigate(`/tis?q=${encodeURIComponent(`What should I do next on my ${c.production_name || "crop"} cycle in ${c.pu_farmer_label || "this block"}?`)}`)}>✨ Ask AI</ActionBtn>
         {transitions.map((next) => (
           <ActionBtn key={next} onClick={() => transition(next)} disabled={!!acting} danger={next === "FAILED"}>
             {acting === next ? "…" : (STATUS_VERB[next] || next)}
@@ -256,6 +254,12 @@ export default function CycleDetail() {
             <>
               <div className="text-lg font-extrabold" style={{ color: C.red }}>{block.chemical} — {block.days_remaining}d left</div>
               <div className="text-[11px] mt-1" style={{ color: C.muted }}>Cannot harvest until withholding clears · clears {fmtDate(block.clear_date)}</div>
+            </>
+          ) : complianceUnknown ? (
+            // PD-A: fail closed — never show "Clear" when we couldn't verify
+            <>
+              <div className="text-lg font-extrabold" style={{ color: C.amber }}>Couldn't verify withholding</div>
+              <div className="text-[11px] mt-1" style={{ color: C.muted }}>The harvest-safety check didn't load — do not harvest until it refreshes.</div>
             </>
           ) : (
             <>
