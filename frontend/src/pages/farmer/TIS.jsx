@@ -192,11 +192,21 @@ export default function TIS() {
     bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [messages, loading]);
 
+  // Deep-link: /tis?q=… (e.g. the Overview "Ask AI" button) pre-asks the
+  // question once on mount. Guarded so it never re-fires or double-sends.
+  const seededRef = useRef(false);
+  useEffect(() => {
+    if (seededRef.current) return;
+    const q = new URLSearchParams(window.location.search).get("q");
+    if (q && q.trim()) { seededRef.current = true; send(q); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const showChips = messages.length === 1 && messages[0].isOpener;
   const sendDisabled = loading || !input.trim();
 
-  async function send() {
-    const text = input.trim();
+  async function send(textArg) {
+    const text = (typeof textArg === "string" ? textArg : input).trim();
     if (!text || loading) return;
     const history = messages
       .filter((m) => !m.isOpener)

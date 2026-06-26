@@ -56,6 +56,43 @@ Needs-you-now band; tap a flock card → poultry dashboard; "Updated HH:MM" is r
 
 ---
 
+## 1-opt2. Overview (/farm) + sidebar — OPTIMIZATION PASS 2 (2026-06-26) — ✅ shipped
+
+Third stress test surfaced two regressions I caused chasing pass-1 speed, plus
+quick wins. All fixed. Build ✓.
+
+- **R1 (regression) FIXED** — pass-1 dropped `/auth/me` and read the name from the
+  JWT, but the access token has no name claim (`auth.py:106`) → greeting was always
+  nameless. Re-added the `["me"]` query (staleTime 5m); greeting personalised again.
+- **R2 (regression) FIXED — AI now real** — `/tis?q=…` was cosmetic (TIS.jsx never read
+  it). Wired TIS to consume `?q=` once on mount and auto-send (guarded ref, no double-
+  send; the click-event guard in `send(textArg)` keeps button/Enter callers safe).
+  "Ask AI" from Overview now actually asks the contextual question. (DO-NOT-TOUCH TIS.jsx
+  override — surgical: one effect + one signature change.)
+- **R5 FIXED — safer one-tap Done** — optimistic hide on tap (can't double-complete),
+  reverts on failure with a toast; `aria-live="polite"` on the Needs-you-now region so
+  screen readers announce the current priority.
+- **R6 FIXED** — EnterpriseCompare capped to 8 + "+N more" (consistent with the farms cap).
+- a11y: reduced-motion on the sidebar chevron.
+
+**Sidebar updated (fewer clicks + simplicity):** promoted the two daily-use destinations
+**Tasks** and **Weather** to one-click top-level items (Tasks badge now always visible)
+and dropped the 2-item "Plan" group. Farm rail order: Overview · Tasks · Weather ·
+Grow · Sell · Prove · Insights · Account · Quick Add. LeftRail passes the open-task
+badge to the top-level Tasks item.
+
+**Still open (carry-over, backend/cross-page — honestly NOT fixed):** low-literacy
+voice/i18n (S6); government/enterprise role-based view + P&L gating (S5); tasks
+tenant-wide + cap 50 (S7); FarmSelector search at 500 farms; whole-farm activity feed
+(M20). R3 (hard-logout on flaky refresh) + R4 (reconnect refetch herd) left as
+correctness-vs-resilience trade-offs to tune deliberately, not patch.
+
+**DEPLOY:** frontend-only → `cd /opt/teivaka/frontend && npm run build`. Verify: greeting
+shows your name; Overview "Ask AI" opens TIS and auto-asks; tap Done → task vanishes
+once, reverts if offline; sidebar shows Tasks (with badge) + Weather as top-level.
+
+---
+
 ## 1-opt. Overview (/farm) — OPTIMIZATION PASS (2026-06-26) — ✅ shipped to branch
 
 Stress-tested across 11 personas (two rounds) → optimized for speed / automation /

@@ -117,7 +117,7 @@ function NeedsYouNow({ item, moreCount, onDone, navigate }) {
   const Icon = item.icon;
   return (
     <Card style={{ background: s.bg, borderColor: item.sev === "high" ? C.red : C.border }}>
-      <div className="p-4 flex items-center gap-4 flex-wrap">
+      <div className="p-4 flex items-center gap-4 flex-wrap" role="status" aria-live="polite">
         <div className="grid place-items-center rounded-xl shrink-0" style={{ width: 44, height: 44, background: "white" }}><Icon size={22} style={{ color: s.fg }} aria-hidden="true" /></div>
         <div className="flex-1 min-w-[180px]">
           <div className="text-[10px] uppercase tracking-wide font-bold" style={{ color: s.fg }}>Needs you now</div>
@@ -277,12 +277,14 @@ function OpsRow({ totalKg, workers, hours, wageWeek, avgCostPerKg, farmCount, na
 
 function EnterpriseCompare({ rows, navigate }) {
   if (rows.length < 2) return null;
+  const shown = rows.slice(0, 8);
+  const more = rows.length - shown.length;
   const maxAbs = Math.max(1, ...rows.map((r) => Math.abs(r.net)));
   return (
     <Card className="p-4">
       <SectionHead icon={BarChart3} title="Enterprise comparison" action="Full analytics" onAction={() => navigate("/farm/insights")} />
       <div className="space-y-2.5">
-        {rows.map((r) => {
+        {shown.map((r) => {
           const pos = r.net >= 0; const w = Math.round((Math.abs(r.net) / maxAbs) * 100);
           return (
             <div key={r.name} className="text-[12px]">
@@ -298,6 +300,7 @@ function EnterpriseCompare({ rows, navigate }) {
           );
         })}
       </div>
+      {more > 0 && <button onClick={() => navigate("/farm/insights")} className={`text-[11px] font-semibold mt-2 ${FOCUS}`} style={{ color: C.greenDk }}>+{more} more enterprise{more === 1 ? "" : "s"} →</button>}
     </Card>
   );
 }
@@ -415,6 +418,7 @@ function FarmOverview() {
   const { open: openLauncher } = useLauncher();
   const [searchParams, setSearchParams] = useSearchParams();
   const [cycleModalOpen, setCycleModalOpen] = useState(false);
+  const [doneIds, setDoneIds] = useState(() => new Set()); // optimistic one-tap Done (R5)
 
   useEffect(() => {
     if (searchParams.get("action") === "new-cycle") {
@@ -435,9 +439,12 @@ function FarmOverview() {
   const labor = useQuery({ queryKey: ["labor", farmId], queryFn: () => getJSON(`/api/v1/labor?farm_id=${encodeURIComponent(farmId)}`), enabled: on });
   const compliance = useQuery({ queryKey: ["compliance", farmId], queryFn: () => getJSON(`/api/v1/crops/compliance/${encodeURIComponent(farmId)}`), enabled: on });
   const chain = useQuery({ queryKey: ["chain-status"], queryFn: () => getJSON(`/api/v1/me/chain-status`) });
+  // The access-token JWT carries no name, so /auth/me is the only name source —
+  // dropping it (an earlier "optimization") made the greeting nameless (R1).
+  const me = useQuery({ queryKey: ["me"], queryFn: () => getJSON("/api/v1/auth/me"), staleTime: 5 * 60_000 });
 
   const farmsArr = useMemo(() => (Array.isArray(farms.data) ? farms.data : []).filter((x) => x && x.farm_id), [farms.data]);
-  const meName = useMemo(() => { const u = getCurrentUser() || {}; return String(u.full_name || u.name || "").split(" ")[0] || ""; }, []);
+  const meName = useMemo(() => String((me.data?.data?.full_name ?? me.data?.full_name ?? getCurrentUser()?.name ?? "") || "").split(" ")[0] || "", [me.data]);
   const updatedAt = Math.max(fin.dataUpdatedAt || 0, crops.dataUpdatedAt || 0, cycles.dataUpdatedAt || 0) || null;
   const degraded = fin.isError || crops.isError || cycles.isError || compliance.isError || tasks.isError;
 
@@ -521,12 +528,14 @@ function FarmOverview() {
     return { finSummary, cycleRows, cashBal, holds, revenue, net, expenses, margin, enterprises, entCounts, cmp, best, worst, score, grade, gradeNote, dueToday, highToday, watchCount, businesses, workers, hours, wageWeek, totalKg, avgCostPerKg, topRevenue, topExpense, needs };
   }, [fin.data, crops.data, flocks.data, cycles.data, tasks.data, compliance.data, labor.data, cash.data, navigate]);
 
-  // honest fallback only when the relevant data actually loaded
+  // honest fallback only when the relevant data actually loaded; optimistically
+  // hide a task the moment its Done is tapped so it can't be double-completed (R5)
+  const liveNeeds = v.needs.filter((n) => !n.taskId || !doneIds.has(n.taskId));
   const checkedOk = !tasks.isError && !compliance.isError;
-  const primary = v.needs[0] || (checkedOk
+  const primary = liveNeeds[0] || (checkedOk
     ? { sev: "ok", icon: CheckCircle2, text: "All clear — nothing needs you right now", hint: "Good time to log today's work.", action: "Log activity", go: () => openLauncher() }
     : { sev: "med", icon: WifiOff, text: "Can't check tasks right now", hint: "We'll refresh when you're back online.", action: "Retry", go: () => qc.invalidateQueries() });
-  const moreCount = Math.max(0, v.needs.length - 1);
+  const moreCount = Math.max(0, liveNeeds.length - 1);
 
   const askAi = () => {
     const q = v.holds ? "I have a harvest on hold for chemical withholding — what should I do?"
@@ -534,7 +543,18 @@ function FarmOverview() {
       : "Give me advice to improve my farm based on my current records.";
     navigate(`/tis?q=${encodeURIComponent(q)}`);
   };
-  const taskAction = async (id, action) => { try { await send("POST", `/api/v1/tasks/${id}/${action}`); emitToast(action === "complete" ? "Task done" : "Task skipped"); qc.invalidateQueries({ queryKey: ["tasks-open"] }); } catch (e) { emitToast(e?.userMessage || "Couldn't update the task — try again"); } };
+  const taskAction = async (id, action) => {
+    if (doneIds.has(id)) return;                                  // guard double-tap
+    setDoneIds((s) => new Set(s).add(id));                        // optimistic hide
+    try {
+      await send("POST", `/api/v1/tasks/${id}/${action}`);
+      emitToast(action === "complete" ? "Task done" : "Task skipped");
+      qc.invalidateQueries({ queryKey: ["tasks-open"] });
+    } catch (e) {
+      setDoneIds((s) => { const n = new Set(s); n.delete(id); return n; }); // revert on failure
+      emitToast(e?.userMessage || "Couldn't update the task — try again");
+    }
+  };
   const handleCycleCreated = () => { ["farm-cycles", "crops", "fin"].forEach((k) => qc.invalidateQueries({ queryKey: [k, farmId] })); qc.invalidateQueries({ queryKey: ["tasks-open"] }); };
 
   // ── render states ──────────────────────────────────────────────────

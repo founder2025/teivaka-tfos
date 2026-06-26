@@ -91,15 +91,12 @@ export const PILLAR_SUB_NAV = {
  * other pillars keep the flat list.
  */
 export const FARM_NAV_GROUPS = [
+  // Daily-use destinations are top-level items (one click, always-visible badge);
+  // lower-frequency surfaces stay grouped. Natural order: Overview → daily →
+  // Grow → Sell → Prove → Insights → Account.
   { kind: "item", path: "/farm", label: "Overview", sub: "Today's focus & farm health", icon: Eye },
-  {
-    kind: "group", id: "plan", label: "Plan", sub: "Tasks · weather",
-    icon: CheckSquare, color: "#7E57C2",
-    items: [
-      { path: "/farm/tasks",   label: "Tasks",   icon: CheckSquare },
-      { path: "/farm/weather", label: "Weather", icon: Cloud },
-    ],
-  },
+  { kind: "item", path: "/farm/tasks", label: "Tasks", sub: "What to do today", icon: CheckSquare },
+  { kind: "item", path: "/farm/weather", label: "Weather", sub: "Forecast & spray windows", icon: Cloud },
   {
     kind: "group", id: "grow", label: "Grow", sub: "Enterprises · production · resources",
     icon: Sprout, color: "#5C9A3F",

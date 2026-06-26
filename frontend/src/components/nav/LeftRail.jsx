@@ -132,7 +132,7 @@ function GroupSection({ entry, isOpen, onToggle, taskCount }) {
             display: "inline-flex", alignItems: "center", justifyContent: "center", color: "#fff",
             background: taskCount.overdue > 0 ? "var(--red)" : "var(--green-dk)" }}>{headerBadge > 99 ? "99+" : headerBadge}</span>
         )}
-        <ChevronDown size={16} style={{ flexShrink: 0, color: "var(--muted)", transform: isOpen ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 160ms ease" }} />
+        <ChevronDown size={16} className="motion-reduce:!transition-none" style={{ flexShrink: 0, color: "var(--muted)", transform: isOpen ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 160ms ease" }} />
       </button>
       {isOpen && (
         <div className="flex flex-col gap-0.5" style={{ paddingLeft: 14, marginTop: 2, marginBottom: 4 }}>
@@ -214,7 +214,9 @@ function FarmGroupedNav({ pathname, taskCount, onQuickAdd }) {
               isOpen={openGroups.has(entry.id)} onToggle={() => toggleGroup(entry.id)} />
           );
         }
-        return <RailItem key={entry.path} item={entry} />;
+        return <RailItem key={entry.path} item={entry}
+          badge={entry.path === "/farm/tasks" ? taskCount.open : 0}
+          badgeOverdue={entry.path === "/farm/tasks" && taskCount.overdue > 0} />;
       })}
     </nav>
   );
