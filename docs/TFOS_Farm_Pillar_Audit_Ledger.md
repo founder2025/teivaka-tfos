@@ -41,6 +41,12 @@ Legend: 🔒 LOCKED (approved; no redesign without new evidence) · ✅ PASS · 
   resolved; remainder filed (Tasks honor ?cycle, per-cycle buyer link, BBCH stage, rotation
   disease warning, certifications, shared loading/error hook, 500-cycle cap). **WHD harvest-hold
   fails CLOSED** (PD-A safety). Do NOT redesign again unless new evidence requires it. Deploy: frontend-only.
+- **Field Events (/farm/field-events)** — LOCKED 2026-06-26 (Operator-approved). Audited → redesigned
+  (one write path = (+) Capture Engine; 3 legacy forms retired, ~1060 dead lines deleted, 1457→393)
+  → stress-tested ×1 → all page-local findings (FE1–FE10, FX1–FX5, FES1–FES5) resolved or filed;
+  remainder filed (list endpoint pu_name+author-name join [real FE1 fix], Capture Engine cycle-state
+  rules FX2, WHD nudge at spray-log FE6, pest/disease severity+GPS FX4, server-side log filter,
+  whole-farm feed). Do NOT redesign again unless new evidence requires it. Deploy: frontend-only.
 
 ---
 
