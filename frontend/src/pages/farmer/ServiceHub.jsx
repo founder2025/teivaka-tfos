@@ -21,6 +21,7 @@ import { useNavigate } from "react-router-dom";
 import { Truck, Snowflake, MapPin, Check, X, Sparkles, Plus, AlertTriangle, ChevronDown } from "lucide-react";
 import TfpShell from "../../components/farm/TfpShell";
 import { getJSON, send } from "../../utils/api";
+import { getCurrentUser } from "../../utils/auth";
 import { formatMoney } from "../../utils/money";
 
 const C = { soil: "var(--soil)", green: "var(--green)", greenDk: "var(--green-dk)", line: "var(--line)", muted: "var(--muted)", paper: "var(--paper)", cream: "var(--cream)", red: "var(--red)" };
@@ -78,8 +79,10 @@ function JobCard({ j, children }) {
   );
 }
 
+const MY_FILTERS = [["active", "Active"], ["all", "All"], ["done", "Done"]];
 export default function ServiceHub() {
   const navigate = useNavigate();
+  const myId = getCurrentUser()?.sub;
   const [tab, setTab] = useState("requests");
   const [profile, setProfile] = useState(undefined); // undefined=loading, null=none
   const [available, setAvailable] = useState(undefined);
@@ -88,6 +91,8 @@ export default function ServiceHub() {
   const [errWork, setErrWork] = useState(false);
   const [errMine, setErrMine] = useState(false);
   const [showProvider, setShowProvider] = useState(false);
+  const [workLoaded, setWorkLoaded] = useState(false);
+  const [myFilter, setMyFilter] = useState("active");
   const [postOpen, setPostOpen] = useState(false);
   const [completeFor, setCompleteFor] = useState(null);
   const [p, setP] = useState({ display_name: "", service_types: [], base_location: "", base_lat: "", base_lng: "", service_radius_km: 25, phone: "", capacity_note: "", is_active: true });
@@ -99,7 +104,8 @@ export default function ServiceHub() {
     getJSON("/api/v1/service-jobs/available").then((r) => setAvailable(r?.data || [])).catch(() => { setAvailable([]); setErrWork(true); });
     getJSON("/api/v1/service-jobs/claimed").then((r) => setClaimed(r?.data || [])).catch(() => setClaimed([])); };
   const loadMine = () => { setErrMine(false); getJSON("/api/v1/service-jobs/mine").then((r) => setMine(r?.data || [])).catch(() => { setMine([]); setErrMine(true); }); };
-  useEffect(() => { loadProfile(); loadWork(); loadMine(); }, []); // eslint-disable-line
+  useEffect(() => { loadProfile(); loadMine(); }, []); // eslint-disable-line  (Earn data loads lazily on tab open — SHS4)
+  const goTab = (t) => { setTab(t); if (t === "work" && !workLoaded) { loadWork(); setWorkLoaded(true); } };
 
   const saveProfile = async () => {
     try {
@@ -118,7 +124,8 @@ export default function ServiceHub() {
   const claim = (id) => act(`/api/v1/service-jobs/${id}/claim`, "Job claimed");
   const cancel = (id) => act(`/api/v1/service-jobs/${id}/cancel`, "Job cancelled");
   const askAi = () => navigate("/tis?q=" + encodeURIComponent("How can I arrange affordable transport or cold storage for my farm produce?"));
-  const onTabKey = (e) => { if (e.key === "ArrowRight" || e.key === "ArrowLeft") { e.preventDefault(); setTab((t) => (t === "requests" ? "work" : "requests")); } };
+  const onTabKey = (e) => { if (e.key === "ArrowRight" || e.key === "ArrowLeft") { e.preventDefault(); goTab(tab === "requests" ? "work" : "requests"); } };
+  const myShown = (mine || []).filter((j) => myFilter === "all" || (myFilter === "done" ? j.status === "COMPLETED" : j.status !== "COMPLETED" && j.status !== "CANCELLED"));
 
   return (
     <TfpShell>
@@ -130,17 +137,23 @@ export default function ServiceHub() {
           </div>
 
           <div className="cycle-view-tabs" role="tablist" aria-label="Services views">
-            <button role="tab" aria-selected={tab === "requests"} tabIndex={tab === "requests" ? 0 : -1} className={`task-tab ${tab === "requests" ? "active" : ""}`} style={{ background: "none", border: "none", font: "inherit", cursor: "pointer" }} onClick={() => setTab("requests")} onKeyDown={onTabKey}>My jobs<span className="task-tab-count" style={{ fontSize: 10 }}>Get moved/stored</span></button>
-            <button role="tab" aria-selected={tab === "work"} tabIndex={tab === "work" ? 0 : -1} className={`task-tab ${tab === "work" ? "active" : ""}`} style={{ background: "none", border: "none", font: "inherit", cursor: "pointer" }} onClick={() => setTab("work")} onKeyDown={onTabKey}>Earn<span className="task-tab-count" style={{ fontSize: 10 }}>Fill jobs near you</span></button>
+            <button role="tab" aria-selected={tab === "requests"} tabIndex={tab === "requests" ? 0 : -1} className={`task-tab ${tab === "requests" ? "active" : ""}`} style={{ background: "none", border: "none", font: "inherit", cursor: "pointer" }} onClick={() => goTab("requests")} onKeyDown={onTabKey}>My jobs<span className="task-tab-count" style={{ fontSize: 10 }}>Get moved/stored</span></button>
+            <button role="tab" aria-selected={tab === "work"} tabIndex={tab === "work" ? 0 : -1} className={`task-tab ${tab === "work" ? "active" : ""}`} style={{ background: "none", border: "none", font: "inherit", cursor: "pointer" }} onClick={() => goTab("work")} onKeyDown={onTabKey}>Earn<span className="task-tab-count" style={{ fontSize: 10 }}>Fill jobs near you</span></button>
           </div>
 
           {tab === "requests" && (
             <>
-              <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12 }}><button className="btn btn-primary" onClick={() => setPostOpen(true)}><Plus size={14} />Post a job</button></div>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
+                <div className="gallery-filter-row" style={{ display: "flex", gap: 6 }}>
+                  {MY_FILTERS.map(([id, l]) => <button key={id} className={`filter-pill ${myFilter === id ? "active" : ""}`} onClick={() => setMyFilter(id)}>{l}<span className="filter-pill-count">{(mine || []).filter((j) => id === "all" || (id === "done" ? j.status === "COMPLETED" : j.status !== "COMPLETED" && j.status !== "CANCELLED")).length}</span></button>)}
+                </div>
+                <button className="btn btn-primary" onClick={() => setPostOpen(true)}><Plus size={14} />Post a job</button>
+              </div>
               {mine === undefined ? <div className="card" style={{ padding: 20, color: C.muted }}>Loading…</div>
                 : errMine && mine.length === 0 ? <ErrorCard msg="Couldn't load your jobs." onRetry={loadMine} />
                 : mine.length === 0 ? <div className="card" style={{ padding: 28, textAlign: "center" }}><div style={{ fontWeight: 700, color: C.soil }}>No jobs yet</div><div style={{ fontSize: 12.5, color: C.muted, margin: "6px auto 14px", maxWidth: 420, lineHeight: 1.5 }}>Post a transport or cold-storage job and nearby providers get notified. You can also start one from a sale (Buyers → order → Find transport).</div><button className="btn btn-primary" onClick={() => setPostOpen(true)}><Plus size={14} />Post a job</button></div>
-                : mine.map((j) => (
+                : myShown.length === 0 ? <div className="card" style={{ padding: 24, textAlign: "center", color: C.muted }}>No {myFilter === "done" ? "completed" : "active"} jobs.</div>
+                : myShown.map((j) => (
                   <JobCard key={j.job_id} j={j}>
                     {j.status === "CLAIMED" && <button className="btn btn-primary btn-sm" onClick={() => setCompleteFor(j)}><Check size={13} style={{ verticalAlign: "-2px" }} /> Confirm done</button>}
                     {(j.status === "OPEN" || j.status === "CLAIMED") && <button className="btn btn-secondary btn-sm" style={{ color: C.red }} onClick={() => cancel(j.job_id)}><X size={13} style={{ verticalAlign: "-2px" }} /> Cancel</button>}
@@ -154,7 +167,7 @@ export default function ServiceHub() {
             <>
               <div className="card" style={{ padding: 0, marginBottom: 14, overflow: "hidden" }}>
                 <button onClick={() => setShowProvider((v) => !v)} style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 16px", background: "none", border: "none", cursor: "pointer", font: "inherit" }}>
-                  <span style={{ fontWeight: 700, color: C.soil, fontSize: 14 }}>Your provider profile{profile ? "" : " — set up to start earning"}</span>
+                  <span style={{ fontWeight: 700, color: C.soil, fontSize: 14 }}>Your provider profile{profile === null ? " — set up to start earning" : ""}</span>
                   <span style={{ display: "flex", alignItems: "center", gap: 8 }}>{profile && !showProvider && <span style={{ fontSize: 11.5, color: C.muted }}>{(profile.service_types || []).length} service{(profile.service_types || []).length === 1 ? "" : "s"} · {profile.is_active !== false ? "available" : "off"}</span>}<ChevronDown size={16} style={{ transform: showProvider ? "rotate(180deg)" : "none", transition: "transform .15s", color: C.muted }} /></span>
                 </button>
                 {showProvider && (
@@ -168,8 +181,8 @@ export default function ServiceHub() {
                     <div style={{ display: "flex", gap: 8, flexWrap: "wrap", margin: "2px 0 10px" }}>
                       {SVC.map(([k, l]) => <button key={k} onClick={() => toggleType(k)} style={{ ...pill(p.service_types.includes(k) ? "#eef7ee" : "var(--cream)", p.service_types.includes(k) ? C.greenDk : C.muted), border: `1px solid ${p.service_types.includes(k) ? C.green : C.line}`, cursor: "pointer", padding: "5px 11px" }}>{l}</button>)}
                     </div>
-                    <div className="form-row" style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr", gap: 10 }}>
-                      <div><span style={lbl}>Base location</span><input value={p.base_location || ""} onChange={(e) => setP({ ...p, base_location: e.target.value })} /></div>
+                    <div className="form-row"><span style={lbl}>Base location</span><input value={p.base_location || ""} onChange={(e) => setP({ ...p, base_location: e.target.value })} /></div>
+                    <div className="form-row" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginTop: 8 }}>
                       <div><span style={lbl}>Lat</span><input value={p.base_lat} onChange={(e) => setP({ ...p, base_lat: e.target.value })} /></div>
                       <div><span style={lbl}>Lng</span><input value={p.base_lng} onChange={(e) => setP({ ...p, base_lng: e.target.value })} /></div>
                       <div><span style={lbl}>Radius km</span><input type="number" value={p.service_radius_km} onChange={(e) => setP({ ...p, service_radius_km: e.target.value })} /></div>
@@ -188,7 +201,7 @@ export default function ServiceHub() {
                 {available === undefined ? <div className="card" style={{ padding: 20, color: C.muted }}>Loading…</div>
                   : errWork && available.length === 0 ? <ErrorCard msg="Couldn't load nearby jobs." onRetry={loadWork} />
                   : available.length === 0 ? <div className="card" style={{ padding: 20, color: C.muted }}>No open jobs match your profile right now.</div>
-                  : available.map((j) => <JobCard key={j.job_id} j={j}><button className="btn btn-primary btn-sm" onClick={() => claim(j.job_id)}>Claim job</button></JobCard>)}
+                  : available.map((j) => <JobCard key={j.job_id} j={j}>{myId && String(j.requester_user_id) === String(myId) ? <span style={{ fontSize: 11.5, color: C.muted }}>Your own job</span> : <button className="btn btn-primary btn-sm" onClick={() => claim(j.job_id)}>Claim job</button>}</JobCard>)}
               </div>
 
               {claimed && claimed.length > 0 && (
@@ -242,9 +255,10 @@ function PostJobModal({ onClose, onSaved }) {
       </div>
       <div className="form-row" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 10 }}>
         <div><label>Needed by (optional)</label><input type="date" value={f.needed_by} onChange={set("needed_by")} /></div>
-        <div><label>Budget FJD (optional)</label><input type="number" min="0" step="0.50" value={f.budget_fjd} onChange={set("budget_fjd")} /></div>
+        <div><label>Max budget FJD (optional)</label><input type="number" min="0" step="0.50" value={f.budget_fjd} onChange={set("budget_fjd")} /></div>
       </div>
       <div className="form-row" style={{ marginTop: 10 }}><label>Notes (optional)</label><textarea rows={2} value={f.notes} onChange={set("notes")} /></div>
+      <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 8, lineHeight: 1.5 }}>This job — its cargo, locations and budget — is shared with nearby providers so they can offer to fill it.</div>
     </Modal>
   );
 }
