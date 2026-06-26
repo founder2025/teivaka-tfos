@@ -174,7 +174,6 @@ function CycleDetailInner() {
       <div className="flex flex-wrap gap-2">
         <ActionBtn onClick={() => navigate("/farm/cycles")}>← Back to list</ActionBtn>
         <ActionBtn onClick={() => openFormModal("crops", { cycleId })}>+ Log event</ActionBtn>
-        <ActionBtn onClick={() => navigate(`/farm/tasks?cycle=${encodeURIComponent(cycleId)}`)}>View tasks</ActionBtn>
         <ActionBtn onClick={() => navigate(`/tis?q=${encodeURIComponent(`What should I do next on my ${c.production_name || "crop"} cycle in ${c.pu_farmer_label || "this block"}?`)}`)}>✨ Ask AI</ActionBtn>
         {transitions.map((next) => (
           <ActionBtn key={next} onClick={() => transition(next)} disabled={!!acting} danger={next === "FAILED"}>
@@ -313,7 +312,7 @@ function CycleDetailInner() {
         </Panel>
 
         {/* 6. Tasks for this cycle — real open count + total events */}
-        <Panel title="Tasks for this cycle" action="Open task timeline" onAction={() => navigate(`/farm/tasks?cycle=${encodeURIComponent(cycleId)}`)}>
+        <Panel title="Tasks for this cycle">
           <div className="grid grid-cols-2 gap-3">
             <MiniStat label="Pending (open)" value={openTasks.length} color={openTasks.length > 0 ? C.amber : C.soil} />
             <MiniStat label="Total events" value={events.length} />

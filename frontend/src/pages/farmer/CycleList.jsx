@@ -11,7 +11,7 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
-import { Layers, Sprout, Plus, AlertTriangle, ShieldAlert } from "lucide-react";
+import { Layers, Sprout, Plus, AlertTriangle, ShieldAlert, Sparkles } from "lucide-react";
 import { useFormModal } from "../../context/FormModalContext";
 import TfpShell from "../../components/farm/TfpShell";
 import { CurrentFarmProvider, useCurrentFarm } from "../../context/CurrentFarmContext";
@@ -108,6 +108,7 @@ function ProductionInner() {
             <div><h1>Production</h1><div className="subtitle">What you're growing right now · {farmId || "your farm"}</div></div>
             <div className="page-actions">
               <FarmSelector />
+              <button className="btn" onClick={() => navigate(`/tis?q=${encodeURIComponent("What should I prioritise across my crops this week?")}`)}><Sparkles size={14} />Ask AI</button>
               <button className="btn btn-primary" onClick={() => openFormModal("cycle_new")}><Plus size={14} />New cycle</button>
             </div>
           </div>
