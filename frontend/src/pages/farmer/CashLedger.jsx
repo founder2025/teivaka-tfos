@@ -49,7 +49,7 @@ const CATEGORIES_BY_TYPE = {
   INCOME: [["HARVEST_SALE", "Harvest sale"], ["OTHER_INCOME", "Other income"]],
   EXPENSE: [["INPUTS_FERTILIZER", "Inputs — fertilizer"], ["INPUTS_CHEMICAL", "Inputs — chemical"], ["INPUTS_SEED", "Inputs — seed"], ["LABOR", "Labor"], ["EQUIPMENT", "Equipment"], ["FUEL", "Fuel"], ["TRANSPORT", "Transport"], ["FERRY", "Ferry"], ["OTHER_EXPENSE", "Other expense"]],
 };
-const VIEWS = [["overview", "Overview", "Live balance"], ["ledger", "Ledger", "Audit feed"], ["categories", "Categories", "Spend trends"], ["forecast", "Forecast", "13-week ahead"], ["reconciliation", "Reconcile", "Match statement"], ["evidence", "Bank Evidence", "Lender-ready"]];
+const VIEWS = [["overview", "Overview", "Live balance"], ["ledger", "Ledger", "Audit feed"], ["categories", "Categories", "Spend trends"], ["forecast", "Forecast", "Runway + outlook"], ["reconciliation", "Reconcile", "Check vs reality"], ["evidence", "Bank Evidence", "Lender-ready"]];
 const WINDOWS = [["week", "Week"], ["month", "Month"], ["quarter", "Quarter"], ["year", "Year"], ["all", "All"]];
 const WINDOW_DAYS = { week: 7, month: 31, quarter: 92, year: 366, all: Infinity };
 const AI_PROMPTS = {
@@ -306,8 +306,8 @@ function CashInner() {
                   : filtered.map((e) => <CashEventCard key={e.ledger_id} e={e} canManage={canManage} onEdit={(x) => setForm({ mode: "edit", type: x.transaction_type, entry: x })} onDelete={setDel} />)}
               </>
             ) : view === "categories" ? <CategoriesView entries={entries} capNote={capNote} />
-            : view === "forecast" ? <Building title="13-week cash forecast" body="Projects cash in/out 13 weeks ahead from your recurring buyer demand signals + scheduled costs. Turns on once you log a season of cash and set buyer demand. Nothing projected from fabricated numbers." />
-            : view === "reconciliation" ? <Building title="Reconcile statement" body="Match your logged cash against a bank / M-PAiSA statement to catch anything missed. Ships with statement import — until then the ledger is your single source of truth." />
+            : view === "forecast" ? <ForecastView farmId={farmId} balance={balance} />
+            : view === "reconciliation" ? <ReconcileView railBal={railBal} atCap={atCap} onAdd={() => setForm({ mode: "create", type: "INCOME" })} />
             : (
               <div className="card" style={{ padding: "18px 20px" }}>
                 <div style={{ fontWeight: 700, color: "var(--soil)", display: "flex", alignItems: "center", gap: 6 }}><ShieldCheck size={15} />Bank Evidence</div>
@@ -349,6 +349,99 @@ function CategoriesView({ entries, capNote }) {
           {r.expense > 0 && <div style={{ height: 7, borderRadius: 999, background: "var(--cream-2,#efe7d6)" }}><div style={{ height: 7, borderRadius: 999, width: `${(r.expense / max) * 100}%`, background: "var(--amber)" }} /></div>}
         </div>
       ))}
+    </div>
+  );
+}
+
+// Real cash forecast — runway + 8-week projection + upcoming income, strictly from
+// /analytics/{farm}/forecasts (balance + recent avg weekly net + live harvest dates). Honest-empty.
+function ForecastView({ farmId, balance }) {
+  const q = useQuery({ queryKey: ["cash-forecast", farmId], queryFn: () => getJSON(`/api/v1/analytics/${encodeURIComponent(farmId)}/forecasts`), enabled: !!farmId, retry: 1 });
+  if (q.isLoading) return <div className="card" style={{ padding: 20, color: "var(--muted)" }}>Loading forecast…</div>;
+  if (q.isError) return <ErrorCard msg="Couldn't load the forecast." onRetry={() => q.refetch()} />;
+  const d = q.data?.data || {};
+  const avg = d.avg_weekly_net_fjd;
+  const proj = d.cash_projection || [];
+  const harvests = d.harvest_windows || [];
+  if (avg == null) return <Building title="Cash forecast" body="Log a few weeks of cash in and out and your runway + projection appear here — projected only from your real history, never invented." />;
+  const burning = avg < 0;
+  const runwayWeeks = burning ? Math.max(0, Math.floor(balance / Math.abs(avg))) : null;
+  const firstNeg = proj.find((p) => p.projected_balance < 0);
+  const maxAbs = Math.max(1, ...proj.map((p) => Math.abs(p.projected_balance)));
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      <div className="cash-balance-card">
+        <div className="cash-balance-label">{burning ? "Cash runway" : "Cash trend"}</div>
+        <div className="cash-balance-value" style={{ color: burning ? (runwayWeeks <= 4 ? "var(--red)" : "var(--amber)") : "var(--green-dk)" }}>
+          {burning ? `≈ ${runwayWeeks} week${runwayWeeks === 1 ? "" : "s"}` : "Cash-positive"}
+        </div>
+        <div className="cash-balance-sub">{burning ? `at your current burn of ${fjd2(Math.abs(avg))}/week` : `building reserves at +${fjd2(avg)}/week`}</div>
+      </div>
+      <div className="card" style={{ padding: 16 }}>
+        <div style={{ fontWeight: 700, color: "var(--soil)", marginBottom: 4 }}>Projected balance</div>
+        <div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 10 }}>Projected from your average weekly net over the last 8 weeks — a guide, not a guarantee.</div>
+        {proj.map((p) => { const neg = p.projected_balance < 0; return (
+          <div key={p.week_offset} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+            <span style={{ width: 52, fontSize: 11.5, color: "var(--muted)" }}>Wk +{p.week_offset}</span>
+            <div style={{ flex: 1, height: 8, borderRadius: 999, background: "var(--cream-2,#efe7d6)" }}><div style={{ height: 8, borderRadius: 999, width: `${(Math.abs(p.projected_balance) / maxAbs) * 100}%`, background: neg ? "var(--red)" : "var(--green-dk)" }} /></div>
+            <span style={{ width: 90, textAlign: "right", fontFamily: "Menlo,monospace", fontSize: 12, color: neg ? "var(--red)" : "var(--soil)" }}>{fjd0(p.projected_balance)}</span>
+          </div>
+        ); })}
+        {firstNeg && burning && <div style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 12, color: "var(--red)", marginTop: 8 }}><AlertTriangle size={13} />On this trend, cash dips below zero around week +{firstNeg.week_offset} — line up income or trim costs before then.</div>}
+      </div>
+      <div className="card" style={{ padding: 16 }}>
+        <div style={{ fontWeight: 700, color: "var(--soil)", marginBottom: 8 }}>Expected income — upcoming harvests</div>
+        {harvests.length === 0 ? <div style={{ fontSize: 12.5, color: "var(--muted)" }}>No harvests scheduled. Set expected harvest dates on your cycles and they appear here as income events.</div>
+          : harvests.map((h) => (
+            <div key={h.cycle_id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 0", borderBottom: "1px solid rgba(92,64,51,0.08)", gap: 8 }}>
+              <div><span style={{ fontWeight: 600, color: "var(--soil)" }}>{h.crop || "Crop"}</span>{h.planned_yield_kg ? <span style={{ fontSize: 11.5, color: "var(--muted)" }}> · {Math.round(h.planned_yield_kg)}kg expected</span> : ""}</div>
+              <span style={{ fontSize: 11.5, color: h.overdue ? "var(--red)" : "var(--muted)" }}>{h.overdue ? "overdue · " : ""}{String(h.date).slice(0, 10)}</span>
+            </div>
+          ))}
+        <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 8 }}>Income amounts aren't projected here — they depend on price + grade you set at sale (no invented figures).</div>
+      </div>
+    </div>
+  );
+}
+
+// Real reconciliation — compare your logged rail balances against what's actually in M-PAiSA,
+// the bank and cash on hand, to catch missed entries. Client-side check; statement import + saved
+// reconciliations are the next slice (honestly named).
+function ReconcileView({ railBal, atCap, onAdd }) {
+  const [a, setA] = useState({ mpaisa: "", cash: "", bank: "" });
+  const rows = [["mpaisa", "M-PAiSA"], ["cash", "Cash on hand"], ["bank", "Bank"]];
+  const entered = rows.some(([k]) => a[k] !== "");
+  const set = (k) => (e) => setA((s) => ({ ...s, [k]: e.target.value }));
+  const diffOf = (k) => (a[k] === "" ? null : Number(a[k]) - (railBal[k] || 0));
+  const totalActual = rows.reduce((s, [k]) => s + (a[k] === "" ? (railBal[k] || 0) : Number(a[k] || 0)), 0);
+  const loggedTotal = railBal.mpaisa + railBal.cash + railBal.bank + (railBal.other || 0);
+  const totalDiff = entered ? totalActual - (railBal.mpaisa + railBal.cash + railBal.bank) : null;
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      <div className="calendar-banner">Enter what's actually in each place — your M-PAiSA, bank and cash on hand — and we'll show any gap versus what you've logged, so you can catch a missed entry.{atCap ? " Compares against your latest 200 entries." : ""}</div>
+      <div className="card" style={{ padding: 16 }}>
+        <div className="form-row" style={{ display: "grid", gridTemplateColumns: "1.3fr 1fr 1fr 1fr", gap: 10, fontSize: 10.5, textTransform: "uppercase", letterSpacing: ".5px", color: "var(--muted)" }}>
+          <span>Rail</span><span style={{ textAlign: "right" }}>Logged</span><span style={{ textAlign: "right" }}>Actual</span><span style={{ textAlign: "right" }}>Difference</span>
+        </div>
+        {rows.map(([k, label]) => { const dv = diffOf(k); return (
+          <div key={k} className="form-row" style={{ display: "grid", gridTemplateColumns: "1.3fr 1fr 1fr 1fr", gap: 10, alignItems: "center", marginTop: 8 }}>
+            <span style={{ fontSize: 13, color: "var(--soil)", fontWeight: 600 }}>{label}</span>
+            <span style={{ textAlign: "right", fontFamily: "Menlo,monospace", fontSize: 12.5 }}>{fjd0(railBal[k] || 0)}</span>
+            <input type="number" step="0.01" value={a[k]} onChange={set(k)} placeholder="0" style={{ textAlign: "right", padding: "6px 8px", border: "1.5px solid var(--line)", borderRadius: 6, fontSize: 12.5 }} />
+            <span style={{ textAlign: "right", fontFamily: "Menlo,monospace", fontSize: 12.5, color: dv == null ? "var(--muted)" : dv === 0 ? "var(--green-dk)" : "var(--red)" }}>{dv == null ? "—" : `${dv > 0 ? "+" : dv < 0 ? "−" : ""}${fjd0(Math.abs(dv))}`}</span>
+          </div>
+        ); })}
+        {railBal.other ? <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 8 }}>Plus {fjd0(railBal.other)} logged as credit/other (not a cash rail).</div> : null}
+      </div>
+      {entered && (
+        totalDiff === 0
+          ? <div className="card" style={{ padding: "12px 16px", color: "var(--green-dk)", fontWeight: 600 }}>Matched — your ledger is in sync with reality.</div>
+          : <div className="card" style={{ padding: "12px 16px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+              <div style={{ color: "var(--soil)", fontSize: 13 }}>Off by <strong style={{ color: "var(--red)" }}>{fjd0(Math.abs(totalDiff))}</strong> — {totalDiff > 0 ? "you have more than logged (a sale not recorded?)" : "you have less than logged (an expense not recorded?)"}</div>
+              <button className="btn btn-secondary btn-sm" onClick={onAdd}><Plus size={12} />Add the missing entry</button>
+            </div>
+      )}
+      <div style={{ fontSize: 11, color: "var(--muted)" }}>This is a quick check — it isn't saved yet. Statement import and saved reconciliation history are the next slice.</div>
     </div>
   );
 }
