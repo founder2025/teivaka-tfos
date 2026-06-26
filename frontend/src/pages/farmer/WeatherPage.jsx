@@ -108,6 +108,36 @@ function Field({ label, children }) {
   return <label className="block"><span className="text-[11px] font-medium" style={{ color: C.soil }}>{label}</span>{children}</label>;
 }
 
+// ── derived advisory from the REAL 7-day forecast (no invented warnings) ─────
+function ForecastBanner({ daily }) {
+  const rows = Array.isArray(daily?.data?.data) ? daily.data.data : [];
+  if (!rows.length) return null;
+  const wet = rows.slice(0, 3).find((d) => Number(d.precip_prob_pct) >= 60 || Number(d.precip_mm) >= 25);
+  if (wet) {
+    const prob = num(wet.precip_prob_pct), mm = round1(wet.precip_mm);
+    return (
+      <div className="rounded-xl border p-3 flex items-start gap-2.5" style={{ background: "#FEF6E6", borderColor: "var(--amber)" }}>
+        <AlertTriangle size={18} style={{ color: "var(--amber)", marginTop: 1 }} />
+        <div className="flex-1 min-w-0">
+          <div className="text-sm font-semibold" style={{ color: C.soil }}>Heavy rain likely {fmtDay(wet.valid_at)}{mm != null ? ` — ${mm} mm` : ""}{prob != null ? ` · ${prob}% chance` : ""}</div>
+          <div className="text-[11px]" style={{ color: C.muted }}>Prepare drainage and hold spraying. Derived from your 7-day forecast.</div>
+        </div>
+      </div>
+    );
+  }
+  const dry48 = rows.slice(0, 2).every((d) => Number(d.precip_prob_pct || 0) < 40 && Number(d.precip_mm || 0) < 5);
+  if (!dry48) return null;
+  return (
+    <div className="rounded-xl border p-3 flex items-start gap-2.5" style={{ background: C.greenTint, borderColor: C.border }}>
+      <Sun size={18} style={{ color: "var(--amber)", marginTop: 1 }} />
+      <div className="flex-1 min-w-0">
+        <div className="text-sm font-semibold" style={{ color: C.greenDk }}>Good window for spraying and field work</div>
+        <div className="text-[11px]" style={{ color: C.muted }}>Rain unlikely in the next 48 hours. Derived from your forecast.</div>
+      </div>
+    </div>
+  );
+}
+
 // ── log-weather modal (real POST) ────────────────────────────────────
 function LogWeatherModal({ open, onClose, farmId, onLogged }) {
   const [f, setF] = useState({ observation_date: todayStr(), rainfall_mm: "", temp_min_c: "", temp_max_c: "", humidity_pct: "", wind_speed_kmh: "", wind_direction: "", cloud_cover: "", notes: "" });
@@ -191,6 +221,8 @@ function WeatherInner() {
           <button onClick={() => setLogOpen(true)} className="btn btn-primary"><Plus size={14} />Log today's weather</button>
         </div>
       </div>
+
+      <ForecastBanner daily={daily} />
 
       {!loggedToday && !loading && (
         <div className="rounded-xl border p-3 flex items-center justify-between gap-2 flex-wrap" style={{ background: C.greenTint, borderColor: C.border }}>
