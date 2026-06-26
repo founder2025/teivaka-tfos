@@ -107,6 +107,9 @@ function LogWeatherModal({ open, onClose, farmId, prefill, onLogged }) {
   const inpStyle = { border: `1px solid ${C.border}`, background: C.paper, color: C.soil };
   const submit = async () => {
     if (!f.observation_date) { emitToast("Pick the observation date"); return; }
+    const rng = (v, lo, hi, lbl) => { const n = num(v); if (n != null && (n < lo || n > hi)) { emitToast(`${lbl} must be ${lo}–${hi}`); return false; } return true; };
+    if (!rng(f.rainfall_mm, 0, 2000, "Rainfall (mm)") || !rng(f.humidity_pct, 0, 100, "Humidity (%)") ||
+        !rng(f.wind_speed_kmh, 0, 400, "Wind (km/h)") || !rng(f.temp_min_c, -15, 60, "Temp min") || !rng(f.temp_max_c, -15, 60, "Temp max")) return;
     setBusy(true);
     try {
       const tmin = num(f.temp_min_c), tmax = num(f.temp_max_c);
@@ -126,11 +129,11 @@ function LogWeatherModal({ open, onClose, farmId, prefill, onLogged }) {
       <div className="text-[12px] mb-2" style={{ color: C.muted }}>Live weather is fetched automatically. Use this to record what you saw on the ground (e.g. your rain-gauge) or correct the feed.</div>
       <div className="grid grid-cols-2 gap-2.5">
         <Field label="Date"><input type="date" value={f.observation_date} onChange={set("observation_date")} className={inp} style={inpStyle} /></Field>
-        <Field label="Rainfall (mm)"><input type="number" inputMode="decimal" value={f.rainfall_mm} onChange={set("rainfall_mm")} className={inp} style={inpStyle} placeholder="0" /></Field>
-        <Field label="Temp min (°C)"><input type="number" inputMode="decimal" value={f.temp_min_c} onChange={set("temp_min_c")} className={inp} style={inpStyle} /></Field>
-        <Field label="Temp max (°C)"><input type="number" inputMode="decimal" value={f.temp_max_c} onChange={set("temp_max_c")} className={inp} style={inpStyle} /></Field>
-        <Field label="Humidity (%)"><input type="number" inputMode="decimal" value={f.humidity_pct} onChange={set("humidity_pct")} className={inp} style={inpStyle} /></Field>
-        <Field label="Wind (km/h)"><input type="number" inputMode="decimal" value={f.wind_speed_kmh} onChange={set("wind_speed_kmh")} className={inp} style={inpStyle} /></Field>
+        <Field label="Rainfall (mm)"><input type="number" inputMode="decimal" min="0" max="2000" value={f.rainfall_mm} onChange={set("rainfall_mm")} className={inp} style={inpStyle} placeholder="0" /></Field>
+        <Field label="Temp min (°C)"><input type="number" inputMode="decimal" min="-15" max="60" value={f.temp_min_c} onChange={set("temp_min_c")} className={inp} style={inpStyle} /></Field>
+        <Field label="Temp max (°C)"><input type="number" inputMode="decimal" min="-15" max="60" value={f.temp_max_c} onChange={set("temp_max_c")} className={inp} style={inpStyle} /></Field>
+        <Field label="Humidity (%)"><input type="number" inputMode="decimal" min="0" max="100" value={f.humidity_pct} onChange={set("humidity_pct")} className={inp} style={inpStyle} /></Field>
+        <Field label="Wind (km/h)"><input type="number" inputMode="decimal" min="0" max="400" value={f.wind_speed_kmh} onChange={set("wind_speed_kmh")} className={inp} style={inpStyle} /></Field>
         <div className="col-span-2"><Field label="Note (optional)"><input value={f.notes} onChange={set("notes")} className={inp} style={inpStyle} placeholder="e.g. storm in the afternoon" /></Field></div>
       </div>
       <div className="flex justify-end gap-2 mt-4">
@@ -148,17 +151,19 @@ function WeatherInner() {
   const [logOpen, setLogOpen] = useState(false);
   const [logPrefill, setLogPrefill] = useState(null);
   const [histOpen, setHistOpen] = useState(false);
+  const [prep, setPrep] = useState("idle"); // idle | busy | done — guards duplicate prep tasks (WXS4)
 
-  const q = (key, url, enabled = true) => useQuery({ queryKey: key, queryFn: () => getJSON(url), enabled: !!farmId && enabled });
-  const current = q(["wx-cur", farmId], `/api/v1/weather/current/${encodeURIComponent(farmId)}`);
-  const daily = q(["wx-fc", farmId, "daily"], `/api/v1/weather/forecast/${encodeURIComponent(farmId)}?range=daily`);
-  const hourly = q(["wx-fc", farmId, "hourly"], `/api/v1/weather/forecast/${encodeURIComponent(farmId)}?range=hourly`);
-  const cyclone = q(["wx-cyc", farmId], `/api/v1/weather/cyclone/${encodeURIComponent(farmId)}`);
-  const crops = q(["wx-crops", farmId], `/api/v1/financials/crops/${encodeURIComponent(farmId)}`);
-  const flocks = q(["wx-flocks", farmId], `/api/v1/flocks?farm_id=${encodeURIComponent(farmId)}&is_active=true`);
-  // history: deferred until opened (W8 — saves 2 calls on first paint)
-  const summary = q(["wx-sum", farmId], `/api/v1/weather/summary/${encodeURIComponent(farmId)}?days=30`, histOpen);
-  const obs = q(["wx-obs", farmId], `/api/v1/weather?farm_id=${encodeURIComponent(farmId)}&days=60`, histOpen);
+  const on = !!farmId;
+  const current = useQuery({ queryKey: ["wx-cur", farmId], queryFn: () => getJSON(`/api/v1/weather/current/${encodeURIComponent(farmId)}`), enabled: on });
+  const daily = useQuery({ queryKey: ["wx-fc", farmId, "daily"], queryFn: () => getJSON(`/api/v1/weather/forecast/${encodeURIComponent(farmId)}?range=daily`), enabled: on });
+  const hourly = useQuery({ queryKey: ["wx-fc", farmId, "hourly"], queryFn: () => getJSON(`/api/v1/weather/forecast/${encodeURIComponent(farmId)}?range=hourly`), enabled: on });
+  const cyclone = useQuery({ queryKey: ["wx-cyc", farmId], queryFn: () => getJSON(`/api/v1/weather/cyclone/${encodeURIComponent(farmId)}`), enabled: on });
+  const crops = useQuery({ queryKey: ["wx-crops", farmId], queryFn: () => getJSON(`/api/v1/financials/crops/${encodeURIComponent(farmId)}`), enabled: on });
+  const flocks = useQuery({ queryKey: ["wx-flocks", farmId], queryFn: () => getJSON(`/api/v1/flocks?farm_id=${encodeURIComponent(farmId)}&is_active=true`), enabled: on });
+  // observations fetched always so the no-feed guidance fallback works (WXS1);
+  // only the heavier 30-day summary aggregate is deferred until history opens (W8).
+  const obs = useQuery({ queryKey: ["wx-obs", farmId], queryFn: () => getJSON(`/api/v1/weather?farm_id=${encodeURIComponent(farmId)}&days=60`), enabled: on });
+  const summary = useQuery({ queryKey: ["wx-sum", farmId], queryFn: () => getJSON(`/api/v1/weather/summary/${encodeURIComponent(farmId)}?days=30`), enabled: on && histOpen });
 
   const cur = current.data?.data || null;
   const dailyRows = daily.data?.data ?? [];
@@ -181,9 +186,10 @@ function WeatherInner() {
   };
   const askAi = () => navigate(`/tis?q=${encodeURIComponent("Give me a weather brief and what to do on my farm this week.")}`);
   const addCyclonePrep = async () => {
-    if (!farmId) { emitToast("Select a farm first"); return; }
-    try { await send("POST", `/api/v1/tasks/manual`, { farm_id: farmId, imperative: `Cyclone prep — secure shelters & move stock${cyc?.name ? ` (${cyc.name})` : ""}` }); emitToast("Prep task added to your Tasks"); }
-    catch (e) { emitToast(e?.userMessage || "Couldn't add the task"); }
+    if (!farmId || prep !== "idle") { if (!farmId) emitToast("Select a farm first"); return; }
+    setPrep("busy");
+    try { await send("POST", `/api/v1/tasks/manual`, { farm_id: farmId, imperative: `Cyclone prep — secure shelters & move stock${cyc?.name ? ` (${cyc.name})` : ""}` }); setPrep("done"); emitToast("Prep task added to your Tasks"); }
+    catch (e) { setPrep("idle"); emitToast(e?.userMessage || "Couldn't add the task"); }
   };
 
   const w = cur ? wmo(cur.weather_code) : null;
@@ -213,7 +219,7 @@ function WeatherInner() {
                 <div className="text-[10px] mt-1" style={{ color: C.muted }}>GDACS · RSMC Nadi {cyc.fetched_at ? `· ${asOf(cyc.fetched_at)}` : ""}</div>
               </div>
             </div>
-            <button onClick={addCyclonePrep} className={`text-sm px-3 py-2 rounded-lg text-white font-semibold ${FOCUS}`} style={{ background: C.red }}>Add prep task</button>
+            <button onClick={addCyclonePrep} disabled={prep !== "idle"} className={`text-sm px-3 py-2 rounded-lg text-white font-semibold disabled:opacity-60 ${FOCUS}`} style={{ background: prep === "done" ? C.greenDk : C.red }}>{prep === "done" ? "Prep task added ✓" : prep === "busy" ? "Adding…" : "Add prep task"}</button>
           </div>
         </div>
       )}
@@ -248,7 +254,13 @@ function WeatherInner() {
       {/* THIS WEEK — outlook + windows + disease (consolidated, W4 / WX2) */}
       {(() => {
         if (daily.isLoading) return <Section icon={CloudSun} title="This week"><div className={`rounded-xl ${PULSE}`} style={{ height: 84, background: C.cream }} /></Section>;
-        if (dailyRows.length === 0) return <Section icon={CloudSun} title="This week"><div className="text-sm" style={{ color: C.muted }}>The 7-day outlook appears here once the weather feed runs for this farm.</div></Section>;
+        if (dailyRows.length === 0) return (
+          <Section icon={CloudSun} title="This week">
+            {daily.isError
+              ? <div className="flex items-center gap-2 text-sm" style={{ color: C.muted }}><WifiOff size={15} style={{ color: C.amber }} aria-hidden="true" />Couldn't load the forecast. <button onClick={() => daily.refetch()} className={`underline ${FOCUS}`} style={{ color: C.greenDk }}>Retry</button></div>
+              : <div className="text-sm" style={{ color: C.muted }}>The 7-day outlook updates automatically every 3 hours. If it stays empty, your farm may need its map location set. <button onClick={() => navigate("/farm/resources?tab=locations")} className={`underline ${FOCUS}`} style={{ color: C.greenDk }}>Set location</button></div>}
+          </Section>
+        );
         const wet = dailyRows.slice(0, 3).find((d) => Number(d.precip_prob_pct) >= 60 || Number(d.precip_mm) >= 25);
         const dry48 = dailyRows.slice(0, 2).every((d) => Number(d.precip_prob_pct || 0) < 40 && Number(d.precip_mm || 0) < 5);
         const wetDays = dailyRows.filter((d) => (Number(d.precip_mm) || 0) >= 5 || (Number(d.precip_prob_pct) || 0) >= 60).length;
@@ -257,7 +269,7 @@ function WeatherInner() {
         const lvlCol = level === "HIGH" ? C.red : level === "ELEVATED" ? C.amber : C.greenDk;
         const chip = (label, c) => <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full inline-block" style={{ color: c, border: `1px solid ${C.border}` }}>{label}</span>;
         return (
-          <Section icon={CalendarClock} title="This week — outlook & windows" meta="Open-Meteo">
+          <Section icon={CalendarClock} title="This week — outlook & windows" meta={daily.data?.meta?.fetched_at ? asOf(daily.data.meta.fetched_at) : "Open-Meteo"}>
             {wet ? (
               <div className="rounded-xl border p-3 flex items-start gap-2.5 mb-3" style={{ background: "#FEF6E6", borderColor: "var(--amber)" }}>
                 <AlertTriangle size={18} style={{ color: "var(--amber)", marginTop: 1 }} aria-hidden="true" />
@@ -298,8 +310,10 @@ function WeatherInner() {
                 </tbody>
               </table>
             </div>
-            <div className="text-sm mt-3" style={{ color: lvlCol, fontWeight: 700 }}>Fungal-disease pressure: {level}</div>
-            <div className="text-[11px] mt-0.5" style={{ color: C.muted }}>{wetDays} of the next 7 days are wet{humid ? " & humid" : ""}. Spray HOLD includes windy days (drift). Weather-operational guidance — not crop-specific agronomy; ask AI for treatment.</div>
+            <div className="text-sm mt-3 flex items-center gap-2 flex-wrap" style={{ color: lvlCol, fontWeight: 700 }}>Fungal-disease pressure: {level}
+              {level !== "LOW" && <button onClick={() => navigate(`/tis?q=${encodeURIComponent(`Fungal disease pressure is ${level} on my farm — what should I scout for and how do I treat it?`)}`)} className={`text-[11px] font-semibold px-2 py-0.5 rounded-full inline-flex items-center gap-1 ${FOCUS}`} style={{ color: C.greenDk, border: `1px solid ${C.border}` }}><Sparkles size={11} aria-hidden="true" />Ask AI for treatment</button>}
+            </div>
+            <div className="text-[11px] mt-0.5" style={{ color: C.muted }}>{wetDays} of the next 7 days are wet{humid ? " & humid" : ""}. Spray HOLD includes windy days (drift). Weather-operational guidance — not crop-specific agronomy.</div>
           </Section>
         );
       })()}
