@@ -528,3 +528,37 @@ prefilled; spray shows HOLD on a windy-but-dry day; history collapsed (opens →
 Verify-item: confirm `tenant.weather_forecast` migration exists in prod (else forecast 500s).
 
 **Status:** ✅ redesign shipped. Awaiting stress pass / approval to lock.
+
+---
+
+## 4. Enterprise (/farm/enterprises) — AUDITED + REDESIGNED (2026-06-26, approved) — ✅ shipped
+
+Audit findings E1–E10 + EX1–EX10 (chat); approved → full rebuild of `Enterprises.jsx` per
+`docs/TFOS_Enterprise_Redesign_Wireframe.md`. Build ✓ (chunk 47.7→39.6 KB). Frontend-only.
+
+**Headline fixes:** EX1 — **3-Layer doctrine surfaced** (Strike #101): a "By layer" 3-axis
+summary strip + a layer badge on every card + a layer filter; layer read per crop from
+`/cycles` (production_id→layer). EX3 — enterprise has no entity → **removed the dead
+Pause/Close/Worth actions** (filed a real entity). EX2 — **dropped the hardcoded "Open
+tasks: 0"** (replaced with the Layer KPI). E2/EX4/EX5 — **no black-box /100**: honest
+standing labels (Profitable / Building / Losing for crops; "{n}% survival" for animals);
+removed the invalid mixed-unit portfolio average. E4 — **13-tab detail → 4 real tabs**
+(Dashboard · Production/Herd · Finance · Records) + one honest "more coming" line.
+E9/EX8 — **5 view tabs → 3** (Portfolio · Money · Outlook; Rankings+Cash+Investor merged
+into Money); dropped the redundant EnterpriseStrip. E1 — routed via `utils/api`
+(token-refresh) + de-jargoned ErrorState. E6 — fixed the `||"Block"||"—"` no-op. E7 —
+"to date" not "this season". EX6 — alerts/"loss" flag only enterprises that **sold at a
+loss** (income>0 && net<0), never mid-cycle crops. B90 — ModeDropdown removed. retry:1 +
+refetchOnReconnect (E8); role=tablist/tab on tabs (a11y). Watermarked "Example" preview kept.
+
+**Filed (backend/cross-page, honest):** real enterprise entity (working Pause/Close/Worth/
+valuation + per-enterprise roles); animal financials (income/net/ROI); per-enterprise
+open-task count; per-block P&L grain; layer for animals/verticals; composite endpoint +
+shared QueryClient; grounded standing via decision signals/KB; certifications.
+
+**DEPLOY:** frontend-only → `cd /opt/teivaka/frontend && npm run build`. Verify: "By layer"
+strip shows Cash flow/Food security/Long-term with net; cards carry a layer badge; no
+Pause/Close buttons; open an enterprise → 4 tabs only, Layer KPI (no fake "0 open tasks");
+a mid-cycle crop is NOT flagged as losing money; empty farm → watermarked Example preview.
+
+**Status:** ✅ redesign shipped. Awaiting stress pass / approval to lock.
