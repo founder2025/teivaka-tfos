@@ -93,6 +93,7 @@ from app.routers import (
     platform_billing,
     payments,
     service_jobs,
+    jobs_board,
     subscriptions,
     webhooks,
     reports,
@@ -447,6 +448,7 @@ app.include_router(marketplace_fees.router,    prefix=PREFIX,                   
 app.include_router(platform_billing.router,    prefix=PREFIX,                         tags=["Platform Billing"])
 app.include_router(payments.router,            prefix=f"{PREFIX}/payments",           tags=["Payments"])
 app.include_router(service_jobs.router,         prefix=PREFIX,                         tags=["Service Jobs"])
+app.include_router(jobs_board.router,           prefix=PREFIX,                         tags=["Jobs Board"])
 app.include_router(webhooks.router,           prefix=f"{PREFIX}/webhooks",           tags=["Webhooks"])
 app.include_router(reports.router,            prefix=f"{PREFIX}/reports",            tags=["Reports"])
 app.include_router(exports.router,            prefix=f"{PREFIX}/exports",            tags=["Exports"])

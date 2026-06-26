@@ -746,3 +746,41 @@ shows; kill /inputs → "Couldn't load · Retry" (not "no items"); a row → Edi
 Receive/Use; on a phone → stacked cards (no 10-col scroll); days-left "—" when no burn.
 
 **Status:** ✅ redesign shipped. Awaiting stress pass / approval to lock.
+
+---
+
+## NEW BUILD — Teivaka Jobs board (agri-sector employment marketplace) — Phase 1 (2026-06-26)
+
+Operator-approved (placement: Market tab; visibility: members-only; monetization: free alpha;
+build Phase 1). NOT a locked-page redesign — a new community marketplace surface, built to the
+same standards. Distinct from Services (one-off tasks) and the Labour page (own workforce).
+
+**Shipped (Phase 1, end-to-end real):**
+- Migration `186_jobs_board` — `community.job_listings`, `community.job_applications`,
+  `community.worker_profiles` (global/cross-tenant, mirrors 178_service_jobs; grants to
+  teivaka_app; apply-as-owner). **Staged — not yet applied to prod DB.**
+- Router `jobs_board.py` (mounted /api/v1): worker-profile GET/PUT; job-listings post/available/
+  mine/status; apply; my-applications; withdraw; applications (poster-gated, contact-on-ACCEPTED);
+  decide (shortlist/decline); **hire → reuses real audited `workers.create_worker` (Labour bridge)**.
+  Guards: no self-apply, unique apply, poster-gated review/hire, ownership-checked status.
+- Frontend `Jobs.jsx` + Market tab "Jobs". Two views: Find work (browse/filter/apply + my
+  applications + collapsible seeker profile) and Hire (post + my listings + applicants + hire→Labour).
+  Standards: api.js, cached-on-error, formatMoney, Fiji time, shared a11y <Modal>, arrow-key tabs,
+  min-wage soft guard, self-apply hidden, view-aware Ask AI, lucide, responsive, submit-locks.
+
+**FILED (Phase 2/3, honest — NOT faked):** notify matching seekers on post (in-app + WhatsApp,
+reuse service_jobs._whatsapp_blast); worker + employer reliability; map view; ratings/reviews;
+in-app messaging; offer-letter/contract doc; FNPF tracking; server-side min-wage hard validation;
+monetization (featured/paid); public board + SEO.
+
+**DEPLOY (Tier-2 — backend migration + api rebuild + frontend):**
+1. `cd /opt/teivaka && git pull origin claude/beautiful-fermi-F0dLX`
+2. Backend: `docker compose -f 04_environment/docker-compose.yml build --no-cache api && docker compose -f 04_environment/docker-compose.yml up -d api && bash 04_environment/verify-deploy.sh`
+3. Migration (apply-as-owner, Strike #123): `docker exec teivaka_api alembic upgrade head` (verify head = 186_jobs_board; stamp only after rebuild ships the file — B78).
+4. Frontend: `cd /opt/teivaka/frontend && npm run build`
+**Verify:** Market → Jobs → post a listing; from another member, apply; as poster, open
+Applicants → Hire → tick "Add to Labour" → worker appears in Labour. Rollback: `git revert`
+the commit + rebuild; migration down = `alembic downgrade -1`.
+
+**Status:** ✅ code shipped to branch + build-verified (frontend npm build, backend py_compile).
+Migration STAGED (needs apply-as-owner on prod). Awaiting deploy + stress pass.
