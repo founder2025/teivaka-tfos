@@ -94,6 +94,21 @@ Legend: 🔒 LOCKED (approved; no redesign without new evidence) · ✅ PASS · 
   verifiable GPS (LOC20/34), multi-parcel/subdivision (LOC25/26), delete/edit-area (LOC18), offline
   map (LOC19), reliable enterprise↔block binding (LS7), bulk import (LS11). Do NOT redesign again
   unless new evidence requires it. Deploy: frontend-only.
+- **Buyers & sales (/farm/market → "Buyers & sales" tab)** — LOCKED 2026-06-26 (Operator-approved).
+  Audited → deepened (8-persona) → redesigned → stress-tested ×1 → optimized — all page-local
+  findings (B1–B32, BS1–BS10) resolved or filed. **#1 fix B1/B30: PAID reachable ONLY via Log
+  payment (writes cash_ledger income + Bank Evidence); status select forward-only; PAID/CANCELLED
+  out of the casual select; Cancel is confirmed — no more silent PAID-without-income.** Also: api.js
+  + cached-on-error; formatMoney; Fiji time; shared a11y <Modal> + arrow-key tabs; to-chase banner;
+  AR aging buckets + avg days; WhatsApp chase (intl-safe); multi-line orders (responsive); honest
+  partial-pay warning; Orders filter+search; friendly status labels; view-aware Ask AI; submit-locks.
+  **BS5 (HIGH, FILED backend): no role gate on /orders create/status/payment — any tenant user can
+  cancel/mark-paid; frontend hides Cancel for non-managers (fail-open) but the authoritative gate
+  must be server-side.** Other filed keystones (NOT faked): /status refuse PAID (B1-server),
+  partial-payment state (B23), sale→harvest stock deduction/oversell guard (B24), provenance/
+  traceability on sales (B27), invoice PDF (B16), credit limit (B26), animal sales via orders (B15),
+  deliveries/pick-list (B31), DSO/revenue-trend (B32), offline queue, pagination (B20). Do NOT
+  redesign again unless new evidence requires it. Deploy: frontend-only.
 
 ---
 
