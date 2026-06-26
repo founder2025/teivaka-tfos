@@ -36,6 +36,11 @@ Legend: 🔒 LOCKED (approved; no redesign without new evidence) · ✅ PASS · 
   per-enterprise task count, per-block P&L grain, layer for animals/verticals, composite endpoint,
   grounded standing, certifications, ES3 200-cycle layer cap). 3-Layer doctrine surfaced. Do NOT
   redesign again unless new evidence requires it. Deploy: frontend-only.
+- **Production (/farm/cycles + /cycles/:id)** — LOCKED 2026-06-26 (Operator-approved). Audited →
+  redesigned → optimized → stress-tested ×1 → all page-local findings (P1–P8, PD-A–PD-H, PS1–PS5)
+  resolved; remainder filed (Tasks honor ?cycle, per-cycle buyer link, BBCH stage, rotation
+  disease warning, certifications, shared loading/error hook, 500-cycle cap). **WHD harvest-hold
+  fails CLOSED** (PD-A safety). Do NOT redesign again unless new evidence requires it. Deploy: frontend-only.
 
 ---
 
