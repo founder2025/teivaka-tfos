@@ -27,12 +27,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient, QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { Plus, ListChecks } from "lucide-react";
+import { Plus, ListChecks, Lock, Sparkles, AlertTriangle } from "lucide-react";
 import ThemedSelect from "../../components/inputs/ThemedSelect.jsx";
 import { useFormModal } from "../../context/FormModalContext";
 import ThemedCombobox from "../../components/inputs/ThemedCombobox.jsx";
 import { CurrentFarmProvider, useCurrentFarm } from "../../context/CurrentFarmContext";
 import FarmSelector from "../../components/farm/FarmSelector";
+import { getJSON } from "../../utils/api";
+import { getCurrentUser } from "../../utils/auth";
 
 const C = {
   soil:    "var(--soil)",
@@ -215,7 +217,7 @@ function CropAndCycleFields({
 }
 
 const queryClient = new QueryClient({
-  defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false, staleTime: 60_000 } },
+  defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false, refetchOnReconnect: true, staleTime: 60_000 } },
 });
 
 // ============================================================================
@@ -1369,17 +1371,30 @@ function FieldEventsLog() {
   const navigate = useNavigate();
   const { openFormModal } = useFormModal();
   const { farmId } = useCurrentFarm();
+  const me = getCurrentUser()?.sub || getCurrentUser()?.user_id || null;
+  const [q, setQ] = useState("");
+  const [typeF, setTypeF] = useState("all");
+  const [editEvt, setEditEvt] = useState(null);
+
+  // FE-T1: api.js (token refresh + honest errors). Default retry/reconnect from queryClient.
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ["field-events", farmId],
-    queryFn: async () => {
-      const r = await fetch(`/api/v1/field-events?farm_id=${encodeURIComponent(farmId)}&limit=100`, { headers: feAuthHeaders() });
-      if (!r.ok) throw new Error(String(r.status));
-      return r.json();
-    },
-    enabled: !!farmId, retry: 0,
+    queryFn: () => getJSON(`/api/v1/field-events?farm_id=${encodeURIComponent(farmId)}&limit=100`),
+    enabled: !!farmId,
   });
-  const events = data?.data?.events ?? [];
-  const [editEvt, setEditEvt] = useState(null);
+  const allEvents = data?.data?.events ?? [];
+  const hasData = allEvents.length > 0; // FE2: keep showing cached events on a refetch error
+  const types = useMemo(() => [...new Set(allEvents.map((e) => e.event_type))], [allEvents]);
+  const events = useMemo(() => {
+    let r = allEvents;
+    if (typeF !== "all") r = r.filter((e) => e.event_type === typeF);
+    const s = q.trim().toLowerCase();
+    if (s) r = r.filter((e) => (FE_HUMAN[e.event_type] || e.event_type || "").toLowerCase().includes(s) || feDetail(e).toLowerCase().includes(s));
+    return r;
+  }, [allEvents, typeF, q]);
+  // FE1: human-readable By/Block — "you" for self, friendly labels when present, never a raw UUID dump.
+  const who = (e) => (e.created_by && me && String(e.created_by) === String(me)) ? "you" : (e.created_by_name || feShort(e.created_by));
+  const block = (e) => e.pu_farmer_label || e.pu_name || feShort(e.pu_id);
 
   return (
     <div className="tfp max-w-5xl mx-auto p-4 space-y-4">
@@ -1387,62 +1402,87 @@ function FieldEventsLog() {
         <div><h1>Field events</h1><div className="subtitle">Spray, irrigation, fertilizer, scouting and more — logged against your blocks</div></div>
         <div className="page-actions">
           <FarmSelector />
+          <button className="btn" onClick={() => navigate(`/tis?q=${encodeURIComponent("Summarise my recent field activity and what I should watch for.")}`)}><Sparkles size={14} />Ask AI</button>
           <button className="btn btn-primary" onClick={() => openFormModal("crops")}><Plus size={14} />Log event</button>
         </div>
       </div>
 
+      {hasData && (
+        <div className="flex items-center gap-2 flex-wrap">
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search activity…" className="rounded-lg border px-3 py-2 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--green)]" style={{ borderColor: C.border, minWidth: 180 }} />
+          <div className="flex gap-1.5 overflow-x-auto">
+            {["all", ...types].map((t) => (
+              <button key={t} onClick={() => setTypeF(t)} className="text-xs px-2.5 py-1 rounded-full shrink-0" style={{ border: `1px solid ${typeF === t ? C.greenDk : C.border}`, background: typeF === t ? C.green : "var(--paper)", color: typeF === t ? "#fff" : C.muted }}>{t === "all" ? "All" : (FE_HUMAN[t] || t)}</button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {isError && hasData && (
+        <div className="rounded-xl border p-2.5 flex items-center justify-between gap-2 flex-wrap" style={{ background: "#FEF6E6", borderColor: C.border }}>
+          <span className="text-[12px] flex items-center gap-1.5" style={{ color: "var(--amber)" }}><AlertTriangle size={13} />Couldn't refresh — showing your last saved events.</span>
+          <button onClick={() => refetch()} className="text-[11px] font-semibold px-2.5 py-1 rounded-lg" style={{ color: C.greenDk, border: `1px solid ${C.border}`, background: "white" }}>Retry</button>
+        </div>
+      )}
+
       <div className="rounded-2xl border bg-white overflow-hidden" style={{ borderColor: C.border }}>
         <div className="hidden md:grid items-center px-4 py-2 text-[10px] font-bold uppercase"
-          style={{ color: C.muted, gridTemplateColumns: "96px 120px 1fr 90px 80px 56px", borderBottom: `1px solid ${C.border}` }}>
+          style={{ color: C.muted, gridTemplateColumns: "96px 120px 1fr 110px 70px 56px", borderBottom: `1px solid ${C.border}` }}>
           <span>Date</span><span>Type</span><span>Detail</span><span>Block</span><span>By</span><span></span>
         </div>
-        {isLoading ? (
+        {isLoading && !hasData ? (
           <div className="px-4 py-10 text-center text-sm" style={{ color: C.muted }}>Loading…</div>
-        ) : isError ? (
+        ) : isError && !hasData ? (
           <div className="px-4 py-10 text-center">
             <div className="text-sm font-semibold" style={{ color: C.soil }}>Couldn't load field events</div>
             <button onClick={() => refetch()} className="mt-2 text-xs px-3 py-1.5 rounded-lg text-white" style={{ background: C.greenDk }}>Retry</button>
           </div>
-        ) : events.length === 0 ? (
+        ) : allEvents.length === 0 ? (
           <div className="px-4 py-12 text-center">
             <ListChecks size={26} style={{ color: C.green, margin: "0 auto" }} />
             <div className="text-sm font-semibold mt-2" style={{ color: C.soil }}>No field events yet</div>
-            <div className="text-xs mt-1" style={{ color: C.muted }}>Tap “Log event” to record a spray, irrigation, fertilizer or scouting activity.</div>
+            <div className="text-xs mt-1" style={{ color: C.muted }}>Tap "Log event" to record a spray, irrigation, fertilizer or scouting activity — with photo, GPS and voice.</div>
           </div>
+        ) : events.length === 0 ? (
+          <div className="px-4 py-10 text-center text-sm" style={{ color: C.muted }}>No events match this filter.</div>
         ) : events.map((e) => (
           <div key={e.event_id} className="flex md:grid md:items-center gap-3 px-4 py-3"
-            style={{ gridTemplateColumns: "96px 120px 1fr 90px 80px 56px", borderTop: `1px solid rgba(92,64,51,0.06)` }}>
+            style={{ gridTemplateColumns: "96px 120px 1fr 110px 70px 56px", borderTop: `1px solid rgba(92,64,51,0.06)` }}>
             <span className="text-[11px] shrink-0" style={{ color: C.muted }}>{feDate(e.event_date)}</span>
             <span className="text-sm font-medium md:font-normal" style={{ color: C.soil }}>{FE_HUMAN[e.event_type] || e.event_type}</span>
             <span className="flex-1 min-w-0 text-[13px] md:truncate" style={{ color: C.soil }}>{feDetail(e)}</span>
-            <span className="text-[11px]" style={{ color: C.muted }}>{feShort(e.pu_id)}</span>
-            <span className="text-[11px]" style={{ color: C.muted }}>{feShort(e.created_by)}</span>
+            <span className="text-[11px]" style={{ color: C.muted }}>{block(e)}</span>
+            <span className="text-[11px]" style={{ color: C.muted }}>{who(e)}</span>
             {feWithin48h(e.created_at)
-              ? <button onClick={() => setEditEvt(e)} className="text-[11px] font-semibold text-left" style={{ color: C.greenDk }}>Edit</button>
-              : <span className="text-[11px]" style={{ color: C.muted }} title="Locked after 48h">🔒</span>}
+              ? <button onClick={() => setEditEvt(e)} className="text-[11px] font-semibold text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--green)]" style={{ color: C.greenDk }}>Edit</button>
+              : <span title="Locked after 48 hours" aria-label="Locked" style={{ color: C.muted, display: "inline-flex" }}><Lock size={13} /></span>}
           </div>
         ))}
       </div>
-      <p className="text-[11px]" style={{ color: C.muted }}>Showing the most recent {events.length} event{events.length === 1 ? "" : "s"} for this farm. Entries can be corrected for 48 hours, then lock 🔒.</p>
+      <p className="text-[11px]" style={{ color: C.muted }}>Showing the most recent {allEvents.length} event{allEvents.length === 1 ? "" : "s"}{allEvents.length >= 100 ? " (first 100)" : ""}. Entries can be corrected for 48 hours, then lock.</p>
       {editEvt && <FieldEventEditModal evt={editEvt} onClose={() => setEditEvt(null)} onSaved={() => { refetch(); setEditEvt(null); }} />}
     </div>
   );
 }
 
+// Deep links (?type / ?new) open the (+) Capture Engine — the single rich, evidence-
+// capturing write path (FX1/FX3) — and land the farmer back on the log. The old in-page
+// forms (CropSelectionForm / Strike96CropsForm / FieldEventForm) are retired (no longer
+// routed to; their code is filed for removal).
+const LEGACY_TO_CATALOG = { SPRAY: "CHEMICAL_APPLIED", FERTILIZE: "FERTILIZER_APPLIED", IRRIGATE: "IRRIGATION", PRUNE: "PRUNING_TRAINING", TRANSPLANT: "TRANSPLANT_LOGGED" };
 function FieldEventDispatcher() {
-  const [searchParams] = useSearchParams();
-  const typeParam = searchParams.get("type");
-  const isNew = searchParams.get("new");
-  if (typeParam === "PLANTING" || typeParam === "TRANSPLANT_LOGGED") {
-    return <CropSelectionForm eventType={typeParam} schema={STRIKE_96_FIELDS[typeParam]} />;
-  }
-  if (typeParam && STRIKE_96_FIELDS[typeParam]) {
-    return <Strike96CropsForm eventType={typeParam} />;
-  }
-  // ?new=1 (or a legacy ?type like CHEMICAL_APPLIED) opens the form; bare route shows the log.
-  if (isNew || typeParam) {
-    return <FieldEventForm />;
-  }
+  const [sp, setSp] = useSearchParams();
+  const { openFormModal } = useFormModal();
+  useEffect(() => {
+    const type = sp.get("type");
+    const isNew = sp.get("new");
+    if (type || isNew) {
+      const t = type ? (LEGACY_TO_CATALOG[type] || type) : null;
+      openFormModal("crops", t ? { eventType: t } : {});
+      const n = new URLSearchParams(sp); n.delete("type"); n.delete("new"); setSp(n, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   return <FieldEventsLog />;
 }
 

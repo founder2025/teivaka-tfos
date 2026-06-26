@@ -608,3 +608,39 @@ closed/failed cycles; open a cycle → "Pending (open)" real count, money in FJD
 openable cards; KPI strip wraps on mobile.
 
 **Status:** ✅ redesign shipped. Awaiting stress pass / approval to lock.
+
+---
+
+## 6. Field Events (/farm/field-events) — AUDITED + REDESIGNED (2026-06-26, approved) — ✅ shipped
+
+Audit FE1–FE10 + FX1–FX5 (chat); approved → FieldEventNew.jsx consolidated per
+`docs/TFOS_FieldEvents_Redesign_Wireframe.md`. Build ✓ (chunk → 16 KB; the retired forms
+are tree-shaken out of the bundle). Frontend-only.
+
+**Headline (FX1/FX3):** the page had THREE in-page forms; the legacy one captured NO
+evidence (photo/GPS/voice) — an inferior duplicate of the (+) Capture Engine. **All three
+retired** (no longer routed to; source filed for deletion). The page is now the live LOG,
+and every log action — the button + any ?type/?new deep link — opens the **(+) Capture
+Engine** via `openFormModal("crops", { eventType })` (Evidence v2). One rich write path.
+
+**Also fixed:** FE2 log keeps cached events + degraded banner on a refetch error; FE-T1 log
+via `utils/api` (token refresh) + refetchOnReconnect; FE10 lucide `Lock` (not `🔒`); FE1
+"By you" for self + friendly Block label (`pu_farmer_label`/`pu_name` when present, raw-id
+join filed); FE4 search + type-chip filter on the log; AI page-level "Ask AI"; a11y
+(focus rings, aria on lock). FX5 stale `["tasks-next"]` invalidation gone with the form.
+
+**Kept verbatim:** FieldEventEditModal — the 48h correction window with WHD-critical chemical
+re-selection + live recomputed harvest-clear date + photo. (Strong; untouched.)
+
+**Filed (backend/cross-page):** list endpoint to join `pu_name` + author display name (FE1
+real fix); Capture Engine to allow cycle states its verbs imply — LAND_PREP pre-planting,
+harvest on HARVESTING cycles (FX2); WHD nudge at spray-log time (FE6); pest/disease
+severity+GPS (FX4); whole-farm activity feed; server-side log filter at volume; remove the
+dead legacy form source (tree-shaken from the bundle already).
+
+**DEPLOY:** frontend-only → `cd /opt/teivaka/frontend && npm run build`. Verify: bare
+/farm/field-events → the log (search + type chips, "By you", lucide lock); "Log event" or a
+?type deep link → the (+) Capture Engine (photo/GPS/voice); offline w/ events → list stays +
+banner; Edit within 48h still opens the WHD-aware modal.
+
+**Status:** ✅ redesign shipped. Awaiting stress pass / approval to lock.
