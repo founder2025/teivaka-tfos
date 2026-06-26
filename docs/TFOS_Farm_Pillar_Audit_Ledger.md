@@ -482,3 +482,43 @@ tasks/farm add server-side pagination + filter (filed).
 
 **Status:** 🟡 — "Do this next" redesign shipped; worker-assign / voice-log / AI-suggest
 filed for backend slices.
+
+---
+
+## 3. Weather (/farm/weather) — REDESIGNED (2026-06-26, audit-approved) — ✅ shipped to branch
+
+Full rebuild of `WeatherPage.jsx` per the approved audit + `docs/TFOS_Weather_Redesign_Wireframe.md`.
+Build ✓ (chunk → 26 KB). Frontend-only. The forecast feed IS live (weather_worker, Open-Meteo
++ GDACS, 3-hourly per celery_app.py:120-128) — the old docstring "feed not connected" was stale.
+
+**Structure (feed-primary, decision-first):** header (Ask AI + Log) → cyclone RED card at TOP
+when active (+ "Add prep task" weather→task bridge) → NOW hero (live feed; staleness note;
+one-tap "Log a ground reading" prefilled from the reading) → THIS WEEK (consolidated: outlook
+headline + 7-day strip + spray/harvest/plant windows + disease line) → What this weather means
+(one shared crop card + per-animal) → compact GREEN cyclone line → collapsible "Your logged
+history" (summary + observations, deferred until opened).
+
+**Fixed (verified):** W1 (api.js token-refresh; error→Retry vs empty→"updates every 3h / set
+location" + Locations link — no false "set your location" on error). W2 (Fiji time). W3 (one
+shared crop card, not faux per-crop). W4 (3 advisories → 1 "this week" block). W5 (ModeDropdown
+removed). W6/W8 (refetchOnReconnect; summary+obs deferred until history opened → 8→6 initial
+calls). WX1 (guidance now from the LIVE feed not just manual log; manual log demoted to optional
+ground-reading; one-tap log prefilled from the now-reading). **WX2 (spray window gated on WIND
+≥25, not just rain — agronomic correctness fix).** WX4 (staleness surfaced when fetched_at >4h).
+WX5 (cyclone leads when active + "Add prep task" creates a real /tasks/manual task). W7
+(progressive disclosure). a11y (aria-hidden icons, reduced-motion, role=alert on cyclone). More
+AI (Ask AI → /tis?q= weather brief). Centered max-w-4xl column.
+
+**Filed (backend/cross-page, honest — not faked):** reconcile feed↔observations data layer
+(auto-populate summary/observations from weather_forecast so "last 30 days" works for feed-only
+farmers — WX1 data layer); cyclone/heavy-rain PUSH alerts (WX5 proactive); GDD/evapotranspiration
++ crop-specific disease via KB (WX3); per-block microclimate (WX6); weather-as-insurance/loss-
+evidence export (WX7); regional aggregate for extension (WX10); thresholds→config (WX8);
+composite weather endpoint + shared QueryClient (W9); voice/i18n.
+
+**DEPLOY:** frontend-only → `cd /opt/teivaka/frontend && npm run build`. Verify: active cyclone
+shows red at top with "Add prep task"; Now hero shows live temp + "Log a ground reading"
+prefilled; spray shows HOLD on a windy-but-dry day; history collapsed (opens → loads summary).
+Verify-item: confirm `tenant.weather_forecast` migration exists in prod (else forecast 500s).
+
+**Status:** ✅ redesign shipped. Awaiting stress pass / approval to lock.
