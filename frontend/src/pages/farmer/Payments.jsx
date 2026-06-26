@@ -22,7 +22,7 @@ import TfpShell from "../../components/farm/TfpShell";
 import Modal from "../../components/ui/Modal.jsx";
 import { formatMoney } from "../../utils/money";
 import { apiFetch } from "../../utils/api";
-import { useCurrentFarm } from "../../context/CurrentFarmContext";
+import { useCurrentFarm, CurrentFarmProvider } from "../../context/CurrentFarmContext";
 
 const API = "/api/v1/payments";
 const toast = (m, t) => { try { window.dispatchEvent(new CustomEvent("tfos:toast", { detail: { message: m, type: t } })); } catch { /* noop */ } };
@@ -69,7 +69,7 @@ function DegradedBanner({ onRetry }) {
   );
 }
 
-export default function Payments() {
+function PaymentsInner() {
   const navigate = useNavigate();
   const { farmId } = useCurrentFarm();
   const [sum, setSum] = useState(null);
@@ -452,5 +452,15 @@ export default function Payments() {
         {cancelTarget && <div style={{ fontSize: 13, color: "var(--soil)" }}>{fjd(cancelTarget.amount_fjd)} · {cancelTarget.category}{cancelTarget.counterparty_label ? ` · ${cancelTarget.counterparty_label}` : ""}. This removes it from your payments list.</div>}
       </Modal>
     </TfpShell>
+  );
+}
+
+// Provide the farm context this page consumes (sibling CashLedger does the same).
+// FarmTabs/Money do NOT supply it, so the leaf page must — else useCurrentFarm throws.
+export default function Payments() {
+  return (
+    <CurrentFarmProvider>
+      <PaymentsInner />
+    </CurrentFarmProvider>
   );
 }
