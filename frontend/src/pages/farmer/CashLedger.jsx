@@ -25,9 +25,13 @@ import TfpShell from "../../components/farm/TfpShell";
 import { CurrentFarmProvider, useCurrentFarm } from "../../context/CurrentFarmContext";
 import FarmSelector from "../../components/farm/FarmSelector";
 import { getJSON, send } from "../../utils/api";
+import { getCurrentUser } from "../../utils/auth";
 import { formatMoney } from "../../utils/money";
 
 const LIST_LIMIT = 200; // backend caps le=200 (CA-BUG)
+// Editing/deleting cash retroactively changes the balance — management-only in the UI;
+// fail-open if role is unknown (authoritative gate filed backend, SS-CA5).
+function canManageCash() { const r = getCurrentUser()?.role; return !r || ["FOUNDER", "MANAGER", "ADMIN", "OWNER"].includes(r); }
 function emitToast(m) { window.dispatchEvent(new CustomEvent("tfos:toast", { detail: { message: m } })); }
 function todayISO() { return new Date().toLocaleDateString("en-CA", { timeZone: "Pacific/Fiji" }); } // Fiji day (CA4)
 function fjd0(v) { return formatMoney(v ?? 0, { decimals: 0 }); }
@@ -100,9 +104,9 @@ function Building({ title, body }) {
     <div style={{ fontSize: 12.5, color: "var(--muted)", marginTop: 6, lineHeight: 1.5 }}>{body}</div></div>;
 }
 
-function CashEventCard({ e, onEdit, onDelete }) {
+function CashEventCard({ e, onEdit, onDelete, canManage }) {
   const inc = isInflow(e); const [railK, railL] = railOf(e);
-  const editable = cashWithin48h(e.created_at);
+  const editable = cashWithin48h(e.created_at) && canManage;
   return (
     <div className={`cash-event-card ${inc ? "in" : "out"}`}>
       <div className="cash-event-head">
@@ -139,6 +143,7 @@ function CashInner() {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const { farmId } = useCurrentFarm();
+  const canManage = canManageCash();
   const [view, setView] = useState("overview");
   const [dir, setDir] = useState("all");
   const [catFilter, setCatFilter] = useState("all");
@@ -226,9 +231,9 @@ function CashInner() {
           <div className="capital-strip" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))" }}>
             <Tile label="Balance" value={fjd0(balance)} sub="live · all rails" />
             <Tile label="This week net" value={`${weekNet < 0 ? "−" : "+"}${fjd0(Math.abs(weekNet))}`} sub={`${fjd0(weekIn)} in · ${fjd0(weekOut)} out`} color={weekNet < 0 ? "var(--amber)" : "var(--green-dk)"} onClick={() => setView("ledger")} />
-            <Tile label="Receivables" value={fjd0(receivables)} sub="owed to farm" onClick={() => navigate("/farm/market")} />
-            <Tile label="Credit purchases" value={fjd0(creditPurchases)} sub={creditPurchases > 0 ? "already in balance" : "none"} color={creditPurchases > 0 ? "var(--amber)" : null} />
-            <Tile label="Net working capital" value={fjd0(nwc)} sub="balance + receivables" />
+            <div title="Money buyers still owe you for delivered orders"><Tile label="Receivables" value={fjd0(receivables)} sub="owed to farm" onClick={() => navigate("/farm/market")} /></div>
+            <div title="Things you bought on credit — these already reduce your balance"><Tile label="Credit purchases" value={fjd0(creditPurchases)} sub={creditPurchases > 0 ? "already in balance" : "none"} color={creditPurchases > 0 ? "var(--amber)" : null} /></div>
+            <div title="What you'd have if every buyer paid you: your balance plus money owed to you"><Tile label="Net working capital" value={fjd0(nwc)} sub="balance + money owed to you" /></div>
           </div>
 
           <div className="cycle-view-tabs" role="tablist" aria-label="Cash views">
@@ -263,7 +268,7 @@ function CashInner() {
                 <div style={{ marginTop: 18 }}>
                   <div style={{ fontSize: 13, fontWeight: 600, color: "var(--soil)", marginBottom: 10, display: "flex", justifyContent: "space-between" }}><span>Recent cash events</span><button style={{ fontSize: 11.5, color: "var(--muted)", background: "none", border: "none", cursor: "pointer" }} onClick={() => setView("ledger")}>View all in ledger</button></div>
                   {recent.length === 0 ? <div className="card" style={{ padding: 24, textAlign: "center", color: "var(--muted)" }}>No cash logged yet — use Cash in / Expense.</div>
-                    : recent.map((e) => <CashEventCard key={e.ledger_id} e={e} onEdit={(x) => setForm({ mode: "edit", type: x.transaction_type, entry: x })} onDelete={setDel} />)}
+                    : recent.map((e) => <CashEventCard key={e.ledger_id} e={e} canManage={canManage} onEdit={(x) => setForm({ mode: "edit", type: x.transaction_type, entry: x })} onDelete={setDel} />)}
                 </div>
               </>
             ) : view === "ledger" ? (
@@ -298,9 +303,9 @@ function CashInner() {
                   <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "var(--muted)", pointerEvents: "none" }}><Search size={14} /></span>
                 </div>
                 {filtered.length === 0 ? <div className="card" style={{ padding: 40, textAlign: "center", color: "var(--muted)" }}>No cash events match these filters.</div>
-                  : filtered.map((e) => <CashEventCard key={e.ledger_id} e={e} onEdit={(x) => setForm({ mode: "edit", type: x.transaction_type, entry: x })} onDelete={setDel} />)}
+                  : filtered.map((e) => <CashEventCard key={e.ledger_id} e={e} canManage={canManage} onEdit={(x) => setForm({ mode: "edit", type: x.transaction_type, entry: x })} onDelete={setDel} />)}
               </>
-            ) : view === "categories" ? <CategoriesView entries={entries} />
+            ) : view === "categories" ? <CategoriesView entries={entries} capNote={capNote} />
             : view === "forecast" ? <Building title="13-week cash forecast" body="Projects cash in/out 13 weeks ahead from your recurring buyer demand signals + scheduled costs. Turns on once you log a season of cash and set buyer demand. Nothing projected from fabricated numbers." />
             : view === "reconciliation" ? <Building title="Reconcile statement" body="Match your logged cash against a bank / M-PAiSA statement to catch anything missed. Ships with statement import — until then the ledger is your single source of truth." />
             : (
@@ -323,7 +328,7 @@ function CashInner() {
   );
 }
 
-function CategoriesView({ entries }) {
+function CategoriesView({ entries, capNote }) {
   const byCat = useMemo(() => {
     const m = {};
     entries.forEach((e) => { const k = e.category || "—"; (m[k] = m[k] || { cat: k, income: 0, expense: 0 }); if (isInflow(e)) m[k].income += amt(e); else m[k].expense += amt(e); });
@@ -333,6 +338,7 @@ function CategoriesView({ entries }) {
   const max = byCat.reduce((m, r) => Math.max(m, r.income, r.expense), 0) || 1;
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      {capNote && <div style={{ fontSize: 11, color: "var(--muted)" }}>{capNote}</div>}
       {byCat.map((r) => (
         <div key={r.cat}>
           <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5, color: "var(--soil)", fontWeight: 600, marginBottom: 4 }}>
