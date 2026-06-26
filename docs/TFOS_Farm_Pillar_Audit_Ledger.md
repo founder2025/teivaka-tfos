@@ -56,6 +56,60 @@ Needs-you-now band; tap a flock card → poultry dashboard; "Updated HH:MM" is r
 
 ---
 
+## 1-opt. Overview (/farm) — OPTIMIZATION PASS (2026-06-26) — ✅ shipped to branch
+
+Stress-tested across 11 personas (two rounds) → optimized for speed / automation /
+AI / simplicity / accessibility, folding in the critical stress-test fixes. Build ✓.
+
+**Speed.** All derivations moved into one `useMemo` (D6) — no recompute on tab/modal
+re-render. Dropped the unused `/farms/{id}` and `/auth/me` queries (name now from the
+JWT via getCurrentUser) → **12→10 calls**. `refetchOnReconnect` + `retry:1` so a flaky
+link self-heals instead of sticking on error.
+
+**Honesty under failure (was the worst weakness).** Routed every call through
+`utils/api` (token auto-refresh + humanised errors, B88) → an **expired session no
+longer renders "FJ$ 0 / All clear"** (D14). farms-*error* now shows a Retry card, not
+"create your first farm" (S2). Errored money shows "—" not 0 (S1). A `degraded` banner
+("showing last saved values · Retry") replaces silent false data; the all-clear line
+only shows when tasks+compliance actually loaded.
+
+**Automation / fewer clicks.** Complete the top task **one-tap from "Needs you now"**
+(no navigate). Auto-refetch on reconnect + after cycle-create.
+
+**AI.** "Ask AI" (header removed, now in Decide) **deep-links TIS pre-seeded with the
+live situation** (`/tis?q=…` — the hold, or the losing enterprise, or a general ask).
+Honest: TIS still answers from the KB; we only frame the question.
+
+**Simplicity.** One header action (Log); "Ask AI" lives where the decision is. Owner
+depth (Ops, Enterprise/Multi-farm compare) only renders when it has data. Stale
+docstring fixed.
+
+**Accessibility.** `prefers-reduced-motion` honoured (`motion-reduce:` on every pulse/
+transition); Active-cycle rows keyboard-operable (role=button, tabIndex, Enter/Space);
+aria-labels on rings + `aria-hidden` on decorative icons; tab row uses role=tab.
+
+**Correctness.** "Today" computed in **Pacific/Fiji** to match the backend day-boundary
+(D2). MultiFarmCompare capped to 6 + "view all" (S4/500-farm). pu_name (not raw pu_id)
++ author dropped in the activity strip (D4/M21).
+
+**STILL OPEN (deliberately staged — touches auth, not this page):**
+- **D1 🔴 shared-device cache** — module-level QueryClient + localStorage farm_id persist
+  across logout → next user briefly sees cached data. Fix = clear cache + farm_id on
+  logout (and namespace keys by user_id) in the auth/shell layer. NOT done here.
+- Backend keystones unchanged: composite `/farm/overview` (Inviolable #3), `farm_id`
+  on /tasks (D-tasks tenant-wide), whole-farm activity feed, role-based view (S5),
+  voice/i18n for low-literacy (S6).
+
+**DEPLOY:** frontend-only → `cd /opt/teivaka/frontend && npm run build`. No API/migration.
+Verify: expire your token (wait or clear access) → page refreshes via refresh-token,
+no false zeros; pull network → "showing saved data" banner; tap Done on the top task →
+it completes without leaving Overview.
+
+**Status:** ✅ optimization shipped. Next 🔴 to clear is D1 (logout cache) — auth-path,
+staged for your review.
+
+---
+
 ## 1-audit. Overview (/farm) — FORMAL FRAMEWORK AUDIT (2026-06-26) — audit record (superseded by redesign above)
 
 Forensic audit of `frontend/src/pages/farmer/FarmDashboard.jsx` (881 lines) under the
