@@ -116,6 +116,7 @@ export default function Jobs() {
   const [errHire, setErrHire] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [postOpen, setPostOpen] = useState(false);
+  const [postEdit, setPostEdit] = useState(null); // listing being edited (JA8)
   const [applyFor, setApplyFor] = useState(null);
   const [applicantsFor, setApplicantsFor] = useState(null);
   const [hireFor, setHireFor] = useState(null); // {listing, application}
@@ -150,6 +151,7 @@ export default function Jobs() {
     } catch (e) { emitToast(e?.userMessage || "Could not save profile"); }
   }
   const toggleDesired = (t) => setProf((o) => ({ ...o, desired_types: o.desired_types.includes(t) ? o.desired_types.filter((x) => x !== t) : [...o.desired_types, t] }));
+  const useMyGps = () => { if (!navigator.geolocation) return emitToast("No GPS on this device"); navigator.geolocation.getCurrentPosition((p) => setProf((o) => ({ ...o, base_lat: p.coords.latitude.toFixed(6), base_lng: p.coords.longitude.toFixed(6) })), () => emitToast("Couldn't get location")); };
   const withdraw = async (id) => { try { await send("PATCH", `/api/v1/job-applications/${id}/withdraw`); emitToast("Application withdrawn"); loadFind(); } catch (e) { emitToast(e?.userMessage || "Could not withdraw"); } };
 
   return (
@@ -189,15 +191,22 @@ export default function Jobs() {
                       <div><span style={lbl}>Phone</span><input value={prof.phone || ""} onChange={(e) => setProf({ ...prof, phone: e.target.value })} /></div>
                       <div><span style={lbl}>Available from</span><input type="date" value={prof.available_from || ""} onChange={(e) => setProf({ ...prof, available_from: e.target.value })} /></div>
                     </div>
-                    <div className="form-row" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 8 }}>
+                    <div className="form-row" style={{ display: "grid", gridTemplateColumns: "1fr 1fr auto", gap: 10, marginTop: 8, alignItems: "end" }}>
                       <div><span style={lbl}>Lat (optional)</span><input value={prof.base_lat} onChange={(e) => setProf({ ...prof, base_lat: e.target.value })} /></div>
                       <div><span style={lbl}>Lng (optional)</span><input value={prof.base_lng} onChange={(e) => setProf({ ...prof, base_lng: e.target.value })} /></div>
+                      <button className="btn btn-secondary btn-sm" onClick={useMyGps} style={{ marginBottom: 2 }}><MapPin size={12} style={{ verticalAlign: "-2px" }} /> Use my GPS</button>
                     </div>
                     <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 10 }}><button className="btn btn-primary btn-sm" onClick={saveProfile}>Save profile</button></div>
                   </div>
                 )}
               </div>
 
+              {hasProfile === false && (
+                <div className="card" style={{ padding: "10px 14px", marginBottom: 10, background: "#FBF4E6", border: `1px solid ${C.amber}`, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                  <span style={{ fontSize: 12.5, color: C.soil }}>Add your skills so employers can assess you — it's what they see when you apply.</span>
+                  <button className="btn btn-secondary btn-sm" onClick={() => setShowProfile(true)}>Complete profile</button>
+                </div>
+              )}
               <div className="gallery-filter-row" style={{ marginBottom: 10, display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
                 <button className={`filter-pill ${empFilter === "" ? "active" : ""}`} onClick={() => setEmpFilter("")}>All</button>
                 {EMP.map(([k, l]) => <button key={k} className={`filter-pill ${empFilter === k ? "active" : ""}`} onClick={() => setEmpFilter(k)}>{l}</button>)}
@@ -224,7 +233,7 @@ export default function Jobs() {
                       <div><div style={{ fontWeight: 600, color: C.soil }}>{a.role_title}</div><div style={{ fontSize: 11.5, color: C.muted }}>{a.poster_org_name || ""}{a.location ? ` · ${a.location}` : ""} · {payText(a)}</div></div>
                       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                         <span style={pill(a.status === "ACCEPTED" ? "#eef7ee" : a.status === "DECLINED" ? "#f3f3f3" : "var(--cream)", a.status === "ACCEPTED" ? C.greenDk : C.muted)}>{APP_STATUS[a.status] || a.status}</span>
-                        {a.status === "ACCEPTED" && <span style={{ fontSize: 11.5, color: C.greenDk }}>Hired — {a.poster_org_name || "the employer"} will be in touch</span>}
+                        {a.status === "ACCEPTED" && <span style={{ fontSize: 11.5, color: C.greenDk }}>Hired — confirm your start with {a.poster_org_name || "the employer"}</span>}
                         {(a.status === "APPLIED" || a.status === "SHORTLISTED") && <button className="btn btn-secondary btn-sm" onClick={() => withdraw(a.application_id)}>Withdraw</button>}
                       </div>
                     </div>
@@ -243,6 +252,7 @@ export default function Jobs() {
                 : mine.map((l) => (
                   <ListingCard key={l.listing_id} l={l}>
                     <button className="btn btn-primary btn-sm" onClick={() => setApplicantsFor(l)}><Users size={13} style={{ verticalAlign: "-2px" }} /> Applicants ({l.applicant_count || 0})</button>
+                    <button className="btn btn-secondary btn-sm" onClick={() => setPostEdit(l)}>Edit</button>
                     {l.status === "OPEN" ? <button className="btn btn-secondary btn-sm" onClick={async () => { try { await send("PATCH", `/api/v1/job-listings/${l.listing_id}/status?status=CLOSED`); emitToast("Listing closed"); loadHire(); } catch (e) { emitToast(e?.userMessage || "Failed"); } }}>Close</button>
                       : <button className="btn btn-secondary btn-sm" onClick={async () => { try { await send("PATCH", `/api/v1/job-listings/${l.listing_id}/status?status=OPEN`); emitToast("Listing reopened"); loadHire(); } catch (e) { emitToast(e?.userMessage || "Failed"); } }}>Reopen</button>}
                   </ListingCard>
@@ -252,15 +262,15 @@ export default function Jobs() {
         </div>
       </main>
 
-      {applyFor && <ApplyModal listing={applyFor} onClose={() => setApplyFor(null)} onSaved={() => { loadFind(); setApplyFor(null); }} />}
-      {postOpen && <PostListingModal onClose={() => setPostOpen(false)} onSaved={() => { loadHire(); setPostOpen(false); }} />}
+      {applyFor && <ApplyModal listing={applyFor} weak={hasProfile === false} onClose={() => setApplyFor(null)} onSaved={() => { loadFind(); setApplyFor(null); }} />}
+      {(postOpen || postEdit) && <PostListingModal edit={postEdit} onClose={() => { setPostOpen(false); setPostEdit(null); }} onSaved={() => { loadHire(); setPostOpen(false); setPostEdit(null); }} />}
       {applicantsFor && <ApplicantsModal listing={applicantsFor} onClose={() => setApplicantsFor(null)} onHire={(app) => { setHireFor({ listing: applicantsFor, application: app }); }} onChanged={loadHire} />}
       {hireFor && <HireModal listing={hireFor.listing} application={hireFor.application} onClose={() => setHireFor(null)} onSaved={() => { setHireFor(null); setApplicantsFor(null); loadHire(); }} />}
     </TfpShell>
   );
 }
 
-function ApplyModal({ listing, onClose, onSaved }) {
+function ApplyModal({ listing, onClose, onSaved, weak }) {
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const lock = useRef(false);
@@ -272,13 +282,21 @@ function ApplyModal({ listing, onClose, onSaved }) {
   return (
     <Modal title={`Apply — ${listing.role_title}`} onClose={onClose} maxWidth={460} foot={<><button className="btn btn-secondary" onClick={onClose}>Cancel</button><button className="btn btn-primary" onClick={submit} disabled={busy}>{busy ? "Sending…" : "Send application"}</button></>}>
       <div style={{ fontSize: 12.5, color: C.muted, marginBottom: 10 }}>{listing.poster_org_name || "Employer"}{listing.location ? ` · ${listing.location}` : ""} · {payText(listing)}. Your work profile is shared with the employer; your contact is revealed only if they accept you.</div>
+      {weak && <div style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 11.5, color: C.amber, marginBottom: 10 }}><AlertTriangle size={12} />Your work profile has no skills yet — add some first so the employer can assess you.</div>}
       <div className="form-row"><label>Message to the employer (optional)</label><textarea rows={3} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Why you're a good fit, availability…" /></div>
     </Modal>
   );
 }
 
-function PostListingModal({ onClose, onSaved }) {
-  const [f, setF] = useState({ role_title: "", sector: "FARM_LABOUR", employment_type: "CASUAL", positions: "1", location: "", base_lat: "", base_lng: "", pay_rate_fjd: "", pay_period: "DAY", pay_negotiable: false, skills_required: "", experience_required: "", start_date: "", duration_note: "", description: "", apply_deadline: "", poster_org_name: "" });
+function PostListingModal({ onClose, onSaved, edit }) {
+  const e0 = edit || {};
+  const [f, setF] = useState({
+    role_title: e0.role_title || "", sector: e0.sector || "FARM_LABOUR", employment_type: e0.employment_type || "CASUAL",
+    positions: String(e0.positions ?? "1"), location: e0.location || "", base_lat: e0.base_lat ?? "", base_lng: e0.base_lng ?? "",
+    pay_rate_fjd: e0.pay_rate_fjd ?? "", pay_period: e0.pay_period || "DAY", pay_negotiable: !!e0.pay_negotiable,
+    skills_required: (e0.skills_required || []).join(", "), experience_required: e0.experience_required || "",
+    start_date: e0.start_date ? String(e0.start_date).slice(0, 10) : "", duration_note: e0.duration_note || "",
+    description: e0.description || "", apply_deadline: e0.apply_deadline ? String(e0.apply_deadline).slice(0, 10) : "", poster_org_name: e0.poster_org_name || "" });
   const [busy, setBusy] = useState(false);
   const lock = useRef(false);
   const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }));
@@ -286,19 +304,21 @@ function PostListingModal({ onClose, onSaved }) {
     if (lock.current) return;
     if (!f.role_title.trim()) { emitToast("Give the role a title"); return; }
     lock.current = true; setBusy(true);
+    const body = {
+      role_title: f.role_title.trim(), sector: f.sector, employment_type: f.employment_type, positions: Number(f.positions) || 1,
+      location: f.location.trim() || null, base_lat: f.base_lat === "" ? null : Number(f.base_lat), base_lng: f.base_lng === "" ? null : Number(f.base_lng),
+      pay_rate_fjd: f.pay_negotiable || !f.pay_rate_fjd ? null : Number(f.pay_rate_fjd), pay_period: f.pay_period, pay_negotiable: !!f.pay_negotiable,
+      skills_required: f.skills_required.split(",").map((s) => s.trim()).filter(Boolean), experience_required: f.experience_required.trim() || null,
+      start_date: f.start_date || null, duration_note: f.duration_note.trim() || null, description: f.description.trim() || null,
+      apply_deadline: f.apply_deadline || null, poster_org_name: f.poster_org_name.trim() || null };
     try {
-      await send("POST", "/api/v1/job-listings", {
-        role_title: f.role_title.trim(), sector: f.sector, employment_type: f.employment_type, positions: Number(f.positions) || 1,
-        location: f.location.trim() || null, base_lat: f.base_lat === "" ? null : Number(f.base_lat), base_lng: f.base_lng === "" ? null : Number(f.base_lng),
-        pay_rate_fjd: f.pay_negotiable || !f.pay_rate_fjd ? null : Number(f.pay_rate_fjd), pay_period: f.pay_period, pay_negotiable: !!f.pay_negotiable,
-        skills_required: f.skills_required.split(",").map((s) => s.trim()).filter(Boolean), experience_required: f.experience_required.trim() || null,
-        start_date: f.start_date || null, duration_note: f.duration_note.trim() || null, description: f.description.trim() || null,
-        apply_deadline: f.apply_deadline || null, poster_org_name: f.poster_org_name.trim() || null });
-      emitToast("Job posted"); onSaved?.();
-    } catch (e) { emitToast(e?.userMessage || "Could not post the job"); lock.current = false; } finally { setBusy(false); }
+      if (edit) await send("PATCH", `/api/v1/job-listings/${encodeURIComponent(edit.listing_id)}`, body);
+      else await send("POST", "/api/v1/job-listings", body);
+      emitToast(edit ? "Listing updated" : "Job posted"); onSaved?.();
+    } catch (e) { emitToast(e?.userMessage || (edit ? "Could not save" : "Could not post the job")); lock.current = false; } finally { setBusy(false); }
   }
   return (
-    <Modal title="Post a job" onClose={onClose} foot={<><button className="btn btn-secondary" onClick={onClose}>Cancel</button><button className="btn btn-primary" onClick={submit} disabled={busy}>{busy ? "Posting…" : "Post job"}</button></>}>
+    <Modal title={edit ? "Edit job" : "Post a job"} onClose={onClose} foot={<><button className="btn btn-secondary" onClick={onClose}>Cancel</button><button className="btn btn-primary" onClick={submit} disabled={busy}>{busy ? "Saving…" : edit ? "Save" : "Post job"}</button></>}>
       <div className="form-row" style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 10 }}>
         <div><label>Role title</label><input value={f.role_title} onChange={set("role_title")} placeholder="e.g. Casual harvest hand" /></div>
         <div><label>Positions</label><input type="number" min="1" value={f.positions} onChange={set("positions")} /></div>
@@ -339,10 +359,17 @@ function ApplicantsModal({ listing, onClose, onHire, onChanged }) {
     try { await send("PATCH", `/api/v1/job-applications/${id}/decide?status=${status}`); emitToast(status === "SHORTLISTED" ? "Shortlisted" : "Declined"); load(); onChanged?.(); }
     catch (e) { emitToast(e?.userMessage || "Failed"); } finally { setBusy(false); }
   }
+  async function shortlistAll() {
+    if (busy) return; setBusy(true);
+    try { for (const a of (rows || []).filter((x) => x.status === "APPLIED")) await send("PATCH", `/api/v1/job-applications/${a.application_id}/decide?status=SHORTLISTED`); emitToast("Shortlisted all new applicants"); load(); onChanged?.(); }
+    catch (e) { emitToast(e?.userMessage || "Failed"); } finally { setBusy(false); }
+  }
   const RANK = { SHORTLISTED: 0, APPLIED: 1, ACCEPTED: 2, DECLINED: 3 };
   const sorted = (rows || []).slice().sort((a, b) => (RANK[a.status] ?? 9) - (RANK[b.status] ?? 9));
+  const appliedCount = (rows || []).filter((x) => x.status === "APPLIED").length;
   return (
     <Modal title={`Applicants — ${listing.role_title}`} onClose={onClose} maxWidth={620} foot={<button className="btn btn-primary" onClick={onClose}>Close</button>}>
+      {appliedCount > 1 && <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}><button className="btn btn-secondary btn-sm" onClick={shortlistAll} disabled={busy}>Shortlist all new ({appliedCount})</button></div>}
       {rows === undefined ? <div style={{ color: C.muted }}>Loading…</div>
         : rows.length === 0 ? <div style={{ color: C.muted, fontSize: 12.5 }}>No applicants yet. They'll appear here as members apply.</div>
         : sorted.map((a) => (

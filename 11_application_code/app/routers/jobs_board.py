@@ -177,14 +177,20 @@ async def available_listings(employment_type: str = Query(None), sector: str = Q
             cl.append("sector = :sec"); p["sec"] = sector
         if region:
             cl.append("(region ILIKE :reg OR location ILIKE :reg)"); p["reg"] = f"%{region}%"
+        # JA10: explicit columns (no SELECT * — don't leak poster_tenant_id etc. network-wide).
         rows = _rows(await db.execute(text(
-            f"SELECT * FROM community.job_listings WHERE {' AND '.join(cl)} ORDER BY created_at DESC LIMIT 200"), p))
+            f"""SELECT listing_id, poster_user_id, poster_org_name, sector, role_title, employment_type,
+                       positions, location, region, base_lat, base_lng, pay_rate_fjd, pay_period,
+                       pay_negotiable, skills_required, experience_required, start_date, duration_note,
+                       description, apply_deadline, status, created_at
+                FROM community.job_listings WHERE {' AND '.join(cl)} ORDER BY created_at DESC LIMIT 200"""), p))
         my_apps = {r["listing_id"] for r in _rows(await db.execute(text(
             "SELECT listing_id FROM community.job_applications WHERE applicant_user_id = :u"),
             {"u": str(user["user_id"])}))}
         for r in rows:
             r["distance_km"] = _haversine_km(prof["base_lat"], prof["base_lng"], r["base_lat"], r["base_lng"]) if prof else None
             r["already_applied"] = r["listing_id"] in my_apps
+            r.pop("base_lat", None); r.pop("base_lng", None)  # coords used for distance only, not exposed
         rows.sort(key=lambda x: (x["distance_km"] is None, x["distance_km"] or 0))
         return {"data": rows, "has_profile": bool(prof)}
 
@@ -213,6 +219,37 @@ async def set_listing_status(listing_id: str, status: str = Query(...), user: di
             raise HTTPException(404, detail="Listing not found")
         await db.commit()
     return {"data": {"listing_id": listing_id, "status": status}}
+
+
+@router.patch("/job-listings/{listing_id}")
+async def edit_listing(listing_id: str, body: ListingCreate, user: dict = Depends(get_current_user)):
+    """Poster-gated full edit of a listing's fields (JA8 — fix a typo without close+repost)."""
+    if not body.role_title.strip():
+        raise HTTPException(422, detail="A role title is required")
+    if body.employment_type not in _EMPLOYMENT:
+        raise HTTPException(400, detail=f"employment_type must be from {_EMPLOYMENT}")
+    if body.pay_period and body.pay_period not in _PERIOD:
+        raise HTTPException(400, detail=f"pay_period must be from {_PERIOD}")
+    if body.sector and body.sector not in _SECTORS:
+        raise HTTPException(400, detail=f"sector must be from {_SECTORS}")
+    async with get_db_ctx() as db:
+        await _assert_owns_listing(db, listing_id, user)
+        await db.execute(text("""
+            UPDATE community.job_listings SET
+                role_title=:role, sector=:sec, employment_type=:et, positions=:pos, location=:loc,
+                region=:reg, base_lat=:lat, base_lng=:lng, pay_rate_fjd=:rate,
+                pay_period=:per, pay_negotiable=:neg, skills_required=:sk, experience_required=:exp,
+                start_date=:sd, duration_note=:dur, description=:desc, apply_deadline=:dl,
+                poster_org_name=:org, updated_at=now()
+            WHERE listing_id=:id AND poster_user_id=:u
+        """), {"id": listing_id, "u": str(user["user_id"]), "role": body.role_title.strip(), "sec": body.sector,
+               "et": body.employment_type, "pos": max(1, body.positions), "loc": body.location, "reg": body.region,
+               "lat": body.base_lat, "lng": body.base_lng, "rate": body.pay_rate_fjd,
+               "per": (None if body.pay_negotiable else body.pay_period), "neg": body.pay_negotiable,
+               "sk": body.skills_required, "exp": body.experience_required, "sd": body.start_date,
+               "dur": body.duration_note, "desc": body.description, "dl": body.apply_deadline, "org": body.poster_org_name})
+        await db.commit()
+    return {"data": {"listing_id": listing_id, "ok": True}}
 
 
 # ───────────────────────── applications ─────────────────────────
@@ -346,6 +383,8 @@ async def hire_applicant(listing_id: str, body: HireBody, user: dict = Depends(g
             "WHERE application_id=:a AND listing_id=:l"), {"a": body.application_id, "l": listing_id})).mappings().first()
         if not app:
             raise HTTPException(404, detail="Application not found for this listing")
+        if app["status"] == "ACCEPTED":  # JA17: idempotent — never re-hire (would duplicate the worker)
+            raise HTTPException(409, detail="This applicant is already hired")
         if app["status"] in ("DECLINED", "WITHDRAWN"):
             raise HTTPException(409, detail="That applicant is no longer available")
         prof = (await db.execute(text(
@@ -376,6 +415,7 @@ async def hire_applicant(listing_id: str, body: HireBody, user: dict = Depends(g
                 whatsapp_number=(prof.get("whatsapp") if prof else None),
                 daily_rate_fjd=body.daily_rate_fjd,
                 worker_type=(body.worker_type or "CASUAL"),
+                notes=f"Hired via Jobs · {listing_id}",  # JA25 provenance
             )
             worker_result = await create_worker(wc, user)
         except HTTPException as e:
