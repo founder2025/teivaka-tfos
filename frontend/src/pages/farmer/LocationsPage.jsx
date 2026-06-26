@@ -43,6 +43,7 @@ const ENTERPRISE_KINDS = {
   APICULTURE: ["HIVE_STAND"], SPECIALTY: ["GREENHOUSE", "NURSERY_TRAY", "FLOWER_BED"],
 };
 const ENT_LABEL = { CROPS: "Crops", PERENNIALS: "Tree/perennial", LIVESTOCK: "Livestock", AQUACULTURE: "Aquaculture", FORESTRY: "Forestry", APICULTURE: "Bees", SPECIALTY: "Protected/specialty" };
+const KIND_LABEL = { BED: "Garden bed", PLOT: "Plot", STAND: "Tree stand", PADDOCK: "Paddock", POND: "Pond", TANK: "Tank", CAGE: "Cage", WOODLOT: "Woodlot", HIVE_STAND: "Hive stand", GREENHOUSE: "Greenhouse", NURSERY_TRAY: "Nursery tray", FLOWER_BED: "Flower bed" }; // LS8 friendly labels
 const useFarmMapFeatures = (id) => useQuery({ queryKey: ["loc-map", id], queryFn: () => getJSON(`/api/v1/farm-map/${encodeURIComponent(id)}`), enabled: !!id, retry: 0 });
 const useBlockStatus = (id) => useQuery({ queryKey: ["loc-status", id], queryFn: () => getJSON(`/api/v1/production-units/status?farm_id=${encodeURIComponent(id)}`), enabled: !!id, retry: 0 });
 
@@ -118,13 +119,32 @@ function FacilityCard({ icon: Icon, title, value, sub, building, onAdd }) {
     </div>
   );
 }
-function MapLegend() {
+// Status legend — honestly labelled: these colours appear on the BLOCK LIST pills,
+// not on the map (the map colours by kind; status-on-map is filed, LOC23). (LS1)
+function StatusLegend() {
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px]" style={{ color: C.muted }}>
+      <span className="font-semibold">Block status:</span>
       {["ACTIVE", "HARVESTING", "RESTING", "IDLE", "EMPTY"].map((k) => (
-        <span key={k} className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm" style={{ background: STATE_STYLE[k].bg, border: `1px solid ${STATE_STYLE[k].fg}` }} />{STATE_STYLE[k].label}</span>
+        <span key={k} className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full" style={{ background: STATE_STYLE[k].bg, border: `1px solid ${STATE_STYLE[k].fg}` }} />{STATE_STYLE[k].label}</span>
       ))}
     </div>
+  );
+}
+function DegradedBanner({ msg }) {
+  return <div className="rounded-xl border p-2.5 text-xs flex items-center gap-2" style={{ background: "#FBF4E6", borderColor: C.amber, color: C.soil }}><AlertTriangle size={13} style={{ color: C.amber }} />{msg}</div>;
+}
+function FirstRun({ onAdd, onDraw }) {
+  return (
+    <Card style={{ padding: "32px 24px", textAlign: "center" }}>
+      <MapPin size={28} style={{ color: C.muted, margin: "0 auto 10px" }} />
+      <div className="text-base font-bold" style={{ color: C.soil }}>Map out your farm</div>
+      <div className="text-xs mt-1.5 mx-auto" style={{ color: C.muted, maxWidth: 380, lineHeight: 1.5 }}>Add your first block by name and area — no map needed — or draw it on the satellite image to geo-locate it.</div>
+      <div className="flex items-center justify-center gap-2 mt-4">
+        <button onClick={onAdd} className="btn btn-primary"><Plus size={14} />Add block</button>
+        <button onClick={onDraw} className="btn btn-secondary"><PenLine size={14} />Draw on map</button>
+      </div>
+    </Card>
   );
 }
 
@@ -133,7 +153,11 @@ function LocationsInner() {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const go = (sub) => navigate(`/farm/${sub}`);
-  const askAi = () => navigate("/tis?q=" + encodeURIComponent("How can I make the best use of my farm's land, zones and block layout?"));
+  const askAi = () => {
+    const selPu = selected ? puRows.find((p) => p.pu_id === selected) : null;
+    const q2 = selPu ? `What should I plant next in ${puCode(selPu)} on my farm, and why?` : "How can I make the best use of my farm's land, zones and block layout?";
+    navigate("/tis?q=" + encodeURIComponent(q2));
+  };
   const refreshSpatial = () => {
     ["loc-pus", "loc-zones", "loc-map", "loc-status"].forEach((k) => qc.invalidateQueries({ queryKey: [k, farmId] }));
     qc.invalidateQueries({ queryKey: ["loc-due"] }); qc.invalidateQueries({ queryKey: ["loc-advice"] });
@@ -203,10 +227,13 @@ function LocationsInner() {
   const blocksInZone = (zid) => puRows.filter((p) => p.zone_id === zid).length;
 
   const totalAreaHa = puRows.reduce((s, p) => s + (puArea(p) || 0), 0);
+  const mapKnown = !mapFeat.isError && !mapFeat.isLoading; // LS2: don't claim "unmapped" if the map failed to load
   const unmapped = puRows.filter((p) => !mappedBlockIds.has(p.pu_id)).length;
 
   const loading = zones.isLoading || pus.isLoading;
   const allErr = zones.isError && pus.isError;
+  const someErr = !allErr && (zones.isError || pus.isError || blockStatus.isError || mapFeat.isError); // LS4
+  const isEmpty = !loading && !allErr && zoneRows.length === 0 && puRows.length === 0; // LS12
 
   let blocks = puRows;
   if (zoneFilter) blocks = blocks.filter((p) => p.zone_id === zoneFilter);
@@ -240,29 +267,31 @@ function LocationsInner() {
             </div>
           </div>
         </Card>
+      ) : isEmpty ? (
+        <FirstRun onAdd={() => setAddBlock(true)} onDraw={() => openMap("BLOCK")} />
       ) : (
         <>
+          {someErr && <DegradedBanner msg="Some location data couldn't load — figures or map markers may be incomplete." />}
           {/* land summary (LOC33 partial) */}
           <div className="grid gap-2.5 grid-cols-2 sm:grid-cols-4">
             <SummaryTile label="Total area" value={totalAreaHa > 0 ? `${totalAreaHa.toFixed(2)} ha` : "—"} sub="mapped + entered" />
             <SummaryTile label="Zones" value={zoneRows.length} sub="sections" />
             <SummaryTile label="Blocks" value={puRows.length} sub="growing areas" />
-            <SummaryTile label="Unmapped" value={unmapped} sub={unmapped ? "draw to geo-locate" : "all on the map"} accent={unmapped ? C.amber : C.greenDk} />
+            <SummaryTile label="Unmapped" value={mapKnown ? unmapped : "—"} sub={!mapKnown ? "map didn't load" : unmapped ? "draw to geo-locate" : "all on the map"} accent={mapKnown && unmapped ? C.amber : C.greenDk} />
           </div>
 
           {/* map hero (LOC29) */}
           <Card style={{ padding: 14 }}>
             <ColHead extra={<span className="text-[11px]" style={{ color: C.muted }}>draw · auto-area · GPS</span>}>Farm map</ColHead>
-            <div className="rounded-xl border p-2 mb-2 text-xs flex flex-wrap items-center justify-between gap-2" style={{ background: C.greenTint, borderColor: C.border, color: C.greenDk }}>
-              <span><strong>Draw your farm on the satellite map.</strong> Pick Zone, Block or Boundary, draw it, area auto-calculates. Prefer no map? Use <strong>Add block</strong> above.</span>
-              <MapLegend />
+            <div className="rounded-xl border p-2 mb-2 text-xs" style={{ background: C.greenTint, borderColor: C.border, color: C.greenDk }}>
+              <strong>Draw your farm on the satellite map.</strong> Pick Zone, Block or Boundary, draw it, area auto-calculates. Prefer no map? Use <strong>Add block</strong> above.
             </div>
             {farmId ? (
-              <Suspense fallback={<div className="rounded-xl flex items-center justify-center" style={{ background: C.paper, height: 520 }}><MapIcon size={26} style={{ color: C.muted }} /></div>}>
+              <Suspense fallback={<div className="rounded-xl flex items-center justify-center" style={{ background: C.paper, height: 460 }}><MapIcon size={26} style={{ color: C.muted }} /></div>}>
                 <FarmMap farmId={farmId} openRequest={openReq} onSaved={refreshSpatial} />
               </Suspense>
             ) : (
-              <div className="rounded-xl flex items-center justify-center text-sm" style={{ background: C.paper, height: 520, color: C.muted }}>Pick a farm to map.</div>
+              <div className="rounded-xl flex items-center justify-center text-sm" style={{ background: C.paper, height: 460, color: C.muted }}>Pick a farm to map.</div>
             )}
           </Card>
 
@@ -300,13 +329,14 @@ function LocationsInner() {
                         className={`flex items-center gap-2 rounded-lg p-2 cursor-pointer hover:bg-[var(--cream-2)] ${FOCUS}`} style={{ border: `1px solid ${selected === p.pu_id ? C.green : "transparent"}` }}>
                         <span className="text-xs font-semibold shrink-0" style={{ color: C.soil }}>{puCode(p)}</span>
                         <span className="text-[11px] flex-1 min-w-0 truncate" style={{ color: C.muted }}>{st?.crop || p.production_name || zName(zoneById[p.zone_id] || {})}</span>
-                        {!mappedBlockIds.has(p.pu_id) && <span className="text-[9px] px-1 rounded shrink-0" title="Not drawn on the map" style={{ color: C.amber, border: `1px solid ${C.border}` }}>no map</span>}
+                        {mapKnown && !mappedBlockIds.has(p.pu_id) && <span className="text-[9px] px-1 rounded shrink-0" title="Not drawn on the map" style={{ color: C.amber, border: `1px solid ${C.border}` }}>no map</span>}
                         {sty && <span className="text-[10px] px-1.5 py-0.5 rounded-full shrink-0 font-semibold" style={{ color: sty.fg, background: sty.bg }}>{st.label}</span>}
                       </div>
                     );
                   })}
                 </div>
               )}
+              {puRows.length > 0 && <div className="mt-2 pt-2" style={{ borderTop: `1px solid ${C.border}` }}><StatusLegend /></div>}
             </Card>
           </div>
 
@@ -562,10 +592,11 @@ function AddBlockModal({ farmId, onClose, onSaved }) {
       <div className="form-row"><label>Block name</label><input value={f.pu_name} onChange={set("pu_name")} placeholder="e.g. Block A / Riverside bed" /></div>
       <div className="form-row" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 10 }}>
         <div><label>Used for</label><select value={f.enterprise_type} onChange={setEnterprise}>{Object.keys(ENTERPRISE_KINDS).map((k) => <option key={k} value={k}>{ENT_LABEL[k] || k}</option>)}</select></div>
-        <div><label>Type</label><select value={f.pu_type} onChange={set("pu_type")}>{kinds.map((k) => <option key={k} value={k}>{k[0] + k.slice(1).toLowerCase().replace("_", " ")}</option>)}</select></div>
+        <div><label>Type</label><select value={f.pu_type} onChange={set("pu_type")}>{kinds.map((k) => <option key={k} value={k}>{KIND_LABEL[k] || k}</option>)}</select></div>
       </div>
       <div className="form-row" style={{ marginTop: 10 }}><label>Area (hectares, optional)</label><input type="number" min="0" step="0.01" value={f.area_ha} onChange={set("area_ha")} placeholder="e.g. 0.50" /></div>
       <div className="form-row" style={{ marginTop: 10 }}><label>Notes (optional)</label><input value={f.notes} onChange={set("notes")} placeholder="anything useful about this block" /></div>
+      <div className="text-[11px] mt-2" style={{ color: "var(--muted)" }}>Added to your main zone. Draw it on the map later to place it in the right spot.</div>
     </Modal>
   );
 }
