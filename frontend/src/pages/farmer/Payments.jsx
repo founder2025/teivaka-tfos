@@ -338,7 +338,8 @@ function PaymentsInner() {
         {/* methods — one-tap provider quick-picks (supports every rail) */}
         {showMethods && (
           <div style={{ border: "1px solid var(--line)", borderRadius: 12, padding: 12, marginBottom: 14, background: "var(--cream)" }}>
-            <div style={{ fontSize: 11.5, fontWeight: 700, color: "var(--soil)", marginBottom: 8 }}>Add a way you pay or get paid</div>
+            <div style={{ fontSize: 11.5, fontWeight: 700, color: "var(--soil)" }}>Add a wallet, bank or card you pay from</div>
+            <div style={{ fontSize: 11, color: "var(--muted)", margin: "2px 0 8px", lineHeight: 1.45 }}>You pay from these yourself; Teivaka records and bank-verifies each payment. Charging directly in-app (M-PAiSA / card) is coming once each rail is switched on.</div>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: mform.picked ? 12 : 0 }}>
               {PROVIDERS.map((pv) => {
                 const sel = mform.picked === pv.name;
