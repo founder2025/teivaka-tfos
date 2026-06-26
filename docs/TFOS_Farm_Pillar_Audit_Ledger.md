@@ -776,7 +776,14 @@ monetization (featured/paid); public board + SEO.
 **DEPLOY (Tier-2 — backend migration + api rebuild + frontend):**
 1. `cd /opt/teivaka && git pull origin claude/beautiful-fermi-F0dLX`
 2. Backend: `docker compose -f 04_environment/docker-compose.yml build --no-cache api && docker compose -f 04_environment/docker-compose.yml up -d api && bash 04_environment/verify-deploy.sh`
-3. Migration (apply-as-owner, Strike #123): `docker exec teivaka_api alembic upgrade head` (verify head = 186_jobs_board; stamp only after rebuild ships the file — B78).
+3. Migration — APPLY AS OWNER (Strike #123). In-container `alembic upgrade head` runs as
+   `teivaka_app` and FAILS with `permission denied for schema community` (confirmed on prod
+   2026-06-26). Correct path: run the DDL as the `teivaka` owner via the db container's local
+   trust auth — `docker exec -i teivaka_db psql -U teivaka -d teivaka_db < <migration DDL>`
+   (idempotent CREATE IF NOT EXISTS + GRANT to teivaka_app), then bump
+   `UPDATE tenant.alembic_version SET version_num='186_jobs_board';`. Verify
+   `docker exec teivaka_api alembic current` = 186_jobs_board. (Do NOT use in-container
+   `alembic upgrade head` for community/tenant DDL — it lacks owner privilege.)
 4. Frontend: `cd /opt/teivaka/frontend && npm run build`
 **Verify:** Market → Jobs → post a listing; from another member, apply; as poster, open
 Applicants → Hire → tick "Add to Labour" → worker appears in Labour. Rollback: `git revert`
