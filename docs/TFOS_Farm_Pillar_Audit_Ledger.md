@@ -13,7 +13,77 @@ Legend: ✅ PASS · 🟡 improved, open items · ▢ not started
 
 ---
 
-## 1. Overview (/farm) — 🟡 improved (this pass)
+## 1. Overview (/farm) — FORMAL FRAMEWORK AUDIT (2026-06-26) — 🔴 audit done, redesign NOT started
+
+Forensic audit of `frontend/src/pages/farmer/FarmDashboard.jsx` (881 lines) under the
+ratified TFOS Review Framework. Backend contracts for all 12 live queries verified
+against the routers (not assumed). **Audit only — no code changed; redesign awaits approval.**
+
+**What actually renders (live path, return @811-868):** OvHeader · LayerBackfillBanner ·
+HealthKpis (health hero + 5 KPIs) · AttentionAdvisor · OpsRow · EnterprisePortfolio ·
+EnterpriseCompare + MultiFarmCompare · FinancialSnapshot + Recent Activity · Active cycles
+(ActiveCyclesTable) · FarmSectionsNav · audit-chain footer · NewCycleModal.
+
+**Data contracts (VERIFIED in routers).** No array-crash risk on the live path:
+`financials/crops` (financials.py:135) + `labor` (labor.py:95) + `farms` (farms.py:108)
+always return arrays; object endpoints (farm summary, flocks{items}, cycles{cycles},
+tasks{tasks}, cash-ledger{cash_balance_fjd}, compliance{blocked_count}, chain-status)
+are correctly unwrapped. Frontend extraction (716-722) matches. Theme tokens valid
+(`--cream-2` index.css:41/60). All live nav targets resolve (several via the merge
+redirects added in App.jsx:385-397).
+
+**FINDINGS (ranked).**
+- **F1 · SEV-1 · DEAD CODE (~40% of file).** 13 components are defined and NEVER
+  rendered: HeaderRow, PillarCards, BankabilityPath, Priorities, WeatherStrip,
+  FarmSummary, HeadlineMetrics, Intelligence, CyclePipeline, FarmComparison,
+  QuickActions, + atoms Section & Tile, + dead helpers fjd/roiTxt/gradeColor/
+  wmoWx/wx1/wxDay, + dead imports useFormModal & ModeDropdown (B90 residue lives
+  here). ≈ lines 50-389. Ships in the 53 KB chunk, and the file's own header
+  docstring describes components that don't render — actively misleads any auditor.
+  WeatherStrip being dead means the page does NOT fetch weather (good for query
+  count, but the section a farmer might expect is simply absent).
+- **F2 · SEV-1 · HONESTY DEFECT.** Health-hero subtext is hardcoded optimistic —
+  `"Your farm is performing — tap to view full health"` (line 453) shows regardless
+  of score. A struggling farm (score 20 / "At risk") still reads "performing". This
+  is a banker-facing surface; copy must reflect the real grade.
+- **F3 · SEV-2 · OVER-CONFIDENT SCORE.** Farm-health `/100` (742-750) is a naive
+  heuristic: crops scored 100 or 75 (only signal = net≥0), flocks ALWAYS 100
+  (ignores mortality/survival), holds the only real deduction. Presented as a precise
+  graded score ("Very Good"). Conflates "has activity" with "healthy". Honest-ish
+  (rubric is commented, holds are real) but the precision + grade label oversell what
+  the math supports.
+- **F4 · SEV-2 · NOISY ALERTS.** `alerts = holds + (#crops with net<0)` (line 780).
+  Every new planting (costs logged before harvest income) counts as an alert → the
+  Alerts KPI + AttentionAdvisor cry wolf for normal early-cycle economics.
+- **F5 · SEV-2 · DUPLICATE NAV.** In-page `FarmSectionsNav` (line 842) now duplicates
+  the persistent LeftRail sidebar shipped this session. Two farm navigations on one
+  screen.
+- **F6 · SEV-3 · SCALE.** 12 parallel queries per open (farm, fin, crops, flocks,
+  cycles, tasks, cash, farms, labor, compliance, chain, me). Fine at alpha; filed
+  composite `GET /farm/overview/{id}` for scale.
+- **F7 · SEV-3 · HOOKS FRAGILITY.** `q = (key,fn,enabled)=>useQuery(...)` (702) calls
+  a hook inside a helper. Works (stable call order) but violates rules-of-hooks lint
+  and breaks the moment any q() is wrapped in a condition.
+- **F8 · SEV-3.** Nested `QueryClientProvider` local to this page (874) — cache not
+  shared with the shell (B31: lift to FarmerShell).
+- **F9 · SEV-3.** Internal links point at OLD routes (/farm/cash, /farm/analytics,
+  /farm/reports, /farm/history, /farm/locations, /farm/labor) that now redirect —
+  works but adds a navigation hop; should target merged routes directly.
+
+**Strengths (PASS).** Real RLS data on every live tile; honest "—"/"Building" gaps
+(worth, credit, FRCS, demand, margin); array-guarded live path (verified, won't
+white-screen); `formatMoney()` (i18n-safe) on the live path; strike-mandated pieces
+preserved (LayerBackfillBanner #104a, real audit-chain footer via /me/chain-status);
+security clean (auth + farm-scoped + server-side RLS, no secrets in URLs).
+
+**Verdict:** functionally honest and non-crashing, but carrying a large dead-code
+mass (F1), one real honesty defect (F2), and two trust-eroding heuristics (F3/F4).
+Redesign scope = delete F1, fix F2 copy, ground/soften F3+F4, drop F5, point links
+at merged routes (F9). F6-F8 are backend/infra slices. **Awaiting approval to redesign.**
+
+---
+
+## 1-prev. Overview (/farm) — 🟡 improved (earlier pass, superseded by formal audit above)
 
 **Brutal assessment.** Recently rebuilt to prototype format (real KPIs, Attention,
 Advisor, Portfolio, Financial, Recent Activity) — solid and honest, but had two
