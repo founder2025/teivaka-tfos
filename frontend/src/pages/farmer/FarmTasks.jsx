@@ -207,7 +207,7 @@ function TasksInner() {
   const [busy, setBusy] = useState(null);
   const [openMenu, setOpenMenu] = useState(null);
   const [doneIds, setDoneIds] = useState(() => new Set());
-  const [session, setSession] = useState(0);
+  const [todayDone, setTodayDone] = useState(0); // today/overdue completions this session (progress numerator)
   const [inputFor, setInputFor] = useState(null);
   const [inputVal, setInputVal] = useState("");
   const [addOpen, setAddOpen] = useState(false);
@@ -234,19 +234,29 @@ function TasksInner() {
     Object.values(g).forEach((a) => a.sort(rank));
     return g;
   }, [tasks]);
-  const todayList = [...groups.Overdue, ...groups.Today];
-  const laterCount = groups.Tomorrow.length + groups["This week"].length + groups.Later.length;
 
   const nextTask = useMemo(() => {
     const w = (t) => (["Overdue", "Today"].includes(whenOf(t.due_date)) ? 0 : 1);
     return [...tasks].sort((a, b) => (w(a) - w(b)) || ((a.task_rank ?? 999) - (b.task_rank ?? 999)))[0] || null;
   }, [tasks]);
 
+  // U1: the hero task is excluded from the lists below so it's never shown twice.
+  const heroId = nextTask?.task_id;
+  const todayAll = [...groups.Overdue, ...groups.Today];
+  const todayList = todayAll.filter((t) => t.task_id !== heroId);
+  const comingGroups = {
+    Tomorrow: groups.Tomorrow.filter((t) => t.task_id !== heroId),
+    "This week": groups["This week"].filter((t) => t.task_id !== heroId),
+    Later: groups.Later.filter((t) => t.task_id !== heroId),
+  };
+  const laterCount = comingGroups.Tomorrow.length + comingGroups["This week"].length + comingGroups.Later.length;
+
   // value === undefined → trigger (route / open inline); value provided (incl null) → submit
   async function onComplete(t, value) {
     const tgt = taskTarget(t);
     if (tgt && value === undefined) { navigate(tgt.route); return; }
     if (needsInline(t) && value === undefined) { setInputFor(t.task_id); setInputVal(""); return; }
+    const wasToday = ["Overdue", "Today"].includes(whenOf(t.due_date));
     let input_value = null;
     if (needsInline(t)) {
       input_value = String(value ?? "").trim();
@@ -256,7 +266,7 @@ function TasksInner() {
       if (t.input_hint === "text_short" && input_value.length > 200) { emitToast("Keep it under 200 characters"); return; }
     }
     setBusy(t.task_id); setDoneIds((s) => new Set(s).add(t.task_id));
-    try { await send("POST", `/api/v1/tasks/${t.task_id}/complete`, { input_value }); setSession((n) => n + 1); setInputFor(null); emitToast("Done"); refresh(); }
+    try { await send("POST", `/api/v1/tasks/${t.task_id}/complete`, { input_value }); if (wasToday) setTodayDone((n) => n + 1); setInputFor(null); emitToast("Done"); refresh(); }
     catch (e) { setDoneIds((s) => { const n = new Set(s); n.delete(t.task_id); return n; }); emitToast(e?.userMessage || "Couldn't complete — try again"); }
     finally { setBusy(null); }
   }
@@ -276,11 +286,11 @@ function TasksInner() {
   const askAi = (t) => navigate(`/tis?q=${encodeURIComponent(`How do I: ${t.imperative}?`)}`);
 
   const rowProps = (t) => ({ t, asking: inputFor === t.task_id, val: inputVal, setVal: setInputVal, busy: busy === t.task_id, onComplete, onCancel: () => setInputFor(null), onSkip, askAi, openMenu, setOpenMenu, navigate });
-  const todayTotal = todayList.length + session;
-  const pct = todayTotal > 0 ? Math.round((session / todayTotal) * 100) : 0;
+  const todayTotal = todayAll.length + todayDone;
+  const pct = todayTotal > 0 ? Math.round((todayDone / todayTotal) * 100) : 0;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 w-full max-w-4xl mx-auto">
       <div className="flex items-start justify-between gap-2 flex-wrap">
         <div>
           <h1 className="text-2xl font-bold" style={{ color: C.soil }}>Tasks</h1>
@@ -316,9 +326,9 @@ function TasksInner() {
           {todayTotal > 0 && (
             <div>
               <div className="flex items-center justify-between text-[11px] mb-1" style={{ color: C.muted }}>
-                <span>Today's progress</span><span>{session} of {todayTotal} done</span>
+                <span>Today's progress</span><span>{todayDone} of {todayTotal} done</span>
               </div>
-              <div className="h-2 rounded-full overflow-hidden" style={{ background: "#EEF2F6" }} role="progressbar" aria-valuenow={session} aria-valuemin={0} aria-valuemax={todayTotal}>
+              <div className="h-2 rounded-full overflow-hidden" style={{ background: "#EEF2F6" }} role="progressbar" aria-label="Today's progress" aria-valuenow={todayDone} aria-valuemin={0} aria-valuemax={todayTotal}>
                 <div style={{ width: `${pct}%`, height: "100%", background: C.green }} />
               </div>
             </div>
@@ -333,10 +343,10 @@ function TasksInner() {
 
           {laterCount > 0 && (
             <Group title="Coming up" count={laterCount} defaultOpen={todayList.length === 0}>
-              {["Tomorrow", "This week", "Later"].map((k) => groups[k].length > 0 && (
+              {["Tomorrow", "This week", "Later"].map((k) => comingGroups[k].length > 0 && (
                 <div key={k}>
                   <div className="text-[10px] font-bold uppercase tracking-wide px-1 mb-1 mt-1" style={{ color: C.muted }}>{k}</div>
-                  <div className="flex flex-col gap-2">{groups[k].map((t) => <TaskRow key={t.task_id} {...rowProps(t)} />)}</div>
+                  <div className="flex flex-col gap-2">{comingGroups[k].map((t) => <TaskRow key={t.task_id} {...rowProps(t)} />)}</div>
                 </div>
               ))}
             </Group>
