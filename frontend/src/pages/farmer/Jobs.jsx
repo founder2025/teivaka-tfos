@@ -115,6 +115,7 @@ export default function Jobs() {
   const [errFind, setErrFind] = useState(false);
   const [errHire, setErrHire] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
+  const [profileLoaded, setProfileLoaded] = useState(false);
   const [postOpen, setPostOpen] = useState(false);
   const [postEdit, setPostEdit] = useState(null); // listing being edited (JA8)
   const [applyFor, setApplyFor] = useState(null);
@@ -129,7 +130,9 @@ export default function Jobs() {
       .then((r) => { setAvailable(r?.data || []); setHasProfile(r?.has_profile !== false); }).catch(() => { setAvailable([]); setErrFind(true); });
     getJSON("/api/v1/my-applications").then((r) => setMyApps(r?.data || [])).catch(() => setMyApps([]));
   };
-  const loadProfile = () => getJSON("/api/v1/worker-profile").then((r) => { const d = r?.data; if (d) { setProf((o) => ({ ...o, ...d, skills: d.skills || [], desired_types: d.desired_types || [], base_lat: d.base_lat ?? "", base_lng: d.base_lng ?? "", available_from: d.available_from ? String(d.available_from).slice(0, 10) : "" })); setSkillsText((d.skills || []).join(", ")); } }).catch(() => {});
+  const loadProfile = () => getJSON("/api/v1/worker-profile").then((r) => { const d = r?.data; if (d) { setProf((o) => ({ ...o, ...d, skills: d.skills || [], desired_types: d.desired_types || [], base_lat: d.base_lat ?? "", base_lng: d.base_lng ?? "", available_from: d.available_from ? String(d.available_from).slice(0, 10) : "" })); setSkillsText((d.skills || []).join(", ")); } }).catch(() => {}).finally(() => setProfileLoaded(true));
+  // JBS2: "weak" = no profile OR a profile with no skills (only once loaded, to avoid a flash).
+  const profileWeak = profileLoaded && (hasProfile === false || skillsText.trim() === "");
   const loadHire = () => { setErrHire(false); getJSON("/api/v1/job-listings/mine").then((r) => setMine(r?.data || [])).catch(() => { setMine([]); setErrHire(true); }); };
   useEffect(() => { loadProfile(); }, []); // eslint-disable-line
   useEffect(() => { loadFind(); }, [empFilter]); // eslint-disable-line  (single load; region filters client-side)
@@ -201,7 +204,7 @@ export default function Jobs() {
                 )}
               </div>
 
-              {hasProfile === false && (
+              {profileWeak && (
                 <div className="card" style={{ padding: "10px 14px", marginBottom: 10, background: "#FBF4E6", border: `1px solid ${C.amber}`, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                   <span style={{ fontSize: 12.5, color: C.soil }}>Add your skills so employers can assess you — it's what they see when you apply.</span>
                   <button className="btn btn-secondary btn-sm" onClick={() => setShowProfile(true)}>Complete profile</button>
@@ -262,7 +265,7 @@ export default function Jobs() {
         </div>
       </main>
 
-      {applyFor && <ApplyModal listing={applyFor} weak={hasProfile === false} onClose={() => setApplyFor(null)} onSaved={() => { loadFind(); setApplyFor(null); }} />}
+      {applyFor && <ApplyModal listing={applyFor} weak={profileWeak} onClose={() => setApplyFor(null)} onSaved={() => { loadFind(); setApplyFor(null); }} />}
       {(postOpen || postEdit) && <PostListingModal edit={postEdit} onClose={() => { setPostOpen(false); setPostEdit(null); }} onSaved={() => { loadHire(); setPostOpen(false); setPostEdit(null); }} />}
       {applicantsFor && <ApplicantsModal listing={applicantsFor} onClose={() => setApplicantsFor(null)} onHire={(app) => { setHireFor({ listing: applicantsFor, application: app }); }} onChanged={loadHire} />}
       {hireFor && <HireModal listing={hireFor.listing} application={hireFor.application} onClose={() => setHireFor(null)} onSaved={() => { setHireFor(null); setApplicantsFor(null); loadHire(); }} />}
@@ -319,6 +322,7 @@ function PostListingModal({ onClose, onSaved, edit }) {
   }
   return (
     <Modal title={edit ? "Edit job" : "Post a job"} onClose={onClose} foot={<><button className="btn btn-secondary" onClick={onClose}>Cancel</button><button className="btn btn-primary" onClick={submit} disabled={busy}>{busy ? "Saving…" : edit ? "Save" : "Post job"}</button></>}>
+      {edit && edit.applicant_count > 0 && <div style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 11.5, color: C.amber, marginBottom: 10 }}><AlertTriangle size={12} />{edit.applicant_count} {edit.applicant_count === 1 ? "person has" : "people have"} applied to the current terms — they won't be notified of changes.</div>}
       <div className="form-row" style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 10 }}>
         <div><label>Role title</label><input value={f.role_title} onChange={set("role_title")} placeholder="e.g. Casual harvest hand" /></div>
         <div><label>Positions</label><input type="number" min="1" value={f.positions} onChange={set("positions")} /></div>
@@ -361,18 +365,24 @@ function ApplicantsModal({ listing, onClose, onHire, onChanged }) {
   }
   async function shortlistAll() {
     if (busy) return; setBusy(true);
-    try { for (const a of (rows || []).filter((x) => x.status === "APPLIED")) await send("PATCH", `/api/v1/job-applications/${a.application_id}/decide?status=SHORTLISTED`); emitToast("Shortlisted all new applicants"); load(); onChanged?.(); }
-    catch (e) { emitToast(e?.userMessage || "Failed"); } finally { setBusy(false); }
+    let ok = 0, fail = 0;
+    for (const a of (rows || []).filter((x) => x.status === "APPLIED")) {
+      try { await send("PATCH", `/api/v1/job-applications/${a.application_id}/decide?status=SHORTLISTED`); ok++; }
+      catch { fail++; } // JBS1: continue on individual failure, always refresh
+    }
+    emitToast(fail ? `Shortlisted ${ok}, ${fail} couldn't be updated` : `Shortlisted ${ok} applicant${ok === 1 ? "" : "s"}`);
+    load(); onChanged?.(); setBusy(false);
   }
   const RANK = { SHORTLISTED: 0, APPLIED: 1, ACCEPTED: 2, DECLINED: 3 };
   const sorted = (rows || []).slice().sort((a, b) => (RANK[a.status] ?? 9) - (RANK[b.status] ?? 9));
+  const shown = sorted.slice(0, 100); // JBS5: cap the drawer; note if more
   const appliedCount = (rows || []).filter((x) => x.status === "APPLIED").length;
   return (
     <Modal title={`Applicants — ${listing.role_title}`} onClose={onClose} maxWidth={620} foot={<button className="btn btn-primary" onClick={onClose}>Close</button>}>
       {appliedCount > 1 && <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}><button className="btn btn-secondary btn-sm" onClick={shortlistAll} disabled={busy}>Shortlist all new ({appliedCount})</button></div>}
       {rows === undefined ? <div style={{ color: C.muted }}>Loading…</div>
         : rows.length === 0 ? <div style={{ color: C.muted, fontSize: 12.5 }}>No applicants yet. They'll appear here as members apply.</div>
-        : sorted.map((a) => (
+        : shown.map((a) => (
           <div key={a.application_id} className="card" style={{ padding: "10px 13px", marginBottom: 8 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
               <strong style={{ color: C.soil }}>{a.display_name || "Applicant"}</strong>
@@ -391,6 +401,7 @@ function ApplicantsModal({ listing, onClose, onHire, onChanged }) {
             )}
           </div>
         ))}
+      {rows && rows.length > 100 && <div style={{ fontSize: 11.5, color: C.muted, marginTop: 6 }}>Showing the first 100 applicants.</div>}
     </Modal>
   );
 }
