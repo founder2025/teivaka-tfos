@@ -109,6 +109,20 @@
         }
     }
 
+    # TATI public portals (Agricultural Passport) — server-rendered HTML from FastAPI.
+    #   /s/<token>  — Share Session portal (scoped passport view)
+    #   /a/<token>  — Attestation portal (community confirmation)
+    # These are backend html_router routes mounted at prefix="" (see main.py); without
+    # this block they fall through to the SPA and render React's "Page Not Found".
+    # Match the bare token path AND any sub-path (e.g. /a/<token>/respond).
+    @tati_portal path /s/* /a/*
+    handle @tati_portal {
+        reverse_proxy api:8000 {
+            health_uri /api/v1/health
+        }
+        header Cache-Control "no-store, no-cache, must-revalidate"
+    }
+
     # Static assets — long cache (content-hashed filenames)
     @static_assets {
         path *.js *.css *.woff *.woff2 *.ttf *.ico *.png *.jpg *.jpeg *.gif *.svg *.webp *.avif
