@@ -363,3 +363,50 @@ farmer adds nothing. Trust shows real headline stats + honest "Building" (Phase 
 
 **Out of Phase 1 (explicit):** Trust math (Phase 2), share tokens/portal upgrade (Phase 3), Document
 Vault (Phase 4), GOV_ID/FI verification (Phase 5).
+
+---
+
+## RATIFIED PRINCIPLES — round 2 (Operator, 2026-06-27)
+
+**GOVERNING PRINCIPLE (supreme — every decision must satisfy it):**
+> "A farmer manages their farm once inside TFOS, and Teivaka automatically builds their Agricultural
+> Passport, Trust Engine, Verification Portal, and institutional reports without asking them to
+> duplicate work."
+> **If any feature requires duplicate data entry, redesign it until it doesn't.**
+
+**P1 — Public `/verify/{hash}` is PROOF-ONLY (locked, permanent — not a temporary compromise).**
+Answers exactly "is this report genuine?" Shows ONLY: report authenticity (Verified/Invalid),
+report ID, version, generated date, issued-by-Teivaka, digital-signature status, integrity status,
+expiry (if any). **NEVER** exposes: photos, field history, GPS, farm blocks, financials, production
+history, documents, timeline, personal information. *(Actioned 2026-06-27: mig-187 evidence
+projection removed from the public route + farm identifier dropped from the public page.)*
+
+**P2 — Reports are SHARE SESSIONS, not PDFs-with-QR (new architectural principle).** The QR mints a
+secure **Share Session** opening the permissioned Verification Portal. Supersedes the
+`passport_shares` sketch with a richer model:
+```
+tenant.share_sessions
+  (session_id, owner_user_id, tenant_id,
+   report_version,                      -- which version of the report/passport was shared
+   recipient text?,                     -- optional named institution/person
+   audience  [LOAN|BUYER|INSURANCE|GOVERNMENT|INVESTOR|RESEARCHER|NGO|OTHER],
+   share_reason text,                   -- why it was shared (drives the portal's framing)
+   scope jsonb,                         -- which sections/dimensions/claims are visible
+   token_hash, password_hash?,          -- secure token; optional password
+   view_only bool, allow_download bool, -- permissions
+   expires_at, revoked_at, created_at)
+tenant.share_session_access            -- append-only: who/when/IP/action per access
+```
+Portal capabilities (Phase 3): permission scopes · expiry · optional password · revocable · view-only
+vs download · institution identity where applicable · full access log the farmer sees. A report is
+therefore a *controlled, auditable permission*, not a static file. The Bank Evidence PDF's embedded
+QR will carry a Share Session token (not a raw hash) once Phase 3 ships.
+
+**P3 — The Passport is a professional agricultural PORTFOLIO, not a profile page.** It auto-grows from
+TFOS activity. The farmer contributes almost nothing beyond initial identity + farm setup (already
+captured); everything else is generated. Phase 1's `passport_profile` manual surface is capped at
+photo + bio + languages — and even Training is auto-pulled (Classroom completions), Skills/Awards/
+Memberships are honest-empty until a real source exists (never a manual-entry wall).
+
+These bind all phases. The Phase-1 plan above already complies (projection-only, honest Building,
+no public sharing, no duplicate entry).

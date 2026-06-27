@@ -125,10 +125,10 @@
   </div>
 
   <div class="card">
-    <h2>Event</h2>
-    <div class="row"><span class="label">Type</span><span class="value">{{ event.event_type }}</span></div>
-    <div class="row"><span class="label">Occurred at</span><span class="value">{{ event.occurred_at_human or event.occurred_at }}</span></div>
-    <div class="row"><span class="label">Farm</span><span class="value mono">{{ event.farm_id }}</span></div>
+    <h2>Report</h2>
+    <div class="row"><span class="label">Record type</span><span class="value">{{ event.event_type }}</span></div>
+    <div class="row"><span class="label">Generated</span><span class="value">{{ event.occurred_at_human or event.occurred_at }}</span></div>
+    <div class="row"><span class="label">Issued by</span><span class="value">Teivaka Agriculture Ecosystem</span></div>
   </div>
 
   <div class="card">
@@ -148,35 +148,8 @@
 
   <div class="card">
     <h2>What this confirms</h2>
-    <p style="font-size: 14px; margin: 0; color: var(--soil);">This confirms the record exists in Teivaka's audit chain and has not been altered or backdated since it was recorded (tamper-evident). It does <strong>not</strong> independently audit the figures themselves &mdash; entries are farmer-reported, corroborated by photos, GPS, and buyer confirmations where available.</p>
+    <p style="font-size: 14px; margin: 0; color: var(--soil);">This page confirms one thing: the report is <strong>genuine</strong> &mdash; it exists in Teivaka's audit chain and has not been altered or backdated since it was recorded (tamper-evident). It does <strong>not</strong> display the farm's data. The farm's photos, blocks, production, financials and history are private &mdash; viewable only through a secure, time-limited link the farmer grants. Farmers own their data; Teivaka verifies it; institutions access it only with the farmer's permission.</p>
   </div>
-
-  {% if evidence %}
-  <div class="card">
-    <h2>Evidence behind this report{% if evidence.period %} &middot; {{ evidence.period }}{% endif %}</h2>
-    <p style="font-size: 13px; color: var(--muted); margin: 0 0 12px;">The figures above are backed by these location blocks and field photos. Each photo's content is SHA-256-bound into the audit chain.</p>
-    {% if evidence.blocks %}
-    <div style="font-size: 11px; font-weight: 700; color: var(--muted); letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 6px;">Location blocks ({{ evidence.blocks|length }})</div>
-    {% for b in evidence.blocks %}
-      <div class="row"><span class="label">{{ b.pu_name }}</span><span class="value">{{ b.area_ha }} ha &middot; {{ b.active_cycles }} cycle{{ '' if b.active_cycles == 1 else 's' }}</span></div>
-    {% endfor %}
-    {% endif %}
-    {% if evidence.photos %}
-    <div style="font-size: 11px; font-weight: 700; color: var(--muted); letter-spacing: 0.5px; text-transform: uppercase; margin: 16px 0 8px;">Photo evidence ({{ evidence.photos|length }})</div>
-    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 8px;">
-      {% for p in evidence.photos %}
-      <div style="border: 1px solid var(--border); border-radius: 6px; overflow: hidden; background: #fff;">
-        <img src="{{ p.photo_url }}" alt="{{ p.event_type }}" loading="lazy" style="width: 100%; height: 72px; object-fit: cover; display: block;">
-        <div style="padding: 3px 5px; font-size: 9px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ p.date }}{% if p.sha256 %} &middot; &#10003;{% endif %}</div>
-      </div>
-      {% endfor %}
-    </div>
-    {% endif %}
-    {% if not evidence.blocks and not evidence.photos %}
-    <p style="font-size: 13px; color: var(--muted); margin: 0;">No photo or block evidence was attached for this period.</p>
-    {% endif %}
-  </div>
-  {% endif %}
   {% else %}
   <div class="badge unverified">
     <span class="icon">&#10007;</span>

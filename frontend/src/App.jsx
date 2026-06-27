@@ -128,6 +128,7 @@ const VerticalStub  = lazy(() => import("./pages/farmer/VerticalStub"));
 const EstablishUnitNew = lazy(() => import("./pages/farmer/EstablishUnitNew"));
 const InventoryList = lazy(() => import("./pages/farmer/InventoryList"));
 const Me            = lazy(() => import("./pages/me/ProfilePage"));
+const Passport      = lazy(() => import("./pages/me/Passport"));
 const Subscription  = lazy(() => import("./pages/me/Subscription"));
 const Referrals     = lazy(() => import("./pages/me/Referrals"));
 const Affiliate     = lazy(() => import("./pages/me/Affiliate"));
@@ -351,6 +352,7 @@ export default function App() {
             <Route path="/farm/poultry" element={<PoultryDashboard  />} />
             <Route path="/farm/poultry/bank-evidence" element={<PoultryBankEvidence  />} />
             <Route path="/me"                element={<Me self />} />
+            <Route path="/me/passport"       element={<Passport />} />
             <Route path="/u/:id"             element={<Me />} />
             <Route path="/me/library"        element={<LibrarySettings   />} />
             <Route path="/tis"               element={<TIS           />} />
