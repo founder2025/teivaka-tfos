@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Teivaka — Shared Agricultural Passport</title>
+<link rel="icon" href="/favicon.ico">
+<style>
+  :root { --soil:#5C4033; --cream:#F8F3E9; --green:#6AA84F; --green-dk:#2D6A4F; --amber:#BF9000; --red:#A32D2D; --border:#E6DED0; --muted:#8A8678; }
+  *{box-sizing:border-box} body{margin:0;background:var(--cream);color:var(--soil);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;line-height:1.5}
+  .wrap{max-width:560px;margin:0 auto;padding:28px 18px 60px}
+  header{display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border);padding-bottom:14px;margin-bottom:18px}
+  .brand{font-weight:800;color:var(--green-dk);font-size:18px}
+  .sub{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+  .card{background:#fff;border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:14px}
+  .card h2{font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.5px;text-transform:uppercase;margin:0 0 10px}
+  .row{display:flex;justify-content:space-between;gap:12px;padding:6px 0;border-top:1px solid var(--border);font-size:14px}
+  .row:first-of-type{border-top:none}
+  .label{color:var(--muted)} .value{font-weight:600;text-align:right}
+  .badge{display:inline-flex;align-items:center;gap:8px;padding:8px 12px;border-radius:8px;font-weight:600;font-size:14px}
+  .band{font-weight:800}
+  .bar{height:7px;border-radius:99px;background:var(--cream);overflow:hidden;margin-top:5px}
+  .bar > i{display:block;height:100%}
+  .dim{padding:9px 0;border-top:1px solid var(--border)}
+  .dim:first-child{border-top:none}
+  .stat{border:1px solid var(--border);border-radius:8px;padding:10px;text-align:center}
+  .stat .v{font-size:18px;font-weight:800}.stat .l{font-size:11px;color:var(--muted)}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px}
+  footer{margin-top:24px;padding-top:14px;border-top:1px solid var(--border);font-size:11px;color:var(--muted)}
+  input[type=password]{width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;font-size:15px;margin-top:8px}
+  button{background:var(--green-dk);color:#fff;border:none;border-radius:8px;padding:10px 16px;font-size:14px;font-weight:600;margin-top:10px;cursor:pointer}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <span class="brand">TEIVAKA</span>
+    <span class="sub">Shared Agricultural Passport</span>
+  </header>
+
+  {% if state == "ok" %}
+  {% set v = view %}
+  <div class="badge" style="background:#E8F0E2;color:var(--green-dk);border:1px solid var(--green);width:100%">
+    &#10003;&nbsp; Shared securely by the farmer{% if reason %} &middot; {{ reason }}{% endif %}
+  </div>
+
+  {% if v.identity %}
+  <div class="card">
+    <h2>Farmer</h2>
+    <div style="font-size:18px;font-weight:800">{{ v.identity.name }}</div>
+    {% if v.identity.bio %}<div style="font-size:13px;color:var(--soil);margin-top:4px">{{ v.identity.bio }}</div>{% endif %}
+    <div class="row"><span class="label">Farmer ID</span><span class="value" style="font-family:monospace">{{ v.identity.farmer_id or '—' }}</span></div>
+    <div class="row"><span class="label">On Teivaka since</span><span class="value">{{ v.identity.member_since or '—' }}</span></div>
+  </div>
+  {% endif %}
+
+  {% if v.trust %}
+  <div class="card">
+    <h2>Evidence &amp; Reliability Confidence</h2>
+    <div style="display:flex;align-items:center;justify-content:space-between">
+      <span class="band" style="font-size:20px">{{ v.trust.overall_band }}</span>
+      {% if v.trust.overall_score is not none %}<span style="font-weight:700;color:var(--muted)">{{ v.trust.overall_score }}/100</span>{% endif %}
+    </div>
+    {% for d in v.trust.dimensions %}
+    <div class="dim">
+      <div style="display:flex;justify-content:space-between;font-size:13px"><span style="font-weight:600">{{ d.key|replace('_',' ')|title }}</span><span style="color:var(--muted)">{{ d.score }} &middot; {{ d.band }}</span></div>
+      <div class="bar"><i style="width:{{ d.score }}%;background:{% if d.band=='Strong' %}var(--green-dk){% elif d.band=='Established' %}var(--green){% elif d.band=='Developing' %}var(--amber){% else %}var(--muted){% endif %}"></i></div>
+      {% if d.why %}<div style="font-size:11.5px;color:var(--muted);margin-top:4px">{{ d.why }}</div>{% endif %}
+    </div>
+    {% endfor %}
+    <div style="font-size:11px;color:var(--muted);margin-top:10px">Reflects the completeness and consistency of verified records &mdash; <strong>not a credit decision</strong>. The lending decision rests with your institution.</div>
+  </div>
+  {% endif %}
+
+  {% if v.reputation %}
+  <div class="card">
+    <h2>Verified records</h2>
+    <div class="grid">
+      <div class="stat"><div class="v">{{ v.reputation.seasons }}</div><div class="l">Seasons</div></div>
+      <div class="stat"><div class="v">{{ v.reputation.production_kg|round|int }} kg</div><div class="l">Production</div></div>
+      <div class="stat"><div class="v">{{ v.reputation.sales_n }}</div><div class="l">Sales</div></div>
+    </div>
+  </div>
+  {% endif %}
+
+  {% if v.farms %}
+  <div class="card">
+    <h2>Farm</h2>
+    {% for f in v.farms %}<div class="row"><span class="label">{{ f.name }}</span><span class="value">{{ f.location or '—' }}</span></div>{% endfor %}
+  </div>
+  {% endif %}
+
+  {% elif state == "password" %}
+  <div class="card">
+    <h2>Password required</h2>
+    <p style="font-size:14px">This passport was shared with password protection.</p>
+    {% if message %}<p style="color:var(--red);font-size:13px">{{ message }}</p>{% endif %}
+    <form method="get" action="/s/{{ token }}">
+      <input type="password" name="pw" placeholder="Enter password" autofocus>
+      <button type="submit">Open</button>
+    </form>
+  </div>
+
+  {% else %}
+  <div class="badge" style="background:#FDECEA;color:var(--red);border:1px solid var(--red);width:100%">{{ message or "This link is not available." }}</div>
+  <div class="card"><p style="font-size:14px;margin:0">Ask the farmer for a fresh secure link. Farmers own their data on Teivaka and control every share — links can expire or be revoked at any time.</p></div>
+  {% endif %}
+
+  <footer>
+    Shared through Teivaka with the farmer's permission. The farmer can see when this link is opened and can revoke it at any time. Records are hash-chained and tamper-evident.
+    <br><br><a href="https://teivaka.com" style="color:var(--green-dk);text-decoration:none">Teivaka Agriculture Ecosystem</a>
+  </footer>
+</div>
+</body>
+</html>
