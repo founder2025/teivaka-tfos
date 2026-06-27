@@ -24,6 +24,8 @@ import {
 import cropsConfig from "./config/crops";
 import { useFarmName } from "../utils/farmName";
 import { isNative, nativeTakePhoto, nativeGetPosition } from "../native/bridge";
+import { submitCapture, ensureCaptureSync } from "./submitCapture";
+import { newIdem } from "./offlineQueue";
 
 const ICONS = {
   Eye, Droplet, Scissors, ShieldCheck, Sprout, Warehouse, Coins, Leaf, CalendarPlus, CalendarCheck,
@@ -91,6 +93,8 @@ export default function CaptureEngine({ config = cropsConfig, onDone, onBack, pr
   const ctx = config.context || DEFAULT_CONTEXT;
   const [items, setItems] = useState([]);
   const [loadingItems, setLoadingItems] = useState(true);
+  const [itemsError, setItemsError] = useState(false);   // FAB2: a failed load is NOT "no crops"
+  const [reloadKey, setReloadKey] = useState(0);          // retry the loader
   const [verb, setVerb] = useState(null);
   const [spec, setSpec] = useState(null);          // chosen EventSpec (primary or a branch option)
   const [itemId, setItemId] = useState("");
@@ -132,6 +136,10 @@ export default function CaptureEngine({ config = cropsConfig, onDone, onBack, pr
   const chunksRef = useRef([]);
   const timerRef = useRef(null);
   const preAppliedRef = useRef(false);
+  const idemRef = useRef(null);   // idempotency key for the entry being captured (FAB12)
+
+  // Drain any captures queued offline in a previous session + wire the reconnect flush.
+  useEffect(() => { ensureCaptureSync(); }, []);
 
   useEffect(() => {
     let off = false;
@@ -148,20 +156,22 @@ export default function CaptureEngine({ config = cropsConfig, onDone, onBack, pr
 
   useEffect(() => {
     let off = false;
-    setLoadingItems(true);
+    setLoadingItems(true); setItemsError(false);
     (async () => {
       try {
         const res = await fetch(ctx.loader, { headers: authHeaders() });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const body = await res.json().catch(() => null);
         const list = ctx.extract(body) || [];
         if (!off) {
           setItems(list);
           if (list.length === 1) setItemId(list[0][ctx.idKey]);
         }
-      } finally { if (!off) setLoadingItems(false); }
+      } catch { if (!off) setItemsError(true); }   // FAB2: distinguish a load failure from genuinely-empty
+      finally { if (!off) setLoadingItems(false); }
     })();
     return () => { off = true; };
-  }, [ctx.loader]);
+  }, [ctx.loader, reloadKey]);
 
   // Deep-link preselect: the catalog (+) opens the engine already aimed at a specific
   // event_type (jump straight to its form, skipping verb + branch), and/or a specific
@@ -250,6 +260,7 @@ export default function CaptureEngine({ config = cropsConfig, onDone, onBack, pr
     setRecording(false); setRecSecs(0);
     setOccurredDate(nowDateStr()); setOccurredTime(nowTimeStr()); setChemQuery(""); setLibQuery("");
     setEditOpen(false); setEditSaved(false); setEditPhoto(null);
+    idemRef.current = null;   // fresh idempotency key per entry
   }
   function pickVerb(v) {
     // "link" verbs hand off to an existing rich page (cycle/nursery/harvest)
@@ -349,68 +360,52 @@ export default function CaptureEngine({ config = cropsConfig, onDone, onBack, pr
     if (!spec || !selectedItem) return;
     if (spec.validate) { const msg = spec.validate(values); if (msg) { setError(msg); return; } }
     setSubmitting(true); setError("");
-    // Submit adapter: some configs post to a different audit-emitting endpoint with a
-    // different body shape (e.g. Money -> /cash-ledger). Default path = /events envelope.
-    if (config.submit) {
-      try {
-        const ev = {};
-        if (photoUrl) ev.photo_url = photoUrl;
-        if (gps) { ev.gps_lat = gps.lat; ev.gps_lng = gps.lng; }
-        if (voiceUrl) ev.voice_url = voiceUrl;
-        if (witnessName.trim()) ev.witness_name = witnessName.trim();
-        if (witnessContact.trim()) ev.witness_contact = witnessContact.trim();
-        const body = config.submit.buildBody({ values, spec, item: selectedItem, occurredDate, occurredTime, evidence: ev });
-        const res = await fetch(config.submit.endpoint, { method: config.submit.method || "POST", headers: authHeaders(), body: JSON.stringify(body) });
-        const parsed = await res.json().catch(() => null);
-        if ((res.status === 201 || res.ok) && parsed?.status !== "error") {
-          setResult(config.submit.extractResult ? config.submit.extractResult(parsed) : { event_id: "", audit_hash: "" });
-        } else {
-          setError(parsed?.detail?.message || (typeof parsed?.detail === "string" ? parsed.detail : parsed?.error?.message)
-            || `${res.status} ${res.statusText}`);
-        }
-      } catch (e) { setError(`Network error: ${e.message}`); }
-      finally { setSubmitting(false); }
-      return;
-    }
-    const payload = {};
-    for (const f of spec.capture) {
-      if (f.name === "notes") continue;       // notes captured by the universal section below
-      const v = values[f.name];
-      if (v !== undefined && v !== "" && v !== null) payload[f.name] = v;
-    }
-    // Context inference: inject anchor-derived payload keys (e.g. crop production_id)
-    // so the farmer never re-types them (safe: schemas require them or allow extras).
-    Object.assign(payload, ctx.injectPayload ? ctx.injectPayload(selectedItem) : {});
-    // Auto-fill required date fields from the chosen date (e.g. sale_date, given_date)
-    // so the farmer enters the date once.
-    if (spec.autofillDate) for (const k of spec.autofillDate) if (payload[k] === undefined) payload[k] = occurredDate;
-    if (values.notes) payload.notes = values.notes;
-    // Evidence is cross-cutting envelope metadata (NOT payload) — photo + voice are
-    // SHA-256 hashed server-side, GPS + witness stored; each lifts verification level.
-    const evidence = {};
-    if (photoUrl) evidence.photo_url = photoUrl;
-    if (gps) { evidence.gps_lat = gps.lat; evidence.gps_lng = gps.lng; }
-    if (voiceUrl) evidence.voice_url = voiceUrl;
-    if (witnessName.trim()) evidence.witness_name = witnessName.trim();
-    if (witnessContact.trim()) evidence.witness_contact = witnessContact.trim();
-    const envelope = {
-      event_type: spec.event_type,
-      occurred_at: `${occurredDate}T${occurredTime || "12:00"}:00+12:00`,
-      anchors: ctx.buildAnchors(selectedItem),
-      payload,
-      ...(Object.keys(evidence).length ? { evidence } : {}),
-    };
+    if (!idemRef.current) idemRef.current = newIdem();   // stable across retries of THIS entry (FAB12)
+
+    // Evidence is cross-cutting envelope metadata — photo + voice are SHA-256 hashed server-side,
+    // GPS + witness stored; each lifts verification level.
+    const ev = {};
+    if (photoUrl) ev.photo_url = photoUrl;
+    if (gps) { ev.gps_lat = gps.lat; ev.gps_lng = gps.lng; }
+    if (voiceUrl) ev.voice_url = voiceUrl;
+    if (witnessName.trim()) ev.witness_name = witnessName.trim();
+    if (witnessContact.trim()) ev.witness_contact = witnessContact.trim();
+
     try {
-      const res = await fetch("/api/v1/events", { method: "POST", headers: authHeaders(), body: JSON.stringify(envelope) });
-      const parsed = await res.json().catch(() => null);
-      if (res.status === 201 && parsed?.status === "success") {
-        setResult({ event_id: parsed.data?.event_id || "", audit_hash: parsed.data?.audit_hash || "" });
+      if (config.submit) {
+        // Submit adapter: some configs post to a different audit-emitting endpoint with a
+        // different body shape (e.g. Money -> /cash-ledger).
+        const body = config.submit.buildBody({ values, spec, item: selectedItem, occurredDate, occurredTime, evidence: ev });
+        const r = await submitCapture({ endpoint: config.submit.endpoint, method: config.submit.method || "POST", body, idem: idemRef.current });
+        if (r.queued) setResult({ queued: true });
+        else setResult(config.submit.extractResult ? config.submit.extractResult(r.data) : { event_id: "", audit_hash: "" });
       } else {
-        setError(parsed?.error?.message || parsed?.detail?.message ||
-          (typeof parsed?.detail === "string" ? parsed.detail : `${res.status} ${res.statusText}`));
+        const payload = {};
+        for (const f of spec.capture) {
+          if (f.name === "notes") continue;       // notes captured by the universal section below
+          const v = values[f.name];
+          if (v !== undefined && v !== "" && v !== null) payload[f.name] = v;
+        }
+        // Context inference: inject anchor-derived keys (e.g. crop production_id) so the farmer
+        // never re-types them. Auto-fill required date fields from the chosen date.
+        Object.assign(payload, ctx.injectPayload ? ctx.injectPayload(selectedItem) : {});
+        if (spec.autofillDate) for (const k of spec.autofillDate) if (payload[k] === undefined) payload[k] = occurredDate;
+        if (values.notes) payload.notes = values.notes;
+        const envelope = {
+          event_type: spec.event_type,
+          occurred_at: `${occurredDate}T${occurredTime || "12:00"}:00+12:00`,
+          anchors: ctx.buildAnchors(selectedItem),
+          payload,
+          ...(Object.keys(ev).length ? { evidence: ev } : {}),
+        };
+        const r = await submitCapture({ endpoint: "/api/v1/events", body: envelope, idem: idemRef.current });
+        if (r.queued) setResult({ queued: true });
+        else setResult({ event_id: r.data?.data?.event_id || "", audit_hash: r.data?.data?.audit_hash || "" });
       }
-    } catch (e) { setError(`Network error: ${e.message}`); }
-    finally { setSubmitting(false); }
+    } catch (e) {
+      // submitCapture only throws on a genuine server/validation rejection (network errors queue).
+      setError(e?.userMessage || e?.message || "Couldn't save — please try again.");
+    } finally { setSubmitting(false); }
   }
 
   // --- in-window correction of the just-logged field_events record ---
@@ -463,7 +458,9 @@ export default function CaptureEngine({ config = cropsConfig, onDone, onBack, pr
         <Check size={56} style={{ color: "var(--green)" }} />
         <h2 style={{ fontSize: 20, fontWeight: 700, marginTop: 12 }}>{editSaved ? "Correction saved" : "Saved"}</h2>
         <p style={{ color: "var(--muted)", fontSize: 13, marginTop: 6 }}>
-          Recorded {result.event_id}{result.audit_hash ? ` · ${result.audit_hash.slice(0, 12)}…` : ""}</p>
+          {result.queued
+            ? "Saved on your device — it will sync automatically when you're back online."
+            : <>Recorded {result.event_id}{result.audit_hash ? ` · ${result.audit_hash.slice(0, 12)}…` : ""}</>}</p>
       </div>
 
       {canEditResult && !editOpen && (
@@ -651,6 +648,19 @@ export default function CaptureEngine({ config = cropsConfig, onDone, onBack, pr
       <button onClick={goBack} style={backBtn}><ChevronLeft size={18} /> Back</button>
       <h1 style={{ fontSize: 20, fontWeight: 800, marginBottom: 14 }}>{spec.choiceLabel || verb.label}</h1>
       {loadingItems ? <p style={{ color: "var(--muted)" }}>{ctx.loadingMsg}</p>
+        : itemsError ? (
+          <div style={card}>
+            <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+              <AlertTriangle size={18} style={{ color: "var(--amber)", flexShrink: 0, marginTop: 2 }} />
+              <div>
+                <div style={{ fontWeight: 700, color: "var(--soil)" }}>Couldn't load — this is a connection problem, not missing data.</div>
+                <button onClick={() => setReloadKey((k) => k + 1)} style={{ marginTop: 10, display: "inline-flex", alignItems: "center", gap: 6, background: "none", border: "1px solid var(--line)", borderRadius: 10, padding: "8px 14px", fontWeight: 600, cursor: "pointer", color: "var(--green-dk)" }}>
+                  <Loader2 size={14} /> Retry
+                </button>
+              </div>
+            </div>
+          </div>
+        )
         : items.length === 0 ? <p style={{ color: "#9a3b3b" }}>{ctx.emptyMsg}</p>
         : (<>
           {/* Anchors — Farm · <context> · Operator (the 4-anchor identity on every record) */}
