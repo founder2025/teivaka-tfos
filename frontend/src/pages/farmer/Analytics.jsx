@@ -23,7 +23,7 @@
 import { useState } from "react";
 import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import { Plus, X, ArrowLeft, ArrowRight, Check, Clock, AlertTriangle, RefreshCw, Download } from "lucide-react";
+import { Plus, X, ArrowLeft, ArrowRight, Check, Clock, AlertTriangle, RefreshCw, Download, Sparkles } from "lucide-react";
 import TfpShell from "../../components/farm/TfpShell";
 import { CurrentFarmProvider, useCurrentFarm } from "../../context/CurrentFarmContext";
 import FarmSelector from "../../components/farm/FarmSelector";
@@ -50,35 +50,42 @@ function StaleBanner({ ageH }) {
   );
 }
 
-// "Right now" triage — leads the page so decision-making starts with ONE thing, not 13 tabs.
-function TriageCard({ signals, onDrill, onTask }) {
+// "Right now" triage — the single decision lead across the whole page. Unifies signal RED/AMBER
+// AND cash runway (which may NOT be a configured signal — it lives in /cashdemand), so the most
+// decision-critical number for a smallholder isn't buried two taps deep.
+function TriageCard({ signals, cd, onDrill, onTask, onCash }) {
   const live = signals.filter((s) => s.status !== "BUILDING");
-  if (live.length === 0) return null;
-  const reds = live.filter((s) => s.status === "RED");
-  const ambers = live.filter((s) => s.status === "AMBER");
-  if (reds.length === 0 && ambers.length === 0) {
+  const items = [];
+  live.filter((s) => s.status === "RED").forEach((s) => items.push({ sev: "red", label: `${s.name}${s.value != null ? ` · ${Number(s.value).toLocaleString()}` : ""}`, note: s.notes, primary: { label: "Generate task", on: () => onTask(s) }, secondary: { label: "Detail", on: () => onDrill(s.signal_id) } }));
+  const rw = cd?.runway_weeks;
+  if (rw != null && rw < 8) items.push({ sev: rw < 4 ? "red" : "amber", label: `Cash runway · ${rw} week${rw === 1 ? "" : "s"}`, note: rw < 4 ? "Close to running out of cash — chase overdue buyers or cut spend." : "Cash runway is getting short.", primary: { label: "Open cash & demand", on: onCash } });
+  live.filter((s) => s.status === "AMBER").forEach((s) => items.push({ sev: "amber", label: `${s.name}${s.value != null ? ` · ${Number(s.value).toLocaleString()}` : ""}`, note: s.notes, primary: { label: "Generate task", on: () => onTask(s) }, secondary: { label: "Detail", on: () => onDrill(s.signal_id) } }));
+  if (items.length === 0) {
+    if (live.length === 0 && rw == null) return null;
     return (
       <div className="card" style={{ padding: "12px 16px", marginBottom: 10, background: "var(--green-tint)", border: "1px solid var(--green)", display: "flex", gap: 10, alignItems: "center" }}>
         <Check size={18} style={{ color: "var(--green-dk)", flexShrink: 0 }} />
-        <div><div style={{ fontWeight: 700, color: "var(--soil)" }}>All clear right now</div><div style={{ fontSize: 12, color: "var(--muted)" }}>{live.length} signal{live.length === 1 ? "" : "s"} tracked · nothing needs action today.</div></div>
+        <div><div style={{ fontWeight: 700, color: "var(--soil)" }}>All clear right now</div><div style={{ fontSize: 12, color: "var(--muted)" }}>{live.length} signal{live.length === 1 ? "" : "s"} tracked{rw != null ? ` · ${rw} weeks cash runway` : ""} · nothing needs action today.</div></div>
       </div>
     );
   }
-  const top = reds[0] || ambers[0];
-  const sev = reds.length ? "red" : "amber";
+  items.sort((a, b) => (a.sev === "red" ? 0 : 1) - (b.sev === "red" ? 0 : 1));
+  const top = items[0];
+  const reds = items.filter((i) => i.sev === "red").length;
+  const ambers = items.length - reds;
   return (
-    <div className="card" style={{ padding: "14px 16px", marginBottom: 10, border: `1px solid var(--${sev})`, background: sev === "red" ? "rgba(163,45,45,0.06)" : "rgba(191,144,0,0.08)" }}>
+    <div className="card" style={{ padding: "14px 16px", marginBottom: 10, border: `1px solid var(--${top.sev})`, background: top.sev === "red" ? "rgba(163,45,45,0.06)" : "rgba(191,144,0,0.08)" }}>
       <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: 0.6, textTransform: "uppercase", color: "var(--muted)" }}>Right now · what matters most</div>
       <div style={{ display: "flex", gap: 10, alignItems: "flex-start", marginTop: 6, flexWrap: "wrap" }}>
-        <span style={{ fontSize: 10.5, fontWeight: 800, padding: "3px 8px", borderRadius: 6, color: "#fff", background: `var(--${sev})`, flexShrink: 0 }}>{top.status}</span>
+        <span style={{ fontSize: 10.5, fontWeight: 800, padding: "3px 8px", borderRadius: 6, color: "#fff", background: `var(--${top.sev})`, flexShrink: 0 }}>{top.sev.toUpperCase()}</span>
         <div style={{ flex: 1, minWidth: 140 }}>
-          <div style={{ fontWeight: 700, color: "var(--soil)" }}>{top.name}{top.value != null ? ` · ${Number(top.value).toLocaleString()}` : ""}</div>
-          {top.notes && <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 2 }}>{top.notes}</div>}
-          <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 3 }}>{reds.length} red · {ambers.length} amber need attention</div>
+          <div style={{ fontWeight: 700, color: "var(--soil)" }}>{top.label}</div>
+          {top.note && <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 2 }}>{top.note}</div>}
+          <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 3 }}>{reds} red · {ambers} amber need attention</div>
         </div>
         <div style={{ display: "flex", gap: 6 }}>
-          <button className="btn btn-primary" style={{ fontSize: 11, padding: "5px 10px" }} onClick={() => onTask(top)}>Generate task</button>
-          <button className="btn btn-secondary" style={{ fontSize: 11, padding: "5px 10px" }} onClick={() => onDrill(top.signal_id)}>Detail</button>
+          <button className="btn btn-primary" style={{ fontSize: 11, padding: "5px 10px" }} onClick={top.primary.on}>{top.primary.label}</button>
+          {top.secondary && <button className="btn btn-secondary" style={{ fontSize: 11, padding: "5px 10px" }} onClick={top.secondary.on}>{top.secondary.label}</button>}
         </div>
       </div>
     </div>
@@ -188,8 +195,6 @@ function SignalsView({ data, onDrill, onTask }) {
   const signals = data?.signals ?? [];
   if (signals.length === 0) return <div className="card" style={{ padding: 20, color: "var(--muted)" }}>No decision signals configured yet — the Decision Engine writes its first snapshots within its next scheduled run.</div>;
   const health = computeHealth(signals);
-  const snoozed = snoozedSet();
-  const urgent = signals.filter((s) => (s.status === "RED" || s.status === "AMBER") && !snoozed.has(s.signal_id));
   return (
     <>
       <div className={`health-composite ${health.overall}`}>
@@ -209,22 +214,6 @@ function SignalsView({ data, onDrill, onTask }) {
           <div className="signal-tile-foot"><span>composite</span><span>{data?.last_snapshot_at ? String(data.last_snapshot_at).slice(11, 16) : "—"}</span></div>
         </div>
       </div>
-      {urgent.length > 0 && (
-        <div className="urgent-strip">
-          <div style={{ fontSize: 13, fontWeight: 600, color: "var(--soil)", marginBottom: 8 }}>Needs attention</div>
-          {urgent.map((s) => (
-            <div className="urgent-row" key={s.signal_id}>
-              <span className={`urgent-dot ${stateClass(s.status)}`} />
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 12.5, fontWeight: 600, color: "var(--soil)" }}>{s.name} · {s.value != null ? Number(s.value).toLocaleString() : "—"}</div>
-                {s.notes && <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 2 }}>{s.notes}</div>}
-              </div>
-              <button className="btn btn-secondary" style={{ fontSize: 11, padding: "5px 10px" }} onClick={() => onTask(s)}>Generate task</button>
-              <button className="btn btn-secondary" style={{ fontSize: 11, padding: "5px 10px" }} onClick={() => onDrill(s.signal_id)}>Detail</button>
-            </div>
-          ))}
-        </div>
-      )}
     </>
   );
 }
@@ -964,13 +953,13 @@ function AnalyticsInner() {
   const sigQ = useQuery({ queryKey: ["an-signals", farmId], queryFn: () => get(`/api/v1/analytics/${encodeURIComponent(farmId)}/signals`), enabled: !!farmId });
   const flipQ = useQuery({ queryKey: ["an-flips", farmId], queryFn: () => get(`/api/v1/analytics/${encodeURIComponent(farmId)}/fliplog`), enabled: !!farmId && (view === "fliplog" || !!drill) });
   const cycQ = useQuery({ queryKey: ["an-cycles", farmId], queryFn: () => get(`/api/v1/analytics/${encodeURIComponent(farmId)}/cycles`), enabled: !!farmId });
-  const cdQ = useQuery({ queryKey: ["an-cd", farmId], queryFn: () => get(`/api/v1/analytics/${encodeURIComponent(farmId)}/cashdemand`), enabled: !!farmId && view === "cashdemand" });
+  const cdQ = useQuery({ queryKey: ["an-cd", farmId], queryFn: () => get(`/api/v1/analytics/${encodeURIComponent(farmId)}/cashdemand`), enabled: !!farmId });  // always: feeds the runway into the triage
   const fcQ = useQuery({ queryKey: ["an-fc", farmId], queryFn: () => get(`/api/v1/analytics/${encodeURIComponent(farmId)}/forecasts`), enabled: !!farmId && view === "forecasts" });
   const wxQ = useQuery({ queryKey: ["an-wx", farmId], queryFn: () => fetch(`/api/v1/weather/forecast/${encodeURIComponent(farmId)}?range=daily`, { headers: authHeaders() }).then((r) => (r.ok ? r.json() : { data: [] })).then((b) => b?.data ?? []), enabled: !!farmId && view === "forecasts" });
-  const finQ = useQuery({ queryKey: ["an-fin", farmId], queryFn: () => fetch(`/api/v1/financials/farm/${encodeURIComponent(farmId)}`, { headers: authHeaders() }).then((r) => (r.ok ? r.json() : {})), enabled: !!farmId && view === "kpi" });
-  const invQ = useQuery({ queryKey: ["an-inv", farmId], queryFn: () => fetch(`/api/v1/inputs?farm_id=${encodeURIComponent(farmId)}`, { headers: authHeaders() }).then((r) => (r.ok ? r.json() : { data: [] })).then((b) => b?.data ?? []), enabled: !!farmId && view === "inventory" });
+  const finQ = useQuery({ queryKey: ["an-fin", farmId], queryFn: () => getJSON(`/api/v1/financials/farm/${encodeURIComponent(farmId)}`), enabled: !!farmId && view === "kpi" });
+  const invQ = useQuery({ queryKey: ["an-inv", farmId], queryFn: () => getJSON(`/api/v1/inputs?farm_id=${encodeURIComponent(farmId)}`).then((b) => b?.data ?? []), enabled: !!farmId && view === "inventory" });
   const wkQ = useQuery({ queryKey: ["an-wk", farmId], queryFn: () => fetch(`/api/v1/workers?farm_id=${encodeURIComponent(farmId)}`, { headers: authHeaders() }).then((r) => (r.ok ? r.json() : { data: [] })).then((b) => b?.data ?? []), enabled: !!farmId && (view === "labour" || view === "kpi") });
-  const lbQ = useQuery({ queryKey: ["an-lb", farmId], queryFn: () => fetch(`/api/v1/labor?farm_id=${encodeURIComponent(farmId)}`, { headers: authHeaders() }).then((r) => (r.ok ? r.json() : { data: [] })).then((b) => b?.data ?? []), enabled: !!farmId && (view === "labour" || view === "kpi") });
+  const lbQ = useQuery({ queryKey: ["an-lb", farmId], queryFn: () => getJSON(`/api/v1/labor?farm_id=${encodeURIComponent(farmId)}`).then((b) => b?.data ?? []), enabled: !!farmId && (view === "labour" || view === "kpi") });
 
   const signals = sigQ.data?.signals ?? [];
   const cycles = cycQ.data?.cycles ?? [];
@@ -980,7 +969,7 @@ function AnalyticsInner() {
   const staleAgeH = snapshotAgeH(sigQ.data?.last_snapshot_at);
   // the primary query behind each view → drives the error/retry gate (kpi/inventory/labour
   // swallow errors to empty by design, so they aren't gated here)
-  const activeQ = ({ signals: sigQ, profit: cycQ, productivity: cycQ, perunit: cycQ, compare: cycQ, findings: cycQ, benchmark: cycQ, cashdemand: cdQ, fliplog: flipQ, forecasts: fcQ })[view] || null;
+  const activeQ = ({ signals: sigQ, profit: cycQ, productivity: cycQ, perunit: cycQ, compare: cycQ, findings: cycQ, benchmark: cycQ, cashdemand: cdQ, fliplog: flipQ, forecasts: fcQ, kpi: finQ, inventory: invQ, labour: lbQ })[view] || null;
   const drillSignal = drill ? signals.find((s) => s.signal_id === drill) : null;
 
   function ack(s) {
@@ -1001,13 +990,14 @@ function AnalyticsInner() {
                 <div className="page-actions">
                   {snapTime && <span className="event-anchor-chip" style={{ cursor: "pointer" }} onClick={() => emitToast(`Signals are pre-computed by the Decision Engine. Last snapshot ${snapTime}.`)}><Clock size={12} />Snapshot {snapTime}</span>}
                   {cycles.length > 0 && <button className="btn btn-secondary" style={{ fontSize: 12 }} onClick={() => exportCyclesCSV(cycles, farmId)}><Download size={12} />Export</button>}
+                  <button className="btn btn-secondary" style={{ fontSize: 12 }} onClick={() => navigate(`/tis?q=${encodeURIComponent("Review my farm analytics — what stands out and what should I do next?")}`)}><Sparkles size={12} />Ask TIS</button>
                   <FarmSelector />
                 </div>
               </div>
               <StaleBanner ageH={staleAgeH} />
-              {sigQ.data && <TriageCard signals={sigQ.data.signals ?? []} onDrill={setDrill} onTask={setTaskFor} />}
+              {sigQ.data && <TriageCard signals={sigQ.data.signals ?? []} cd={cdQ.data} onDrill={setDrill} onTask={setTaskFor} onCash={() => { setView("cashdemand"); setDrill(null); }} />}
               <div className="cycle-view-tabs">
-                {TABS.map(([id, l, s]) => <div key={id} className={`task-tab ${view === id ? "active" : ""}`} onClick={() => { setView(id); setDrill(null); }}>{l}<span className="task-tab-count" style={{ fontSize: 10 }}>{s}</span></div>)}
+                {TABS.map(([id, l, s]) => <div key={id} role="tab" tabIndex={0} aria-selected={view === id} className={`task-tab ${view === id ? "active" : ""}`} onClick={() => { setView(id); setDrill(null); }} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setView(id); setDrill(null); } }}>{l}<span className="task-tab-count" style={{ fontSize: 10 }}>{s}</span></div>)}
               </div>
               {!farmId ? <div className="card" style={{ padding: 20, color: "var(--muted)" }}>Select a farm to see its analytics.</div>
                 : activeQ?.isError ? <ErrorCard onRetry={() => activeQ.refetch()} />
