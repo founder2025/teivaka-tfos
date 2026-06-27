@@ -294,7 +294,10 @@ function AttestSheet({ open, onClose }) {
 
 function ShareSheet({ open, onClose }) {
   const [shares, setShares] = useState([]);
-  const [form, setForm] = useState({ audience: "LOAN", share_reason: "", expiry_days: 30, password: "", one_time: false, evidence: false, documents: false });
+  // Evidence (photos/blocks) defaults ON for loan/buyer/insurer shares — proving yourself
+  // IS the point of those links — and OFF for general shares. Still freely toggleable.
+  const EVIDENCE_DEFAULT_AUD = ["LOAN", "BUYER", "INSURANCE"];
+  const [form, setForm] = useState({ audience: "LOAN", share_reason: "", expiry_days: 30, password: "", one_time: false, evidence: true, documents: false });
   const [busy, setBusy] = useState(false);
   const [created, setCreated] = useState(null); // {url}
   const reload = useCallback(async () => { try { const d = await getJSON("/api/v1/shares"); setShares(d?.data?.shares || []); } catch { /* noop */ } }, []);
@@ -327,7 +330,7 @@ function ShareSheet({ open, onClose }) {
           </div>
         )}
         <label style={{ fontSize: 12.5, color: C.soil }}>Who is this for?
-          <select value={form.audience} onChange={(e) => setForm({ ...form, audience: e.target.value })} style={inp}>{AUD.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></label>
+          <select value={form.audience} onChange={(e) => { const a = e.target.value; setForm({ ...form, audience: a, evidence: EVIDENCE_DEFAULT_AUD.includes(a) }); }} style={inp}>{AUD.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></label>
         <label style={{ fontSize: 12.5, color: C.soil }}>Reason (optional)
           <input value={form.share_reason} onChange={(e) => setForm({ ...form, share_reason: e.target.value })} placeholder="e.g. Loan application — BSP" style={inp} /></label>
         <div style={{ display: "flex", gap: 10 }}>
@@ -339,7 +342,7 @@ function ShareSheet({ open, onClose }) {
         <label style={{ fontSize: 12.5, color: C.soil, display: "flex", alignItems: "center", gap: 6 }}>
           <input type="checkbox" checked={form.one_time} onChange={(e) => setForm({ ...form, one_time: e.target.checked })} />One-time link (opens once, then dies)</label>
         <label style={{ fontSize: 12.5, color: C.soil, display: "flex", alignItems: "center", gap: 6 }}>
-          <input type="checkbox" checked={form.evidence} onChange={(e) => setForm({ ...form, evidence: e.target.checked })} />Include photo &amp; block evidence</label>
+          <input type="checkbox" checked={form.evidence} onChange={(e) => setForm({ ...form, evidence: e.target.checked })} />Include photo &amp; block evidence{EVIDENCE_DEFAULT_AUD.includes(form.audience) ? <span style={{ color: C.green, fontWeight: 700 }}> · recommended</span> : null}</label>
         <label style={{ fontSize: 12.5, color: C.soil, display: "flex", alignItems: "center", gap: 6 }}>
           <input type="checkbox" checked={form.documents} onChange={(e) => setForm({ ...form, documents: e.target.checked })} />Include document details (titles/dates only, not files)</label>
         <div style={{ fontSize: 11, color: C.muted }}>The viewer sees your identity, reputation, trust and farm{form.evidence ? ", plus your field photos and blocks" : ""} — never your raw cash records or private notes. You own this share and can revoke it.</div>

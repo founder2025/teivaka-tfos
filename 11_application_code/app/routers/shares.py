@@ -65,7 +65,13 @@ async def create_share(body: ShareCreate, db: AsyncSession = Depends(get_tenant_
     audience = body.audience.upper() if body.audience else "OTHER"
     if audience not in _AUDIENCES:
         audience = "OTHER"
-    scope = {k: bool((body.scope or {}).get(k, _DEFAULT_SCOPE[k])) for k in _DEFAULT_SCOPE}
+    # Evidence defaults ON for loan/buyer/insurer audiences (proving yourself is the point);
+    # an explicit value in body.scope always wins. Backstop for direct API callers — the
+    # frontend share sheet sets the same default per audience.
+    defaults = dict(_DEFAULT_SCOPE)
+    if audience in ("LOAN", "BUYER", "INSURANCE"):
+        defaults["evidence"] = True
+    scope = {k: bool((body.scope or {}).get(k, defaults[k])) for k in _DEFAULT_SCOPE}
     token = secrets.token_urlsafe(24)
     token_hash = _hash_token(token)
     expires_at = _now() + timedelta(days=body.expiry_days)
