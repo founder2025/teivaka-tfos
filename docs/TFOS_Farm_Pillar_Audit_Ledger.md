@@ -14,6 +14,30 @@ Legend: 🔒 LOCKED (approved; no redesign without new evidence) · ✅ PASS · 
 ---
 
 ## 🔒 LOCKED PAGES
+- **Analytics (/farm/insights · analytics)** — LOCKED 2026-06-27 (Operator-approved). Audited →
+  scorecard (6.5) → 8-persona → redesigned + wireframe → stress-tested ×1 → optimized ×1 →
+  deploy-smoke fix. **#1 fix: the Decision board now leads with a "Right now" TRIAGE card** (top
+  RED → AMBER signals + cash runway, which lives in /cashdemand not as a signal, so the most
+  decision-critical number isn't two taps deep) instead of a wall of 13 flat tabs — and **real
+  error states** replaced the perpetual "Loading…" that hid every 500/401/404. Also: **stale-
+  snapshot banner** (loud amber when signals ≥24h old — the Decision Engine has silently died
+  before, Strike #110, so a timestamp alone isn't enough); `get()` routed through shared `getJSON`
+  (token auto-refresh + honest errors, no stuck 401); **RED signals non-snoozable** (can't bury a
+  crisis — only amber/green ack); per-cycle P&L **CSV export** (the bankable table); Ask TIS deep-
+  link (`/tis?q=`); role=tab + keyboard nav; removed the redundant urgent-strip (TriageCard is the
+  canonical urgent surface). **Deploy-smoke caught + fixed (ee63b8e): the Signals-tab ErrorCard was
+  a LATENT `_require_farm` 404** — a `farm_id` left in localStorage from a previous login isn't under
+  the current account; the old non-throwing `get()` masked it as an empty "no signals configured,"
+  the new `getJSON` correctly throws. ErrorCard is now **status-aware** — a 404 says "This farm isn't
+  available · Choose another farm" and clears the stale selection so FarmSelector re-picks (recoverable,
+  not a dead "Retry"); genuine load errors get Retry; a true 401 already redirects to /login (so an
+  ErrorCard is never auth). Wireframe: docs/TFOS_Analytics_Redesign_Wireframe.md. Remainder filed
+  (backend, named — not faked): 3-Layer lens (Cash-Flow/Food-Security/Long-Term-Asset) on P&L +
+  productivity; signal "why" (rule + threshold + value) needs the signals endpoint to return the
+  rule; **server-side cycle rollups + cross-view reconciliation to ONE source** (KPI vs cashdemand
+  vs profit); per-block / per-worker drill; **synced (server-side) signal acknowledgement** (ack is
+  localStorage-only today); regional / cross-farm cohort benchmark (needs ≥5 farms — honest building
+  state, no fake cohort); i18n / voice. Deploy: frontend-only.
 - **Gallery (/farm/records · gallery)** — LOCKED 2026-06-27 (Operator-approved). Audited → scorecard
   (6.0) → 8-persona → redesigned + wireframe → stress-tested ×2 → optimized. Page-local findings
   resolved: 200-event cap → pagination; honest copy ("field & event logs", not faked "every
