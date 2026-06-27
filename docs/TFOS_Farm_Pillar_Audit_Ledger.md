@@ -14,6 +14,34 @@ Legend: 🔒 LOCKED (approved; no redesign without new evidence) · ✅ PASS · 
 ---
 
 ## 🔒 LOCKED PAGES
+- **Cash (/farm/money · cash)** — LOCKED 2026-06-27 (Operator-approved). Audited (CA-A + CA-B–CA-H)
+  → scorecard (4.0 — capped by CA-A) → 8-persona → redesigned + wireframe → stress-tested ×1 (11
+  scenarios) → optimized ×1. **#1 fix — CA-A SHOWSTOPPER: the page rendered $0 + an empty ledger
+  for EVERY farm.** `getCash` returned the `{data:{entries, cash_balance_fjd}}` envelope but the
+  page read top-level fields (one `.data` too shallow); the Overview tile unwraps `.data.data` and
+  looked fine, hiding it. Writes succeeded, reads showed nothing — farmers logged cash and watched
+  it vanish. Fixed: `getCash` unwraps `?.data` → balance + ledger + every derived view (week net,
+  rails, categories, NWC, forecast, reconcile) render. **Also:** entry-time **enterprise anchor**
+  (optional cycle picker sends `pu_id`+`production_id` — the API accepted them, the form never did
+  — enabling per-enterprise P&L at the data layer; collapsed behind "+ Attach to a business");
+  **honest forecast** (runway relabelled "Spend runway · before harvest income"; the below-zero
+  alarm states it counts COSTS ONLY and points at the excluded upcoming-harvest income — no false
+  "going broke" for a seasonal pre-harvest farm); **cashbook CSV export** (Ledger + Bank Evidence,
+  honestly labelled "covers latest 200"); **Bank Evidence is a real view** (period balance/in/out/
+  net + export + pack link, was a 1-button stub); **Overview de-dup** (receivables/credit/NWC live
+  once in the capital strip); **solo-farmer edit fix** (`canManageCash` now includes FARMER — the
+  owner can edit/delete their OWN cash; WORKER/VIEWER read-only); date/in-out **immutability
+  surfaced honestly** (locked for backdating protection — fix = delete & re-add within 48h); a11y
+  keyboard tiles. Carried strengths: getJSON/send token refresh, error/degraded/cached-on-error,
+  Fiji time, formatMoney, 48h server edit window + Lock UI, hash-chained CRUD, a11y Modal + arrow
+  tabs. Wireframe: docs/TFOS_Cash_Redesign_Wireframe.md (v2). **FILED (backend, named not faked):
+  CA-C server-side role gate on PATCH/DELETE** (client-only + fail-open today — STAGED, not shipped
+  blind: a fail-closed gate would lock out FARMER-role owners, so the read-only role set is an
+  Operator auth decision); **server aggregates + pagination** (CA1 — rails/categories/"All" + export
+  reconcile to the all-time balance beyond 200 entries); credit/payables accrual (CA-D); per-cycle
+  P&L report consuming the new anchor (CA21/22); tax-category mapping (CA27); TRANSFER/loan/grant;
+  server category enum; statement import + saved reconciliation; **receipt-snap → cash** (the parked
+  OCR work lands here); B31 provider lift; voice/i18n. Deploy: frontend-only.
 - **Library (/farm/library)** — LOCKED 2026-06-27 (Operator-approved). Audited (LB1–LB9) →
   scorecard (6.5→6.0 after 8-persona) → 8-persona → redesigned + wireframe → stress-tested ×1
   (11 scenarios) → optimized ×1. **#1 fix (LB1): every tab is react-query → real ErrorCard+Retry
