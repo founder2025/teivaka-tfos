@@ -109,6 +109,25 @@ Legend: 🔒 LOCKED (approved; no redesign without new evidence) · ✅ PASS · 
   traceability on sales (B27), invoice PDF (B16), credit limit (B26), animal sales via orders (B15),
   deliveries/pick-list (B31), DSO/revenue-trend (B32), offline queue, pagination (B20). Do NOT
   redesign again unless new evidence requires it. Deploy: frontend-only.
+- **Payments (/farm/money → "Payments" tab)** — LOCKED 2026-06-26 (Operator-approved). Audited
+  (PA1–PA16) → deepened 8-persona (PA17–PA29) → redesigned → stress-tested ×11 → optimized →
+  provider quick-picks + honest copy. **#1 fix PA1: confirm books to the obligation's farm (or the
+  current farm sent by the page), refusing when ambiguous instead of silently booking to the oldest
+  farm — multi-farm Bank Evidence no longer corrupted.** Also: one Settle flow (instruction
+  persistent, no toast loss); api.js wrapper keeping the 423 PIN-lock but no longer swallowing
+  errors; allSettled load (one flaky call can't blank the page); current-farm "Books to" selector;
+  one-tap Fiji provider quick-picks (M-PAiSA/MyCash/Digicel/BSP/ANZ/Westpac/HFC/Bred/Visa/MC +
+  Other); real method chooser; overdue total+sort+flags; shared a11y Modal (no window.prompt/
+  confirm); lucide icons; submit-locks; retry-safe confirm; friendly labels; search + show-settled;
+  arrow-key tabs; enriched Ask AI; Fiji dates; honest "record now, charge later" copy. **Stress test
+  caught a self-introduced white-screen crash (ST-P1 — useCurrentFarm w/o provider) — FIXED.**
+  **Backend STAGED (no migration): PA1 farm-correct booking, PA18 idempotent instruct, PA24 Fiji
+  date, ST-P2 adopt farm tag, ST-P3 real method label — needs `build --no-cache api` + verify-deploy.
+  FILED (honest, not faked): ST-P10 server role gate/maker-checker, ST-P12 receipt-verify view +
+  register export + FNPF/tax, PA22 partial settlement, PA23 Evidence-v2 on confirm, PA27 single AR
+  truth, PATCH /methods/{id}/default, real in-app charging via gateway (adapter spec +
+  onboarding checklist: `docs/TFOS_Payments_Provider_Adapter_Spec.md`; blocked on merchant account).**
+  Do NOT redesign again unless new evidence requires it. Deploy: frontend `npm run build` + backend staged.
 
 ---
 
