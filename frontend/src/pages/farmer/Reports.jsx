@@ -51,9 +51,9 @@ const REPORT_KINDS = {
   "buyer-statement": { name: "Buyer statement", Icon: Truck },
 };
 // Reports with REAL data today vs honestly-building (RC3). No 19 equal tiles.
-const READY = ["cash-flow", "cycle-pl", "harvest-summary", "compliance-log"];
+const READY = ["cash-flow", "cycle-pl", "harvest-summary", "compliance-log", "audit-report"];
 const BUILDING = ["balance-sheet", "networth", "valuation-statement", "labor-record", "buyer-statement",
-  "audit-report", "inventory-report", "budget-report", "certification-report", "gov-report", "investor-report", "ngo-report"];
+  "inventory-report", "budget-report", "certification-report", "gov-report", "investor-report", "ngo-report"];
 
 const TABS = [
   { id: "library", label: "Library", hint: "All reports" },
@@ -89,12 +89,10 @@ function Brandmark({ size = 22 }) {
   return <span style={{ display: "inline-flex", alignItems: "center", gap: 6, color: C.greenDk }}><Sprout size={size - 4} /><span style={{ fontWeight: 800, letterSpacing: ".06em", color: C.soil }}>TEIVAKA</span></span>;
 }
 
-function ChainBanner({ verifyUrl }) {
+function ChainBanner() {
   return (
-    <div className="rounded-xl border p-3 flex items-center justify-between gap-2 flex-wrap" style={{ background: C.greenTint, borderColor: C.border }}>
-      <div className="text-xs" style={{ color: C.greenDk }}><CheckCircle2 size={13} style={{ display: "inline", verticalAlign: -2, marginRight: 4 }} />Verification chain · <strong>INTACT</strong> — every record carries a stamp; nothing is edited after the fact.</div>
-      {verifyUrl ? <a href={verifyUrl} target="_blank" rel="noreferrer" className="text-[11px] px-2 py-1 rounded-lg" style={{ color: C.greenDk, border: `1px solid ${C.border}` }}>Open verify ↗</a>
-        : <span className="text-[11px]" style={{ color: C.muted }}>verify link appears once you generate a PDF</span>}
+    <div className="rounded-xl border p-3" style={{ background: C.greenTint, borderColor: C.border }}>
+      <div className="text-xs" style={{ color: C.greenDk }}><CheckCircle2 size={13} style={{ display: "inline", verticalAlign: -2, marginRight: 4 }} />Verification chain · <strong>INTACT</strong> — every record carries a stamp; nothing is edited after the fact. Generate a report to get its scannable verify link.</div>
     </div>
   );
 }
@@ -113,17 +111,21 @@ function QState({ q, label, children }) {
   return children;
 }
 
-// Generate + download the signed PDF (real; the one authoritative artifact).
+// Generate + download the signed PDF (the one authoritative artifact). Returns the
+// audit anchor from the X-Anchor-Hash header so the page can show a Verify link + QR
+// for the exact document just issued (no background audit scan — RST3/RST5).
 async function downloadPdf(farmId, period) {
   emitToast("Generating Bank Evidence PDF…");
   try {
     const r = await apiFetch(`/api/v1/crops/bank-evidence?period=${encodeURIComponent(period)}&farm_id=${encodeURIComponent(farmId)}`);
     if (!r.ok) throw new Error(`Couldn't generate (${r.status})`);
+    const anchor = r.headers.get("X-Anchor-Hash");
     const blob = await r.blob(); const url = URL.createObjectURL(blob);
     const a = document.createElement("a"); a.href = url; a.download = `bank-evidence-${farmId}-${period}.pdf`;
     document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
     emitToast("Bank Evidence PDF generated — audit-anchored");
-  } catch (e) { emitToast(e.message || "Couldn't generate the PDF"); }
+    return anchor;
+  } catch (e) { emitToast(e.message || "Couldn't generate the PDF"); return null; }
 }
 
 // ── Bank Evidence card (reads /sources → matches the PDF) ────────────────────
@@ -132,22 +134,30 @@ function BankDocCard({ farmId, period }) {
   const farm = useFarmIdentity(farmId);
   const [qr, setQr] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [anchor, setAnchor] = useState(null);   // set from the generated PDF (RST3)
   const s = sq.data?.data || {};
-  const verifyUrl = s.verify_url;
+  const verifyUrl = anchor ? `https://teivaka.com/verify/${anchor}` : null;
 
+  // A new period/farm is a different document — drop the stale anchor.
+  useEffect(() => { setAnchor(null); setQr(null); }, [farmId, period]);
+
+  // QR only exists once a PDF is generated — encodes THAT document's verify URL.
   useEffect(() => {
+    if (!anchor) { setQr(null); return; }
     let alive = true; let obj;
     (async () => {
       try {
-        const r = await apiFetch(`/api/v1/crops/bank-evidence/qr.png?farm_id=${encodeURIComponent(farmId)}&period=${encodeURIComponent(period)}`);
+        const r = await apiFetch(`/api/v1/crops/bank-evidence/qr.png?hash=${encodeURIComponent(anchor)}`);
         if (!r.ok) return; const b = await r.blob(); obj = URL.createObjectURL(b); if (alive) setQr(obj);
       } catch { /* QR is optional chrome */ }
     })();
     return () => { alive = false; if (obj) URL.revokeObjectURL(obj); };
-  }, [farmId, period]);
+  }, [anchor]);
 
+  const onDownload = async () => { setBusy(true); const a = await downloadPdf(farmId, period); if (a) setAnchor(a); setBusy(false); };
   const share = async () => {
-    const text = `${farm.name} — Bank Evidence (${period}). Verify it's genuine: ${verifyUrl || "generate the PDF first"}`;
+    if (!verifyUrl) { emitToast("Generate the signed PDF first — it creates the verifiable link"); return; }
+    const text = `${farm.name} — Bank Evidence (${period}). Verify it's genuine: ${verifyUrl}`;
     if (navigator.share) { try { await navigator.share({ title: "Bank Evidence", text }); return; } catch { /* fall through */ } }
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
   };
@@ -179,14 +189,14 @@ function BankDocCard({ farmId, period }) {
           {/* QR → scan to verify + browse evidence */}
           <div className="text-center" style={{ width: 132 }}>
             <div style={{ width: 132, height: 132, border: `1px solid ${C.border}`, borderRadius: 10, display: "grid", placeItems: "center", background: "#fff" }}>
-              {qr ? <img src={qr} alt="Verify QR" style={{ width: 116, height: 116 }} /> : <span className="text-[10px]" style={{ color: C.muted }}>QR appears once a PDF is generated</span>}
+              {qr ? <img src={qr} alt="Scan to verify this report" style={{ width: 116, height: 116 }} /> : <span className="text-[10px] px-2" style={{ color: C.muted }}>Generate the signed PDF to get a scannable QR</span>}
             </div>
-            <div className="text-[10px] mt-1" style={{ color: C.muted }}>Scan to verify + browse evidence</div>
+            <div className="text-[10px] mt-1" style={{ color: C.muted }}>{qr ? "Scan to verify this report" : "verifies the exact PDF you issue"}</div>
           </div>
         </div>
 
         <div className="flex items-center gap-2 flex-wrap mt-3">
-          <button onClick={async () => { setBusy(true); await downloadPdf(farmId, period); setBusy(false); }} disabled={busy || !farmId} className="text-sm px-3 py-1.5 rounded-lg text-white disabled:opacity-50" style={{ background: C.greenDk }}>{busy ? "Generating…" : <><Download size={13} style={{ display: "inline", verticalAlign: -2, marginRight: 4 }} />Download signed PDF</>}</button>
+          <button onClick={onDownload} disabled={busy || !farmId} className="text-sm px-3 py-1.5 rounded-lg text-white disabled:opacity-50" style={{ background: C.greenDk }}>{busy ? "Generating…" : <><Download size={13} style={{ display: "inline", verticalAlign: -2, marginRight: 4 }} />Download signed PDF</>}</button>
           <button onClick={share} className="text-sm px-3 py-1.5 rounded-lg" style={{ color: C.soil, border: `1px solid ${C.border}` }}><Share2 size={13} style={{ display: "inline", verticalAlign: -2, marginRight: 4 }} />Send</button>
           {verifyUrl && <a href={verifyUrl} target="_blank" rel="noreferrer" className="text-sm px-3 py-1.5 rounded-lg" style={{ color: C.greenDk, border: `1px solid ${C.border}` }}><ShieldCheck size={13} style={{ display: "inline", verticalAlign: -2, marginRight: 4 }} />Verify</a>}
         </div>
@@ -229,6 +239,7 @@ function EvidencePanel({ farmId, period }) {
 
         <div>
           <div className="text-sm font-semibold mb-2" style={{ color: C.soil }}>Photo evidence ({photos.length}) — grouped by block</div>
+          {photos.length >= 200 && <div className="text-[11px] mb-2" style={{ color: C.muted }}>Showing the latest 200 photos for this period.</div>}
           {photos.length === 0 ? <div className="text-sm" style={{ color: C.muted }}>No photos logged in this period. Attach photos to field events and they appear here as verifiable evidence.</div> : (
             Object.keys(byBlock).map((bid) => (
               <div key={bid} className="mb-3">
@@ -292,11 +303,12 @@ function ReportDocBody({ typeId, farmId, period, navigate }) {
   // RC17 — real compliance, not a hardcoded "No active holds".
   if (typeId === "compliance-log") return <ComplianceDoc farmId={farmId} navigate={navigate} />;
 
-  // RC17 — honest audit report: the real chain check runs in the signed PDF.
+  // RC17 — honest audit report: the real chain check runs in the signed PDF, and the
+  // button actually generates it (RST2 — real action, not a dead tab nav).
   if (typeId === "audit-report") return (
     <DocSection title="Tamper-evident record">
-      <div className="text-sm py-2" style={{ color: C.soil }}>Every action is hash-chained. The cryptographic chain integrity check runs when you generate the <strong>Bank Evidence PDF</strong> — it calls the chain verifier and prints the result + a scannable QR. This page does not assert a result it hasn't run.</div>
-      <button onClick={() => navigate && navigate("?tab=bankevidence")} className="text-sm px-3 py-1.5 rounded-lg mt-1" style={{ color: C.greenDk, border: `1px solid ${C.border}` }}>Generate the verified PDF</button>
+      <div className="text-sm py-2" style={{ color: C.soil }}>Every action is hash-chained. The cryptographic chain integrity check runs when you generate the <strong>signed PDF</strong> — it calls the chain verifier and prints the result + a scannable QR. This page does not assert a result it hasn't run.</div>
+      <button onClick={() => downloadPdf(farmId, period)} className="text-sm px-3 py-1.5 rounded-lg mt-1 text-white" style={{ background: C.greenDk }}><Download size={13} style={{ display: "inline", verticalAlign: -2, marginRight: 4 }} />Generate the verified PDF</button>
     </DocSection>
   );
 
@@ -389,7 +401,7 @@ function LibraryTab({ farmId, period, onOpen, setTab }) {
   const [showBuilding, setShowBuilding] = useState(false);
   return (
     <div className="space-y-4">
-      <ChainBanner verifyUrl={sq.data?.data?.verify_url} />
+      <ChainBanner />
       <div className="rounded-xl border-2 p-4 flex items-center gap-3 cursor-pointer" style={{ background: "var(--paper)", borderColor: C.green }} onClick={() => setTab("bankevidence")}>
         <div className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0" style={{ background: C.greenTint, color: C.greenDk }}><Award size={20} /></div>
         <div className="flex-1 min-w-0"><div className="font-semibold text-sm" style={{ color: C.soil }}>Bank Evidence</div><div className="text-xs" style={{ color: C.muted }}>The whole-farm summary a lender reads — money, evidence, QR, verification.{net != null ? ` Net this period: ${fjd(net)}.` : ""}</div></div>
@@ -426,7 +438,7 @@ function ReportsInner() {
   const [period, setPeriod] = useState(monthNow());
   const [reportOpen, setReportOpen] = useState(null);
   const navigate = useNavigate();
-  const askAI = () => navigate(`/tis?q=${encodeURIComponent("Explain my Bank Evidence and what a lender will see in it")}`);
+  const askAI = () => navigate(`/tis?q=${encodeURIComponent(`Explain my Bank Evidence for ${period} and what a lender will see in it`)}`);
 
   if (reportOpen) return <div className="tfp space-y-4"><ReportDocument typeId={reportOpen} farmId={farmId} period={period} onBack={() => setReportOpen(null)} /></div>;
 
@@ -449,7 +461,7 @@ function ReportsInner() {
           </div>
           <section className="bg-white rounded-2xl px-3 py-4 sm:px-4" style={{ border: `1px solid ${C.border}` }}>
             {tab === "library" && <LibraryTab farmId={farmId} period={period} onOpen={setReportOpen} setTab={setTab} />}
-            {tab === "bankevidence" && <div className="space-y-3"><ChainBanner verifyUrl={undefined} /><BankDocCard farmId={farmId} period={period} /></div>}
+            {tab === "bankevidence" && <BankDocCard farmId={farmId} period={period} />}
             {tab === "evidence" && <EvidencePanel farmId={farmId} period={period} />}
             {tab === "dispatch" && <DispatchTab />}
           </section>

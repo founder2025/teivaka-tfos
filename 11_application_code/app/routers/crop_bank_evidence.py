@@ -489,16 +489,6 @@ async def _resolve_farm(db, tid, farm_id):
     return row
 
 
-async def _latest_anchor(db, tid, farm_id):
-    """Most recent Bank-Evidence anchor hash for this farm (for the verify URL/QR)."""
-    return (await db.execute(text("""
-        SELECT this_hash FROM audit.events
-         WHERE tenant_id = cast(:tid AS uuid) AND event_type = 'BANK_PDF_GENERATED'
-           AND payload->>'farm_id' = :fid
-         ORDER BY occurred_at DESC LIMIT 1
-    """), {"tid": tid, "fid": farm_id})).scalar()
-
-
 @router.get("/crops/bank-evidence/sources")
 async def crop_bank_evidence_sources(
     period: Optional[str] = Query(None),
@@ -532,7 +522,9 @@ async def crop_bank_evidence_sources(
         WHERE tenant_id=:tid AND farm_id=:fid AND harvest_date>=:ps AND harvest_date<:pe
     """), {"tid": tid, "fid": farm_id, "ps": ps_date, "pe": pe_date})).first()
     blocks, photos = await _evidence_sources(db, tid, farm_id, ps_date, pe_date, period_start, period_end)
-    anchor = await _latest_anchor(db, tid, farm_id)
+    # No audit.events scan here (RST5) — the verifiable anchor is returned by the PDF
+    # generation (X-Anchor-Hash header), so the verify link reflects the document the
+    # farmer actually issued, not a guessed prior one.
     return {"data": {
         "farm_id": farm_id, "farm_name": farm.farm_name, "period": period,
         "earned_fjd": round(cin, 2), "spent_fjd": round(cout, 2), "net_fjd": round(cin - cout, 2),
@@ -544,24 +536,18 @@ async def crop_bank_evidence_sources(
                     "date": p["d"].isoformat() if p["d"] else None, "pu_id": p["pu_id"],
                     "photo_url": p["photo_url"], "sha256": p["photo_sha256"], "audit_hash": p["audit_hash"]}
                    for p in photos],
-        "anchor_hash": anchor,
-        "verify_url": f"https://teivaka.com/verify/{anchor}" if anchor else None,
     }}
 
 
 @router.get("/crops/bank-evidence/qr.png")
 async def crop_bank_evidence_qr(
-    period: Optional[str] = Query(None),
-    farm_id: Optional[str] = Query(None),
+    hash: str = Query(..., min_length=16, max_length=128, description="Audit anchor hash from the generated PDF"),
     user: dict = Depends(get_current_user),
-    db: AsyncSession = Depends(get_tenant_db),
 ):
-    """QR PNG for the report's verify URL — lets the page show a scannable code without a
-    frontend QR lib. Encodes the latest anchor's verify page, else the public verify home."""
-    tid = str(_resolve_tenant_uuid(user))
-    farm = await _resolve_farm(db, tid, farm_id)
-    anchor = await _latest_anchor(db, tid, farm.farm_id) if farm else None
-    url = f"https://teivaka.com/verify/{anchor}" if anchor else "https://teivaka.com/verify"
-    buf = generate_qr_image(url)
-    return Response(content=buf.read(), media_type="image/png",
-                    headers={"Cache-Control": "no-store"})
+    """QR PNG for a generated report's verify URL — DB-free (RST5): the frontend passes the
+    anchor it received from the PDF's X-Anchor-Hash header. Hash is validated hex."""
+    import re
+    if not re.fullmatch(r"[0-9a-fA-F]{16,128}", hash):
+        raise HTTPException(400, error_envelope("bad_hash", "Invalid anchor hash."))
+    buf = generate_qr_image(f"https://teivaka.com/verify/{hash}")
+    return Response(content=buf.read(), media_type="image/png", headers={"Cache-Control": "no-store"})
