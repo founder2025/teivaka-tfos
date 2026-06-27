@@ -23,7 +23,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
-from sqlalchemy import text
+from sqlalchemy import text, bindparam
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
@@ -237,12 +237,12 @@ async def _assemble_lot(db: AsyncSession, lot_id: str) -> Optional[dict]:
     harvested_kg = 0.0
     allocated_all = 0.0
     if hids:
-        harvested_kg = float((await db.execute(text(
-            "SELECT COALESCE(SUM(gross_yield_kg),0) FROM tenant.harvest_log WHERE harvest_id = ANY(:h)"),
-            {"h": hids})).scalar() or 0)
-        allocated_all = float((await db.execute(text(
-            "SELECT COALESCE(SUM(kg),0) FROM tenant.lot_items WHERE harvest_id = ANY(:h)"),
-            {"h": hids})).scalar() or 0)
+        harvested_kg = float((await db.execute(
+            text("SELECT COALESCE(SUM(gross_yield_kg),0) FROM tenant.harvest_log WHERE harvest_id IN :h")
+            .bindparams(bindparam("h", expanding=True)), {"h": hids})).scalar() or 0)
+        allocated_all = float((await db.execute(
+            text("SELECT COALESCE(SUM(kg),0) FROM tenant.lot_items WHERE harvest_id IN :h")
+            .bindparams(bindparam("h", expanding=True)), {"h": hids})).scalar() or 0)
     # Legacy rows can carry NULL compliance (pre-015a trigger) — treat NULL as n/a, not a fail.
     all_cleared = all(i["chemical_compliance_cleared"] is not False for i in items) if items else False
 
@@ -253,19 +253,19 @@ async def _assemble_lot(db: AsyncSession, lot_id: str) -> Optional[dict]:
                    cl.chem_name, cl.withholding_period_days
             FROM tenant.field_events fe
             JOIN shared.chemical_library cl ON cl.chemical_id = fe.chemical_id
-            WHERE fe.pu_id = ANY(:pus) AND fe.chemical_id IS NOT NULL AND fe.deleted_at IS NULL
+            WHERE fe.pu_id IN :pus AND fe.chemical_id IS NOT NULL AND fe.deleted_at IS NULL
             ORDER BY fe.event_date DESC LIMIT 60
-        """), {"pus": pu_ids})).mappings().all()]
+        """).bindparams(bindparam("pus", expanding=True)), {"pus": pu_ids})).mappings().all()]
         photos = [dict(r) for r in (await db.execute(text("""
             SELECT fe.event_type, fe.event_date::date AS date, fe.photo_url, fe.photo_sha256
             FROM tenant.field_events fe
-            WHERE fe.pu_id = ANY(:pus) AND fe.photo_url IS NOT NULL AND fe.deleted_at IS NULL
+            WHERE fe.pu_id IN :pus AND fe.photo_url IS NOT NULL AND fe.deleted_at IS NULL
             ORDER BY fe.event_date DESC LIMIT 40
-        """), {"pus": pu_ids})).mappings().all()]
+        """).bindparams(bindparam("pus", expanding=True)), {"pus": pu_ids})).mappings().all()]
         blocks = [dict(r) for r in (await db.execute(text("""
             SELECT pu_name, latitude, longitude, COALESCE(area_sqm,0) AS area_sqm
-            FROM tenant.production_units WHERE pu_id = ANY(:pus) ORDER BY pu_name
-        """), {"pus": pu_ids})).mappings().all()]
+            FROM tenant.production_units WHERE pu_id IN :pus ORDER BY pu_name
+        """).bindparams(bindparam("pus", expanding=True)), {"pus": pu_ids})).mappings().all()]
 
     def _iso(x):
         return x.isoformat() if x else None
