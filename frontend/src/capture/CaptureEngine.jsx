@@ -26,6 +26,7 @@ import { useFarmName } from "../utils/farmName";
 import { isNative, nativeTakePhoto, nativeGetPosition } from "../native/bridge";
 import { submitCapture, ensureCaptureSync } from "./submitCapture";
 import { newIdem } from "./offlineQueue";
+import { recordCapture, lastValues } from "./captureMemory";
 
 const ICONS = {
   Eye, Droplet, Scissors, ShieldCheck, Sprout, Warehouse, Coins, Leaf, CalendarPlus, CalendarCheck,
@@ -137,9 +138,26 @@ export default function CaptureEngine({ config = cropsConfig, onDone, onBack, pr
   const timerRef = useRef(null);
   const preAppliedRef = useRef(false);
   const idemRef = useRef(null);   // idempotency key for the entry being captured (FAB12)
+  const prefillRef = useRef(null);
 
   // Drain any captures queued offline in a previous session + wire the reconnect flush.
   useEffect(() => { ensureCaptureSync(); }, []);
+
+  // Pre-fill routine scalar fields (e.g. last feed quantity) from on-device memory the moment a
+  // spec is chosen — cuts typing for the daily repeats. Never overwrites what the farmer typed,
+  // never touches FK pickers / notes. Runs once per spec selection.
+  useEffect(() => {
+    if (!spec || prefillRef.current === spec) return;
+    prefillRef.current = spec;
+    const lv = lastValues(spec.event_type);
+    if (!lv || !Object.keys(lv).length) return;
+    const allowed = new Set((spec.capture || [])
+      .filter((f) => ["number", "text", "choice"].includes(f.input || "text"))
+      .map((f) => f.name));
+    const seed = {};
+    for (const [k, v] of Object.entries(lv)) if (allowed.has(k)) seed[k] = v;
+    if (Object.keys(seed).length) setValues((s) => ({ ...seed, ...s }));
+  }, [spec]);
 
   useEffect(() => {
     let off = false;
@@ -261,6 +279,7 @@ export default function CaptureEngine({ config = cropsConfig, onDone, onBack, pr
     setOccurredDate(nowDateStr()); setOccurredTime(nowTimeStr()); setChemQuery(""); setLibQuery("");
     setEditOpen(false); setEditSaved(false); setEditPhoto(null);
     idemRef.current = null;   // fresh idempotency key per entry
+    prefillRef.current = null;
   }
   function pickVerb(v) {
     // "link" verbs hand off to an existing rich page (cycle/nursery/harvest)
@@ -402,6 +421,8 @@ export default function CaptureEngine({ config = cropsConfig, onDone, onBack, pr
         if (r.queued) setResult({ queued: true });
         else setResult({ event_id: r.data?.data?.event_id || "", audit_hash: r.data?.data?.audit_hash || "" });
       }
+      // Learn this farmer's routine (frequency + last values) for Quick-log + pre-fill. On-device.
+      recordCapture({ eventType: spec.event_type, values });
     } catch (e) {
       // submitCapture only throws on a genuine server/validation rejection (network errors queue).
       setError(e?.userMessage || e?.message || "Couldn't save — please try again.");
@@ -554,7 +575,7 @@ export default function CaptureEngine({ config = cropsConfig, onDone, onBack, pr
       return (
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           {f.options.map((o) => (
-            <button key={o.value} onClick={() => toggle(o.value)}
+            <button key={o.value} onClick={() => toggle(o.value)} aria-pressed={arr.includes(o.value)}
               style={{ padding: "10px 14px", borderRadius: 12, fontSize: 14, fontWeight: 600,
                 border: arr.includes(o.value) ? "2px solid var(--green)" : "1px solid var(--line)",
                 background: arr.includes(o.value) ? "#eaf3ea" : "#fff", cursor: "pointer" }}>{o.label}</button>
@@ -624,7 +645,7 @@ export default function CaptureEngine({ config = cropsConfig, onDone, onBack, pr
     if (f.input === "choice") return (
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
         {f.options.map((o) => (
-          <button key={o.value} onClick={() => setVal(f.name, o.value)}
+          <button key={o.value} onClick={() => setVal(f.name, o.value)} aria-pressed={v === o.value}
             style={{ padding: "12px 18px", borderRadius: 12, fontSize: 15, fontWeight: 600,
               border: v === o.value ? "2px solid var(--green)" : "1px solid var(--line)",
               background: v === o.value ? "#eaf3ea" : "#fff", cursor: "pointer" }}>{o.label}</button>
@@ -633,10 +654,10 @@ export default function CaptureEngine({ config = cropsConfig, onDone, onBack, pr
     );
     if (f.input === "number") { const n = Number(v) || 0; return (
       <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-        <button onClick={() => setVal(f.name, Math.max(0, n - 1))} style={{ width: 48, height: 48, borderRadius: 12, border: "1px solid var(--line)", background: "var(--paper)", fontSize: 22, cursor: "pointer" }}>−</button>
-        <input type="number" value={v} onChange={(e) => setVal(f.name, e.target.value)} inputMode="numeric"
+        <button onClick={() => setVal(f.name, Math.max(0, n - 1))} aria-label={`Decrease ${f.ask}`} style={{ width: 48, height: 48, borderRadius: 12, border: "1px solid var(--line)", background: "var(--paper)", fontSize: 22, cursor: "pointer" }}>−</button>
+        <input type="number" value={v} onChange={(e) => setVal(f.name, e.target.value)} inputMode="numeric" aria-label={f.ask}
           style={{ width: 90, textAlign: "center", padding: 12, borderRadius: 12, border: "1px solid var(--line)", fontSize: 18, fontWeight: 700 }} />
-        <button onClick={() => setVal(f.name, n + 1)} style={{ width: 48, height: 48, borderRadius: 12, border: "1px solid var(--line)", background: "var(--paper)", fontSize: 22, cursor: "pointer" }}>+</button>
+        <button onClick={() => setVal(f.name, n + 1)} aria-label={`Increase ${f.ask}`} style={{ width: 48, height: 48, borderRadius: 12, border: "1px solid var(--line)", background: "var(--paper)", fontSize: 22, cursor: "pointer" }}>+</button>
       </div>
     ); }
     return <input value={v} onChange={(e) => setVal(f.name, e.target.value)}

@@ -11,6 +11,7 @@ import {
 import Modal from "../ui/Modal";
 import CaptureEngine from "../../capture/CaptureEngine";
 import { buildCatalog, configForVertical, DOORS, essentialsCards } from "../../capture/catalog";
+import { topActions } from "../../capture/captureMemory";
 import { useFormModal } from "../../context/FormModalContext";
 
 /**
@@ -90,6 +91,17 @@ export default function LogSheet({ isOpen, onClose, target = null }) {
 
   const sections = useMemo(() => buildCatalog(activeGroups), [activeGroups]);
   const essentials = useMemo(() => essentialsCards(activeGroups), [activeGroups]);
+  // Quick-log = what THIS farmer logs most (on-device frequency+recency), resolved to real cards;
+  // falls back to the static essentials before any history exists. Fixes the config-ordered 8-cap.
+  const cardByEvent = useMemo(() => {
+    const m = {};
+    for (const sec of sections) for (const c of sec.cards) if (c.eventType && !m[c.eventType]) m[c.eventType] = { ...c, vertical: sec.vertical };
+    return m;
+  }, [sections]);
+  const quick = useMemo(() => {
+    const learned = topActions(8).map((x) => cardByEvent[x.eventType]).filter(Boolean);
+    return learned.length ? { cards: learned, personalized: true } : { cards: essentials, personalized: false };
+  }, [cardByEvent, essentials, isOpen]);
   const doors = useMemo(
     () => DOORS.filter((d) => d.key === "WHOLE" || sections.some((s) => d.verticals.includes(s.vertical))),
     [sections],
@@ -214,11 +226,11 @@ export default function LogSheet({ isOpen, onClose, target = null }) {
             ) : (
               /* ── level 1: quick-log essentials + the three doors ── */
               <>
-                {essentials.length > 0 && (
+                {quick.cards.length > 0 && (
                   <div style={{ marginBottom: 16 }}>
-                    <div className="catalog-group-sub" style={{ marginBottom: 8 }}>Quick log · tap to record</div>
+                    <div className="catalog-group-sub" style={{ marginBottom: 8 }}>{quick.personalized ? "Your usual · tap to log" : "Quick log · tap to record"}</div>
                     <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                      {essentials.map((c) => (
+                      {quick.cards.map((c) => (
                         <button key={c.key} type="button" onClick={() => pickCard(c.vertical, c)}
                           style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 12px", borderRadius: 999,
                             border: "1px solid var(--line)", background: "var(--paper)", color: "var(--soil)", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
