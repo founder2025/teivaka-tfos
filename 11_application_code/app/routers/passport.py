@@ -23,7 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.middleware.rls import get_current_user, get_tenant_db
 from app.schemas.envelope import success_envelope
-from app.services.passport_summary import deterministic_summary, build_prompt
+from app.services.passport_summary import deterministic_summary, build_prompt, is_grounded
 
 router = APIRouter()
 
@@ -147,6 +147,14 @@ async def _assemble_passport(db: AsyncSession, user: dict) -> dict:
 @router.get("/passport/me")
 async def get_my_passport(db: AsyncSession = Depends(get_tenant_db), user: dict = Depends(get_current_user)):
     p = await _assemble_passport(db, user)
+    # First load with no snapshot → compute once so the farmer sees real scores, not "Building" (P-4).
+    if (p.get("trust") or {}).get("status") == "building":
+        try:
+            from app.workers.trust_worker import refresh_tenant
+            await run_in_threadpool(refresh_tenant, str(user["tenant_id"]))
+            p = await _assemble_passport(db, user)
+        except Exception:  # noqa: BLE001 — keep the honest "Building" if compute fails
+            pass
     row = (await db.execute(text(
         "SELECT summary, source, generated_at FROM tenant.passport_ai_summary LIMIT 1"))).mappings().first()
     if row and row["summary"]:
@@ -193,6 +201,8 @@ async def refresh_my_summary(db: AsyncSession = Depends(get_tenant_db), user: di
         out = await bridge_chat(build_prompt(p), str(user["user_id"]), farm_id)
         if not out or len(out.strip()) < 40:
             raise ValueError("empty")
+        if not is_grounded(out, p):   # Inviolable #1 — reject any invented figure (P-6)
+            raise ValueError("ungrounded")
         txt = out.strip()
         await _store_summary(db, user, txt, "ai", based)
         return success_envelope({"summary": txt, "source": "ai"})

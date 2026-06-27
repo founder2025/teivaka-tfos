@@ -53,17 +53,42 @@ const DIM_LABELS = {
   verification_history: "Independent verification",
 };
 
-function TrustHeadline({ trust, onView }) {
+const ORDER = ["Building", "Developing", "Established", "Strong"];
+const THRESH = { Building: 25, Developing: 50, Established: 75 };
+function milestone(trust) {
+  if (trust?.status !== "scored" || trust.overall_band === "Strong") return null;
+  const nextBand = ORDER[ORDER.indexOf(trust.overall_band) + 1];
+  const gap = (THRESH[trust.overall_band] || 25) - (trust.overall_score || 0);
+  // the lowest dimension is the lever to pull
+  const lowest = [...(trust.dimensions || [])].sort((a, b) => a.score - b.score)[0];
+  const lever = lowest ? (DIM_LABELS[lowest.key] || lowest.key) : "more records";
+  return `${Math.max(1, gap)} pts to ${nextBand} — your biggest lever is ${lever.toLowerCase()}`;
+}
+function fmtAsOf(iso) { try { return new Date(iso).toLocaleString("en-GB", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }); } catch { return ""; } }
+
+function TrustHero({ trust, onView, onRefresh, refreshing }) {
   const scored = trust?.status === "scored";
   const b = scored ? trust.overall_band : "Building";
   const color = BANDS[b] || C.muted;
+  const score = scored ? trust.overall_score : 0;
+  const next = milestone(trust);
   return (
-    <div onClick={onView} style={{ border: `1px solid ${C.line}`, borderLeft: `4px solid ${color}`, borderRadius: 12, padding: 14, marginTop: 12, background: "var(--paper)", cursor: "pointer" }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}><BadgeCheck size={16} style={{ color }} /><strong style={{ color: C.soil }}>Evidence &amp; Reliability Confidence</strong></div>
-        <span style={{ fontWeight: 800, color }}>{scored ? `${trust.overall_score} · ${b}` : "Building"}</span>
+    <div style={{ border: `1px solid ${C.line}`, borderLeft: `5px solid ${color}`, borderRadius: 14, padding: 16, background: "var(--paper)", marginBottom: 4 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+        <div onClick={onView} style={{ width: 64, height: 64, borderRadius: "50%", display: "grid", placeItems: "center", flexShrink: 0, cursor: "pointer", background: `conic-gradient(${color} ${score * 3.6}deg, var(--cream) 0deg)` }}>
+          <div style={{ width: 50, height: 50, borderRadius: "50%", background: "var(--paper)", display: "grid", placeItems: "center" }}>
+            <span style={{ fontWeight: 800, fontSize: 18, color }}>{scored ? score : "—"}</span>
+          </div>
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 11, color: C.muted, textTransform: "uppercase", letterSpacing: 0.4 }}>Evidence &amp; Reliability Confidence</div>
+          <div style={{ fontSize: 18, fontWeight: 800, color }}>{b}</div>
+          <div style={{ fontSize: 11, color: C.muted }}>{scored && trust.computed_at ? `as of ${fmtAsOf(trust.computed_at)}` : (trust?.note || "Builds from your records")}</div>
+        </div>
+        <button onClick={onRefresh} disabled={refreshing} title="Recompute" style={{ border: `1px solid ${C.line}`, color: C.greenDk, borderRadius: 8, padding: 7, background: "var(--paper)" }}><RefreshCw size={14} /></button>
       </div>
-      <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>{scored ? "Tap to see what drives it — and how to raise it." : (trust?.note || "Builds automatically from your records.")}</div>
+      {next && <div style={{ marginTop: 10, fontSize: 12, color: C.greenDk, fontWeight: 600 }}>↑ {next}</div>}
+      <div onClick={onView} style={{ marginTop: 8, fontSize: 11.5, color: C.muted, cursor: "pointer" }}>Tap the ring to see what drives it · not a lending decision</div>
     </div>
   );
 }
@@ -344,10 +369,12 @@ export default function Passport() {
   const [summary, setSummary] = useState(null);
   const [sumBusy, setSumBusy] = useState(false);
 
+  const [expiring, setExpiring] = useState([]);
   const load = useCallback(async () => {
     setErr(false);
     try { const d = await getJSON("/api/v1/passport/me"); setData(d?.data || d); }
     catch { if (!data) setErr(true); }
+    try { const e = await getJSON("/api/v1/documents/expiring"); setExpiring(e?.data?.documents || []); } catch { /* best-effort */ }
   }, [data]);
   useEffect(() => { load(); /* eslint-disable-next-line */ }, []);
 
@@ -411,16 +438,29 @@ export default function Passport() {
             {id.legal_name && id.legal_name !== id.preferred_name && <div style={{ fontSize: 12, color: C.muted }}>{id.legal_name}</div>}
             <div style={{ fontSize: 11.5, color: C.muted, fontFamily: "monospace" }}>Farmer #{id.farmer_id}</div>
           </div>
-          <button onClick={() => setEdit({ preferred_name: id.preferred_name || "", bio: id.bio || "", languages: (id.languages || []).join(", ") })} title="Edit name / bio / languages" style={{ border: `1px solid ${C.line}`, borderRadius: 8, padding: 7, color: C.muted, background: "var(--paper)" }}><Pencil size={14} /></button>
+          <div style={{ display: "flex", gap: 6 }}>
+            <button onClick={() => setShareOpen(true)} title="Share securely" style={{ border: `1px solid ${C.greenDk}`, background: C.greenDk, color: "var(--paper)", borderRadius: 8, padding: "7px 11px", fontSize: 12.5, fontWeight: 700, whiteSpace: "nowrap" }}><Share2 size={13} style={{ verticalAlign: -2, marginRight: 4 }} />Share</button>
+            <button onClick={() => setEdit({ preferred_name: id.preferred_name || "", bio: id.bio || "", languages: (id.languages || []).join(", ") })} title="Edit name / bio / languages" style={{ border: `1px solid ${C.line}`, borderRadius: 8, padding: 7, color: C.muted, background: "var(--paper)" }}><Pencil size={14} /></button>
+          </div>
         </div>
         {id.bio && <div style={{ fontSize: 13, color: C.soil, marginTop: 10, lineHeight: 1.5 }}>{id.bio}</div>}
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 12 }}>
-          <Chip on={v.identity} building={!v.identity} label="Identity verified" />
+          <Chip on={v.identity} building={!v.identity} label={v.identity ? "Identity verified" : "Identity · self-reported"} />
           <Chip on={v.farm} label="Farm" />
           <Chip on={v.email} label="Email" />
           <Chip on={v.phone} label="Phone" />
         </div>
       </div>
+
+      {/* attention strip (PP-21) — expiring documents surfaced, not silent */}
+      {expiring.length > 0 && (
+        <div style={{ display: "flex", alignItems: "center", gap: 8, border: "1px solid #e8d27a", background: "#fff8e6", borderRadius: 10, padding: "8px 12px", fontSize: 12.5, color: "#8a6d00", cursor: "pointer" }} onClick={() => setTab("documents")}>
+          <AlertTriangle size={14} />{expiring.length} document{expiring.length === 1 ? "" : "s"} expiring soon — review in Documents
+        </div>
+      )}
+
+      {/* ONE trust hero (PP-26) — band + score + as-of + next milestone */}
+      <TrustHero trust={data.trust} onView={() => setTab("reputation")} onRefresh={refreshTrust} refreshing={refreshing} />
 
       {/* tabs */}
       <div role="tablist" style={{ display: "flex", gap: 8, margin: "14px 0 12px" }}>
@@ -438,7 +478,6 @@ export default function Passport() {
             <Stat label="Recorded sales" value={fjd(rep.total_sales_fjd)} sub={`${rep.sales_records} sales`} />
             <Stat label="On Teivaka since" value={id.member_since || "—"} sub={`${rep.photo_evidence} photos logged`} />
           </div>
-          <TrustHeadline trust={data.trust} onView={() => setTab("reputation")} />
           <SummaryCard summary={summary || data.summary} busy={sumBusy} onGenerate={() => genSummary(false)} onAI={() => genSummary(true)} />
         </>
       )}

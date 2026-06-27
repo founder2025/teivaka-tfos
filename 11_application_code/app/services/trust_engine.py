@@ -17,7 +17,10 @@ Bands (per dimension AND overall): Building <25 · Developing <50 · Established
 """
 from __future__ import annotations
 
-FORMULA_VERSION = "v1"
+import math
+from datetime import date, datetime
+
+FORMULA_VERSION = "v2"  # v2: independence-gating + expiry/recency decay + production magnitude
 
 # Per-source confidence weights for claim_verifications (D4). SELF lowest; third parties highest.
 SOURCE_WEIGHTS = {
@@ -61,14 +64,19 @@ def _r(key, score, why, evidence, how):
 def production(ev: dict) -> dict:
     seasons = ev.get("closed_seasons", 0)
     harvests = ev.get("harvest_records", 0)
+    total_kg = ev.get("total_kg", 0) or 0
     cv = ev.get("yield_cv")  # coefficient of variation of harvest weights; None if <2 harvests
-    base = min(70, seasons * 18 + harvests * 4)              # volume of verified production
+    # Scale matters (PP-19): a larger operation outscores a tiny one. Log-scaled so it rewards
+    # magnitude without runaway (≈100kg→+12, 1t→+18, 10t→+24 capped at 25).
+    magnitude = _clamp(min(25, math.log10(total_kg + 1) * 6)) if total_kg > 0 else 0
+    base = min(70, seasons * 14 + harvests * 3 + magnitude)
     consistency = 0 if cv is None else _clamp(30 * (1 - min(cv, 1.0)))  # steadier yields → up to +30
     score = base + (consistency if harvests >= 2 else 0)
-    why = (f"{seasons} completed season(s) and {harvests} harvest record(s)"
+    mag_word = "" if total_kg <= 0 else f"; {round(total_kg):,} kg logged"
+    why = (f"{seasons} completed season(s), {harvests} harvest record(s){mag_word}"
            + ("" if cv is None else f"; yield consistency {'high' if cv < 0.3 else 'moderate' if cv < 0.6 else 'variable'}"))
-    how = "Complete more growing seasons and log every harvest with weights — steady yields raise this most."
-    return _r("production", score, why, [f"{seasons} closed seasons", f"{harvests} harvests"], how)
+    how = "Complete more seasons, log every harvest with weights, and grow volume — scale and steadiness both raise this."
+    return _r("production", score, why, [f"{seasons} closed seasons", f"{harvests} harvests", f"{round(total_kg)} kg"], how)
 
 
 def operations(ev: dict) -> dict:
@@ -144,46 +152,80 @@ def record_consistency(ev: dict) -> dict:
     return _r("record_consistency", score, why, [f"{total} events", f"{breaks} breaks"], how)
 
 
-def _claim_score(claims: list, claim_types: set) -> tuple:
-    """Weighted, self-capped score from claim_verifications rows for given claim types."""
-    rel = [c for c in claims if c.get("claim_type") in claim_types and c.get("status") == "VERIFIED"]
-    weight = sum(SOURCE_WEIGHTS.get(c.get("source"), 0) for c in rel)
-    third_party = any(c.get("source") not in ("SELF", "EMAIL", "PHONE") for c in rel)
+def _as_date(v):
+    if v is None:
+        return None
+    if isinstance(v, date) and not isinstance(v, datetime):
+        return v
+    if isinstance(v, datetime):
+        return v.date()
+    try:
+        return datetime.fromisoformat(str(v).replace("Z", "+00:00")).date()
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _recency_factor(verified_at, as_of: date) -> float:
+    d = _as_date(verified_at)
+    if not d:
+        return 1.0
+    age = (as_of - d).days
+    if age <= 365:
+        return 1.0
+    if age <= 730:
+        return 0.6
+    return 0.3
+
+
+def _claim_score(claims: list, claim_types: set, as_of: date) -> tuple:
+    """Weighted, self-capped score from claim_verifications. Honours expiry + recency decay (P-2)
+    and only counts INDEPENDENT third-party confirmations toward independence (PP-18)."""
+    rel = [c for c in claims if c.get("claim_type") in claim_types and c.get("status") == "VERIFIED"
+           and not (_as_date(c.get("expires_at")) and _as_date(c.get("expires_at")) < as_of)]
+    weight = sum(SOURCE_WEIGHTS.get(c.get("source"), 0) * _recency_factor(c.get("verified_at"), as_of) for c in rel)
+    # independent = a non-self/contact source whose confirmation was NOT self-served (independent flag)
+    third_party = any(c.get("source") not in ("SELF", "EMAIL", "PHONE") and c.get("independent", True) for c in rel)
     score = min(100, weight)
     if not third_party:
-        score = min(score, 20)   # never beyond "Building/low-Developing" on self-asserted alone
+        score = min(score, 20)   # self-asserted (or self-confirmed) alone never beyond low-Developing
     sources = sorted({c.get("source") for c in rel})
-    return score, sources, third_party
+    return int(round(score)), sources, third_party
 
 
 def identity(ev: dict) -> dict:
-    score, sources, third = _claim_score(ev.get("claims", []), {"IDENTITY"})
-    why = (f"Confirmed by: {', '.join(s.title() for s in sources)}." if sources else "Not yet confirmed.")
+    as_of = ev.get("as_of") or date.today()
+    score, sources, third = _claim_score(ev.get("claims", []), {"IDENTITY"}, as_of)
+    why = (f"Confirmed by: {', '.join(s.replace('_', ' ').title() for s in sources)}." if sources else "Not yet confirmed.")
     if not third and sources:
-        why += " Self/contact only — an independent confirmation lifts this."
+        why += " Self/contact only — an INDEPENDENT confirmation lifts this."
     how = "Get verified by an extension officer, cooperative, government programme, or with a government ID."
     return _r("identity", score, why, sources, how)
 
 
 def farm(ev: dict) -> dict:
-    score, sources, third = _claim_score(ev.get("claims", []), {"FARM_OWNERSHIP", "LAND_BOUNDARY"})
+    as_of = ev.get("as_of") or date.today()
+    score, sources, third = _claim_score(ev.get("claims", []), {"FARM_OWNERSHIP", "LAND_BOUNDARY"}, as_of)
     mapped = ev.get("gps_mapped", False)
     if mapped:
         score = min(100, score + 15)
     why = (("Farm boundary mapped. " if mapped else "Boundary not yet mapped. ")
-           + (f"Ownership confirmed by: {', '.join(s.title() for s in sources)}." if sources else "Ownership self-asserted."))
+           + (f"Ownership confirmed by: {', '.join(s.replace('_', ' ').title() for s in sources)}." if sources else "Ownership self-asserted."))
     how = "Map your farm boundary in Locations and get ownership confirmed by the landowner or an extension officer."
     return _r("farm", score, why, (["GPS mapped"] if mapped else []) + sources, how)
 
 
 def verification_history(ev: dict) -> dict:
-    claims = [c for c in ev.get("claims", []) if c.get("status") == "VERIFIED"]
+    as_of = ev.get("as_of") or date.today()
+    claims = [c for c in ev.get("claims", []) if c.get("status") == "VERIFIED"
+              and not (_as_date(c.get("expires_at")) and _as_date(c.get("expires_at")) < as_of)]
     distinct = sorted({c.get("source") for c in claims})
-    third = [s for s in distinct if s not in ("SELF", "EMAIL", "PHONE")]
-    score = min(100, len(distinct) * 12 + len(third) * 18)
+    # only INDEPENDENT non-self sources count toward "independent verification" (PP-18)
+    third = sorted({c.get("source") for c in claims
+                    if c.get("source") not in ("SELF", "EMAIL", "PHONE") and c.get("independent", True)})
+    score = min(100, len(distinct) * 10 + len(third) * 20)
     why = (f"{len(distinct)} verification source(s)" + (f", {len(third)} independent." if third else ", all self/contact.")
            if distinct else "No verifications yet.")
-    how = "Each independent confirmation (officer, coop, buyer, bank) broadens and strengthens your trust."
+    how = "Each INDEPENDENT confirmation (officer, coop, buyer, bank) broadens and strengthens your trust."
     return _r("verification_history", score, why, distinct, how)
 
 
@@ -197,6 +239,7 @@ _FUNCS = {
 
 def compute_all(evidence: dict) -> dict:
     """Return {dimensions:[...], overall:{score,band,label}}. `evidence` carries all inputs."""
+    evidence.setdefault("as_of", date.today())
     dims = [_FUNCS[k](evidence) for k in DIMENSIONS]
     scored = [d["score"] for d in dims]
     overall_score = _clamp(sum(scored) / len(scored)) if scored else 0

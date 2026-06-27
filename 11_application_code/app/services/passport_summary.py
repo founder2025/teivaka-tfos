@@ -91,6 +91,21 @@ def deterministic_summary(passport: dict) -> str:
     return " ".join(s)
 
 
+def is_grounded(summary: str, passport: dict) -> bool:
+    """Reject an LLM summary that contains a multi-digit number NOT present in the grounded facts
+    (Inviolable #1 guard). Single digits are tolerated (sentence counts etc.)."""
+    import re
+    if not summary:
+        return False
+    facts = " ".join(_facts(passport))
+    fact_nums = {n.replace(",", "") for n in re.findall(r"\d[\d,]*", facts)}
+    for n in re.findall(r"\d[\d,]*", summary):
+        nn = n.replace(",", "")
+        if len(nn) >= 2 and nn not in fact_nums:
+            return False
+    return True
+
+
 def build_prompt(passport: dict) -> str:
     facts = "\n".join(f"- {x}" for x in _facts(passport))
     return (

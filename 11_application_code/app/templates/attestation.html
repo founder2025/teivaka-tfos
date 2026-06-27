@@ -33,14 +33,19 @@
     <h1>Confirm a farmer's record</h1>
     <p style="font-size:14px;color:var(--muted)">A farmer has asked you, as their <b>{{ source_label }}</b>, to confirm the following. Only confirm what you personally know to be true.</p>
     <div class="ask">This farmer <b>{{ claim_label }}</b>.{% if subject_label %}<br><br><span style="color:var(--muted)">Details:</span> {{ subject_label }}{% endif %}</div>
+    {% if message %}<p style="color:var(--red);font-size:13px">{{ message }}</p>{% endif %}
     <form method="post" action="/a/{{ token }}/respond">
-      <textarea name="note" rows="2" placeholder="Optional note"></textarea>
+      <label style="font-size:12.5px;color:var(--muted)">Your name (required — recorded with your confirmation)</label>
+      <input name="verifier_name" type="text" required placeholder="e.g. Mereani Q." style="width:100%;border:1px solid var(--border);border-radius:8px;padding:10px;font-size:14px;margin:4px 0 8px">
+      <label style="font-size:12.5px;color:var(--muted)">Your role / title</label>
+      <input name="verifier_role" type="text" placeholder="e.g. Extension Officer, Kadavu" style="width:100%;border:1px solid var(--border);border-radius:8px;padding:10px;font-size:14px;margin:4px 0 8px">
+      <textarea name="note" rows="2" placeholder="Optional note" style="width:100%;border:1px solid var(--border);border-radius:8px;padding:10px;font-size:14px;font-family:inherit"></textarea>
       <div class="btns">
         <button class="confirm" name="decision" value="confirm" type="submit">Yes, I confirm</button>
         <button class="decline" name="decision" value="decline" type="submit">I can't confirm</button>
       </div>
     </form>
-    <footer>Your confirmation is recorded on Teivaka's tamper-evident chain and strengthens this farmer's verified reputation. It is not a financial guarantee.</footer>
+    <footer>Your name is recorded with this confirmation, which strengthens the farmer's verified reputation. If this page is opened from the same device as the farmer, it is recorded as self-reported, not independent. This is not a financial guarantee.</footer>
 
     {% elif state == "thanks" %}
     <div class="badge {{ 'ok' if confirmed else 'bad' }}">

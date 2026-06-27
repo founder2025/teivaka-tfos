@@ -62,6 +62,7 @@ def _gather(cur, tenant_id: str) -> dict:
     cur.execute("SELECT gross_yield_kg FROM tenant.harvest_log WHERE gross_yield_kg IS NOT NULL")
     weights = [float(r["gross_yield_kg"]) for r in cur.fetchall()]
     ev["harvest_records"] = len(weights)
+    ev["total_kg"] = sum(weights)
     if len(weights) >= 2 and statistics.mean(weights) > 0:
         ev["yield_cv"] = statistics.pstdev(weights) / statistics.mean(weights)
     else:
@@ -109,7 +110,7 @@ def _gather(cur, tenant_id: str) -> dict:
     except Exception:  # noqa: BLE001 — chain check is best-effort; don't fail the whole run
         ev["chain_events"] = 0; ev["chain_breaks"] = 0
 
-    cur.execute("SELECT claim_type, source, status FROM tenant.claim_verifications")
+    cur.execute("SELECT claim_type, source, status, independent, verified_at, expires_at FROM tenant.claim_verifications")
     ev["claims"] = [dict(r) for r in cur.fetchall()]
     return ev
 
