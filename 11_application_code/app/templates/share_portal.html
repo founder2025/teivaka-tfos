@@ -47,6 +47,7 @@
   {% if v.identity %}
   <div class="card">
     <h2>Farmer</h2>
+    {% if v.identity.photo_url %}<img src="{{ v.identity.photo_url }}" alt="" style="width:56px;height:56px;border-radius:50%;object-fit:cover;float:right;border:1px solid var(--border)">{% endif %}
     <div style="font-size:18px;font-weight:800">{{ v.identity.name }}</div>
     {% if v.identity.bio %}<div style="font-size:13px;color:var(--soil);margin-top:4px">{{ v.identity.bio }}</div>{% endif %}
     <div class="row"><span class="label">Farmer ID</span><span class="value" style="font-family:monospace">{{ v.identity.farmer_id or '—' }}</span></div>

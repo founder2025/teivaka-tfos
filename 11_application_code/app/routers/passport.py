@@ -36,7 +36,7 @@ async def _assemble_passport(db: AsyncSession, user: dict) -> dict:
     uid = str(user["user_id"])
 
     u = (await db.execute(text(
-        "SELECT full_name, email, whatsapp_number, created_at FROM tenant.users WHERE user_id = cast(:u AS uuid)"
+        "SELECT full_name, email, whatsapp_number, avatar_url, created_at FROM tenant.users WHERE user_id = cast(:u AS uuid)"
     ), {"u": uid})).mappings().first() or {}
 
     prof = (await db.execute(text(
@@ -116,7 +116,9 @@ async def _assemble_passport(db: AsyncSession, user: dict) -> dict:
             "preferred_name": prof.get("preferred_name") or u.get("full_name"),
             "legal_name": u.get("full_name"),
             "farmer_id": (farms[0]["farm_id"] if farms else uid[:8].upper()),
-            "photo_url": prof.get("professional_photo_url"),
+            # Reuse the farmer's existing profile picture (Golden Rule — never re-ask);
+            # a dedicated passport photo, if set, takes precedence.
+            "photo_url": prof.get("professional_photo_url") or u.get("avatar_url"),
             "bio": prof.get("bio"),
             "languages": prof.get("languages") or [],
             "email": u.get("email"),

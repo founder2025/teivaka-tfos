@@ -132,14 +132,15 @@ async def _assemble_scoped(db: AsyncSession, tenant_id: str, scope: dict) -> dic
     data: dict = {}
     if scope.get("identity"):
         u = (await db.execute(text(
-            "SELECT full_name, created_at FROM tenant.users ORDER BY created_at LIMIT 1"))).mappings().first() or {}
+            "SELECT full_name, avatar_url, created_at FROM tenant.users ORDER BY created_at LIMIT 1"))).mappings().first() or {}
         p = (await db.execute(text(
-            "SELECT preferred_name, bio FROM tenant.passport_profile LIMIT 1"))).mappings().first() or {}
+            "SELECT preferred_name, bio, professional_photo_url FROM tenant.passport_profile LIMIT 1"))).mappings().first() or {}
         f = (await db.execute(text(
             "SELECT farm_id FROM tenant.farms WHERE is_active=TRUE ORDER BY created_at LIMIT 1"))).scalar()
         data["identity"] = {
             "name": p.get("preferred_name") or u.get("full_name") or "Farmer",
             "bio": p.get("bio"), "farmer_id": f,
+            "photo_url": p.get("professional_photo_url") or u.get("avatar_url"),
             "member_since": u["created_at"].date().isoformat() if u.get("created_at") else None,
         }
     if scope.get("reputation"):
