@@ -14,6 +14,32 @@ Legend: 🔒 LOCKED (approved; no redesign without new evidence) · ✅ PASS · 
 ---
 
 ## 🔒 LOCKED PAGES
+- **Partnerships (/farm/partnerships)** — LOCKED 2026-06-27 (Operator-approved). Audited (PN1–PN8)
+  → scorecard (6.5→6.0 after 8-persona) → 8-persona → redesigned + wireframe → stress-tested ×1
+  (11 scenarios) → optimized ×1. **#1 fix (PN1): the network + agreement no longer read "None
+  added yet" on a failed load** — `getJSON`/`send` (token refresh) with per-section loading /
+  ErrorCard+Retry / honest-empty (this is a lender-facing surface). **#2 (PN2): buyer/supplier
+  counts are tenant-wide endpoints → labelled "N · across your farms,"** not silently shown as
+  this farm's; **PX-1 follow-up: those link-types are excluded from the group totals + "N of 5
+  groups active"** so Commercial isn't inflated by tenant data. Also: distribution date reads the
+  real `calculated_at` (PN3); **delete a partner** via soft-delete `PATCH {is_active:false}` behind
+  a confirm (PN4, keeps the audit row); **land agreement elevated** (accent, first) with **"Edit
+  agreement" when one exists** (was a misleading "New" that silently overwrote the single rate);
+  network groups **collapse to a one-line count** (no wall of empties) + a completeness glance;
+  **tap-to-call + WhatsApp** per partner; **partner search** past 6 entries; mobile name
+  truncation; **Ask-TIS** grounded benchmark on the agreement rate; a11y modals (role=dialog +
+  Esc) + keyboard group headers; `formatMoney`. **Backend: `partner_type` validated server-side**
+  (VALID_TYPES — no invisible orphan rows). Wireframe: docs/TFOS_Partnerships_Redesign_Wireframe.md.
+  **Honesty — the dormant flagship, named not faked:** the distribution split-calc endpoint
+  (`POST /profit-share/calculate/{cycle}`) exists but **nothing calls it**, so the archive is empty
+  in practice — the copy states honestly how splits are created and **auto-calculate-on-cycle-close
+  is FILED as the backend keystone**. Remainder filed (backend/scope, not faked): multi-agreement
+  per parcel + effective-date + lease term/expiry + document (lease PDF) attach (today a single
+  farm-level rate); unify the 3 partner tables (farm_partners + customers + suppliers) into one
+  read-model; professional-partner verification handshake; exporter→consignment link; **server-side
+  role gate on agreement writes** (PX-7 — a contractual figure editable by any user); export; B31
+  provider lift; voice/i18n; per-type pagination at scale. Deploy: frontend npm run build + backend
+  build --no-cache api (partner_type guard).
 - **Decisions (/farm/insights · decisions)** — LOCKED 2026-06-27 (Operator-approved; RE-LOCKED
   after a second stress + optimize round). **Post-lock hardening (8f71bae + c93ac0c):** the live
   deploy surfaced a real failure on Viyasiyasi Farm · Kadavu — 4/5 queries returned data, only
