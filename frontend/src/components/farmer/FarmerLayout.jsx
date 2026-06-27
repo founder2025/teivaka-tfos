@@ -110,6 +110,11 @@ function UserDropdown({ user, onLogout }) {
             style={{ color: C.soil }}>
             👤 My Profile
           </Link>
+          <Link to="/me/passport" onClick={() => setOpen(false)}
+            className="flex items-center gap-2 px-4 py-2.5 text-sm hover:bg-gray-50 transition-colors"
+            style={{ color: C.soil }}>
+            🪪 Agricultural Passport
+          </Link>
           <Link to="/farm" onClick={() => setOpen(false)}
             className="flex items-center gap-2 px-4 py-2.5 text-sm hover:bg-gray-50 transition-colors"
             style={{ color: C.soil }}>
