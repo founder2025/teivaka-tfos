@@ -4,9 +4,14 @@ One place to deploy everything from the TATI build (Passport · Trust · Share S
 Attestation · AI Summary) and the verify-proof-only revert. Safe to re-run — all SQL is
 idempotent (`IF NOT EXISTS` / `CREATE OR REPLACE` / `DROP POLICY IF EXISTS` first).
 
-**Migrations covered:** 187 report-evidence fn (dormant, reserved) · 188 passport_profile ·
+**Migrations covered (187→193):** 187 report-evidence fn (dormant, reserved) · 188 passport_profile ·
 189 trust (claim_verifications + trust_snapshots) · 190 share_sessions · 191 attestation +
-ai_summary. Final `tenant.alembic_version` = `191_attestation_summary`.
+ai_summary · 192 document_vault · 193 attestation_integrity. Final `tenant.alembic_version`
+= `193_attestation_integrity`.
+
+After the SQL: rebuild api `--no-cache` + restart `teivaka_worker_automation` + `teivaka_beat`
+(trust nightly + single-tenant task), then `npm run build`. Confirm `/app/uploads` is a Docker
+VOLUME (vault + photos persist) before relying on uploads.
 
 > All migrations create **FORCED-RLS tenant tables + SECURITY DEFINER functions**, so they MUST
 > be applied as the **`teivaka`** owner (Strike #123), not via in-container alembic (which runs as
@@ -138,7 +143,34 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON tenant.passport_profile, tenant.claim_ve
   tenant.share_sessions, tenant.share_session_access, tenant.attestation_requests, tenant.passport_ai_summary TO teivaka_app;
 
 -- final version
-UPDATE tenant.alembic_version SET version_num='191_attestation_summary';
+-- 192: Document Vault
+CREATE TABLE IF NOT EXISTS tenant.documents (
+  document_id UUID PRIMARY KEY DEFAULT gen_random_uuid(), tenant_id UUID NOT NULL, owner_user_id UUID NOT NULL,
+  doc_type TEXT NOT NULL DEFAULT 'OTHER', title TEXT, storage_name TEXT NOT NULL, sha256 TEXT, byte_size BIGINT,
+  mime TEXT, issued_date DATE, expiry_date DATE, verification_status TEXT NOT NULL DEFAULT 'UNVERIFIED',
+  supersedes_id UUID, uploaded_at TIMESTAMPTZ NOT NULL DEFAULT now(), deleted_at TIMESTAMPTZ);
+ALTER TABLE tenant.documents ENABLE ROW LEVEL SECURITY; ALTER TABLE tenant.documents FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS documents_tenant_isolation ON tenant.documents;
+CREATE POLICY documents_tenant_isolation ON tenant.documents FOR ALL
+  USING (tenant_id=(current_setting('app.tenant_id'::text))::uuid) WITH CHECK (tenant_id=(current_setting('app.tenant_id'::text))::uuid);
+CREATE INDEX IF NOT EXISTS idx_documents_tenant ON tenant.documents (tenant_id, uploaded_at DESC);
+CREATE INDEX IF NOT EXISTS idx_documents_expiry ON tenant.documents (tenant_id, expiry_date) WHERE expiry_date IS NOT NULL AND deleted_at IS NULL;
+CREATE TABLE IF NOT EXISTS tenant.document_access (
+  access_id UUID PRIMARY KEY DEFAULT gen_random_uuid(), document_id UUID NOT NULL, tenant_id UUID NOT NULL,
+  accessed_at TIMESTAMPTZ NOT NULL DEFAULT now(), accessor TEXT, action TEXT NOT NULL DEFAULT 'VIEW');
+ALTER TABLE tenant.document_access ENABLE ROW LEVEL SECURITY; ALTER TABLE tenant.document_access FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS document_access_tenant_isolation ON tenant.document_access;
+CREATE POLICY document_access_tenant_isolation ON tenant.document_access FOR ALL
+  USING (tenant_id=(current_setting('app.tenant_id'::text))::uuid) WITH CHECK (tenant_id=(current_setting('app.tenant_id'::text))::uuid);
+GRANT SELECT, INSERT, UPDATE, DELETE ON tenant.documents TO teivaka_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON tenant.document_access TO teivaka_app;
+
+-- 193: Attestation integrity (verifier identity + self-confirm transparency flag + lineage)
+ALTER TABLE tenant.attestation_requests ADD COLUMN IF NOT EXISTS creator_ip TEXT;
+ALTER TABLE tenant.claim_verifications ADD COLUMN IF NOT EXISTS independent BOOLEAN NOT NULL DEFAULT TRUE;
+ALTER TABLE tenant.claim_verifications ADD COLUMN IF NOT EXISTS request_id UUID;
+
+UPDATE tenant.alembic_version SET version_num='193_attestation_integrity';
 SQL
 ```
 
@@ -178,7 +210,13 @@ docker exec teivaka_api python -c "from app.workers.trust_worker import refresh_
 - [ ] **Revoke** → reload → "revoked." [ ] **Password** set → opens only with the password. [ ] **One-time** → 2nd open = "already opened." [ ] Past **expiry** → "expired." [ ] **Tamper** a token char → "not valid." [ ] Share list shows the **view count**.
 
 **Attestation**
-- [ ] "Get verified" → create request → open `/a/{token}` in incognito → Confirm → Reputation's Identity/Farm/Verification dimensions **rise** (live recompute). [ ] Decline adds nothing. [ ] Re-open a used link → "no longer open."
+- [ ] "Get verified" → create request → open `/a/{token}` in incognito → **enter verifier name (required)** → Confirm → Identity/Farm dimensions **rise to ~Developing** (community-attested, partial — not Strong). [ ] Decline adds nothing. [ ] Re-open a used link → "no longer open." [ ] A confirm with no name is rejected.
+
+**Document Vault (192)**
+- [ ] Passport → Documents → upload a PDF/image → appears with size + expiry badge. [ ] **Security gate:** copy the `document_id`, hit `/api/v1/documents/<id>/file` **logged-out** → must be **401/403/404, never the file**. [ ] Expiring doc surfaces in the passport attention strip. [ ] Confirm `/app/uploads` is a Docker **volume** (else uploads vanish on rebuild).
+
+**Share with evidence/documents (opt-in)**
+- [ ] Mint a share with "Include photo & block evidence" / "Include document details" → portal shows them; default (toggles off) shows neither. [ ] Revoke → link dies.
 
 ## 6. Rollback (per piece)
 - Code: redeploy the previous api image / `git checkout` the prior commit + rebuild.

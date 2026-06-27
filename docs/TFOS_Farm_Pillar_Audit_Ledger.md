@@ -147,6 +147,27 @@ Legend: 🔒 LOCKED (approved; no redesign without new evidence) · ✅ PASS · 
   compliance / re-entry interval / MRL, CO9 cert store, CC9 mobile table columns, CC17 harvest-vs-
   orders, CO29 kava-180/PHI.** Do NOT redesign again unless new evidence requires it. Deploy:
   frontend `npm run build` + backend staged.
+- **Agricultural Passport + TATI (/me/passport + verify/share/attest portals)** — LOCKED 2026-06-27
+  (Operator-approved). The TATI platform (Phases 0–4): Passport read-model, Trust Engine,
+  Share Sessions, Attestation, AI Summary, Document Vault. Audited (P1–P17) → 8-persona (PP18–PP29)
+  → redesigned → stress ×11 (PR1–PR9) → optimized. **#1 fix (PP-18/PR-1): attestation made honest —
+  a self-confirmed "officer" no longer fakes independence; link confirmations earn PARTIAL
+  "community-attested" credit (trust v3 channel-discount, cap 20→38), real officers no longer
+  punished by the IP heuristic (shared-NAT false-positives), IP match kept as a transparency flag
+  only.** Also: public /verify proof-only (D2); Share Sessions (hashed token, expiry/revoke/one-time/
+  password, access log, opt-in evidence+documents scope); Trust Engine precomputed (Inviolable #3),
+  pure, expiry+recency decay + scale-magnitude; trust compute OFF the request (Celery single-tenant
+  task, PR-2); AI summary grounding-validated (Inviolable #1, P-6); Document Vault disk + owner-gated
+  retrieval + SHA-256; Passport hero (SVG gauge + band + as-of + milestone), prominent Share,
+  attention strip; photo reuses avatar (Golden Rule). **Migrations 187→193 (apply-as-owner) +
+  frontend — see `docs/TATI_DEPLOY_RUNBOOK.md` (one-paste + security smoke).** **FILED (honest,
+  partner/scale-gated): PP-27 verifier ACCOUNTS (the real KYC independence — Phase 5), P-3 full
+  document chain-anchoring, P-5 per-farm/cooperative scoping (multi-farm over-share), PR-5
+  low-literacy/voice, PP-20 device/velocity anti-fraud, PP-21 push/WhatsApp notifications, PP-22
+  config formula, PP-25 per-enterprise.** **Build is on-branch; PROVEN ONLY by py_compile/npm/engine
+  tests — must deploy + run the runbook security smoke before any farmer/bank relies on it.** Do NOT
+  redesign again unless new evidence requires it; the next TATI step is Phase 5 (verifier accounts)
+  AFTER the alpha exercises Phases 1–4.
 
 ---
 
