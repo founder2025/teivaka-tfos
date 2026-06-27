@@ -39,6 +39,7 @@ function authHeaders() {
   return { "Content-Type": "application/json", ...(tok ? { Authorization: `Bearer ${tok}` } : {}) };
 }
 const ALLOWED_UNITS = ["ML_PER_L", "G_PER_L", "L_PER_HA", "KG_PER_HA"];
+const isOffline = () => typeof navigator !== "undefined" && navigator.onLine === false;
 function whdClearDate(days) {
   if (days == null) return "?";
   const d = new Date();
@@ -123,10 +124,12 @@ export default function CaptureEngine({ config = cropsConfig, onDone, onBack, pr
   const [occurredDate, setOccurredDate] = useState(nowDateStr());
   const [occurredTime, setOccurredTime] = useState(nowTimeStr());
   const [photoUrl, setPhotoUrl] = useState(null);
+  const [photoFile, setPhotoFile] = useState(null);   // kept offline so the photo survives to flush
   const [photoUploading, setPhotoUploading] = useState(false);
   const [gps, setGps] = useState(null);            // {lat,lng}
   const [gpsStatus, setGpsStatus] = useState("");  // locating|captured|denied|unavailable
   const [voiceUrl, setVoiceUrl] = useState(null);
+  const [voiceBlob, setVoiceBlob] = useState(null);   // kept offline so the voice note survives to flush
   const [voiceUploading, setVoiceUploading] = useState(false);
   const [recording, setRecording] = useState(false);
   const [recSecs, setRecSecs] = useState(0);
@@ -270,8 +273,8 @@ export default function CaptureEngine({ config = cropsConfig, onDone, onBack, pr
   // Clear the per-entry fields (values, evidence, notes, when) — keeps cycle + operator.
   function clearEntry() {
     setValues({}); setShowDetail(false); setError("");
-    setPhotoUrl(null); setPhotoUploading(false); setGps(null); setGpsStatus("");
-    setVoiceUrl(null); setVoiceUploading(false); setShowWitness(false);
+    setPhotoUrl(null); setPhotoFile(null); setPhotoUploading(false); setGps(null); setGpsStatus("");
+    setVoiceUrl(null); setVoiceBlob(null); setVoiceUploading(false); setShowWitness(false);
     setWitnessName(""); setWitnessContact("");
     if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
     if (mediaRef.current && recording) { try { mediaRef.current.stop(); } catch { /* noop */ } }
@@ -298,6 +301,8 @@ export default function CaptureEngine({ config = cropsConfig, onDone, onBack, pr
 
   async function uploadPhoto(file) {
     if (!file) return;
+    setPhotoFile(file);                 // keep it regardless — offline-durable; submit/flush uploads it
+    if (isOffline()) return;            // no signal: hold the file, upload at flush (no error)
     setPhotoUploading(true); setError("");
     try {
       const fd = new FormData(); fd.append("file", file);
@@ -307,8 +312,8 @@ export default function CaptureEngine({ config = cropsConfig, onDone, onBack, pr
       });
       const body = await res.json().catch(() => null);
       const url = body?.data?.url || body?.url;
-      if (url) setPhotoUrl(url); else setError("Photo upload failed — record still saves without it.");
-    } catch (e) { setError(`Photo upload error: ${e.message}`); }
+      if (url) setPhotoUrl(url);        // else: keep the file; submit will retry/queue it
+    } catch { /* network: keep the file silently — it rides the queue */ }
     finally { setPhotoUploading(false); }
   }
   // Native shell: take the photo with the device camera plugin (better UX +
@@ -335,6 +340,8 @@ export default function CaptureEngine({ config = cropsConfig, onDone, onBack, pr
     );
   }
   async function uploadVoice(blob, mime) {
+    setVoiceBlob(blob);                 // keep it regardless — offline-durable
+    if (isOffline()) return;
     setVoiceUploading(true);
     try {
       const ext = mime && mime.includes("mp4") ? "mp4" : mime && mime.includes("ogg") ? "ogg" : "webm";
@@ -345,8 +352,8 @@ export default function CaptureEngine({ config = cropsConfig, onDone, onBack, pr
       });
       const body = await res.json().catch(() => null);
       const url = body?.data?.url || body?.url;
-      if (url) setVoiceUrl(url); else setError("Voice upload failed — record still saves without it.");
-    } catch (e) { setError(`Voice upload error: ${e.message}`); }
+      if (url) setVoiceUrl(url);        // else: keep the blob; submit will retry/queue it
+    } catch { /* network: keep the blob silently */ }
     finally { setVoiceUploading(false); }
   }
   async function startRec() {
@@ -417,7 +424,11 @@ export default function CaptureEngine({ config = cropsConfig, onDone, onBack, pr
           payload,
           ...(Object.keys(ev).length ? { evidence: ev } : {}),
         };
-        const r = await submitCapture({ endpoint: "/api/v1/events", body: envelope, idem: idemRef.current });
+        // Pass any evidence not yet uploaded (offline / mid-upload) so it's stashed + sent on flush.
+        const r = await submitCapture({
+          endpoint: "/api/v1/events", body: envelope, idem: idemRef.current,
+          evidenceFiles: { photo_url: photoUrl ? null : photoFile, voice_url: voiceUrl ? null : voiceBlob },
+        });
         if (r.queued) setResult({ queued: true });
         else setResult({ event_id: r.data?.data?.event_id || "", audit_hash: r.data?.data?.audit_hash || "" });
       }
@@ -721,14 +732,14 @@ export default function CaptureEngine({ config = cropsConfig, onDone, onBack, pr
             <div style={cardHead}>Evidence · lifts verification</div>
             <div style={{ display: "flex", gap: 8 }}>
               {isNative() ? (
-                <button type="button" onClick={takePhotoNative} style={evBtn(!!photoUrl)}>
-                  <Camera size={20} style={{ color: photoUrl ? "var(--green)" : "var(--muted)" }} />
-                  <span style={{ fontWeight: 600 }}>{photoUploading ? "…" : photoUrl ? "Photo ✓" : "Photo"}</span>
+                <button type="button" onClick={takePhotoNative} style={evBtn(!!(photoUrl || photoFile))}>
+                  <Camera size={20} style={{ color: (photoUrl || photoFile) ? "var(--green)" : "var(--muted)" }} />
+                  <span style={{ fontWeight: 600 }}>{photoUploading ? "…" : (photoUrl || photoFile) ? "Photo ✓" : "Photo"}</span>
                 </button>
               ) : (
-                <label style={evBtn(!!photoUrl)}>
-                  <Camera size={20} style={{ color: photoUrl ? "var(--green)" : "var(--muted)" }} />
-                  <span style={{ fontWeight: 600 }}>{photoUploading ? "…" : photoUrl ? "Photo ✓" : "Photo"}</span>
+                <label style={evBtn(!!(photoUrl || photoFile))}>
+                  <Camera size={20} style={{ color: (photoUrl || photoFile) ? "var(--green)" : "var(--muted)" }} />
+                  <span style={{ fontWeight: 600 }}>{photoUploading ? "…" : (photoUrl || photoFile) ? "Photo ✓" : "Photo"}</span>
                   <input type="file" accept="image/*" capture="environment" style={{ display: "none" }} onChange={(e) => uploadPhoto(e.target.files?.[0])} />
                 </label>
               )}
@@ -736,9 +747,9 @@ export default function CaptureEngine({ config = cropsConfig, onDone, onBack, pr
                 <MapPin size={20} style={{ color: gps ? "var(--green)" : "var(--muted)" }} />
                 <span style={{ fontWeight: 600 }}>{gps ? "GPS ✓" : gpsStatus === "locating" ? "…" : "GPS"}</span>
               </button>
-              <button type="button" onClick={recording ? stopRec : startRec} style={evBtn(!!voiceUrl || recording)}>
-                {recording ? <Square size={20} style={{ color: "#9a3b3b" }} /> : <Mic size={20} style={{ color: voiceUrl ? "var(--green)" : "var(--muted)" }} />}
-                <span style={{ fontWeight: 600 }}>{recording ? `Stop ${mmss(recSecs)}` : voiceUploading ? "…" : voiceUrl ? "Voice ✓" : "Voice"}</span>
+              <button type="button" onClick={recording ? stopRec : startRec} style={evBtn(!!(voiceUrl || voiceBlob) || recording)}>
+                {recording ? <Square size={20} style={{ color: "#9a3b3b" }} /> : <Mic size={20} style={{ color: (voiceUrl || voiceBlob) ? "var(--green)" : "var(--muted)" }} />}
+                <span style={{ fontWeight: 600 }}>{recording ? `Stop ${mmss(recSecs)}` : voiceUploading ? "…" : (voiceUrl || voiceBlob) ? "Voice ✓" : "Voice"}</span>
               </button>
               <button type="button" onClick={() => setShowWitness((s) => !s)} style={evBtn(!!witnessName.trim())}>
                 <Users size={20} style={{ color: witnessName.trim() ? "var(--green)" : "var(--muted)" }} />
@@ -786,14 +797,16 @@ export default function CaptureEngine({ config = cropsConfig, onDone, onBack, pr
           </div>
 
           {error && <p style={{ color: "#9a3b3b", fontSize: 13, marginBottom: 12 }}>{error}</p>}
-          {(photoUploading || voiceUploading || recording) && (
-            <p style={{ fontSize: 12, color: "var(--muted)", marginBottom: 8, textAlign: "center" }}>
-              {recording ? "Stop the recording to save." : "Finishing upload…"}</p>
+          {recording && (
+            <p style={{ fontSize: 12, color: "var(--muted)", marginBottom: 8, textAlign: "center" }}>Stop the recording to save.</p>
           )}
-          <button onClick={submit} disabled={submitting || !selectedItem || photoUploading || voiceUploading || recording}
+          {(photoUploading || voiceUploading) && !recording && (
+            <p style={{ fontSize: 12, color: "var(--muted)", marginBottom: 8, textAlign: "center" }}>Photo/voice still uploading — you can save now; it attaches automatically.</p>
+          )}
+          <button onClick={submit} disabled={submitting || !selectedItem || recording}
             style={{ width: "100%", padding: 16, borderRadius: 14, border: "none", fontSize: 16, fontWeight: 700, color: "#fff",
-              background: (!selectedItem || photoUploading || voiceUploading || recording) ? "#b8b8b8" : "var(--green)",
-              cursor: submitting || !selectedItem ? "default" : "pointer",
+              background: (!selectedItem || recording) ? "#b8b8b8" : "var(--green)",
+              cursor: submitting || !selectedItem || recording ? "default" : "pointer",
               display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
             {submitting ? <Loader2 size={18} /> : <Check size={18} />}{submitting ? "Saving…" : "Save"}</button>
         </>)}
