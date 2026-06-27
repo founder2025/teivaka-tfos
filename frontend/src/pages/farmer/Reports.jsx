@@ -420,7 +420,9 @@ function DispatchTab() {
 
 function ReportsInner() {
   const { farmId } = useCurrentFarm();
-  const [tab, setTab] = useState(() => new URLSearchParams(window.location.search).get("tab") || "library");
+  // NOTE: do NOT read ?tab here — that param belongs to the outer Records FarmTabs
+  // (?tab=reports). Reading it would leave this inner section blank (RST1).
+  const [tab, setTab] = useState("library");
   const [period, setPeriod] = useState(monthNow());
   const [reportOpen, setReportOpen] = useState(null);
   const navigate = useNavigate();
