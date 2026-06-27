@@ -234,6 +234,13 @@ async def export_chemical_register_csv(
     rows = await _fetch_register(db, farm_id, 10000)
     fields = ["applied_date", "chemical", "block_name", "crop", "dose", "applied_by",
               "whd_days", "clear_date", "status", "off_label", "verify_url"]
+
+    def _safe(v):
+        # Neutralise CSV/formula injection — a cell opened in Excel/Sheets must never
+        # execute. Prefix a leading =,+,-,@ (or control char) with a single quote.
+        s = "" if v is None else str(v)
+        return "'" + s if s and s[0] in ("=", "+", "-", "@", "\t", "\r") else s
+
     buf = io.StringIO()
     w = csv.DictWriter(buf, fieldnames=fields, extrasaction="ignore")
     w.writeheader()
@@ -241,10 +248,10 @@ async def export_chemical_register_csv(
         status = ("Active WHD" if r["active"] else "WHD unknown" if r["unspecified"]
                   else "Cleared" if r["clear_date"] else "—")
         w.writerow({
-            "applied_date": r["applied_date"] or "", "chemical": r["chemical"],
-            "block_name": r["block_name"] or "", "crop": r["crop"] or "",
+            "applied_date": r["applied_date"] or "", "chemical": _safe(r["chemical"]),
+            "block_name": _safe(r["block_name"]), "crop": _safe(r["crop"]),
             "dose": r["dose"] if r["dose"] is not None else "",
-            "applied_by": r["applied_by"] or "", "whd_days": r["whd_days"] if r["whd_days"] is not None else "",
+            "applied_by": _safe(r["applied_by"]), "whd_days": r["whd_days"] if r["whd_days"] is not None else "",
             "clear_date": r["clear_date"] or "", "status": status,
             "off_label": "YES" if r["off_label"] else "no",
             "verify_url": f"https://teivaka.com/verify/{r['audit_hash']}" if r["audit_hash"] else "",

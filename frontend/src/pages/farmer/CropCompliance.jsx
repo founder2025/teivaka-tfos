@@ -79,13 +79,14 @@ function RollupBanner({ rollupQ, currentFarmId, onPick }) {
         <span style={{ fontSize: 12, color: "var(--muted)" }}>{data.farms_with_holds} with holds · {data.farms_with_attention} need attention · {clearN} clear</span>
       </div>
       {anyIssue && (
-        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>
-          {flagged.map((f) => (
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8, alignItems: "center" }}>
+          {flagged.slice(0, 12).map((f) => (
             <button key={f.farm_id} className="filter-pill" onClick={() => onPick(f.farm_id)} title={`Open ${f.farm_name}`}
               style={{ borderColor: f.blocked > 0 ? "var(--red)" : "var(--amber)", fontWeight: 600, ...(f.farm_id === currentFarmId ? { background: "var(--green-tint)" } : {}) }}>
               {f.farm_name} · {f.blocked > 0 ? `${f.blocked} blocked` : `${f.attention} attention`}
             </button>
           ))}
+          {flagged.length > 12 && <span style={{ fontSize: 11.5, color: "var(--muted)" }}>+{flagged.length - 12} more farm{flagged.length - 12 === 1 ? "" : "s"} — use the farm switcher</span>}
         </div>
       )}
     </div>
@@ -264,8 +265,8 @@ function RegisterView({ regQ, navigate, farmId }) {
         <div className={`capital-tile ${flagged > 0 ? "low" : ""}`}><div className="capital-tile-label">Flagged</div><div className="capital-tile-value" style={{ color: flagged > 0 ? "var(--amber)" : "var(--soil)" }}>{flagged}</div><div className="capital-tile-sub">unidentified/off-label</div></div>
         <div className="capital-tile"><div className="capital-tile-label">Most used</div><div className="capital-tile-value" style={{ fontSize: 13 }}>{most ? most[0].split(" ")[0] : "—"}</div><div className="capital-tile-sub">{most ? `${most[1]} times` : ""}</div></div>
       </div>
-      <div style={{ display: "flex", gap: 10, margin: "12px 0" }}>
-        <div style={{ flex: 1, position: "relative" }}>
+      <div style={{ display: "flex", gap: 10, margin: "12px 0", flexWrap: "wrap" }}>
+        <div style={{ flex: 1, minWidth: 160, position: "relative" }}>
           <Search size={14} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "var(--muted)" }} />
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search chemical, block, crop, who…" style={{ width: "100%", padding: "9px 12px 9px 36px", border: "1.5px solid var(--line)", borderRadius: 7, fontSize: 13, background: "var(--paper)" }} />
         </div>
