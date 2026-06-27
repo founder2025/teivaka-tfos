@@ -14,6 +14,20 @@ Legend: 🔒 LOCKED (approved; no redesign without new evidence) · ✅ PASS · 
 ---
 
 ## 🔒 LOCKED PAGES
+- **History (/farm/history)** — LOCKED 2026-06-27 (Operator-approved). Audited → scorecard (4.0,
+  capped by being unreachable) → 8-persona → redesigned + wireframe → stress-tested ×2 → optimized
+  ×2. Page-local findings resolved: **made reachable** (was lazy-imported but never routed; /farm/history
+  redirected to Records — now a real route + Farm sub-nav entry); **Fiji-local** day/time bucketing
+  (was UTC string-slice → wrong day); **export includes tasks** (was dropped); **no raw UUIDs**;
+  removed fake "chain INTACT" + dead per-row "Verify" → honest 48h-correction note + real /verify link;
+  3 control rows → 2; decision summary (records/kg/cash/sprays/last); spray agronomic detail + photo
+  lightbox; debounced **text-only** auto-exhaust search (category chips stay client-side) with honest
+  25-page cap surfacing; "Ask TIS" deep-links /tis?q= with the range. Regression caught + fixed:
+  removed-then-restored QueryClientProvider (FarmSelector needs it) — had crashed /farm/records too.
+  Wireframe: docs/TFOS_History_Redesign_Wireframe.md. Remainder filed (backend/Phase B): server-side
+  unified /history over audit.events w/ per-row hash + true totals + server search; offline/PWA cache;
+  i18n; worker-name resolution + filter; corrections trail; government inspector + enterprise cross-farm/API;
+  desktop two-pane/virtualization. Deploy: frontend-only.
 - **Overview (/farm)** — LOCKED 2026-06-26 (Operator-approved). Audited → redesigned →
   optimized ×2 → stress-tested ×3 → all page-local findings (F1–F9, M1–M28, S1–S8,
   D1–D14, R1–R6) resolved; remainder are filed backend/cross-page slices. Do NOT
