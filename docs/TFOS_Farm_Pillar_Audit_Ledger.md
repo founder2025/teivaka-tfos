@@ -14,6 +14,26 @@ Legend: 🔒 LOCKED (approved; no redesign without new evidence) · ✅ PASS · 
 ---
 
 ## 🔒 LOCKED PAGES
+- **(+) FAB / Universal Capture (mission · IA · interaction model)** — LOCKED 2026-06-27
+  (Operator-ratified). The platform's highest-impact component. Mission: **"log what I just did"** —
+  fastest path from a done-thing to a hash-chained record, pocket-notebook not enterprise software.
+  IA: bottom sheet → smart top (**Your usual** [on-device frequency-ranked] · **Say it / Snap it** ·
+  Search · Browse[3 doors]) → lean capture (anchors auto · when · 1–2 fields pre-filled · evidence+
+  preview ONLY for stakes) → earned saved. Interaction: opens to answers not a menu; routine ≤2–3
+  taps / do-again exact-repeat / back-to-work 1 tap; **optimistic + offline-first + idempotent**
+  (never lost/blocked/duplicated); load matched to stakes; backdating first-class; voice + large-text
+  first-class; **AI strictly additive** (works fully AI-down); crop **and** animal WHD airtight.
+  **Governance: no redesign of mission/IA/interaction model without real-world farmer evidence;
+  extensions must preserve the locked invariants; the extension mechanism is the config (new verbs/
+  verticals) + additive layers, never bespoke capture UIs.** Full doctrine:
+  docs/TFOS_FAB_Doctrine_LOCKED.md · wireframe: docs/TFOS_FAB_Redesign_Wireframe.md. Audit→scorecard→
+  10-persona→architecture→interaction→wireframe→build (findings FAB1–FAB25). **Built (implementing
+  the locked model, not redesign):** Slice 1 (offline+idempotent+token-safe backbone) + Slice 2a
+  (on-device learning + value pre-fill + a11y). **Remaining convergence slices (no re-approval —
+  build the locked model):** 1b evidence-offline-queue + backend idempotency + reference cache +
+  non-blocking uploads (FAB21/22/24); 2b bottom-sheet container + searchable current-farm-scoped
+  anchor (FAB3/23) + field-hardening (FAB25); 3 Voice-to-log + Snap-it (additive AI); 4 animal-WHD
+  parity (FAB13) + sale-dedup + worker attribution (FAB14) + batch (FAB15).
 - **Settings (/farm/settings)** — LOCKED 2026-06-27 (Operator-approved). Audited (SET1–SET8) →
   scorecard (6.0→5.5 after 8-persona) → 8-persona → redesigned + wireframe → stress-tested ×1 (11
   scenarios) → optimized ×1. **#1 (security): invite privilege-escalation closed** — `create_invite`
