@@ -555,6 +555,19 @@ export default function ProfilePage({ self = false }) {
 
       {/* main */}
       <main style={{ width: "100%", minWidth: 0 }}>
+        {/* Agricultural Passport — prominent entry on your own profile (TATI) */}
+        {isYou && !pub && (
+          <Link to="/me/passport" style={{ display: "flex", alignItems: "center", gap: 12, textDecoration: "none",
+            background: "linear-gradient(120deg, rgba(45,106,79,0.12), rgba(106,168,79,0.18))",
+            border: `1px solid ${C.greenDk}`, borderRadius: 12, padding: "14px 16px", marginBottom: 14 }}>
+            <span style={{ fontSize: 26 }}>🪪</span>
+            <span style={{ flex: 1, minWidth: 0 }}>
+              <span style={{ display: "block", fontWeight: 800, color: C.soil, fontSize: 15 }}>Your Agricultural Passport</span>
+              <span style={{ display: "block", fontSize: 12.5, color: C.muted }}>Verifiable farm identity, trust score &amp; secure sharing — built automatically from your records.</span>
+            </span>
+            <span style={{ background: C.greenDk, color: "#fff", borderRadius: 8, padding: "7px 12px", fontSize: 13, fontWeight: 700, whiteSpace: "nowrap" }}>Open →</span>
+          </Link>
+        )}
         {/* cover banner */}
         <div style={{ position: "relative", height: 150, borderRadius: 12, marginBottom: 14, overflow: "hidden", background: p.cover_url ? "#000" : "linear-gradient(120deg, rgba(106,168,79,0.25), rgba(62,123,31,0.35))", border: `1px solid ${C.line}` }}>
           {p.cover_url && <img src={p.cover_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} onError={(e) => { e.currentTarget.style.display = "none"; }} />}
