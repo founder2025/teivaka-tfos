@@ -6,12 +6,13 @@
  *  - reachable (routed + nav); Fiji-local day/time bucketing (was UTC string-slice);
  *  - honest trust copy (no hardcoded "INTACT", no dead per-row "Verify"); real 48h-edit note;
  *  - export includes tasks (was dropped); decision summary; agronomic detail on sprays;
- *  - photo thumbnails; no raw UUIDs; dead ModeDropdown + unused QueryClientProvider removed.
+ *  - photo thumbnails; no raw UUIDs; dead ModeDropdown removed (QueryClientProvider kept — FarmSelector needs it).
  * Honest-deferred (Phase B, not faked): server-side unified /history over audit.events with
  *  per-row hash + true total + server-side search. Search/summary here are over LOADED rows.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { QueryClientProvider, QueryClient } from "@tanstack/react-query";
 import { useFormModal } from "../../context/FormModalContext";
 import { Clock, Camera, Sprout, Package, Coins, Bird, FileText, RefreshCw, AlertTriangle,
   Plus, Download, Printer, Search, ListChecks, ChevronDown, Sparkles } from "lucide-react";
@@ -499,6 +500,12 @@ function HistoryInner() {
   );
 }
 
+// QueryClientProvider is required: FarmSelector (rendered in the header) uses useQuery.
+const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 0, refetchOnWindowFocus: false, staleTime: 60_000 } } });
 export default function FarmHistory() {
-  return <CurrentFarmProvider><HistoryInner /></CurrentFarmProvider>;
+  return (
+    <QueryClientProvider client={queryClient}>
+      <CurrentFarmProvider><HistoryInner /></CurrentFarmProvider>
+    </QueryClientProvider>
+  );
 }
