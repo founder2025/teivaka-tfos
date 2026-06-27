@@ -44,12 +44,95 @@ function Stat({ label, value, sub }) {
   );
 }
 
+const BANDS = { Strong: C.greenDk, Established: C.green, Developing: C.amber, Building: C.muted };
+const DIM_LABELS = {
+  production: "Production", operations: "Operations", market: "Market", compliance: "Compliance",
+  financial: "Financial record", evidence_completeness: "Evidence completeness",
+  record_consistency: "Record consistency", identity: "Identity", farm: "Farm",
+  verification_history: "Independent verification",
+};
+
+function TrustHeadline({ trust, onView }) {
+  const scored = trust?.status === "scored";
+  const b = scored ? trust.overall_band : "Building";
+  const color = BANDS[b] || C.muted;
+  return (
+    <div onClick={onView} style={{ border: `1px solid ${C.line}`, borderLeft: `4px solid ${color}`, borderRadius: 12, padding: 14, marginTop: 12, background: "var(--paper)", cursor: "pointer" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}><BadgeCheck size={16} style={{ color }} /><strong style={{ color: C.soil }}>Evidence &amp; Reliability Confidence</strong></div>
+        <span style={{ fontWeight: 800, color }}>{scored ? `${trust.overall_score} · ${b}` : "Building"}</span>
+      </div>
+      <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>{scored ? "Tap to see what drives it — and how to raise it." : (trust?.note || "Builds automatically from your records.")}</div>
+    </div>
+  );
+}
+
+function DimRow({ d }) {
+  const color = BANDS[d.band] || C.muted;
+  return (
+    <div style={{ borderBottom: `1px solid ${C.line}`, padding: "10px 0" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+        <span style={{ fontWeight: 700, color: C.soil, fontSize: 13.5 }}>{DIM_LABELS[d.key] || d.key}</span>
+        <span style={{ fontSize: 12, fontWeight: 700, color }}>{d.score} · {d.band}</span>
+      </div>
+      <div style={{ height: 6, borderRadius: 99, background: "var(--cream)", marginTop: 6, overflow: "hidden" }}><div style={{ width: `${d.score}%`, height: "100%", background: color }} /></div>
+      <div style={{ fontSize: 12, color: C.muted, marginTop: 5 }}>{d.why}</div>
+      {d.how_to_improve && <div style={{ fontSize: 11.5, color: C.greenDk, marginTop: 3 }}>↑ {d.how_to_improve}</div>}
+    </div>
+  );
+}
+
+function RefreshBtn({ onRefresh, refreshing }) {
+  return (
+    <button onClick={onRefresh} disabled={refreshing} style={{ border: `1px solid ${C.line}`, color: C.greenDk, borderRadius: 8, padding: "4px 10px", fontSize: 12, fontWeight: 600 }}>
+      {refreshing ? "Refreshing…" : <><RefreshCw size={12} style={{ verticalAlign: -2, marginRight: 4 }} />Refresh</>}
+    </button>
+  );
+}
+
+function Reputation({ trust, rep, onRefresh, refreshing }) {
+  const scored = trust?.status === "scored";
+  return (
+    <div style={{ display: "grid", gap: 12 }}>
+      {scored ? (
+        <div style={{ border: `1px solid ${C.line}`, borderRadius: 12, padding: 14, background: "var(--paper)" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}><ShieldCheck size={16} style={{ color: BANDS[trust.overall_band] || C.greenDk }} /><strong style={{ color: C.soil }}>Confidence · {trust.overall_score} · {trust.overall_band}</strong></div>
+            <RefreshBtn onRefresh={onRefresh} refreshing={refreshing} />
+          </div>
+          <div style={{ fontSize: 11.5, color: C.muted, marginTop: 4, lineHeight: 1.5 }}>{trust.disclaimer}</div>
+          <div style={{ marginTop: 8 }}>{(trust.dimensions || []).map((d) => <DimRow key={d.key} d={d} />)}</div>
+        </div>
+      ) : (
+        <div style={{ border: `1px dashed ${C.line}`, borderRadius: 12, padding: 14, background: "var(--cream)" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+            <strong style={{ color: C.soil }}>Trust · Building</strong>
+            <RefreshBtn onRefresh={onRefresh} refreshing={refreshing} />
+          </div>
+          <div style={{ fontSize: 12.5, color: C.muted, marginTop: 4, lineHeight: 1.5 }}>{trust?.note}</div>
+        </div>
+      )}
+      <div style={{ border: `1px solid ${C.line}`, borderRadius: 12, padding: 14, background: "var(--paper)" }}>
+        <strong style={{ color: C.soil, fontSize: 13.5 }}>Your records — the evidence behind your trust</strong>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(140px,1fr))", gap: 10, marginTop: 10 }}>
+          <Stat label="Seasons completed" value={rep.seasons_completed} />
+          <Stat label="Production logged" value={`${Math.round(rep.verified_production_kg || 0).toLocaleString()} kg`} />
+          <Stat label="Sales recorded" value={fjd(rep.total_sales_fjd)} />
+          <Stat label="Photo evidence" value={rep.photo_evidence} />
+        </div>
+      </div>
+      <button disabled title="Secure sharing arrives in the next release" style={{ border: `1px solid ${C.line}`, color: C.muted, borderRadius: 8, padding: "8px 12px", fontSize: 13, fontWeight: 600, opacity: 0.65 }}><Share2 size={14} style={{ verticalAlign: -2, marginRight: 4 }} />Share my passport (secure sharing coming soon)</button>
+    </div>
+  );
+}
+
 export default function Passport() {
   const navigate = useNavigate();
   const [data, setData] = useState(null);
   const [err, setErr] = useState(false);
   const [tab, setTab] = useState("overview");
   const [edit, setEdit] = useState(null); // {preferred_name, bio, languages}
+  const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(async () => {
     setErr(false);
@@ -66,6 +149,13 @@ export default function Passport() {
       });
       toast("Passport updated"); setEdit(null); await load();
     } catch (e) { toast(e.userMessage || e.message || "Couldn't save"); }
+  };
+
+  const refreshTrust = async () => {
+    setRefreshing(true);
+    try { await send("POST", "/api/v1/passport/me/trust/refresh"); await load(); }
+    catch (e) { toast(e.userMessage || e.message || "Couldn't refresh trust"); }
+    finally { setRefreshing(false); }
   };
 
   if (err && !data) return (
@@ -127,10 +217,7 @@ export default function Passport() {
             <Stat label="Recorded sales" value={fjd(rep.total_sales_fjd)} sub={`${rep.sales_records} sales`} />
             <Stat label="On Teivaka since" value={id.member_since || "—"} sub={`${rep.photo_evidence} photos logged`} />
           </div>
-          <div style={{ border: `1px dashed ${C.line}`, borderRadius: 12, padding: 14, marginTop: 12, background: "var(--cream)" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}><BadgeCheck size={16} style={{ color: C.amber }} /><strong style={{ color: C.soil }}>Trust · Building</strong></div>
-            <div style={{ fontSize: 12.5, color: C.muted, marginTop: 4, lineHeight: 1.5 }}>{data.trust?.note}</div>
-          </div>
+          <TrustHeadline trust={data.trust} onView={() => setTab("reputation")} />
         </>
       )}
 
@@ -147,31 +234,7 @@ export default function Passport() {
         </div>
       )}
 
-      {tab === "reputation" && (
-        <div style={{ display: "grid", gap: 12 }}>
-          <div style={{ border: `1px solid ${C.line}`, borderRadius: 12, padding: 14, background: "var(--paper)" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}><ShieldCheck size={16} style={{ color: C.greenDk }} /><strong style={{ color: C.soil }}>Your verified reputation</strong></div>
-            <div style={{ fontSize: 12.5, color: C.muted, marginTop: 4, lineHeight: 1.5 }}>Built automatically from your farming records — every one is hash-stamped and tamper-evident.</div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(140px,1fr))", gap: 10, marginTop: 12 }}>
-              <Stat label="Seasons completed" value={rep.seasons_completed} />
-              <Stat label="Production logged" value={`${Math.round(rep.verified_production_kg || 0).toLocaleString()} kg`} />
-              <Stat label="Sales recorded" value={fjd(rep.total_sales_fjd)} />
-              <Stat label="Photo evidence" value={rep.photo_evidence} />
-            </div>
-          </div>
-          <div style={{ border: `1px dashed ${C.line}`, borderRadius: 12, padding: 14, background: "var(--cream)" }}>
-            <strong style={{ color: C.soil, fontSize: 13.5 }}>What strengthens your reputation</strong>
-            <ul style={{ margin: "8px 0 0 16px", fontSize: 12.5, color: C.soil, lineHeight: 1.7 }}>
-              <li>Completing growing seasons with logged harvests</li>
-              <li>Recording sales and repeat buyers</li>
-              <li>Keeping compliance (withholding periods) clean</li>
-              <li>Adding photos &amp; GPS to your field events</li>
-              <li>Independent verification (extension officer, cooperative, buyer) — coming soon</li>
-            </ul>
-          </div>
-          <button disabled title="Secure sharing arrives in the next release" style={{ border: `1px solid ${C.line}`, color: C.muted, borderRadius: 8, padding: "8px 12px", fontSize: 13, fontWeight: 600, opacity: 0.65 }}><Share2 size={14} style={{ verticalAlign: -2, marginRight: 4 }} />Share my passport (secure sharing coming soon)</button>
-        </div>
-      )}
+      {tab === "reputation" && <Reputation trust={data.trust} rep={rep} onRefresh={refreshTrust} refreshing={refreshing} />}
 
       <Modal isOpen={!!edit} onClose={() => setEdit(null)} title="Edit passport details" size="sm"
         footer={<><button onClick={() => setEdit(null)} style={{ border: `1px solid ${C.line}`, borderRadius: 8, padding: "6px 12px", fontSize: 13 }}>Cancel</button><button onClick={saveProfile} style={{ border: `1px solid ${C.greenDk}`, color: "var(--paper)", background: C.greenDk, borderRadius: 8, padding: "6px 12px", fontSize: 13, fontWeight: 600 }}>Save</button></>}>

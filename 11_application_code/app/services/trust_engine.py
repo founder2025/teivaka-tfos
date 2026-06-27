@@ -1,0 +1,210 @@
+"""Trust Engine v1 — PURE, explainable scoring (TATI Phase 2).
+
+Evidence & Reliability Confidence — NOT a creditworthiness score (D1). Teivaka explains
+*why* the data is trustworthy; institutions decide lending.
+
+Design rules:
+  - PURE: every function takes an evidence dict and returns a result dict — no I/O, no DB.
+    The worker gathers evidence (SQL); this module only does the math. → unit-testable.
+  - EXPLAINABLE: each dimension returns {key,label,score,band,why,evidence[],how_to_improve}.
+  - TUNABLE + VERSIONED: weights are constants; FORMULA_VERSION is stamped into snapshots so
+    a score is always reproducible/auditable.
+  - HONEST cold-start: no evidence → score 0, band "Building", with the exact path to grow it.
+  - ANTI-GAMING: buyer-confirmed ≫ self-reported; consistency rewarded; identity never
+    "verified" on SELF alone; verifications time-decay.
+
+Bands (per dimension AND overall): Building <25 · Developing <50 · Established <75 · Strong ≥75.
+"""
+from __future__ import annotations
+
+FORMULA_VERSION = "v1"
+
+# Per-source confidence weights for claim_verifications (D4). SELF lowest; third parties highest.
+SOURCE_WEIGHTS = {
+    "SELF": 5, "PHONE": 10, "EMAIL": 10, "BUYER": 15, "COOPERATIVE": 20,
+    "LANDOWNER": 25, "EXTENSION_OFFICER": 25, "GOV_PROGRAMME": 25,
+    "GOV_ID": 30, "FINANCIAL_INSTITUTION": 30,
+}
+
+DIMENSIONS = [
+    "production", "operations", "market", "compliance", "financial",
+    "evidence_completeness", "record_consistency", "identity", "farm", "verification_history",
+]
+_LABELS = {
+    "production": "Production", "operations": "Operations", "market": "Market",
+    "compliance": "Compliance", "financial": "Financial record", "evidence_completeness": "Evidence completeness",
+    "record_consistency": "Record consistency", "identity": "Identity", "farm": "Farm",
+    "verification_history": "Independent verification",
+}
+
+
+def band(score: int) -> str:
+    if score >= 75:
+        return "Strong"
+    if score >= 50:
+        return "Established"
+    if score >= 25:
+        return "Developing"
+    return "Building"
+
+
+def _clamp(v) -> int:
+    return max(0, min(100, int(round(v))))
+
+
+def _r(key, score, why, evidence, how):
+    return {"key": key, "label": _LABELS[key], "score": _clamp(score), "band": band(_clamp(score)),
+            "why": why, "evidence": evidence, "how_to_improve": how}
+
+
+# ── dimensions (each: evidence dict → result) ────────────────────────────────
+def production(ev: dict) -> dict:
+    seasons = ev.get("closed_seasons", 0)
+    harvests = ev.get("harvest_records", 0)
+    cv = ev.get("yield_cv")  # coefficient of variation of harvest weights; None if <2 harvests
+    base = min(70, seasons * 18 + harvests * 4)              # volume of verified production
+    consistency = 0 if cv is None else _clamp(30 * (1 - min(cv, 1.0)))  # steadier yields → up to +30
+    score = base + (consistency if harvests >= 2 else 0)
+    why = (f"{seasons} completed season(s) and {harvests} harvest record(s)"
+           + ("" if cv is None else f"; yield consistency {'high' if cv < 0.3 else 'moderate' if cv < 0.6 else 'variable'}"))
+    how = "Complete more growing seasons and log every harvest with weights — steady yields raise this most."
+    return _r("production", score, why, [f"{seasons} closed seasons", f"{harvests} harvests"], how)
+
+
+def operations(ev: dict) -> dict:
+    events = ev.get("field_events", 0)
+    media = ev.get("events_with_media", 0)
+    active_months = ev.get("active_months", 0)
+    cadence = min(60, active_months * 8)                      # sustained activity across months
+    coverage = 0 if events == 0 else _clamp(40 * media / events)  # photo/GPS-backed share
+    score = cadence + coverage
+    why = f"Logged activity across {active_months} month(s); {media} of {events} events carry a photo or GPS."
+    how = "Log field activity regularly and attach a photo or GPS to each — both lift this score."
+    return _r("operations", score, why, [f"{events} field events", f"{media} with media", f"{active_months} active months"], how)
+
+
+def market(ev: dict) -> dict:
+    sales = ev.get("sales_count", 0)
+    buyers = ev.get("distinct_buyers", 0)
+    repeat = ev.get("repeat_buyers", 0)
+    base = min(60, sales * 6)
+    relationships = min(40, buyers * 8 + repeat * 8)         # repeat buyers weighted
+    score = base + relationships
+    why = f"{sales} recorded sale(s) across {buyers} buyer(s), {repeat} of them repeat."
+    how = "Record every sale and your buyers — repeat buyers strengthen your market reputation most."
+    return _r("market", score, why, [f"{sales} sales", f"{buyers} buyers", f"{repeat} repeat"], how)
+
+
+def compliance(ev: dict) -> dict:
+    overrides = ev.get("overrides", 0)
+    holds = ev.get("active_holds", 0)
+    flagged = ev.get("flagged", 0)                            # off-label / unidentified chemicals
+    has_activity = ev.get("chemical_records", 0) > 0 or ev.get("harvest_records", 0) > 0
+    if not has_activity:
+        return _r("compliance", 0, "No spray or harvest activity recorded yet — nothing to assess.",
+                  [], "This builds once you log sprays and harvests under withholding-period control.")
+    score = 100 - overrides * 25 - holds * 10 - flagged * 8
+    why = (f"{overrides} override(s), {holds} active withholding hold(s), {flagged} off-label/"
+           f"unidentified application(s)." if (overrides or holds or flagged) else
+           "Clean — withholding periods honoured, no overrides, no off-label use.")
+    how = "Wait out withholding periods (avoid overrides) and always identify the chemical you apply."
+    return _r("compliance", score, why, [f"{overrides} overrides", f"{holds} holds", f"{flagged} flagged"], how)
+
+
+def financial(ev: dict) -> dict:
+    # Record DISCIPLINE — length + completeness of the cash record, NOT profitability (D1).
+    months = ev.get("cash_months", 0)
+    records = ev.get("cash_records", 0)
+    score = min(100, months * 10 + records * 2)
+    why = f"Cash records kept across {months} month(s) ({records} entries) — a continuous, datable money trail."
+    how = "Keep logging money in and out every month — an unbroken record is what a lender reads, not the profit."
+    return _r("financial", score, why, [f"{months} months", f"{records} entries"], how)
+
+
+def evidence_completeness(ev: dict) -> dict:
+    total = ev.get("evidenceable_events", 0)
+    backed = ev.get("events_with_media", 0)
+    score = 0 if total == 0 else _clamp(100 * backed / total)
+    why = ("No events yet to back with evidence." if total == 0 else
+           f"{backed} of {total} loggable events carry a photo, GPS or witness.")
+    how = "Attach a photo, GPS or witness when you log — evidence-backed records are the strongest."
+    return _r("evidence_completeness", score, why, [f"{backed}/{total} backed"], how)
+
+
+def record_consistency(ev: dict) -> dict:
+    breaks = ev.get("chain_breaks", 0)
+    total = ev.get("chain_events", 0)
+    if total == 0:
+        return _r("record_consistency", 0, "No records in the audit chain yet.", [],
+                  "This builds automatically — every action you log is hash-stamped in sequence.")
+    score = 100 if breaks == 0 else _clamp(100 - breaks * 20)
+    why = ("Audit chain intact — nothing altered or backdated." if breaks == 0 else
+           f"{breaks} chain inconsistency(ies) detected.")
+    how = "Keep logging in real time. The chain is tamper-evident — it stays strong on its own."
+    return _r("record_consistency", score, why, [f"{total} events", f"{breaks} breaks"], how)
+
+
+def _claim_score(claims: list, claim_types: set) -> tuple:
+    """Weighted, self-capped score from claim_verifications rows for given claim types."""
+    rel = [c for c in claims if c.get("claim_type") in claim_types and c.get("status") == "VERIFIED"]
+    weight = sum(SOURCE_WEIGHTS.get(c.get("source"), 0) for c in rel)
+    third_party = any(c.get("source") not in ("SELF", "EMAIL", "PHONE") for c in rel)
+    score = min(100, weight)
+    if not third_party:
+        score = min(score, 20)   # never beyond "Building/low-Developing" on self-asserted alone
+    sources = sorted({c.get("source") for c in rel})
+    return score, sources, third_party
+
+
+def identity(ev: dict) -> dict:
+    score, sources, third = _claim_score(ev.get("claims", []), {"IDENTITY"})
+    why = (f"Confirmed by: {', '.join(s.title() for s in sources)}." if sources else "Not yet confirmed.")
+    if not third and sources:
+        why += " Self/contact only — an independent confirmation lifts this."
+    how = "Get verified by an extension officer, cooperative, government programme, or with a government ID."
+    return _r("identity", score, why, sources, how)
+
+
+def farm(ev: dict) -> dict:
+    score, sources, third = _claim_score(ev.get("claims", []), {"FARM_OWNERSHIP", "LAND_BOUNDARY"})
+    mapped = ev.get("gps_mapped", False)
+    if mapped:
+        score = min(100, score + 15)
+    why = (("Farm boundary mapped. " if mapped else "Boundary not yet mapped. ")
+           + (f"Ownership confirmed by: {', '.join(s.title() for s in sources)}." if sources else "Ownership self-asserted."))
+    how = "Map your farm boundary in Locations and get ownership confirmed by the landowner or an extension officer."
+    return _r("farm", score, why, (["GPS mapped"] if mapped else []) + sources, how)
+
+
+def verification_history(ev: dict) -> dict:
+    claims = [c for c in ev.get("claims", []) if c.get("status") == "VERIFIED"]
+    distinct = sorted({c.get("source") for c in claims})
+    third = [s for s in distinct if s not in ("SELF", "EMAIL", "PHONE")]
+    score = min(100, len(distinct) * 12 + len(third) * 18)
+    why = (f"{len(distinct)} verification source(s)" + (f", {len(third)} independent." if third else ", all self/contact.")
+           if distinct else "No verifications yet.")
+    how = "Each independent confirmation (officer, coop, buyer, bank) broadens and strengthens your trust."
+    return _r("verification_history", score, why, distinct, how)
+
+
+_FUNCS = {
+    "production": production, "operations": operations, "market": market, "compliance": compliance,
+    "financial": financial, "evidence_completeness": evidence_completeness,
+    "record_consistency": record_consistency, "identity": identity, "farm": farm,
+    "verification_history": verification_history,
+}
+
+
+def compute_all(evidence: dict) -> dict:
+    """Return {dimensions:[...], overall:{score,band,label}}. `evidence` carries all inputs."""
+    dims = [_FUNCS[k](evidence) for k in DIMENSIONS]
+    scored = [d["score"] for d in dims]
+    overall_score = _clamp(sum(scored) / len(scored)) if scored else 0
+    return {
+        "dimensions": dims,
+        "overall": {"score": overall_score, "band": band(overall_score),
+                    "label": "Evidence & Reliability Confidence",
+                    "disclaimer": "Reflects the completeness and consistency of verified records — "
+                                  "not a credit decision. Lending decisions rest with the institution."},
+        "formula_version": FORMULA_VERSION,
+    }

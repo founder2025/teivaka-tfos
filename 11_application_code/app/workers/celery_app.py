@@ -14,6 +14,7 @@ app = Celery(
         "app.workers.ai_worker",
         "app.workers.maintenance_worker",
         "app.workers.weather_worker",
+        "app.workers.trust_worker",
         "app.tasks.health_monitor",
     ]
 )
@@ -55,6 +56,7 @@ app.conf.update(
         "app.workers.ai_worker.*":              {"queue": "ai"},
         "app.workers.maintenance_worker.*":     {"queue": "maintenance"},
         "app.workers.weather_worker.*":         {"queue": "maintenance"},
+        "app.workers.trust_worker.*":           {"queue": "maintenance"},
     },
 
     # Beat schedule (all times UTC, Fiji = UTC+12)
@@ -75,6 +77,12 @@ app.conf.update(
         "mv-refresh-daily": {
             "task": "app.workers.maintenance_worker.refresh_materialized_views",
             "schedule": crontab(hour=18, minute=10),
+            "options": {"queue": "maintenance"},
+        },
+        # Trust Engine snapshots: 06:15 Fiji = 18:15 UTC (after the day's activity is in)
+        "trust-snapshots-daily": {
+            "task": "app.workers.trust_worker.compute_all_trust_snapshots",
+            "schedule": crontab(hour=18, minute=15),
             "options": {"queue": "maintenance"},
         },
         # Ferry buffer scan: weekly Monday 06:00 Fiji = 18:00 UTC Sunday

@@ -16,6 +16,7 @@ Routes (mounted at /api/v1):
 from typing import Optional
 
 from fastapi import APIRouter, Depends
+from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -76,6 +77,35 @@ async def get_my_passport(
     created = u.get("created_at")
     member_since = created.date().isoformat() if created else None
 
+    # Trust — read precomputed snapshots (Inviolable #3). Honest "Building" if none yet.
+    snaps = (await db.execute(text(
+        "SELECT dimension, score, band, why, how_to_improve, computed_at FROM tenant.trust_snapshots "
+        "WHERE subject_id = cast(:t AS text)"
+    ), {"t": str(user["tenant_id"])})).mappings().all()
+    if snaps:
+        overall = next((s for s in snaps if s["dimension"] == "__overall__"), None)
+        dims = [{"key": s["dimension"], "score": s["score"], "band": s["band"],
+                 "why": s["why"], "how_to_improve": s["how_to_improve"]}
+                for s in snaps if s["dimension"] != "__overall__"]
+        trust = {
+            "status": "scored",
+            "overall_score": overall["score"] if overall else None,
+            "overall_band": overall["band"] if overall else None,
+            "label": "Evidence & Reliability Confidence",
+            "disclaimer": (overall["how_to_improve"] if overall else
+                           "Reflects the completeness and consistency of verified records — not a credit decision."),
+            "dimensions": dims,
+            "computed_at": (snaps[0]["computed_at"].isoformat() if snaps[0]["computed_at"] else None),
+        }
+    else:
+        trust = {
+            "status": "building",
+            "headline": "Your reputation is building from your records",
+            "note": "Every season, harvest, sale and photo strengthens your verified reputation. "
+                    "Tap refresh or check back — scored trust appears as your evidence accumulates.",
+            "dimensions": [],
+        }
+
     # Honest verification chips (Phase 1 — real signals only; full claim model is Phase 2/3).
     verifications = {
         "email": bool(u.get("email")),          # email captured at signup
@@ -111,13 +141,7 @@ async def get_my_passport(
             "sales_records": int(sales.get("n") or 0),
             "photo_evidence": int(photos),
         },
-        # Phase 2 fills this with the real Trust Engine; Phase 1 is honest "Building".
-        "trust": {
-            "status": "building",
-            "headline": "Your reputation is building from your records",
-            "note": "Every season, harvest, sale and photo strengthens your verified reputation. "
-                    "Scored trust dimensions arrive as your evidence accumulates.",
-        },
+        "trust": trust,
     })
 
 
@@ -163,3 +187,16 @@ async def update_my_profile(
            "pn": body.preferred_name, "bio": body.bio, "langs": body.languages,
            "photo": body.professional_photo_url, "sha": body.photo_sha256})
     return success_envelope({"updated": True})
+
+
+@router.post("/passport/me/trust/refresh")
+async def refresh_my_trust(user: dict = Depends(get_current_user)):
+    """On-demand Trust Engine recompute for this tenant. Runs the SAME sync compute path
+    as the nightly worker, off the event loop (run_in_threadpool). Snapshots are then
+    read by GET /passport/me (Inviolable #3 — the page never computes inline)."""
+    from app.workers.trust_worker import refresh_tenant
+    try:
+        written = await run_in_threadpool(refresh_tenant, str(user["tenant_id"]))
+        return success_envelope({"refreshed": True, "dimensions": written})
+    except Exception:  # noqa: BLE001 — never leak internals (Inviolable #6)
+        return success_envelope({"refreshed": False, "error": "Couldn't refresh trust right now"})
