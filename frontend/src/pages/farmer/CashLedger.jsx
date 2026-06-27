@@ -20,8 +20,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { QueryClient, QueryClientProvider, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { Plus, Search, Pencil, Trash2, X, ShieldCheck, Lock, Sparkles, AlertTriangle, Camera } from "lucide-react";
-import ReceiptSnap from "./ReceiptSnap";
+import { Plus, Search, Pencil, Trash2, X, ShieldCheck, Lock, Sparkles, AlertTriangle } from "lucide-react";
 import TfpShell from "../../components/farm/TfpShell";
 import { CurrentFarmProvider, useCurrentFarm } from "../../context/CurrentFarmContext";
 import FarmSelector from "../../components/farm/FarmSelector";
@@ -156,7 +155,6 @@ function CashInner() {
   const [q, setQ] = useState("");
   const [form, setForm] = useState(null);
   const [del, setDel] = useState(null);
-  const [snap, setSnap] = useState(false);
   const [searchParams, setSearchParams] = useSearchParams();
   useEffect(() => {
     const t = searchParams.get("type");
@@ -228,7 +226,6 @@ function CashInner() {
             <div className="page-actions" style={{ flexWrap: "wrap", gap: 8 }}>
               <FarmSelector />
               <button className="btn btn-secondary" onClick={askAi}><Sparkles size={13} />Ask AI</button>
-              <button className="btn btn-secondary" onClick={() => setSnap(true)}><Camera size={13} />Snap receipt</button>
               <button className="btn btn-secondary" onClick={() => setForm({ mode: "create", type: "INCOME" })}><Plus size={13} />Cash in</button>
               <button className="btn btn-primary" onClick={() => setForm({ mode: "create", type: "EXPENSE" })}><Plus size={13} />Expense</button>
             </div>
@@ -326,7 +323,6 @@ function CashInner() {
         </div>
       </main>
 
-      {snap && <ReceiptSnap farmId={farmId} onClose={() => setSnap(false)} onSaved={() => { refetch(); emitToast("Receipt saved to your cashbook"); }} />}
       {form && <EntryForm form={form} farmId={farmId} onClose={() => setForm(null)} onSaved={() => { refetch(); setForm(null); }} />}
       {del && <Modal title="Delete this entry?" onClose={() => setDel(null)} maxWidth={420} foot={<><button className="btn btn-secondary" onClick={() => setDel(null)}>Cancel</button><button className="btn btn-primary" style={{ background: "var(--red)" }} onClick={doDelete}>Delete</button></>}>
         <div style={{ fontSize: 13, color: "var(--soil)", lineHeight: 1.6 }}>{del.description || del.category} · {fjd2(amt(del))}. The audit-chain record remains; only the live ledger row is removed. This can't be undone.</div>
