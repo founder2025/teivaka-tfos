@@ -15,9 +15,11 @@ and off-label use (chemical not registered for the crop) is flagged.
 Tenant-scoped via get_tenant_db (RLS + app.tenant_id). shared.* read-only.
 """
 
+import csv
+import io
 from datetime import date
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Response
 from sqlalchemy import text, bindparam
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -151,15 +153,10 @@ async def get_crop_compliance(
     })
 
 
-@router.get("/crops/compliance/{farm_id}/register")
-async def get_chemical_register(
-    farm_id: str,
-    db: AsyncSession = Depends(get_tenant_db),
-    current_user: dict = Depends(get_current_user),
-):
-    """Chemical-application register for the Compliance > Chemical register tab.
-    EVERY chemical application on the farm (LEFT JOIN — CO18: never hide a mislogged
-    one), with dose, who applied it (CO24), off-label flag (CO19) and the WHD. Read-only."""
+async def _fetch_register(db: AsyncSession, farm_id: str, limit: int):
+    """Chemical-application register rows (LEFT JOIN — CO18: never hide a mislogged
+    one), with dose, who applied it (CO24), off-label flag (CO19), WHD, and the full
+    audit hash for a public verify link. Shared by the JSON tab and the CSV export."""
     rows = (await db.execute(
         text("""
             SELECT fe.event_id::text                                          AS event_id,
@@ -182,7 +179,7 @@ async def get_chemical_register(
                         ELSE false END                                       AS off_label,
                    (fe.chemical_id IS NOT NULL AND cl.registered_crops IS NULL) AS reg_unknown,
                    u.full_name                                               AS applied_by,
-                   fe.audit_hash                                             AS hash
+                   fe.audit_hash                                             AS audit_hash
             FROM tenant.field_events fe
             LEFT JOIN shared.chemical_library cl ON cl.chemical_id = fe.chemical_id
             LEFT JOIN tenant.production_units pu ON pu.pu_id = fe.pu_id
@@ -192,9 +189,9 @@ async def get_chemical_register(
             WHERE fe.farm_id = :fid
               AND fe.chemical_application = true
             ORDER BY fe.event_date DESC
-            LIMIT 500
+            LIMIT :lim
         """),
-        {"fid": farm_id},
+        {"fid": farm_id, "lim": limit},
     )).mappings().all()
     today = date.today()
     out = []
@@ -209,9 +206,98 @@ async def get_chemical_register(
         d["reg_unknown"] = bool(d["reg_unknown"])
         d["dose"] = float(d["dose"]) if d["dose"] is not None else None
         d["chemical"] = d["chemical"] or ("Not identified" if d["unspecified"] else "Chemical")
-        d["hash"] = (d["hash"] or "")[-8:]
+        d["audit_hash"] = d["audit_hash"] or None
+        d["hash"] = (d["audit_hash"] or "")[-8:]
         out.append(d)
+    return out
+
+
+@router.get("/crops/compliance/{farm_id}/register")
+async def get_chemical_register(
+    farm_id: str,
+    db: AsyncSession = Depends(get_tenant_db),
+    current_user: dict = Depends(get_current_user),
+):
+    """Chemical-application register for the Compliance > Chemical register tab."""
+    out = await _fetch_register(db, farm_id, 500)
     return success_envelope({"applications": out, "count": len(out), "capped": len(out) >= 500})
+
+
+@router.get("/crops/compliance/{farm_id}/register.csv")
+async def export_chemical_register_csv(
+    farm_id: str,
+    db: AsyncSession = Depends(get_tenant_db),
+    current_user: dict = Depends(get_current_user),
+):
+    """Download the full chemical register as CSV — the artifact an extension officer
+    or auditor can take away (CC16). Includes the verify URL per application."""
+    rows = await _fetch_register(db, farm_id, 10000)
+    fields = ["applied_date", "chemical", "block_name", "crop", "dose", "applied_by",
+              "whd_days", "clear_date", "status", "off_label", "verify_url"]
+    buf = io.StringIO()
+    w = csv.DictWriter(buf, fieldnames=fields, extrasaction="ignore")
+    w.writeheader()
+    for r in rows:
+        status = ("Active WHD" if r["active"] else "WHD unknown" if r["unspecified"]
+                  else "Cleared" if r["clear_date"] else "—")
+        w.writerow({
+            "applied_date": r["applied_date"] or "", "chemical": r["chemical"],
+            "block_name": r["block_name"] or "", "crop": r["crop"] or "",
+            "dose": r["dose"] if r["dose"] is not None else "",
+            "applied_by": r["applied_by"] or "", "whd_days": r["whd_days"] if r["whd_days"] is not None else "",
+            "clear_date": r["clear_date"] or "", "status": status,
+            "off_label": "YES" if r["off_label"] else "no",
+            "verify_url": f"https://teivaka.com/verify/{r['audit_hash']}" if r["audit_hash"] else "",
+        })
+    filename = f"chemical-register-{farm_id}-{date.today().isoformat()}.csv"
+    return Response(content=buf.getvalue(), media_type="text/csv",
+                    headers={"Content-Disposition": f'attachment; filename="{filename}"'})
+
+
+@router.get("/crops/compliance-summary")  # distinct path — must not collide with /{farm_id}
+async def get_compliance_summary(
+    db: AsyncSession = Depends(get_tenant_db),
+    current_user: dict = Depends(get_current_user),
+):
+    """Per-farm compliance rollup across the whole tenant (CC7) — the head-office
+    view so a multi-farm operator sees which farms have holds without clicking each.
+    One aggregate query; RLS scopes it to the tenant."""
+    rows = (await db.execute(
+        text(f"""
+            WITH cyc AS (
+                SELECT pc.farm_id, pc.cycle_id,
+                       MAX(COALESCE(fe.whd_clearance_date,
+                           CASE WHEN cl.withholding_period_days IS NOT NULL
+                                THEN fe.event_date::date + cl.withholding_period_days END)) AS max_clear,
+                       bool_or(fe.chemical_id IS NULL)                                       AS any_unspecified
+                  FROM tenant.production_cycles pc
+                  LEFT JOIN tenant.field_events fe
+                    ON fe.pu_id = pc.pu_id AND fe.chemical_application = true AND fe.deleted_at IS NULL
+                   AND fe.event_date::date >= COALESCE(pc.planting_date, CURRENT_DATE - 180)
+                  LEFT JOIN shared.chemical_library cl ON cl.chemical_id = fe.chemical_id
+                 WHERE pc.cycle_status IN :states
+                 GROUP BY pc.farm_id, pc.cycle_id
+            )
+            SELECT f.farm_id, f.farm_name,
+                   COUNT(c.cycle_id)                                                          AS active_cycles,
+                   COUNT(*) FILTER (WHERE COALESCE(c.max_clear > CURRENT_DATE, false))        AS blocked,
+                   COUNT(*) FILTER (WHERE NOT COALESCE(c.max_clear > CURRENT_DATE, false)
+                                      AND COALESCE(c.any_unspecified, false))                 AS attention
+              FROM tenant.farms f
+              LEFT JOIN cyc c ON c.farm_id = f.farm_id
+             GROUP BY f.farm_id, f.farm_name
+             ORDER BY blocked DESC, attention DESC, f.farm_name
+        """).bindparams(bindparam("states", _ACTIVE_STATES, expanding=True)),
+    )).mappings().all()
+    farms = [{"farm_id": r["farm_id"], "farm_name": r["farm_name"],
+              "active_cycles": int(r["active_cycles"]), "blocked": int(r["blocked"]),
+              "attention": int(r["attention"])} for r in rows]
+    return success_envelope({
+        "farms": farms,
+        "farms_total": len(farms),
+        "farms_with_holds": sum(1 for f in farms if f["blocked"] > 0),
+        "farms_with_attention": sum(1 for f in farms if f["attention"] > 0),
+    })
 
 
 @router.get("/crops/compliance/{farm_id}/overrides")

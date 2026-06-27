@@ -16,15 +16,28 @@ import { useNavigate } from "react-router-dom";
 import { useFormModal } from "../../context/FormModalContext";
 import {
   Shield, Plus, Search, Clock, AlertTriangle, Check, HelpCircle, Lock, FlaskConical,
-  List, Award, Activity, FileText, Sparkles, RefreshCw,
+  List, Award, Activity, FileText, Sparkles, RefreshCw, Download, ShieldCheck, Layers,
 } from "lucide-react";
 import TfpShell from "../../components/farm/TfpShell";
 import Modal from "../../components/ui/Modal.jsx";
 import { CurrentFarmProvider, useCurrentFarm } from "../../context/CurrentFarmContext";
 import FarmSelector from "../../components/farm/FarmSelector";
-import { getJSON } from "../../utils/api";
+import { getJSON, apiFetch } from "../../utils/api";
 
 function emitToast(m) { window.dispatchEvent(new CustomEvent("tfos:toast", { detail: { message: m } })); }
+
+// Authed file download (CSV export) — apiFetch attaches the token + refreshes on 401.
+async function downloadFile(url, filename) {
+  emitToast("Preparing download…");
+  try {
+    const r = await apiFetch(url);
+    if (!r.ok) { emitToast("Download failed — please try again"); return; }
+    const blob = await r.blob();
+    const href = URL.createObjectURL(blob);
+    const a = document.createElement("a"); a.href = href; a.download = filename;
+    document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(href);
+  } catch { emitToast("Download failed — check your connection"); }
+}
 const TABS = [
   ["status", "Status", "The gate"], ["areas", "Areas", "All standards"],
   ["register", "Chemical register", "Applications"], ["certs", "Certifications", "Certs"],
@@ -49,6 +62,33 @@ function QueryState({ q, children, label = "compliance" }) {
       {q.isError && q.data && <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: "#8a6d00", background: "#fff8e6", border: "1px solid #e8d27a", borderRadius: 8, padding: "6px 10px", marginBottom: 10 }}><AlertTriangle size={13} />Showing last loaded data — couldn't refresh. <button className="btn btn-secondary btn-sm" style={{ marginLeft: "auto" }} onClick={() => q.refetch()}>Retry</button></div>}
       {children}
     </>
+  );
+}
+
+// Multi-farm rollup (CC7) — head-office view; only renders for >1 farm.
+function RollupBanner({ rollupQ, currentFarmId, onPick }) {
+  const data = rollupQ.data?.data;
+  if (!data || (data.farms_total ?? 0) <= 1) return null;
+  const flagged = data.farms.filter((f) => f.blocked > 0 || f.attention > 0);
+  const anyIssue = flagged.length > 0;
+  const clearN = data.farms_total - flagged.length;
+  return (
+    <div className="card" style={{ padding: "12px 14px", marginBottom: 12, borderLeft: `4px solid ${anyIssue ? "var(--amber)" : "var(--green-dk)"}` }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+        <span style={{ display: "flex", alignItems: "center", gap: 6, fontWeight: 700, color: "var(--soil)", fontSize: 13 }}><Layers size={14} style={{ color: "var(--green-dk)" }} />Across your {data.farms_total} farms</span>
+        <span style={{ fontSize: 12, color: "var(--muted)" }}>{data.farms_with_holds} with holds · {data.farms_with_attention} need attention · {clearN} clear</span>
+      </div>
+      {anyIssue && (
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>
+          {flagged.map((f) => (
+            <button key={f.farm_id} className="filter-pill" onClick={() => onPick(f.farm_id)} title={`Open ${f.farm_name}`}
+              style={{ borderColor: f.blocked > 0 ? "var(--red)" : "var(--amber)", fontWeight: 600, ...(f.farm_id === currentFarmId ? { background: "var(--green-tint)" } : {}) }}>
+              {f.farm_name} · {f.blocked > 0 ? `${f.blocked} blocked` : `${f.attention} attention`}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -206,7 +246,7 @@ function AreasView({ blocked, clear, setTab }) {
 }
 
 // ── Chemical register ────────────────────────────────────────────────────────
-function RegisterView({ regQ, navigate }) {
+function RegisterView({ regQ, navigate, farmId }) {
   const [q, setQ] = useState("");
   const data = regQ.data?.data || {};
   const apps = data.applications ?? [];
@@ -229,6 +269,7 @@ function RegisterView({ regQ, navigate }) {
           <Search size={14} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "var(--muted)" }} />
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search chemical, block, crop, who…" style={{ width: "100%", padding: "9px 12px 9px 36px", border: "1.5px solid var(--line)", borderRadius: 7, fontSize: 13, background: "var(--paper)" }} />
         </div>
+        <button className="btn btn-secondary" disabled={apps.length === 0} title="Download the full register as CSV" onClick={() => downloadFile(`/api/v1/crops/compliance/${encodeURIComponent(farmId)}/register.csv`, `chemical-register-${farmId}-${new Date().toLocaleDateString("en-CA", { timeZone: "Pacific/Fiji" })}.csv`)}><Download size={14} />CSV</button>
         <button className="btn btn-primary" onClick={() => navigate("/farm/field-events?type=CHEMICAL_APPLIED")}><Plus size={14} />Log chemical</button>
       </div>
       {filtered.length === 0 ? <div className="card" style={{ padding: 20, color: "var(--muted)" }}>No chemical applications recorded yet. Log one from the (+) Crops menu — every spray lands here with its withholding period.</div>
@@ -247,7 +288,7 @@ function RegisterView({ regQ, navigate }) {
                     <td style={{ fontSize: 11 }}>{a.applied_by || "—"}</td>
                     <td style={{ fontFamily: "Menlo,monospace" }}>{a.whd_days != null ? `${a.whd_days}d` : "?"}</td>
                     <td style={{ fontSize: 11, ...(a.active ? { color: "var(--red)", fontWeight: 600 } : {}) }}>{a.clear_date || (a.unspecified ? "unknown" : "—")}{a.active ? " (active)" : ""}</td>
-                    <td>{a.hash ? <span className="verification-badge"><span className="verify-dot" />{a.hash}</span> : "—"}</td>
+                    <td>{a.audit_hash ? <a href={`/verify/${encodeURIComponent(a.audit_hash)}`} target="_blank" rel="noreferrer" className="verification-badge" title="Open public verification" style={{ textDecoration: "none" }}><ShieldCheck size={11} />{a.hash}</a> : "—"}</td>
                   </tr>
                 ))}
               </tbody>
@@ -395,11 +436,12 @@ function OverrideModal({ blk, onClose, navigate }) {
 // ── Page ──────────────────────────────────────────────────────────────────────
 function CropComplianceInner() {
   const navigate = useNavigate();
-  const { farmId } = useCurrentFarm();
+  const { farmId, setFarmId } = useCurrentFarm();
   const [tab, setTab] = useState("status");
   const [override, setOverride] = useState(null);
 
   const compQ = useQuery({ queryKey: ["comp", farmId], queryFn: () => getJSON(`/api/v1/crops/compliance/${encodeURIComponent(farmId)}`), enabled: !!farmId });
+  const rollupQ = useQuery({ queryKey: ["comp-rollup"], queryFn: () => getJSON("/api/v1/crops/compliance-summary"), staleTime: 60_000 });
   const cyclesQ = useQuery({ queryKey: ["comp-cycles", farmId], queryFn: () => getJSON(`/api/v1/cycles?farm_id=${encodeURIComponent(farmId)}&limit=200`), enabled: !!farmId });
   const ovrQ = useQuery({ queryKey: ["comp-ovr", farmId], queryFn: () => getJSON(`/api/v1/crops/compliance/${encodeURIComponent(farmId)}/overrides`), enabled: !!farmId });
   // Register shared by Register + Analytics (CO26 — one query, react-query dedupes).
@@ -437,6 +479,7 @@ function CropComplianceInner() {
               <button className="btn btn-primary" onClick={() => navigate("/farm/field-events?type=CHEMICAL_APPLIED")}><Plus size={14} />Log chemical</button>
             </div>
           </div>
+          {farmId && <RollupBanner rollupQ={rollupQ} currentFarmId={farmId} onPick={(id) => { setFarmId(id); setTab("status"); }} />}
           <div className="cycle-view-tabs" role="tablist" aria-label="Compliance views">
             {TABS.map(([id, l, s]) => (
               <div key={id} role="tab" tabIndex={tab === id ? 0 : -1} aria-selected={tab === id} onKeyDown={onTabKey} className={`task-tab ${tab === id ? "active" : ""}`} onClick={() => setTab(id)}>{l}<span className="task-tab-count" style={{ fontSize: 10 }}>{s}</span></div>
@@ -446,7 +489,7 @@ function CropComplianceInner() {
           {!farmId ? <div className="card" style={{ padding: 20, color: "var(--muted)" }}>Select a farm to see its compliance.</div>
             : tab === "status" ? <StatusView compQ={compQ} cycles={cycles} cyclesErr={cyclesQ.isError} overridesYtd={overridesYtd} ovrErr={ovrQ.isError} onOverride={setOverride} />
             : tab === "areas" ? <QueryState q={compQ} label="compliance areas"><AreasView blocked={blocked} clear={Math.max(0, checked - (comp.attention_count ?? 0))} setTab={setTab} /></QueryState>
-            : tab === "register" ? <RegisterView regQ={regQ} navigate={navigate} />
+            : tab === "register" ? <RegisterView regQ={regQ} navigate={navigate} farmId={farmId} />
             : tab === "certs" ? <CertsView />
             : tab === "overrides" ? <OverridesView ovrQ={ovrQ} />
             : tab === "calendar" ? <CalendarView compQ={compQ} navigate={navigate} />
