@@ -79,7 +79,7 @@ def upgrade():
             item_id       UUID PRIMARY KEY DEFAULT gen_random_uuid(),
             lot_id        UUID NOT NULL,
             tenant_id     UUID NOT NULL,
-            harvest_id    UUID NOT NULL,
+            harvest_id    TEXT NOT NULL,   -- harvest_log.harvest_id is TEXT ('HRV-YYYYMMDD-NNN'), not uuid
             harvest_date  DATE NOT NULL,
             kg            NUMERIC(12,2) NOT NULL,
             created_at    TIMESTAMPTZ NOT NULL DEFAULT now()

@@ -115,7 +115,7 @@ async def create_lot(body: LotCreate, db: AsyncSession = Depends(get_tenant_db),
             SELECT h.gross_yield_kg, h.chemical_compliance_cleared,
                    (SELECT production_name FROM shared.productions p WHERE p.production_id = h.production_id) AS production_name
             FROM tenant.harvest_log h
-            WHERE h.harvest_id = cast(:hid AS uuid) AND h.harvest_date = cast(:hd AS date)
+            WHERE h.harvest_id = :hid AND h.harvest_date = cast(:hd AS date)
             FOR UPDATE
         """), {"hid": it.harvest_id, "hd": it.harvest_date})).mappings().first()
         if not h:
@@ -123,7 +123,7 @@ async def create_lot(body: LotCreate, db: AsyncSession = Depends(get_tenant_db),
         if h["chemical_compliance_cleared"] is False:
             uncleared = True
         allocated = (await db.execute(text(
-            "SELECT COALESCE(SUM(kg),0) FROM tenant.lot_items WHERE harvest_id = cast(:hid AS uuid)"),
+            "SELECT COALESCE(SUM(kg),0) FROM tenant.lot_items WHERE harvest_id = :hid"),
             {"hid": it.harvest_id})).scalar() or 0
         remaining = float(h["gross_yield_kg"] or 0) - float(allocated) - req_by_harvest.get(it.harvest_id, 0.0)
         if it.kg > remaining + _TOL:
@@ -159,7 +159,7 @@ async def create_lot(body: LotCreate, db: AsyncSession = Depends(get_tenant_db),
     for it in body.items:
         await db.execute(text("""
             INSERT INTO tenant.lot_items (lot_id, tenant_id, harvest_id, harvest_date, kg)
-            VALUES (cast(:l AS uuid), cast(:t AS uuid), cast(:hid AS uuid), cast(:hd AS date), :kg)
+            VALUES (cast(:l AS uuid), cast(:t AS uuid), :hid, cast(:hd AS date), :kg)
         """), {"l": str(lot_id), "t": str(user["tenant_id"]), "hid": it.harvest_id, "hd": it.harvest_date, "kg": it.kg})
 
     return success_envelope({
