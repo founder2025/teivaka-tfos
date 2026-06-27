@@ -226,7 +226,7 @@
   {% if v.farms %}
   <div class="card">
     <h2>Farm</h2>
-    {% for f in v.farms %}<div class="row"><span class="label">{{ f.name }}</span><span class="value">{{ f.location or '—' }}</span></div>{% endfor %}
+    {% for f in v.farms %}<div class="row"><span class="label">{{ f.name }}</span><span class="value">{{ f.location or '—' }}{% if f.tenure %} &middot; {{ f.tenure }}{% endif %}</span></div>{% endfor %}
   </div>
   {% endif %}
 
@@ -321,18 +321,30 @@
     Shared through Teivaka with the farmer's permission. The farmer can see when this link is opened and can revoke it at any time. Every record behind this passport is anchored in a SHA-256 hash chain and independently verifiable.
     <br><br><a href="https://teivaka.com">Teivaka Agriculture Ecosystem →</a>
   </footer>
+
+  {% if state == "ok" and token %}
+  <div style="text-align:center;margin-top:18px">
+    <img src="/s/{{ token }}/qr.png" alt="Scan to open" width="112" height="112"
+         style="border:1px solid var(--border);border-radius:10px;background:#fff;padding:6px">
+    <div style="font-size:10.5px;color:var(--muted);margin-top:5px">Scan to open this passport on another device</div>
+  </div>
+  {% endif %}
 </div>
 
 <div class="lb" id="lb" onclick="closeLB(event)">
   <span class="cls" onclick="closeLB(event)">&times;</span>
   <img id="lbImg" src="" alt="">
-  <div class="cap"><span id="lbCap"></span> <span id="lbHash"></span></div>
+  <div class="cap"><span id="lbCap"></span> <span id="lbHash"></span>
+    <a id="lbVerify" href="#" target="_blank" rel="noopener" style="display:none;color:#9FD685;text-decoration:underline;margin-left:8px">Verify independently →</a>
+  </div>
 </div>
 <script>
   function openLB(src, cap, sha){
     document.getElementById('lbImg').src = src;
     document.getElementById('lbCap').textContent = cap || '';
     document.getElementById('lbHash').innerHTML = sha ? '&middot; <b>&#10003; SHA-256 ' + sha.slice(0,16) + '…</b>' : '';
+    var vf = document.getElementById('lbVerify');
+    if (sha) { vf.href = '/verify/photo/' + sha; vf.style.display = 'inline'; } else { vf.style.display = 'none'; }
     document.getElementById('lb').classList.add('on');
   }
   function closeLB(e){

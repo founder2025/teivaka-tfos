@@ -326,6 +326,10 @@ function ShareSheet({ open, onClose }) {
             <div style={{ fontSize: 12, color: C.greenDk, fontWeight: 700, marginBottom: 4 }}>Secure link ready</div>
             <div style={{ fontSize: 11.5, color: C.soil, wordBreak: "break-all", fontFamily: "monospace" }}>{created.url}</div>
             <button onClick={() => copy(created.url)} style={{ border: `1px solid ${C.greenDk}`, color: C.greenDk, background: "var(--paper)", borderRadius: 8, padding: "4px 10px", fontSize: 12, fontWeight: 600, marginTop: 6 }}>Copy link</button>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 8 }}>
+              <img src={`${created.url}/qr.png`} alt="Share QR" width={92} height={92} style={{ border: `1px solid ${C.line}`, borderRadius: 8, background: "#fff", padding: 4 }} />
+              <div style={{ fontSize: 11, color: C.muted }}>Show or print this QR for an in-person loan or buyer meeting — they scan it to open your passport.</div>
+            </div>
             <div style={{ fontSize: 11, color: C.muted, marginTop: 6 }}>Expires {created.expires_at?.slice(0, 10)}. You'll see when it's opened, and you can revoke it any time below.</div>
           </div>
         )}
@@ -394,6 +398,13 @@ export default function Passport() {
     } catch (e) { toast(e.userMessage || e.message || "Couldn't save"); }
   };
 
+  const saveTenure = async (farm_id, land_tenure) => {
+    try {
+      await send("PUT", `/api/v1/passport/me/farm/${farm_id}/tenure`, { land_tenure: land_tenure || null });
+      toast("Land tenure saved"); await load();
+    } catch (e) { toast(e.userMessage || e.message || "Couldn't save"); }
+  };
+
   const refreshTrust = async () => {
     setRefreshing(true);
     try { await send("POST", "/api/v1/passport/me/trust/refresh"); await load(); }
@@ -423,7 +434,7 @@ export default function Passport() {
   );
   if (!data) return <div style={{ maxWidth: 720, margin: "0 auto", padding: 16, color: C.muted }}>Loading your passport…</div>;
 
-  const id = data.identity || {}; const rep = data.reputation || {}; const farms = data.farms || []; const v = id.verifications || {};
+  const id = data.identity || {}; const rep = data.reputation || {}; const farms = data.farms || []; const v = id.verifications || {}; const profile = data.profile || {};
   const TABS = [["overview", "Overview"], ["farm", "Farm"], ["reputation", "Reputation"], ["documents", "Documents"]];
 
   return (
@@ -495,8 +506,39 @@ export default function Passport() {
               <div style={{ fontWeight: 700, color: C.soil, display: "flex", alignItems: "center", gap: 6 }}><Sprout size={15} style={{ color: C.greenDk }} />{f.farm_name}</div>
               <div style={{ fontSize: 12, color: C.muted, marginTop: 3 }}>{f.location ? `${f.location} · ` : ""}{f.area_ha} ha · {f.blocks} block{f.blocks === 1 ? "" : "s"}</div>
               <div style={{ fontFamily: "monospace", fontSize: 11, color: C.muted, marginTop: 2 }}>{f.farm_id}</div>
+              <label style={{ display: "block", fontSize: 11.5, color: C.muted, marginTop: 8 }}>Land tenure <span>(shown to lenders)</span>
+                <select value={f.land_tenure || ""} onChange={(e) => saveTenure(f.farm_id, e.target.value)} style={{ display: "block", marginTop: 4, border: `1px solid ${C.line}`, borderRadius: 8, padding: "7px 9px", fontSize: 13, width: "100%", maxWidth: 280 }}>
+                  <option value="">— not set —</option>
+                  {["iTaukei lease", "Freehold", "Crown/State lease", "Native reserve", "Customary (no lease)", "Other"].map((o) => <option key={o} value={o}>{o}</option>)}
+                </select>
+              </label>
             </div>
           ))}
+
+          {(profile.crops?.length || profile.verticals?.length || profile.layers?.length) ? (
+            <div style={{ border: `1px solid ${C.line}`, borderRadius: 12, padding: 14, background: "var(--paper)" }}>
+              <div style={{ fontSize: 11, fontWeight: 800, color: C.muted, letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 10 }}>Farm Profile · what lenders see</div>
+              {profile.crops?.length ? (
+                <div style={{ marginBottom: 10 }}>
+                  <div style={{ fontSize: 10.5, color: C.muted, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>What you grow</div>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>{profile.crops.map((c) => <span key={c.name} style={{ background: "var(--green-tint)", color: C.greenDk, border: `1px solid ${C.green}`, borderRadius: 99, padding: "4px 10px", fontSize: 12.5, fontWeight: 600 }}>{c.name}{c.cycles > 1 ? ` ×${c.cycles}` : ""}</span>)}</div>
+                </div>
+              ) : null}
+              {profile.verticals?.length ? (
+                <div style={{ marginBottom: 10 }}>
+                  <div style={{ fontSize: 10.5, color: C.muted, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Types of farming</div>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>{profile.verticals.map((t) => <span key={t} style={{ background: "#FBF1DC", color: "#7A5B12", border: "1px solid #EBDCB6", borderRadius: 99, padding: "4px 10px", fontSize: 12.5, fontWeight: 600 }}>{t}</span>)}</div>
+                </div>
+              ) : null}
+              {profile.layers?.length ? (
+                <div>
+                  <div style={{ fontSize: 10.5, color: C.muted, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Production focus</div>
+                  {profile.layers.map((l) => <div key={l.label} style={{ display: "flex", justifyContent: "space-between", fontSize: 13, padding: "3px 0" }}><span style={{ fontWeight: 600, color: C.soil }}>{l.label}</span><span style={{ color: C.muted }}>{l.n} cycle{l.n === 1 ? "" : "s"}</span></div>)}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+
           <button onClick={() => navigate("/farm/locations")} style={{ border: `1px solid ${C.line}`, color: C.greenDk, borderRadius: 8, padding: "8px 12px", fontSize: 13, fontWeight: 600 }}><MapPin size={14} style={{ verticalAlign: -2, marginRight: 4 }} />View farm map &amp; blocks</button>
         </div>
       )}

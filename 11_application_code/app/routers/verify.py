@@ -283,3 +283,58 @@ async def verify_html(
     response = templates.TemplateResponse("verify_result.html", context)
     response.headers["Cache-Control"] = "public, max-age=300"
     return response
+
+
+# ─────────── Independent photo verification (safe, proof-only) ───────────
+_PLATFORM = {"name": "Teivaka Farm OS", "verify_method": "sha256-hash-chain"}
+
+
+async def _verify_photo_core(sha: str, request: Request, db: AsyncSession) -> dict:
+    sha = sha.lower().strip()
+    if not HASH_REGEX.match(sha):
+        raise HTTPException(
+            status_code=400,
+            detail=error_envelope("invalid_hash_format", "Photo hash must be 64 lowercase hex characters."),
+        )
+    await _rate_limit_check(request)
+    raw = (await db.execute(text("SELECT audit.verify_photo_by_hash(:h) AS r"), {"h": sha})).scalar()
+    import json as _json
+    info = raw if isinstance(raw, dict) else (_json.loads(raw) if raw else {})
+    if not info or not info.get("found"):
+        return {"verified": False, "photo_hash": sha, "platform": _PLATFORM}
+    chain = await _chain_integrity(db, str(info["tenant_id"]))
+    return {
+        "verified": True,
+        "photo_hash": sha,
+        "evidence": {"event_type": info.get("event_type"), "occurred_at": info.get("occurred_at")},
+        "chain": chain,
+        "platform": _PLATFORM,
+    }
+
+
+@router.get("/verify/photo/{sha}", response_class=JSONResponse)
+async def verify_photo_json(sha: str, request: Request, db: AsyncSession = Depends(get_db)):
+    payload = await _verify_photo_core(sha, request, db)
+    response = JSONResponse(content=payload)
+    response.headers["Cache-Control"] = "public, max-age=300"
+    return response
+
+
+@html_router.get("/verify/photo/{sha}", response_class=HTMLResponse)
+async def verify_photo_html(sha: str, request: Request, db: AsyncSession = Depends(get_db)):
+    payload = await _verify_photo_core(sha, request, db)
+    ev = payload.get("evidence")
+    chain = payload.get("chain")
+    ev_human = {**ev, "occurred_at_human": _format_iso_human(ev.get("occurred_at"))} if ev else None
+    chain_human = {**chain, "verified_at_human": _format_iso_human(chain.get("verified_at"))} if chain else None
+    context = {
+        "request": request,
+        "verified": payload.get("verified", False),
+        "photo_hash": payload["photo_hash"],
+        "evidence": ev_human,
+        "chain": chain_human,
+        "platform": payload["platform"],
+    }
+    response = templates.TemplateResponse("verify_evidence.html", context)
+    response.headers["Cache-Control"] = "public, max-age=300"
+    return response

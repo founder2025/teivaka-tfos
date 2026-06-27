@@ -24,6 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.middleware.rls import get_current_user, get_tenant_db
 from app.schemas.envelope import success_envelope
 from app.services.passport_summary import deterministic_summary, build_prompt, is_grounded
+from app.services.farm_profile import gather_farm_profile
 
 router = APIRouter()
 
@@ -44,7 +45,7 @@ async def _assemble_passport(db: AsyncSession, user: dict) -> dict:
     ), {"u": uid})).mappings().first() or {}
 
     farms = (await db.execute(text("""
-        SELECT f.farm_id, f.farm_name, f.location_island, f.created_at,
+        SELECT f.farm_id, f.farm_name, f.location_island, f.created_at, f.land_tenure,
                COALESCE((SELECT SUM(area_sqm) FROM tenant.production_units pu
                           WHERE pu.farm_id = f.farm_id AND pu.is_active = TRUE), 0) AS area_sqm,
                (SELECT COUNT(*) FROM tenant.production_units pu
@@ -129,8 +130,9 @@ async def _assemble_passport(db: AsyncSession, user: dict) -> dict:
         "farms": [{
             "farm_id": f["farm_id"], "farm_name": f["farm_name"],
             "location": f["location_island"], "area_ha": round(float(f["area_sqm"] or 0) / 10000.0, 2),
-            "blocks": int(f["block_count"] or 0),
+            "blocks": int(f["block_count"] or 0), "land_tenure": f["land_tenure"],
         } for f in farms],
+        "profile": await gather_farm_profile(db),
         "reputation": {
             "seasons_completed": int(seasons),
             "active_cycles": int(active_cycles),
@@ -256,6 +258,24 @@ async def update_my_profile(
            "pn": body.preferred_name, "bio": body.bio, "langs": body.languages,
            "photo": body.professional_photo_url, "sha": body.photo_sha256})
     return success_envelope({"updated": True})
+
+
+class TenureUpdate(BaseModel):
+    land_tenure: Optional[str] = Field(None, max_length=60)
+
+
+@router.put("/passport/me/farm/{farm_id}/tenure")
+async def set_farm_tenure(farm_id: str, body: TenureUpdate,
+                          db: AsyncSession = Depends(get_tenant_db), user: dict = Depends(get_current_user)):
+    """Set land tenure for one of the farmer's farms (e.g. iTaukei lease / Freehold /
+    Crown lease) — a high-value signal for lenders. RLS scopes the UPDATE to the tenant."""
+    res = await db.execute(text(
+        "UPDATE tenant.farms SET land_tenure = :t WHERE farm_id = :f AND is_active = TRUE"),
+        {"t": (body.land_tenure or None), "f": farm_id})
+    if res.rowcount == 0:
+        from fastapi import HTTPException
+        raise HTTPException(404, detail="Farm not found")
+    return success_envelope({"farm_id": farm_id, "land_tenure": body.land_tenure})
 
 
 @router.post("/passport/me/trust/refresh")

@@ -170,38 +170,13 @@ async def _assemble_scoped(db: AsyncSession, tenant_id: str, scope: dict) -> dic
         }
     if scope.get("farm"):
         farms = (await db.execute(text(
-            "SELECT farm_name, location_island FROM tenant.farms WHERE is_active=TRUE ORDER BY created_at"))).mappings().all()
-        data["farms"] = [{"name": f["farm_name"], "location": f["location_island"]} for f in farms]
+            "SELECT farm_name, location_island, land_tenure FROM tenant.farms WHERE is_active=TRUE ORDER BY created_at"))).mappings().all()
+        data["farms"] = [{"name": f["farm_name"], "location": f["location_island"],
+                          "tenure": f["land_tenure"]} for f in farms]
         # Farm profile (always-on with farm scope): what's grown, the farming types,
-        # the 3-Layer mix, and total land — all from real records, honest-empty if none.
-        crops = (await db.execute(text("""
-            SELECT p.production_name AS name, COUNT(*) AS cycles
-            FROM tenant.production_cycles pc
-            JOIN shared.productions p ON p.production_id = pc.production_id
-            GROUP BY p.production_name ORDER BY cycles DESC, name LIMIT 24
-        """))).mappings().all()
-        layers = (await db.execute(text("""
-            SELECT layer, COUNT(*) AS n FROM tenant.production_cycles
-            WHERE layer IS NOT NULL GROUP BY layer
-        """))).mappings().all()
-        land = (await db.execute(text("""
-            SELECT COUNT(*) AS blocks, COALESCE(SUM(area_sqm),0) AS area_sqm
-            FROM tenant.production_units WHERE is_active=TRUE
-        """))).mappings().first() or {}
-        verticals = (await db.execute(text("""
-            SELECT DISTINCT enterprise_type AS t FROM tenant.production_units
-            WHERE is_active=TRUE AND enterprise_type IS NOT NULL
-        """))).mappings().all()
-        _layer_label = {"CASH_FLOW": "Cash Flow", "FOOD_SECURITY": "Food Security",
-                        "LONG_TERM_ASSET": "Long-Term Asset"}
-        data["profile"] = {
-            "crops": [{"name": c["name"], "cycles": int(c["cycles"])} for c in crops],
-            "verticals": [str(v["t"]).replace("_", " ").title() for v in verticals],
-            "layers": [{"label": _layer_label.get(l["layer"], str(l["layer"]).replace("_", " ").title()),
-                        "n": int(l["n"])} for l in layers],
-            "blocks": int(land.get("blocks") or 0),
-            "land_ha": round(float(land.get("area_sqm") or 0) / 10000.0, 2),
-        }
+        # the 3-Layer mix, and total land — shared helper so owner + share never drift.
+        from app.services.farm_profile import gather_farm_profile
+        data["profile"] = await gather_farm_profile(db)
     if scope.get("evidence"):
         # Photo + block evidence — opt-in, permission-gated (only because this share grants it).
         blocks = (await db.execute(text("""
@@ -277,4 +252,16 @@ async def resolve_share(token: str, request: Request, pw: Optional[str] = Query(
             {"s": str(row["session_id"])})
     await db.commit()
 
-    return page(state="ok", view=view, audience=row["audience"], reason=row["share_reason"], view_only=row["view_only"])
+    return page(state="ok", view=view, audience=row["audience"], reason=row["share_reason"],
+                view_only=row["view_only"], token=token)
+
+
+@html_router.get("/s/{token}/qr.png")
+async def share_qr(token: str):
+    """Public QR PNG of the share link — so a farmer can print/show it for an in-person
+    loan or buyer meeting (DB-free; just encodes the URL the holder already has)."""
+    from fastapi.responses import Response
+    from app.routers.poultry_bank_evidence import generate_qr_image
+    buf = generate_qr_image(f"https://teivaka.com/s/{token}")
+    return Response(content=buf.getvalue(), media_type="image/png",
+                    headers={"Cache-Control": "public, max-age=86400"})
