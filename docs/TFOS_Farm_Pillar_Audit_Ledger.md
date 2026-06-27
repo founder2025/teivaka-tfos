@@ -128,6 +128,25 @@ Legend: 🔒 LOCKED (approved; no redesign without new evidence) · ✅ PASS · 
   truth, PATCH /methods/{id}/default, real in-app charging via gateway (adapter spec +
   onboarding checklist: `docs/TFOS_Payments_Provider_Adapter_Spec.md`; blocked on merchant account).**
   Do NOT redesign again unless new evidence requires it. Deploy: frontend `npm run build` + backend staged.
+- **Compliance (/farm/compliance)** — LOCKED 2026-06-26 (Operator-approved). Audited (CO1–CO17) →
+  deepened 8-persona (CO18–CO29) → redesigned → stress-tested ×11 (CC1–CC17) → optimized →
+  CC7+CC16 built + hardened (EX1–EX3). **#1 fix: the page no longer FAKES a clean compliance state
+  on load failure (CO1/CO2/CO3 + CC1–CC4) and no longer HIDES off-label/unidentified sprays
+  (CO18/CO19) — on the surface lenders + regulators trust most.** Backend (crop_compliance.py):
+  LEFT JOIN library + read stored whd_clearance_date (mislogged/off-label surfaced not dropped);
+  off_label via registered_crops + reg_unknown flag; register adds dose/applied_by/full audit_hash;
+  YTD uses current year; **NEW** `/compliance-summary` per-farm rollup (CC7) + `/register.csv`
+  injection-safe export (CC16/EX1). Frontend (CropCompliance.jsx): QueryState ErrorCard/Retry
+  everywhere (never green-on-error); verdict banner; real "Compliance standing" (no fake score);
+  needs-attention + off-label cards (amber, not red); api.js; view-aware Ask AI; role=tab + arrow
+  keys; shared Modal override (de-emphasised + block-preselected); multi-farm RollupBanner (capped
+  12); register CSV download + per-row /verify/{hash} share link; responsive. Every button/download/
+  share reaches a real endpoint. **Backend STAGED (no migration) — needs `build --no-cache api` +
+  verify-deploy.** **FILED (honest gaps, not lies): CO5 farm-scope overrides (needs farm_id column +
+  migration), CO20 precomputed holds (Inviolable-#3 at scale), CO21/CO22/CO23 unified animal-drug
+  compliance / re-entry interval / MRL, CO9 cert store, CC9 mobile table columns, CC17 harvest-vs-
+  orders, CO29 kava-180/PHI.** Do NOT redesign again unless new evidence requires it. Deploy:
+  frontend `npm run build` + backend staged.
 
 ---
 
