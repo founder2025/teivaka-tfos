@@ -14,6 +14,28 @@ Legend: 🔒 LOCKED (approved; no redesign without new evidence) · ✅ PASS · 
 ---
 
 ## 🔒 LOCKED PAGES
+- **Library (/farm/library)** — LOCKED 2026-06-27 (Operator-approved). Audited (LB1–LB9) →
+  scorecard (6.5→6.0 after 8-persona) → 8-persona → redesigned + wireframe → stress-tested ×1
+  (11 scenarios) → optimized ×1. **#1 fix (LB1): every tab is react-query → real ErrorCard+Retry
+  / skeleton / honest-empty** — a failed load (esp. the WHD-trust Chemicals tab) no longer reads
+  "none match." **#2 (LB2): the Nutrition flagship resolves** — NEW `GET /agronomy/nutrition/crops`
+  lists crops that actually have protocols, and the picker passes the real `crop_key` (taro), not
+  the reference `ref_id` (CRP-TAR) that 404'd for every crop. **LB3: KB articles are readable**
+  (GET /kb/{id} → light markdown body). **LB4: corpora are cached + lazy per active tab** (search
+  enables the cross-corpora set, debounced 250ms — no 9-request eager load, no refetch-every-visit).
+  **Chemicals is now first-class:** WHD-band filter pills + "what affects my crops" intersecting
+  `registered_crops` with the farmer's live cycle `production_id`s (LX-3 verified: `/cycles` returns
+  production_id). Also: cross-search spans livestock/vet + KB with "+N more"; **Ask-TIS on the row
+  detail + KB** (chem prompt includes WHD — closes the citation loop); a11y (cards=buttons, modals
+  role=dialog + Esc, modal titled by the row); `getJSON`/`send` writes (token refresh); `?tab=`+`?q=`
+  URL state (citation landing); livestock partial-error per-section retry; `useCorpus` (rules-of-hooks).
+  **Honesty:** the "How to use" lesson no longer promises a per-row version/date the tables don't
+  store, nor a "My Library" that has no backend. Wireframe: docs/TFOS_Library_Redesign_Wireframe.md.
+  Remainder filed (backend/scope, not faked): **"My Library"** (custom varieties/sightings/notes —
+  needs tenant tables + CRUD); per-row review **dates/versions** (no column); request-update **status
+  tracking**; corpus **export/print**; **server-side search/pagination** at 10×; dated provenance for
+  government trust; voice/i18n; LX-2 lazy tab-count badges (accepted tradeoff). Deploy: frontend
+  npm run build + backend build --no-cache api (new /agronomy/nutrition/crops endpoint).
 - **Partnerships (/farm/partnerships)** — LOCKED 2026-06-27 (Operator-approved). Audited (PN1–PN8)
   → scorecard (6.5→6.0 after 8-persona) → 8-persona → redesigned + wireframe → stress-tested ×1
   (11 scenarios) → optimized ×1. **#1 fix (PN1): the network + agreement no longer read "None
