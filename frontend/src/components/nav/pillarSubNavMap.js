@@ -64,6 +64,7 @@ export const PILLAR_SUB_NAV = {
       { path: "/farm/money",        label: "Money",        icon: Wallet },
       { path: "/farm/compliance",   label: "Compliance",   icon: Shield },
       { path: "/farm/records",      label: "Records",      icon: FileText },
+      { path: "/farm/history",      label: "History",      icon: Clock },
       { path: "/farm/insights",     label: "Insights",     icon: BarChart3 },
       { path: "/farm/library",      label: "Library",      icon: Library },
       { path: "/farm/partnerships", label: "Partnerships", icon: Share2 },

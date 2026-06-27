@@ -390,7 +390,7 @@ export default function App() {
             <Route path="/farm/payments"     element={<Navigate to="/farm/money?tab=payments" replace />} />
             <Route path="/farm/buyers"       element={<Navigate to="/farm/market" replace />} />
             <Route path="/farm/services"     element={<Navigate to="/farm/market?tab=services" replace />} />
-            <Route path="/farm/history"      element={<Navigate to="/farm/records" replace />} />
+            <Route path="/farm/history"      element={<FarmHistory />} />
             <Route path="/farm/reports"      element={<Navigate to="/farm/records?tab=reports" replace />} />
             <Route path="/farm/gallery"      element={<Navigate to="/farm/records?tab=gallery" replace />} />
             <Route path="/farm/analytics"    element={<Navigate to="/farm/insights" replace />} />
