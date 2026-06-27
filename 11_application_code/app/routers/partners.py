@@ -27,6 +27,12 @@ from app.middleware.rls import get_current_user
 router = APIRouter()
 
 VALID_GROUPS = {"government", "commercial", "finance", "support", "development"}
+# Server-side enum so a bad client/API call can't insert an invisible orphan row
+# (the frontend only renders these known types). Mirrors the prototype's 14 types.
+VALID_TYPES = {
+    "ministries", "extension", "buyers", "suppliers", "exporters", "investors",
+    "banks", "microfinance", "vets", "agronomists", "advisors", "ngos", "coops", "groups",
+}
 
 
 def _rows(result):
@@ -74,6 +80,8 @@ async def list_partners(farm_id: str = Query(...), user: dict = Depends(get_curr
 async def add_partner(body: PartnerCreate, user: dict = Depends(get_current_user)):
     if body.partner_group not in VALID_GROUPS:
         raise HTTPException(400, detail=f"partner_group must be one of {sorted(VALID_GROUPS)}")
+    if body.partner_type not in VALID_TYPES:
+        raise HTTPException(400, detail=f"partner_type must be one of {sorted(VALID_TYPES)}")
     if not body.name.strip():
         raise HTTPException(422, detail="A name is required")
     tid = str(user["tenant_id"])
