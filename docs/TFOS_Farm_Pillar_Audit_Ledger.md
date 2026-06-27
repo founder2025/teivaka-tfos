@@ -14,7 +14,23 @@ Legend: 🔒 LOCKED (approved; no redesign without new evidence) · ✅ PASS · 
 ---
 
 ## 🔒 LOCKED PAGES
-- **Decisions (/farm/insights · decisions)** — LOCKED 2026-06-27 (Operator-approved). Audited →
+- **Decisions (/farm/insights · decisions)** — LOCKED 2026-06-27 (Operator-approved; RE-LOCKED
+  after a second stress + optimize round). **Post-lock hardening (8f71bae + c93ac0c):** the live
+  deploy surfaced a real failure on Viyasiyasi Farm · Kadavu — 4/5 queries returned data, only
+  `/decision-engine` errored, yet the page showed "Couldn't read everything." Root-caused + fixed
+  two defects: (1) **design — signals were treated as a core input**; they're now ADVISORY (the call
+  + all-clear gate on crop holds + tasks only; a signals failure shows a quiet inline note, never a
+  page-wide alarm); (2) **backend — `/decision-engine` could 500**; now runs the read in a SAVEPOINT
+  (`begin_nested`, Strike #113) + try/except → logs the real exception (Sentry/docker) and returns an
+  honest empty `degraded:true` result instead of 500 (backend deploy: `build --no-cache api`). Then a
+  second 8-persona pass caught the **cash-blind decision ladder** (the page could say "nothing urgent"
+  while runway was critical) → **CASH IS NOW A FIRST-CLASS CALL TIER** (runway from `/cashdemand`:
+  <4wk red, <8wk amber) + Cash-runway tile + risk card + money-read line. Also: DV-1 (surface the
+  backend `degraded` flag — note no longer dead code), page-level **as-of "updated HH:MM"** (ERP
+  freshness contract across mixed-vintage feeds), **since-last-visit delta** ("you cleared N holds/
+  tasks", localStorage — progress reinforcement), 5 nav-count tiles, 2-col risk grid, first-run hint,
+  "+N more" list overflow, `taskSev` bands VERIFIED == backend `RANK_BAND_RANGES`. Original lock:
+  Audited →
   scorecard (5.5→5.0 after 8-persona) → 8-persona → redesigned + wireframe → stress-tested ×1 (11
   scenarios) → optimized ×1. **#1 fix (DC1): the page can no longer tell a farmer "the farm is
   running clear" on a failed load** — routed through `utils/api` (token refresh + honest errors),
