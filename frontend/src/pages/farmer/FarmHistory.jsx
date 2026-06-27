@@ -14,7 +14,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useFormModal } from "../../context/FormModalContext";
 import { Clock, Camera, Sprout, Package, Coins, Bird, FileText, RefreshCw, AlertTriangle,
-  Plus, Download, Printer, Search, ListChecks, ChevronDown } from "lucide-react";
+  Plus, Download, Printer, Search, ListChecks, ChevronDown, Sparkles } from "lucide-react";
 import { CurrentFarmProvider, useCurrentFarm } from "../../context/CurrentFarmContext";
 import FarmSelector from "../../components/farm/FarmSelector";
 
@@ -56,7 +56,7 @@ function monthLabel(k) { try { const d = new Date(k + "T00:00:00"); if (!isNaN(d
 function todayStr() { return new Date().toLocaleDateString("en-CA", { timeZone: FJ }); }
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-/i;
 function cleanWho(...cands) { for (const c of cands) { if (c && !UUID_RE.test(String(c))) return String(c); } return "you"; }  // never leak a UUID
-function ago(day) { if (!day) return ""; const d = Math.round((Date.now() - new Date(day + "T00:00:00").getTime()) / 86400000); return d <= 0 ? "today" : d === 1 ? "1 day ago" : `${d} days ago`; }
+function ago(day) { if (!day) return ""; const d = Math.round((Date.parse(todayStr() + "T00:00:00Z") - Date.parse(day + "T00:00:00Z")) / 86400000); return d <= 0 ? "today" : d === 1 ? "1 day ago" : `${d} days ago`; }
 
 // ── normalisers (source row → timeline event) ────────────────────────
 function normFieldEvent(e, i) {
@@ -265,6 +265,8 @@ function HistoryInner() {
   const [render, setRender] = useState(60);
   const [exporting, setExporting] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
+  const [lightbox, setLightbox] = useState(null);
+  const autoLoads = useRef(0);
 
   const tl = useTimeline(farmId, from, to);
   const applyPreset = (id) => { setPreset(id); const r = presetRange(id); if (r) { setFrom(r[0]); setTo(r[1]); } };
@@ -273,6 +275,21 @@ function HistoryInner() {
   const matchesFilter = useCallback((e) => (filter === "all" || (filter === "photos" ? e.isPhoto : e.cat === filter)) &&
     (!q || `${e.label} ${e.summary} ${e.who} ${e.pu}`.toLowerCase().includes(q)), [filter, q]);
   const view = useMemo(() => tl.rows.filter(matchesFilter), [tl.rows, matchesFilter]);
+
+  // P1 fix: while a search/filter is active, auto-exhaust paging so search covers ALL
+  // history (not just loaded rows) — no false "nothing matches", no "Load older" clicks.
+  // Bounded to protect slow links; manual paging stays for the default unfiltered view.
+  const searching = (!!q || filter !== "all");
+  useEffect(() => { autoLoads.current = 0; }, [q, filter, from, to]);
+  useEffect(() => {
+    if (searching && tl.hasMore && !tl.loading && autoLoads.current < 25) { autoLoads.current += 1; tl.loadMore(); }
+  }, [searching, tl.hasMore, tl.loading, tl.rows]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Escape closes the export menu + the photo lightbox.
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === "Escape") { setExportOpen(false); setLightbox(null); } };
+    window.addEventListener("keydown", onKey); return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   // decision summary over the loaded+filtered set (honestly labelled)
   const sum = useMemo(() => {
@@ -307,11 +324,12 @@ function HistoryInner() {
         <div className="page-actions" style={{ display: "flex", gap: 8, alignItems: "center" }}>
           <FarmSelector />
           <div className="relative">
-            <button onClick={() => setExportOpen((o) => !o)} disabled={exporting} className={`text-xs px-3 py-1.5 rounded-lg flex items-center gap-1.5 hover:brightness-95 disabled:opacity-50 ${FOCUS}`} style={{ color: C.greenDk, border: `1px solid ${C.border}`, background: "var(--paper)" }}>
+            <button onClick={() => setExportOpen((o) => !o)} disabled={exporting} aria-haspopup="menu" aria-expanded={exportOpen} aria-label="Export history" className={`text-xs px-3 py-1.5 rounded-lg flex items-center gap-1.5 hover:brightness-95 disabled:opacity-50 ${FOCUS}`} style={{ color: C.greenDk, border: `1px solid ${C.border}`, background: "var(--paper)" }}>
               {exporting ? <RefreshCw size={13} className="animate-spin" /> : <Download size={13} />}Export<ChevronDown size={12} />
             </button>
+            {exportOpen && <div className="fixed inset-0 z-10" onClick={() => setExportOpen(false)} aria-hidden="true" />}
             {exportOpen && (
-              <div className="absolute right-0 mt-1 z-20 rounded-lg border bg-white shadow-lg" style={{ borderColor: C.border, minWidth: 168 }}>
+              <div role="menu" className="absolute right-0 mt-1 z-20 rounded-lg border bg-white shadow-lg" style={{ borderColor: C.border, minWidth: 168 }}>
                 <button onClick={() => runExport("csv")} className="w-full text-left text-xs px-3 py-2 hover:bg-[var(--cream-2)] flex items-center gap-2"><Download size={12} />CSV (full range)</button>
                 <button onClick={() => runExport("pdf")} className="w-full text-left text-xs px-3 py-2 hover:bg-[var(--cream-2)] flex items-center gap-2"><Printer size={12} />History book (print)</button>
               </div>
@@ -324,12 +342,12 @@ function HistoryInner() {
       <Card>
         <div className="p-3.5 space-y-3">
           <div className="flex items-center gap-2 flex-wrap">
-            <select value={preset} onChange={(e) => applyPreset(e.target.value)} className={`px-2.5 py-2 rounded-lg text-sm ${FOCUS}`} style={{ border: `1px solid ${C.border}`, background: C.paper, color: C.soil }}>
+            <select value={preset} onChange={(e) => applyPreset(e.target.value)} aria-label="Date range" className={`px-2.5 py-2 rounded-lg text-sm ${FOCUS}`} style={{ border: `1px solid ${C.border}`, background: C.paper, color: C.soil }}>
               {PRESETS.map(([id, label]) => <option key={id} value={id}>{label}</option>)}
             </select>
             <div className="relative flex-1 min-w-[160px]">
               <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: C.muted }} />
-              <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search block, crop, who, note…" className={`w-full pl-9 pr-3 py-2 rounded-lg text-sm ${FOCUS}`} style={{ border: `1.5px solid ${C.border}`, background: C.paper, color: C.soil }} />
+              <input value={search} onChange={(e) => setSearch(e.target.value)} aria-label="Search history" placeholder="Search block, crop, who, note…" className={`w-full pl-9 pr-3 py-2 rounded-lg text-sm ${FOCUS}`} style={{ border: `1.5px solid ${C.border}`, background: C.paper, color: C.soil }} />
             </div>
           </div>
           {preset === "custom" && (
@@ -354,14 +372,21 @@ function HistoryInner() {
           {sum.cout > 0 && <span style={{ color: C.red }}>{fjd(sum.cout)} out</span>}
           {sum.sprays > 0 && <span>{sum.sprays} spray{sum.sprays === 1 ? "" : "s"}</span>}
           {sum.last && <span style={{ color: C.muted }}>last activity {ago(sum.last)}</span>}
+          <button onClick={() => navigate("/tis")} className={`ml-auto text-[11px] px-2.5 py-1 rounded-lg flex items-center gap-1 hover:brightness-95 ${FOCUS}`} style={{ color: C.greenDk, border: `1px solid ${C.border}`, background: "var(--paper)" }}><Sparkles size={11} />Ask TIS about this</button>
         </div>
       )}
 
-      {/* honest record note (replaces the hardcoded "INTACT" + dead per-row Verify) */}
-      <div className="text-[11px] flex items-start gap-1.5" style={{ color: C.muted }}>
-        <Clock size={12} style={{ marginTop: 1, flexShrink: 0 }} />
-        <span>Your full record, kept and timestamped. A record can be corrected within 48&nbsp;hours of logging; after that it locks. Verify issued reports at <a href="https://teivaka.com/verify" target="_blank" rel="noreferrer" className="underline" style={{ color: C.greenDk }}>teivaka.com/verify</a>.</span>
-      </div>
+      {searching && tl.hasMore && (
+        <div aria-live="polite" className="text-[11px] flex items-center gap-1.5" style={{ color: C.muted }}><RefreshCw size={11} className="animate-spin" />Searching all your history…</div>
+      )}
+
+      {/* honest record note (replaces the hardcoded "INTACT" + dead per-row Verify) — only once there's a record */}
+      {tl.rows.length > 0 && (
+        <div className="text-[11px] flex items-start gap-1.5" style={{ color: C.muted }}>
+          <Clock size={12} style={{ marginTop: 1, flexShrink: 0 }} />
+          <span>Your full record, kept and timestamped. A record can be corrected within 48&nbsp;hours of logging; after that it locks. Verify issued reports at <a href="https://teivaka.com/verify" target="_blank" rel="noreferrer" className="underline" style={{ color: C.greenDk }}>teivaka.com/verify</a>.</span>
+        </div>
+      )}
 
       {!tl.loading && !tl.allErrored && (tl.errored.field || tl.errored.harvest || tl.errored.cash || tl.errored.livestock) && (
         <div className="text-[11px]" style={{ color: C.muted }}>Some sources didn't load — showing what's available ({[tl.errored.field && "field", tl.errored.harvest && "harvest", tl.errored.cash && "cash", tl.errored.livestock && "animals"].filter(Boolean).join(", ")} unavailable).</div>
@@ -411,7 +436,10 @@ function HistoryInner() {
                           className={`flex gap-3 py-2.5 cursor-pointer hover:bg-[var(--cream-2)] -mx-1 px-1 rounded items-start ${FOCUS}`} style={{ borderBottom: idx < evs.length - 1 ? `1px solid rgba(92,64,51,0.07)` : "none" }}>
                           <div className="w-10 shrink-0 text-xs font-semibold pt-0.5" style={{ color: C.muted }}>{e.time || "—"}</div>
                           {e.photo
-                            ? <img src={e.photo} alt="" loading="lazy" className="shrink-0 w-9 h-9 rounded object-cover" style={{ border: `1px solid ${C.border}` }} />
+                            ? <img src={e.photo} alt={`${e.label} photo`} loading="lazy" decoding="async" role="button" tabIndex={0}
+                                onClick={(ev) => { ev.stopPropagation(); setLightbox({ src: e.photo, cap: `${e.label}${e.summary ? ` — ${e.summary}` : ""}` }); }}
+                                onKeyDown={(ev) => { if (ev.key === "Enter") { ev.stopPropagation(); setLightbox({ src: e.photo, cap: e.label }); } }}
+                                className="shrink-0 w-9 h-9 rounded object-cover cursor-zoom-in" style={{ border: `1px solid ${C.border}` }} />
                             : <div className="shrink-0 mt-1.5 w-2 h-2 rounded-full" style={{ background: e.isSpray ? C.amber : C.green }} />}
                           <div className="flex-1 min-w-0">
                             <div className="text-sm font-semibold flex items-center gap-1.5" style={{ color: C.soil }}>
@@ -431,6 +459,8 @@ function HistoryInner() {
 
           {render < view.length ? (
             <button onClick={() => setRender((r) => r + 60)} className={`w-full text-sm py-2.5 rounded-xl hover:brightness-95 ${FOCUS}`} style={{ color: C.greenDk, border: `1px solid ${C.border}`, background: "var(--paper)" }}>Show more ({view.length - render} more loaded)</button>
+          ) : searching && tl.hasMore ? (
+            <div className="text-center text-[11px] py-2 flex items-center justify-center gap-1.5" style={{ color: C.muted }}><RefreshCw size={12} className="animate-spin" />Searching all your history…</div>
           ) : tl.hasMore ? (
             <button onClick={tl.loadMore} disabled={tl.loading} className={`w-full text-sm py-2.5 rounded-xl flex items-center justify-center gap-1.5 hover:brightness-95 disabled:opacity-50 ${FOCUS}`} style={{ color: C.greenDk, border: `1px solid ${C.border}`, background: "var(--paper)" }}>
               {tl.loading ? <><RefreshCw size={14} className="animate-spin" />Loading…</> : "Load older records"}
@@ -438,6 +468,14 @@ function HistoryInner() {
           ) : (
             <div className="text-center text-[11px] py-2" style={{ color: C.muted }}>That's the whole history for this range.</div>
           )}
+        </div>
+      )}
+
+      {lightbox && (
+        <div role="dialog" aria-modal="true" aria-label="Photo" onClick={() => setLightbox(null)} className="fixed inset-0 z-50 flex items-center justify-center p-5" style={{ background: "rgba(34,24,16,.92)" }}>
+          <button onClick={() => setLightbox(null)} aria-label="Close photo" className="absolute top-3 right-4 text-3xl" style={{ color: "#fff", lineHeight: 1 }}>&times;</button>
+          <img src={lightbox.src} alt={lightbox.cap} className="max-w-full rounded-lg" style={{ maxHeight: "82vh" }} />
+          {lightbox.cap && <div className="absolute bottom-5 left-0 right-0 text-center text-xs px-4" style={{ color: "#F8F3E9" }}>{lightbox.cap}</div>}
         </div>
       )}
     </div>
