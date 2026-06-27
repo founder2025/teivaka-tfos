@@ -271,19 +271,33 @@ function HistoryInner() {
   const tl = useTimeline(farmId, from, to);
   const applyPreset = (id) => { setPreset(id); const r = presetRange(id); if (r) { setFrom(r[0]); setTo(r[1]); } };
 
-  const q = search.trim().toLowerCase();
+  // Debounced text query — filtering + (text) auto-exhaust react to the settled value,
+  // not every keystroke. Category chips stay instant + client-side.
+  const [dq, setDq] = useState("");
+  useEffect(() => { const t = setTimeout(() => setDq(search.trim().toLowerCase()), 350); return () => clearTimeout(t); }, [search]);
+  const q = dq;
   const matchesFilter = useCallback((e) => (filter === "all" || (filter === "photos" ? e.isPhoto : e.cat === filter)) &&
     (!q || `${e.label} ${e.summary} ${e.who} ${e.pu}`.toLowerCase().includes(q)), [filter, q]);
   const view = useMemo(() => tl.rows.filter(matchesFilter), [tl.rows, matchesFilter]);
 
-  // P1 fix: while a search/filter is active, auto-exhaust paging so search covers ALL
-  // history (not just loaded rows) — no false "nothing matches", no "Load older" clicks.
-  // Bounded to protect slow links; manual paging stays for the default unfiltered view.
-  const searching = (!!q || filter !== "all");
-  useEffect(() => { autoLoads.current = 0; }, [q, filter, from, to]);
+  // Auto-exhaust ONLY on a typed text search (an intentional "find it" action) — NOT on a
+  // category chip (casual browsing must not trigger a full-history download). Bounded, and
+  // the cap is surfaced honestly instead of silently truncating. Category filtering applies
+  // to loaded rows with the normal manual "Load older".
+  const textSearching = !!q;
+  const [searchCapped, setSearchCapped] = useState(false);
+  useEffect(() => { autoLoads.current = 0; setSearchCapped(false); }, [q, from, to]);
   useEffect(() => {
-    if (searching && tl.hasMore && !tl.loading && autoLoads.current < 25) { autoLoads.current += 1; tl.loadMore(); }
-  }, [searching, tl.hasMore, tl.loading, tl.rows]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (!textSearching || !tl.hasMore || tl.loading) return;
+    if (autoLoads.current < 25) { autoLoads.current += 1; tl.loadMore(); }
+    else setSearchCapped(true);
+  }, [textSearching, tl.hasMore, tl.loading, tl.rows]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const askTis = () => {
+    const label = (PRESETS.find(([id]) => id === preset) || [])[1] || "this period";
+    const rangeTxt = (from || to) ? ` from ${from || "the start"} to ${to || "today"}` : ` (${label})`;
+    navigate(`/tis?q=${encodeURIComponent(`Review my farm history${rangeTxt}. What stands out and what should I do next?`)}`);
+  };
 
   // Escape closes the export menu + the photo lightbox.
   useEffect(() => {
@@ -372,12 +386,15 @@ function HistoryInner() {
           {sum.cout > 0 && <span style={{ color: C.red }}>{fjd(sum.cout)} out</span>}
           {sum.sprays > 0 && <span>{sum.sprays} spray{sum.sprays === 1 ? "" : "s"}</span>}
           {sum.last && <span style={{ color: C.muted }}>last activity {ago(sum.last)}</span>}
-          <button onClick={() => navigate("/tis")} className={`ml-auto text-[11px] px-2.5 py-1 rounded-lg flex items-center gap-1 hover:brightness-95 ${FOCUS}`} style={{ color: C.greenDk, border: `1px solid ${C.border}`, background: "var(--paper)" }}><Sparkles size={11} />Ask TIS about this</button>
+          <button onClick={askTis} className={`ml-auto text-[11px] px-2.5 py-1 rounded-lg flex items-center gap-1 hover:brightness-95 ${FOCUS}`} style={{ color: C.greenDk, border: `1px solid ${C.border}`, background: "var(--paper)" }}><Sparkles size={11} />Ask TIS about this</button>
         </div>
       )}
 
-      {searching && tl.hasMore && (
+      {textSearching && tl.hasMore && !searchCapped && (
         <div aria-live="polite" className="text-[11px] flex items-center gap-1.5" style={{ color: C.muted }}><RefreshCw size={11} className="animate-spin" />Searching all your history…</div>
+      )}
+      {searchCapped && (
+        <div className="text-[11px]" style={{ color: C.muted }}>Searched the most recent {tl.rows.length.toLocaleString("en-US")} records — narrow the date range to search deeper.</div>
       )}
 
       {/* honest record note (replaces the hardcoded "INTACT" + dead per-row Verify) — only once there's a record */}
@@ -459,7 +476,7 @@ function HistoryInner() {
 
           {render < view.length ? (
             <button onClick={() => setRender((r) => r + 60)} className={`w-full text-sm py-2.5 rounded-xl hover:brightness-95 ${FOCUS}`} style={{ color: C.greenDk, border: `1px solid ${C.border}`, background: "var(--paper)" }}>Show more ({view.length - render} more loaded)</button>
-          ) : searching && tl.hasMore ? (
+          ) : textSearching && tl.hasMore && !searchCapped ? (
             <div className="text-center text-[11px] py-2 flex items-center justify-center gap-1.5" style={{ color: C.muted }}><RefreshCw size={12} className="animate-spin" />Searching all your history…</div>
           ) : tl.hasMore ? (
             <button onClick={tl.loadMore} disabled={tl.loading} className={`w-full text-sm py-2.5 rounded-xl flex items-center justify-center gap-1.5 hover:brightness-95 disabled:opacity-50 ${FOCUS}`} style={{ color: C.greenDk, border: `1px solid ${C.border}`, background: "var(--paper)" }}>
@@ -473,7 +490,7 @@ function HistoryInner() {
 
       {lightbox && (
         <div role="dialog" aria-modal="true" aria-label="Photo" onClick={() => setLightbox(null)} className="fixed inset-0 z-50 flex items-center justify-center p-5" style={{ background: "rgba(34,24,16,.92)" }}>
-          <button onClick={() => setLightbox(null)} aria-label="Close photo" className="absolute top-3 right-4 text-3xl" style={{ color: "#fff", lineHeight: 1 }}>&times;</button>
+          <button onClick={() => setLightbox(null)} aria-label="Close photo" autoFocus className="absolute top-3 right-4 text-3xl" style={{ color: "#fff", lineHeight: 1 }}>&times;</button>
           <img src={lightbox.src} alt={lightbox.cap} className="max-w-full rounded-lg" style={{ maxHeight: "82vh" }} />
           {lightbox.cap && <div className="absolute bottom-5 left-0 right-0 text-center text-xs px-4" style={{ color: "#F8F3E9" }}>{lightbox.cap}</div>}
         </div>
