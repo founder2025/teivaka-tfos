@@ -496,3 +496,68 @@ Third-party attestation flows (officer/coop/buyer/gov/FI) + the AI executive sum
   completeness — *not* profitability, per D1) — recommended yes — or defer to Phase 2b/3.
 - **DC-4 Subject scope:** per-farmer passport only in v1 (recommended) vs also per-farm trust now
   (cooperatives/multi-farm later).
+
+**DC-1..4 RATIFIED (2026-06-27):** bands Building/Developing/Established/Strong · nightly + manual
+refresh · include Financial record-discipline dimension · per-farmer scope. Phase 2 shipped.
+
+---
+
+## PHASE 3 BUILD PLAN — Share Sessions + Attestation + AI Summary (for go-ahead before code)
+
+**Goal:** make the Passport *shareable on the farmer's terms* and *independently verifiable*. Three
+pillars: (A) **Share Sessions** — the secure, permissioned, revocable QR portal (D2/P2); (B)
+**third-party attestation** — let officers/coops/buyers/landowners confirm claims so trust stops
+being self-asserted (D4); (C) **AI Executive Summary** — the 2-minute institutional read. This is
+the phase that turns the moat into something a bank actually consumes.
+
+### Pillar A — Share Sessions (the secure portal)
+- **Schema (migration 190):** `tenant.share_sessions` + `tenant.share_session_access` (per the P2
+  block). Token stored hashed; optional password hashed; scope jsonb; expiry; one-time; revoked_at.
+- **API (`shares.py`):** `POST /shares` (mint: audience, reason, scope, expiry, password?, one-time?)
+  → returns the URL + QR; `GET /shares` (farmer's grants + access log); `POST /shares/{id}/revoke`.
+  Public resolve: `GET /s/{token}` (rate-limited, password-gated, expiry/revoke-checked) → returns
+  the **scoped** passport/report view; every resolve appends a `share_session_access` row (who/when/IP)
+  and emits an `audit.events` row. The farmer sees "BSP viewed your passport · 14:32."
+- **Portal page:** server-rendered (extends the `/verify` infra) OR a `/s/{token}` React view.
+  Progressive disclosure (Tier 0 badge → Tier 1 exec summary + trust band → Tier 2 evidence drill).
+  **This is where the photo/block evidence returns — now permission-gated** (reuse the dormant
+  mig-187 `report_evidence_by_hash`, called only after token+scope check). Public `/verify/{hash}`
+  stays proof-only (P1, untouched).
+- **Report QR cutover:** Bank Evidence PDF's QR switches from raw hash → a Share Session token the
+  farmer controls (with a proof-only fallback so old PDFs still verify).
+
+### Pillar B — Third-party attestation (claims stop being self-asserted)
+- **Link-based verifier flow (no account for the alpha):** farmer taps "Request verification" on a
+  claim → mints a one-time **attestation link** (reuses the share-token machinery) addressed to an
+  officer/coop/landowner/buyer → the verifier opens it, sees the specific claim + evidence, and
+  confirms/declines → writes a `claim_verifications` row (source = their role, status VERIFIED,
+  `evidence_audit_hash` + `source_ref` = who attested), which **immediately lifts the Trust score**
+  (Identity/Farm/Verification dimensions already read this — Phase 2 wired it).
+- **Auto-attestation where it's free:** a buyer who confirms a sale/order → auto `BUYER` claim on the
+  MARKET/SALE claim; a completed government-programme enrolment → `GOV_PROGRAMME`. No manual entry.
+- **Out of Phase 3:** GOV_ID + FINANCIAL_INSTITUTION sources (need real partner integrations → Phase 5).
+
+### Pillar C — AI Executive Summary
+- **`GET /passport/me/summary`** (+ in the portal): TIS generates the institutional 2-minute read
+  — who the farmer is, what they produce, how long, evidence quality, production/financial
+  consistency, strengths, risks, **recommended confidence band** — STRICTLY grounded in the passport
+  read-model + trust snapshots (no hallucinated figures; Inviolable #1). Carries the standing caveat
+  ("tamper-evident, farmer-reported, not externally audited; not a lending decision" — D1).
+- **Cached** against the trust snapshot's `computed_at` (regenerate only when trust changes) — cheap +
+  consistent. Honest "building" until there's enough evidence to summarise.
+
+### Verification gates
+migration 190 staged apply-as-owner; `py_compile` + `npm run build`; share-token security tests
+(expiry, revoke, password, one-time, scope-leak = a scope must NOT return out-of-scope sections);
+access-log written per resolve; AI summary grounded-output check (no number not present in the
+read-model). Browser smoke: farmer mints a scoped link → opens incognito → sees only the scoped
+tiers → farmer revokes → link dies → access log shows both events.
+
+### Decisions needed before build (DD-1..4)
+- **DD-1 Portal tech:** server-rendered `/s/{token}` (reuses verify infra, works for non-logged-in
+  banks, recommended) vs a React `/s/{token}` route (richer, needs public bundle access).
+- **DD-2 Attestation mechanism:** link-based verifier confirm (no account, recommended for alpha) vs
+  in-app extension-officer/coop accounts (heavier, Phase 5).
+- **DD-3 Default share policy:** expiry default (e.g., 30 days), view-only default ON, password
+  optional, one-time optional — confirm defaults.
+- **DD-4 AI summary timing:** cache-per-snapshot (recommended) vs always-fresh on open (costlier).
