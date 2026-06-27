@@ -82,10 +82,10 @@ const useSources = (farmId, period) => useQuery({
 });
 
 // Teivaka logo with graceful fallback to the wordmark (RC4). Drop the PNG at
-// frontend/public/teivaka-logo.png; until then the wordmark renders.
+// frontend/public/teivaka-logo-v2.png; until then the wordmark renders.
 function Brandmark({ size = 22 }) {
   const [ok, setOk] = useState(true);
-  if (ok) return <img src="/teivaka-logo.png" alt="TEIVAKA" style={{ height: size, width: "auto" }} onError={() => setOk(false)} />;
+  if (ok) return <img src="/teivaka-logo-v2.png" alt="TEIVAKA" style={{ height: size, width: "auto" }} onError={() => setOk(false)} />;
   return <span style={{ display: "inline-flex", alignItems: "center", gap: 6, color: C.greenDk }}><Sprout size={size - 4} /><span style={{ fontWeight: 800, letterSpacing: ".06em", color: C.soil }}>TEIVAKA</span></span>;
 }
 

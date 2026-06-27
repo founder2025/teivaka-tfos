@@ -23,7 +23,7 @@ const toast = (m) => { try { window.dispatchEvent(new CustomEvent("tfos:toast", 
 
 function Brand() {
   const [ok, setOk] = useState(true);
-  if (ok) return <img src="/teivaka-logo.png" alt="TEIVAKA" style={{ height: 24 }} onError={() => setOk(false)} />;
+  if (ok) return <img src="/teivaka-logo-v2.png" alt="TEIVAKA" style={{ height: 30, width: "auto" }} onError={() => setOk(false)} />;
   return <span style={{ fontWeight: 800, letterSpacing: ".06em", color: C.soil }}>TEIVAKA</span>;
 }
 function Chip({ on, label, building }) {
