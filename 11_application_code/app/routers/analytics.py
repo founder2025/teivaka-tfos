@@ -63,54 +63,63 @@ async def analytics_signals(farm_id: str, user: dict = Depends(get_current_user)
     tid = str(user["tenant_id"])
     async with get_rls_db(tid) as db:
         await _require_farm(db, farm_id, tid)
-        r = await db.execute(text("""
-            WITH hist AS (
-                SELECT signal_id, snapshot_date, computed_value, signal_status, notes,
-                       ROW_NUMBER() OVER (PARTITION BY signal_id ORDER BY snapshot_date DESC) AS rn
-                FROM tenant.decision_signal_snapshots
-                WHERE tenant_id = :tid AND farm_id = :fid
-            )
-            SELECT dsc.signal_id, dsc.signal_name, dsc.signal_category,
-                   dsc.green_threshold, dsc.amber_threshold, dsc.red_threshold,
-                   dsc.threshold_direction,
-                   latest.signal_status, latest.computed_value, latest.notes,
-                   latest.snapshot_date,
-                   COALESCE(h.history, ARRAY[]::numeric[]) AS history
-            FROM tenant.decision_signal_config dsc
-            LEFT JOIN hist latest ON latest.signal_id = dsc.signal_id AND latest.rn = 1
-            LEFT JOIN LATERAL (
-                SELECT array_agg(computed_value ORDER BY snapshot_date) AS history
-                FROM (SELECT computed_value, snapshot_date FROM hist
-                      WHERE hist.signal_id = dsc.signal_id AND rn <= 8) last8
-            ) h ON true
-            WHERE dsc.tenant_id = :tid AND dsc.is_active = true
-            ORDER BY dsc.signal_id
-        """), {"tid": tid, "fid": farm_id})
+
+        # Two flat SELECTs + Python aggregation — deliberately NO window function,
+        # NO correlated LATERAL, NO array COALESCE. The previous single-query form
+        # ran a ROW_NUMBER() window over a CTE backed by the decision_signal_snapshots
+        # TimescaleDB hypertable and re-scanned that CTE inside a correlated LATERAL —
+        # a planner shape that throws on Timescale hypertables at runtime (the Signals
+        # 500). This shape can't fail that way.
+        cfg = _rows(await db.execute(text("""
+            SELECT signal_id, signal_name, signal_category,
+                   green_threshold, amber_threshold, red_threshold, threshold_direction
+            FROM tenant.decision_signal_config
+            WHERE tenant_id = :tid AND is_active = true
+            ORDER BY signal_id
+        """), {"tid": tid}))
+
+        snaps = _rows(await db.execute(text("""
+            SELECT signal_id, snapshot_date, computed_value, signal_status, notes
+            FROM tenant.decision_signal_snapshots
+            WHERE tenant_id = :tid AND farm_id = :fid
+            ORDER BY signal_id, snapshot_date DESC
+        """), {"tid": tid, "fid": farm_id}))
+
+        # Group snapshots by signal (already newest-first per signal).
+        by_signal: dict = {}
+        last_at = None
+        for s in snaps:
+            by_signal.setdefault(s["signal_id"], []).append(s)
+            if s["snapshot_date"] is not None and (last_at is None or s["snapshot_date"] > last_at):
+                last_at = s["snapshot_date"]
+
+        def _f(v):
+            return float(v) if v is not None else None
+
         signals = []
-        for row in _rows(r):
-            status = row["signal_status"] or "BUILDING"
+        for row in cfg:
+            rows_for = by_signal.get(row["signal_id"], [])
+            latest = rows_for[0] if rows_for else None
+            # last-8 chronological (oldest→newest) for the sparkline
+            hist = [_f(x["computed_value"]) for x in reversed(rows_for[:8]) if x["computed_value"] is not None]
             signals.append({
                 "signal_id": row["signal_id"],
                 "name": row["signal_name"],
                 "category": row["signal_category"],
-                "status": status,
-                "value": float(row["computed_value"]) if row["computed_value"] is not None else None,
-                "notes": row["notes"],
-                "computed_at": str(row["snapshot_date"]) if row["snapshot_date"] else None,
-                "history": [float(v) for v in (row["history"] or [])],
+                "status": (latest["signal_status"] if latest else None) or "BUILDING",
+                "value": _f(latest["computed_value"]) if latest else None,
+                "notes": latest["notes"] if latest else None,
+                "computed_at": str(latest["snapshot_date"]) if latest and latest["snapshot_date"] else None,
+                "history": hist,
                 "threshold": {
-                    "green": float(row["green_threshold"]) if row["green_threshold"] is not None else None,
-                    "amber": float(row["amber_threshold"]) if row["amber_threshold"] is not None else None,
-                    "red": float(row["red_threshold"]) if row["red_threshold"] is not None else None,
+                    "green": _f(row["green_threshold"]),
+                    "amber": _f(row["amber_threshold"]),
+                    "red": _f(row["red_threshold"]),
                     "direction": row["threshold_direction"],
                 },
             })
-        last = (await db.execute(text("""
-            SELECT MAX(snapshot_date) AS last_at FROM tenant.decision_signal_snapshots
-            WHERE tenant_id = :tid AND farm_id = :fid
-        """), {"tid": tid, "fid": farm_id})).mappings().first()
         return {"data": {"signals": signals,
-                         "last_snapshot_at": str(last["last_at"]) if last and last["last_at"] else None}}
+                         "last_snapshot_at": str(last_at) if last_at else None}}
 
 
 # ── Flip log (state transitions, derived — write-once source rows) ─────────
@@ -118,36 +127,49 @@ async def analytics_signals(farm_id: str, user: dict = Depends(get_current_user)
 @router.get("/{farm_id}/fliplog")
 async def analytics_fliplog(farm_id: str, limit: int = 100, user: dict = Depends(get_current_user)):
     tid = str(user["tenant_id"])
+    cap = max(1, min(limit, 500))
     async with get_rls_db(tid) as db:
         await _require_farm(db, farm_id, tid)
-        r = await db.execute(text("""
-            WITH seq AS (
-                SELECT dss.signal_id, dsc.signal_name, dss.snapshot_date,
-                       dss.signal_status, dss.computed_value,
-                       LAG(dss.signal_status) OVER (PARTITION BY dss.signal_id
-                                                    ORDER BY dss.snapshot_date) AS prev_status
-                FROM tenant.decision_signal_snapshots dss
-                JOIN tenant.decision_signal_config dsc
-                  ON dsc.signal_id = dss.signal_id AND dsc.tenant_id = dss.tenant_id
-                WHERE dss.tenant_id = :tid AND dss.farm_id = :fid
-            )
-            SELECT signal_id, signal_name, snapshot_date, prev_status AS from_status,
-                   signal_status AS to_status, computed_value
-            FROM seq
-            WHERE prev_status IS NOT NULL AND prev_status IS DISTINCT FROM signal_status
-            ORDER BY snapshot_date DESC
-            LIMIT :lim
-        """), {"tid": tid, "fid": farm_id, "lim": max(1, min(limit, 500))})
+
+        # Transitions computed in Python from flat rows — NO LAG window over the
+        # decision_signal_snapshots hypertable (same Timescale-planner hazard the
+        # signals endpoint hit). Names resolved via a small config lookup.
+        names = {r["signal_id"]: r["signal_name"] for r in _rows(await db.execute(text("""
+            SELECT signal_id, signal_name FROM tenant.decision_signal_config
+            WHERE tenant_id = :tid
+        """), {"tid": tid}))}
+
+        snaps = _rows(await db.execute(text("""
+            SELECT signal_id, snapshot_date, signal_status, computed_value
+            FROM tenant.decision_signal_snapshots
+            WHERE tenant_id = :tid AND farm_id = :fid
+            ORDER BY signal_id, snapshot_date ASC
+        """), {"tid": tid, "fid": farm_id}))
+
         flips = []
-        for row in _rows(r):
-            flips.append({
-                "signal_id": row["signal_id"],
-                "signal_name": row["signal_name"],
-                "at": str(row["snapshot_date"]),
-                "from": str(row["from_status"]).lower(),
-                "to": str(row["to_status"]).lower(),
-                "value": float(row["computed_value"]) if row["computed_value"] is not None else None,
-            })
+        prev_sig = None
+        prev_status = None
+        for s in snaps:
+            if s["signal_id"] != prev_sig:
+                prev_sig, prev_status = s["signal_id"], s["signal_status"]
+                continue
+            if s["signal_status"] is not None and s["signal_status"] != prev_status and prev_status is not None:
+                flips.append({
+                    "signal_id": s["signal_id"],
+                    "signal_name": names.get(s["signal_id"], s["signal_id"]),
+                    "at": str(s["snapshot_date"]),
+                    "from": str(prev_status).lower(),
+                    "to": str(s["signal_status"]).lower(),
+                    "value": float(s["computed_value"]) if s["computed_value"] is not None else None,
+                    "_sort": s["snapshot_date"],
+                })
+            prev_status = s["signal_status"]
+
+        # newest-first, capped
+        flips.sort(key=lambda f: f["_sort"], reverse=True)
+        flips = flips[:cap]
+        for f in flips:
+            f.pop("_sort", None)
         return {"data": {"flips": flips}}
 
 
