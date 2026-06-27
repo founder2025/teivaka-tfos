@@ -1,62 +1,59 @@
-# TFOS Cash Page — Redesign Wireframe & Spec (2026-06-26)
+# TFOS Cash Page — Redesign Wireframe & Spec (v2, 2026-06-27)
 
-Redesign of the Cash tab (`CashLedger.jsx`) after the audit (CA-BUG, CA1–CA27). Strong audit
-bones (whole-ledger balance, hash-chain, server 48h lock); this pass fixes the **breakage +
-money correctness** that's safe from the frontend, and files the accrual model.
+Second redesign of the Cash tab (`CashLedger.jsx`). The first pass (2026-06-26, CA-BUG/CA1–CA27)
+gave it strong bones (whole-ledger balance, hash-chain, server 48h lock, error states) — but the
+re-audit found **CA-A: a missing `.data` unwrap made the page render $0 + an empty ledger for every
+farm** (the Overview tile reads it correctly, so the bug hid on the page you'd open to check). This
+pass fixes that showstopper and the structural defects the persona round surfaced.
 
-## Headline decisions
-1. **Unbreak the load (CA-BUG):** request `limit=200` (backend cap), not 500 → no more 422 →
-   no more false $0.
-2. **Money correctness that's frontend-safe:**
-   - **NWC double-count fixed (CA17):** the balance already treats credit purchases as cash-out,
-     so `NWC = balance + receivables` (adding-back-then-subtracting payables cancels). Payables
-     becomes an **informational** "Credit purchases" tile with an honest note. The proper fix —
-     credit = a payable, not a cash-out — is **filed** (backend accrual).
-   - **Sign by inflow set (CA18):** `isInflow = type ∈ {INCOME,LOAN,GRANT,TRANSFER}` (matches the
-     backend balance SQL) so any non-INCOME inflow row renders + signs correctly (was mislabelled "Out").
-   - **Rails reconcile (CA19):** rail split now includes an **Other/credit** segment so M-PAiSA +
-     cash + bank + other = the page balance.
-   - **Honest scope note (CA1):** when the ledger hits the 200 cap, a note says "breakdown covers
-     your latest 200 entries; balance is all-time" (server-side aggregates filed).
-3. **Platform + safety:** api.js + cached-on-error/Retry (CA2/CA3); `formatMoney` (CA5); Fiji time
-   (CA4); shared a11y `<Modal>` (CA8) + arrow-key tabs (CA7); lucide `Lock` not 🔒 (CA6); drop
-   redundant `<h1>` (CA9); view-aware **Ask AI** (CA10); **submit-lock on the money write** (CA20).
+Frontend-only (the API already accepts the anchor; `transaction_date` is intentionally immutable).
 
-## Visual wireframe (Cash tab)
 ```
-[no h1]                                   [🌱 Farm ▾] [✨ Ask AI] [＋ Cash in] [＋ Expense]
-Live balance across every business · crops + animals
-[ Balance ][ This week net ][ Receivables ][ Credit purchases* ][ Net working capital ]
-⟦ cash error + no cache → "Couldn't load your cash · Retry" ⟧  ⟦ + cache → degraded banner ⟧
-[ Overview | Ledger | Categories | Forecast | Reconcile | Bank Evidence ]  role=tab buttons
-── OVERVIEW ──
- ┌ Balance (hero)  FJD … · N entries
- │ M-PAiSA · Cash · Bank · Other/credit   ← rails now sum to balance (CA19)
- └ (if 200-cap) "breakdown covers latest 200; balance is all-time" (CA1)
- Receivables → Buyers · Credit purchases (info) · NWC = balance + receivables (CA17)
- Recent cash events: dir·cat·rail·date · ±amount · hash-chained · Edit/Delete (≤48h) / Lock (>48h)
-── LEDGER ── window/dir/category/rail filters + search · in/out/net tiles · cards
-── CATEGORIES ── income/expense by category bars
-── FORECAST / RECONCILE ── honest "Building"
-── BANK EVIDENCE ── → /farm/reports
+┌────────────────────────────────────────────────┐
+│ Cash                          [Farm▾][Ask AI]    │
+│ [+ Cash in] [+ Expense]                          │
+├────────────────────────────────────────────────┤
+│ Balance · Week net · Receivables · Credit · NWC  │ persistent capital strip (single source)
+├────────────────────────────────────────────────┤
+│ Overview · Ledger · Categories · Forecast ·      │ 6 tabs
+│ Reconcile · Bank Evidence                        │
+├────────────────────────────────────────────────┤
+│ OVERVIEW   Balance {real} ← CA-A fixed (was $0)  │ balance hero + rail breakdown (UNIQUE)
+│  M-PAiSA · Cash · Bank · Other · recent events   │ receivables/NWC NOT repeated here (de-dup)
+├────────────────────────────────────────────────┤
+│ LEDGER            [Export CSV (N)]               │ cashbook export (accountant/lender, CA14)
+├────────────────────────────────────────────────┤
+│ FORECAST  "Spend runway · before harvest income" │ honest reframe — projection is COSTS ONLY;
+│  "trends below zero wk+N — counts costs only;    │ alarm names that harvest income (listed
+│   your harvest income below isn't in it"         │ below) isn't in the line (no false panic)
+├────────────────────────────────────────────────┤
+│ BANK EVIDENCE  balance + in/out/net (window)     │ real view now (was a 1-button stub):
+│  [Export cashbook CSV] [Open Bank Evidence pack] │ period summary + export + pack link
+└────────────────────────────────────────────────┘
+
+Entry form (Cash in / Expense / Edit):
+  type · date · category · amount · method · description
+  + "Attach to a business (optional)" → cycle picker → sends pu_id + production_id
+  Edit: date + in/out type shown locked, with the honest "delete & re-add within 48h" note.
 ```
 
-## Fixes shipped (frontend)
-- **CA-BUG** limit 200. **CA2/CA3** api.js + error/Retry + degraded. **CA5** formatMoney. **CA4** Fiji.
-- **CA17** NWC = balance + receivables (no double-count); payables → info tile + note.
-- **CA18** inflow-set sign helper (correct display/sign for all types). **CA19** Other/credit rail.
-- **CA1** 200-cap honesty note. **CA6** lucide Lock. **CA7** tab buttons + arrows. **CA8** shared Modal.
-- **CA9** drop h1. **CA10** view-aware Ask AI. **CA20** submit-lock. **CA23** balance not triple-shown.
+## Decisions (v2)
+1. **CA-A hotfix (showstopper).** `getCash` now unwraps `?.data` → real `entries` + `cash_balance_fjd`. Every derived view comes alive with it. Writes always worked; only the read was broken — so farmers were logging cash and watching it "disappear."
+2. **Entry-time enterprise anchor.** Optional cycle picker sends `pu_id`+`production_id` (API already supported it; the form never did) → per-enterprise P&L becomes possible at the data layer.
+3. **Honest forecast.** Runway relabelled "Spend runway · before harvest income"; the below-zero alarm states it counts costs only and points at the upcoming-harvest list it excludes — a seasonal pre-harvest farm isn't falsely told it's going broke.
+4. **Cashbook CSV export** on Ledger + Bank Evidence (CA14).
+5. **Bank Evidence is a real view** (period balance/in/out/net + export + pack link; was one button).
+6. **De-dup Overview** — receivables/credit/NWC live once in the capital strip; the duplicate strip is gone.
+7. **Date immutability surfaced honestly** — edit explains date/type are locked (backdating protection); fix = delete-&-re-add within 48h.
 
-## Filed (backend / product — honest, NOT faked)
-- **CA-BUG-server**/CA1: raise list limit or add server-side rail/category/period **aggregates** so
-  the breakdown is whole-ledger, not page-bound; real pagination.
-- **CA17 (accrual):** credit purchase = a **payable**, not a cash-out — don't reduce the cash
-  balance until settled; proper AP with aging.
-- **CA18:** expose **TRANSFER** (rail-to-rail / M-PAiSA cash-out, two-rail) + LOAN/GRANT/REPAYMENT
-  types in the form (pending category-CHECK verification).
-- **CA24:** correcting-entry path (reverse + re-enter, both chained) so the 48h lock can't entrench errors.
-- **CA15** statement reconcile · **CA14** ledger export (CSV/PDF) · **CA21** profit/P&L per cycle ·
-  **CA22** cost-per-cycle/kg · **CA25** created_by/petty-cash · **CA26** consolidated balance sheet ·
-  **CA27** tax/VAT mapping. QueryClient/CurrentFarm lift (CA11).
-```
+## Deferred (named, backend/scope — staged, NOT faked)
+- **CA-C server-side role gate** on PATCH/DELETE — gate is client-only + fail-open today; any tenant user can edit/delete cash via API within 48h. Staged (fail-closed auth needs the user-role shape verified first, not shipped blind).
+- **Server-side aggregates + pagination** (CA1) so rails/categories/"All" reconcile to the all-time balance beyond 200 entries (today: honest cap note; the >200 rail mismatch remains).
+- **Credit/payables accrual** (CA-D); **partial-payment-aware receivables** (CA-E); **correcting-entry** for locked rows; **per-cycle P&L report** consuming the new anchor (CA21/22); **tax-category mapping** (CA27); **TRANSFER/loan/grant**; **server category enum** (drift); statement import + saved reconciliation; **receipt-snap → cash** (the parked OCR work lands here); B31 provider lift; voice/i18n.
+
+---
+
+## (v1, 2026-06-26 — superseded by v2 above)
+First pass fixed the 200-limit false-$0, switched to api.js getJSON/send, added error/degraded
+states, Fiji time, formatMoney, the 48h Lock UI, a11y Modal + arrow tabs, honest caps. It also
+introduced CA-A (the getJSON envelope wasn't unwrapped for cash, though orders was) — fixed in v2.

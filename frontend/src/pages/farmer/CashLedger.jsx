@@ -62,12 +62,24 @@ const AI_PROMPTS = {
 async function getCash(farmId) {
   const qs = new URLSearchParams({ limit: String(LIST_LIMIT) });
   if (farmId) qs.set("farm_id", farmId);
-  return (await getJSON(`/api/v1/cash-ledger?${qs}`)) ?? {};
+  // CA-A (showstopper): the endpoint envelopes as {data:{entries, cash_balance_fjd}} — unwrap
+  // .data here. Reading the envelope top-level made the whole page render $0 + empty ledger.
+  return (await getJSON(`/api/v1/cash-ledger?${qs}`))?.data ?? {};
 }
+async function getCycles(farmId) { return (await getJSON(`/api/v1/cycles?farm_id=${encodeURIComponent(farmId)}`))?.data?.cycles ?? []; }
 async function getOrders(farmId) { return (await getJSON(`/api/v1/orders${farmId ? `?farm_id=${encodeURIComponent(farmId)}` : ""}`))?.data ?? []; }
 
 // 48h correction window — server enforces 403 by created_at.
 function cashWithin48h(createdAt) { if (!createdAt) return false; const t = Date.parse(createdAt); return Number.isFinite(t) && (Date.now() - t) <= 48 * 3600 * 1000; }
+
+// Ledger CSV — the accountant/lender artifact (CA14). Exports exactly what's on screen.
+function exportCashCSV(rows, farmId) {
+  const esc = (s) => `"${String(s ?? "").replace(/"/g, '""')}"`;
+  const head = ["Date", "Direction", "Type", "Category", "Description", "Method", "Amount FJD", "Reference", "Entry ID"];
+  const body = rows.map((e) => [String(e.transaction_date).slice(0, 10), isInflow(e) ? "IN" : "OUT", e.transaction_type, (e.category || "").replace(/_/g, " "), e.description || "", e.payment_method || "", amt(e).toFixed(2), e.reference_id || "", e.ledger_id].map(esc).join(","));
+  const url = URL.createObjectURL(new Blob([[head.map(esc).join(","), ...body].join("\r\n")], { type: "text/csv;charset=utf-8" }));
+  const a = document.createElement("a"); a.href = url; a.download = `${farmId || "farm"}_cashbook_${todayISO()}.csv`; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+}
 
 function Modal({ title, onClose, children, foot, maxWidth }) {
   const ref = useRef(null);
@@ -263,11 +275,7 @@ function CashInner() {
                   </div>
                   {capNote && <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 8 }}>{capNote}</div>}
                 </div>
-                <div className="cash-rp-strip">
-                  <div className="cash-rp-tile receivables" onClick={() => navigate("/farm/market")}><div className="cash-rp-label">Receivables</div><div className="cash-rp-value">{fjd0(receivables)}</div><div className="cash-rp-sub">owed to farm</div></div>
-                  <div className="cash-rp-tile payables"><div className="cash-rp-label">Credit purchases</div><div className="cash-rp-value">{fjd0(creditPurchases)}</div><div className="cash-rp-sub">already in balance</div></div>
-                  <div className="cash-rp-tile net-wc"><div className="cash-rp-label">Net working capital</div><div className="cash-rp-value">{fjd0(nwc)}</div><div className="cash-rp-sub">balance + receivables</div></div>
-                </div>
+                {/* receivables / credit / NWC live in the persistent capital strip above — not repeated here (de-dup) */}
                 <div style={{ marginTop: 18 }}>
                   <div style={{ fontSize: 13, fontWeight: 600, color: "var(--soil)", marginBottom: 10, display: "flex", justifyContent: "space-between" }}><span>Recent cash events</span><button style={{ fontSize: 11.5, color: "var(--muted)", background: "none", border: "none", cursor: "pointer" }} onClick={() => setView("ledger")}>View all in ledger</button></div>
                   {recent.length === 0 ? <div className="card" style={{ padding: 24, textAlign: "center", color: "var(--muted)" }}>No cash logged yet — use Cash in / Expense.</div>
@@ -283,6 +291,9 @@ function CashInner() {
                   <Tile label="Events" value={filtered.length} sub="in window" />
                 </div>
                 {capNote && <div style={{ fontSize: 11, color: "var(--muted)", margin: "0 2px 8px" }}>{capNote}</div>}
+                <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
+                  <button className="btn btn-secondary btn-sm" disabled={filtered.length === 0} onClick={() => exportCashCSV(filtered, farmId)} title="Download these entries as a CSV cashbook"><ShieldCheck size={12} />Export CSV ({filtered.length})</button>
+                </div>
                 <div className="gallery-filter-row" style={{ marginBottom: 8 }}>
                   <span style={{ fontSize: 10.5, color: "var(--muted)", textTransform: "uppercase", letterSpacing: ".5px", marginRight: 6, alignSelf: "center" }}>Direction:</span>
                   {[["all", "All", entries.length], ["in", "In", entries.filter(isInflow).length], ["out", "Out", entries.filter((e) => !isInflow(e)).length]].map(([id, l, n]) => <button key={id} className={`filter-pill ${dir === id ? "active" : ""}`} onClick={() => setDir(id)}>{l}<span className="filter-pill-count">{n}</span></button>)}
@@ -312,10 +323,22 @@ function CashInner() {
             : view === "forecast" ? <ForecastView farmId={farmId} balance={balance} onAdd={() => setForm({ mode: "create", type: "INCOME" })} />
             : view === "reconciliation" ? <ReconcileView balance={balance} railBal={railBal} atCap={atCap} onAdd={() => setForm({ mode: "create", type: "INCOME" })} />
             : (
-              <div className="card" style={{ padding: "18px 20px" }}>
-                <div style={{ fontWeight: 700, color: "var(--soil)", display: "flex", alignItems: "center", gap: 6 }}><ShieldCheck size={15} />Bank Evidence</div>
-                <div style={{ fontSize: 12.5, color: "var(--muted)", margin: "8px 0 12px", lineHeight: 1.5 }}>Your cash ledger is hash-chained and feeds the lender-ready Bank Evidence pack (cashflow statement + audit-verifiable records).</div>
-                <button className="btn btn-primary btn-sm" onClick={() => navigate("/farm/reports")}>Open Bank Evidence →</button>
+              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                <div className="capital-strip" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))" }}>
+                  <Tile label="Balance" value={fjd0(balance)} sub="all-time · hash-chained" />
+                  <Tile label={`Cash in (${win})`} value={fjd0(fIn)} sub={`${filtered.filter(isInflow).length} events`} color="var(--green-dk)" />
+                  <Tile label={`Cash out (${win})`} value={fjd0(fOut)} sub={`${filtered.filter((e) => !isInflow(e)).length} events`} color="var(--amber)" />
+                  <Tile label={`Net (${win})`} value={`${fIn - fOut < 0 ? "−" : "+"}${fjd0(Math.abs(fIn - fOut))}`} sub="in − out" color={fIn - fOut < 0 ? "var(--red)" : "var(--green-dk)"} />
+                </div>
+                <div className="card" style={{ padding: "18px 20px" }}>
+                  <div style={{ fontWeight: 700, color: "var(--soil)", display: "flex", alignItems: "center", gap: 6 }}><ShieldCheck size={15} />Bank Evidence</div>
+                  <div style={{ fontSize: 12.5, color: "var(--muted)", margin: "8px 0 12px", lineHeight: 1.5 }}>Your cash ledger is hash-chained and feeds the lender-ready Bank Evidence pack (cashflow statement + audit-verifiable records). Export your cashbook for an accountant or lender, or open the full pack.</div>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    <button className="btn btn-secondary btn-sm" disabled={filtered.length === 0} onClick={() => exportCashCSV(filtered, farmId)}><ShieldCheck size={12} />Export cashbook CSV ({win})</button>
+                    <button className="btn btn-primary btn-sm" onClick={() => navigate("/farm/reports")}>Open Bank Evidence pack →</button>
+                  </div>
+                  {capNote && <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 8 }}>{capNote}</div>}
+                </div>
               </div>
             )}
             </>
@@ -391,11 +414,11 @@ function ForecastView({ farmId, balance, onAdd }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
       <div className="cash-balance-card">
-        <div className="cash-balance-label">{burning ? "Cash runway" : "Cash trend"}</div>
+        <div className="cash-balance-label">{burning ? "Spend runway · before harvest income" : "Cash trend"}</div>
         <div className="cash-balance-value" style={{ color: burning ? (runwayWeeks <= 4 ? "var(--red)" : "var(--amber)") : "var(--green-dk)" }}>
           {!burning ? "Cash-positive" : longRunway ? "Over a year" : `≈ ${runwayWeeks} week${runwayWeeks === 1 ? "" : "s"}`}
         </div>
-        <div className="cash-balance-sub">{burning ? (longRunway ? `more than 52 weeks of cash at the moment — you're spending ${fjd2(Math.abs(avg))} more than you earn each week` : `you're spending ${fjd2(Math.abs(avg))} more than you earn each week`) : `building reserves at +${fjd2(avg)} a week`}</div>
+        <div className="cash-balance-sub">{burning ? `at your recent rate you spend ${fjd2(Math.abs(avg))} more than you earn each week${harvests.length ? ` — but ${harvests.length} harvest${harvests.length === 1 ? "" : "s"} below will bring income this line doesn't count` : ", before any harvest income"}` : `building reserves at +${fjd2(avg)} a week`}</div>
       </div>
       <div className="card" style={{ padding: 16 }}>
         <div style={{ fontWeight: 700, color: "var(--soil)", marginBottom: 4 }}>Projected balance</div>
@@ -407,7 +430,7 @@ function ForecastView({ farmId, balance, onAdd }) {
             <span style={{ width: 90, textAlign: "right", fontFamily: "Menlo,monospace", fontSize: 12, color: neg ? "var(--red)" : "var(--soil)" }}>{fjd0(p.projected_balance)}</span>
           </div>
         ); })}
-        {firstNeg && burning && <div style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 12, color: "var(--red)", marginTop: 8 }}><AlertTriangle size={13} />On this trend, cash dips below zero around week +{firstNeg.week_offset} — line up income or trim costs before then.</div>}
+        {firstNeg && burning && <div style={{ display: "flex", gap: 6, alignItems: "flex-start", fontSize: 12, color: "var(--red)", marginTop: 8 }}><AlertTriangle size={13} style={{ flexShrink: 0, marginTop: 2 }} /><span>On spending alone, cash trends below zero around week +{firstNeg.week_offset}. This line counts costs only — {harvests.length ? "your upcoming harvest income (below) isn't in it, so check those dates against this." : "log expected harvest dates on your cycles so income shows here too."}</span></div>}
       </div>
       <div className="card" style={{ padding: 16 }}>
         <div style={{ fontWeight: 700, color: "var(--soil)", marginBottom: 8 }}>Expected income — upcoming harvests</div>
@@ -479,18 +502,23 @@ function EntryForm({ form, farmId, onClose, onSaved }) {
   const [amount, setAmount] = useState(e.amount_fjd ? String(e.amount_fjd) : "");
   const [method, setMethod] = useState(e.payment_method || "CASH");
   const [description, setDescription] = useState(e.description || "");
+  const [cycleId, setCycleId] = useState(e.pu_id ? `${e.pu_id}|${e.production_id || ""}` : "");
   const [busy, setBusy] = useState(false);
   const lock = useRef(false); // submit-lock vs double-posted cash (CA20)
   const cats = CATEGORIES_BY_TYPE[type] || CATEGORIES_BY_TYPE.INCOME;
+  // optional enterprise anchor — so cash can be attributed to a cycle (enables per-enterprise P&L)
+  const cyclesQ = useQuery({ queryKey: ["cash-cycles", farmId], queryFn: () => getCycles(farmId), enabled: !!farmId, staleTime: 120_000 });
+  const cycleOpts = cyclesQ.data || [];
   async function submit() {
     if (lock.current) return;
     if (!Number(amount)) { emitToast("Enter the amount"); return; }
     lock.current = true; setBusy(true);
+    const [pu_id, production_id] = cycleId ? cycleId.split("|") : [null, null];
     try {
       if (isEdit) {
-        await send("PATCH", `/api/v1/cash-ledger/${encodeURIComponent(e.ledger_id)}`, { category, amount_fjd: Number(amount), payment_method: method, description: description.trim() || category });
+        await send("PATCH", `/api/v1/cash-ledger/${encodeURIComponent(e.ledger_id)}`, { category, amount_fjd: Number(amount), payment_method: method, description: description.trim() || category, pu_id: pu_id || null, production_id: production_id || null });
       } else {
-        await send("POST", "/api/v1/cash-ledger", { farm_id: farmId, transaction_date: date, transaction_type: type, category, description: description.trim() || category, amount_fjd: Number(amount), payment_method: method });
+        await send("POST", "/api/v1/cash-ledger", { farm_id: farmId, transaction_date: date, transaction_type: type, category, description: description.trim() || category, amount_fjd: Number(amount), payment_method: method, pu_id: pu_id || null, production_id: production_id || null });
       }
       emitToast(isEdit ? "Entry updated" : type === "INCOME" ? "Cash in logged" : "Expense logged"); onSaved?.();
     } catch (err) { emitToast(err?.userMessage || "Could not save"); lock.current = false; } finally { setBusy(false); }
@@ -510,6 +538,14 @@ function EntryForm({ form, farmId, onClose, onSaved }) {
       <Field label="Payment method"><select value={method} onChange={(ev) => setMethod(ev.target.value)}>{PAYMENT_METHODS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></Field>
       {method === "CREDIT" && type === "EXPENSE" && <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 4 }}>Note: credit purchases currently reduce your balance straight away — proper payables tracking is on the roadmap.</div>}
       <Field label="Description"><input value={description} onChange={(ev) => setDescription(ev.target.value)} placeholder="What was this for" /></Field>
+      <Field label="Attach to a business (optional)">
+        <select value={cycleId} onChange={(ev) => setCycleId(ev.target.value)} aria-label="Attach to a cycle">
+          <option value="">Whole farm — not a specific business</option>
+          {cycleOpts.map((c) => <option key={c.cycle_id} value={`${c.pu_id}|${c.production_id || ""}`}>{c.production_name || c.farmer_label || c.cycle_id}{c.farmer_label && c.production_name ? ` · ${c.farmer_label}` : ""}</option>)}
+        </select>
+      </Field>
+      <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 2 }}>Attaching cash to a business lets it show up in that enterprise's profit & loss.</div>
+      {isEdit && <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 6 }}>The date and in/out type can't be changed (locked to keep the audit trail honest). To fix those, delete this entry within 48h and re-add it.</div>}
     </Modal>
   );
 }
