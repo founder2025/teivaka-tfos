@@ -561,3 +561,70 @@ tiers → farmer revokes → link dies → access log shows both events.
 - **DD-3 Default share policy:** expiry default (e.g., 30 days), view-only default ON, password
   optional, one-time optional — confirm defaults.
 - **DD-4 AI summary timing:** cache-per-snapshot (recommended) vs always-fresh on open (costlier).
+
+**DD-1..4 RATIFIED (2026-06-27):** server-rendered `/s/{token}` · link-based attestation · 30-day/
+view-only defaults · cache-per-snapshot. Phase 3 A+B+C shipped. Evidence share-scope added
+(opt-in photo+block in a share). Passport photo reuses `tenant.users.avatar_url`.
+
+---
+
+## PHASE 4 BUILD PLAN — Document Vault (for go-ahead before code)
+
+**Goal:** one place for the documents trust rests on — leases, certificates, IDs, contracts —
+each content-hashed, expiry-tracked, and shareable through the SAME Share Session machinery.
+Right-sized for the alpha (D3 deferred the *full* vault; this is the lean core).
+
+### Storage decision (grounded — answers "where do docs live?")
+Media today = **local disk `/app/uploads`** (`TFOS_MEDIA_DIR`), uploaded via
+`POST /api/v1/community/uploads`, served at `/api/v1/community/uploads/{name}` (in the public
+path list — fine for field photos). **Decision: reuse that disk mechanism (no new infra)** — BUT
+vault documents are more sensitive than field photos, so:
+- **Gated retrieval (the nuance):** vault files are served through a NEW permission-checked route
+  `GET /documents/{id}/file` (owner JWT, or a valid Share Session that scoped documents) — NOT the
+  public `/community/uploads/{name}` path. Store the file on disk under a non-guessable name; the
+  DB row is the access-control point.
+- Object storage (S3/Spaces) is a Phase-6 hardening swap behind the same endpoint; bytea-in-DB is
+  rejected (bad at any scale). Recommended now: **disk + gated route.**
+
+### Schema — migration 192 (apply-as-owner)
+```
+tenant.documents
+  (document_id, tenant_id, owner_user_id, doc_type [LEASE|CERTIFICATE|ID|CONTRACT|INSURANCE|PERMIT|OTHER],
+   title, storage_name (disk file), sha256, byte_size, mime,
+   issued_date, expiry_date, verification_status [UNVERIFIED|VERIFIED|EXPIRED],
+   supersedes_id (version chain), uploaded_at, deleted_at)            -- FORCED RLS
+tenant.document_access  (append-only: who/when/how a doc was fetched) -- FORCED RLS
+```
+
+### API — `documents.py`
+- `POST /documents` (multipart): farmer uploads → hash (sha256) on the server → store on disk →
+  row. Emits a `DOCUMENT_ADDED` audit row (the vault is itself tamper-evident).
+- `GET /documents` (list, by type, expiry flags) · `GET /documents/{id}/file` (gated stream) ·
+  `DELETE /documents/{id}` (soft, 48h window) · `PATCH` (title/dates).
+- **Expiry → compliance:** a daily check (reuse the trust/maintenance worker) flags docs within 30
+  days of `expiry_date` → surfaces on the Compliance page + an auto-task (closes the loop the
+  Certifications stub promised). No fake reminders — only real expiry dates.
+
+### Sharing — reuse Share Sessions
+Add a `documents` scope key (opt-in, like `evidence`): a share can include selected document
+*metadata + a gated view link* (never a public file URL). Same permission/expiry/revoke/log model.
+
+### Frontend
+A **Documents** surface (Passport tab or `/me/documents`): upload (drag/camera, reuses the
+existing compress/upload util), list by type with expiry badges, verification status, view/replace.
+Honest-empty; no placeholders.
+
+### Verification gates
+migration 192 staged apply-as-owner; py_compile + npm build; **security smoke is the gate** — a
+vault file must be **unreachable** without the owner JWT or a documents-scoped share; SHA-256 on
+upload matches on download; soft-delete honoured; expiry flag fires.
+
+### Decision before build (DV-1)
+- **DV-1 storage:** disk + gated retrieval route (recommended) — confirm, or pick S3/Spaces now.
+
+### ⚠️ Strategic timing recommendation
+Per D3 and my standing advice: **hold the Phase 4 build until the alpha cohort actually exercises
+Phases 1–3.** The Passport/Trust/Share/Attestation loop is the moat; the Vault is additive and the
+most storage/security-heavy piece. Building it now risks polishing ahead of real feedback. Plan is
+ready; recommend building Phase 4 *after* first alpha use, unless a pilot bank/cert specifically
+needs document upload first.
