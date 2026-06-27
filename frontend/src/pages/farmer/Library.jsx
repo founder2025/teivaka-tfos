@@ -20,7 +20,7 @@
  *  Honest: the tables carry no per-row version/date, so the lesson no longer promises one.
  */
 import { useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, useNavigate } from "react-router-dom";
 import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
 import {
   Search, MessageSquare, Shield, Check, Plus, ChevronDown, BookOpen, AlertTriangle, RefreshCw, X,
@@ -112,6 +112,9 @@ function LibraryInner() {
   const setTab = (t) => { const n = new URLSearchParams(sp); n.set("tab", t); setSp(n, { replace: true }); };
 
   const [search, setSearch] = useState(sp.get("q") || "");
+  const [debounced, setDebounced] = useState(search);
+  useEffect(() => { const t = setTimeout(() => setDebounced(search), 250); return () => clearTimeout(t); }, [search]);
+  const [searchMore, setSearchMore] = useState({});   // per-group "show more" in cross-search
   const [affectsMine, setAffectsMine] = useState(false);
   const [hideVet, setHideVet] = useState(false);
   const [activeFilter, setActiveFilterState] = useState({});
@@ -122,20 +125,21 @@ function LibraryInner() {
   const [lessonOpen, setLessonOpen] = useState(false);
   const setActive = (t, id) => setActiveFilterState((s) => ({ ...s, [t]: id }));
 
-  const q = search.trim().toLowerCase();
+  // debounced query — the cross-search burst (8 corpora) only fires after typing settles (LX-1)
+  const q = debounced.trim().toLowerCase();
   const searching = q.length >= 2;
 
   // ── lazy, cached corpora (react-query): the active tab + (when searching) all search corpora ──
-  const opt = (key, on, fn) => useQuery({ queryKey: ["lib", key], enabled: on, staleTime: 5 * 60_000, retry: 1, queryFn: fn });
-  const cropsQ = opt("crops", tab === "crops" || searching, () => refCat("CROP"));
-  const chemsQ = opt("chems", tab === "chemicals" || searching, () => getJSON("/api/v1/chemicals").then((r) => r.data || []));
-  const pestsQ = opt("pests", tab === "pests" || searching, () => refCat("PEST"));
-  const disQ = opt("dis", tab === "diseases" || searching, () => refCat("DISEASE"));
-  const fertQ = opt("fert", tab === "fertilizers" || searching, () => refCat("FERTILIZER"));
-  const livdisQ = opt("livdis", tab === "livestock" || searching, () => refCat("LIVESTOCK_DISEASE"));
-  const vetQ = opt("vet", tab === "livestock" || searching, () => refCat("VET"));
-  const kbQ = opt("kb", tab === "kb" || searching, () => getJSON("/api/v1/kb").then((r) => r.data || []));
-  const cyclesQ = opt("cycles", affectsMine, () => getJSON("/api/v1/cycles").then((r) => r.data?.cycles || r.data || []));
+  const useCorpus = (key, on, fn) => useQuery({ queryKey: ["lib", key], enabled: on, staleTime: 5 * 60_000, retry: 1, queryFn: fn });
+  const cropsQ = useCorpus("crops", tab === "crops" || searching, () => refCat("CROP"));
+  const chemsQ = useCorpus("chems", tab === "chemicals" || searching, () => getJSON("/api/v1/chemicals").then((r) => r.data || []));
+  const pestsQ = useCorpus("pests", tab === "pests" || searching, () => refCat("PEST"));
+  const disQ = useCorpus("dis", tab === "diseases" || searching, () => refCat("DISEASE"));
+  const fertQ = useCorpus("fert", tab === "fertilizers" || searching, () => refCat("FERTILIZER"));
+  const livdisQ = useCorpus("livdis", tab === "livestock" || searching, () => refCat("LIVESTOCK_DISEASE"));
+  const vetQ = useCorpus("vet", tab === "livestock" || searching, () => refCat("VET"));
+  const kbQ = useCorpus("kb", tab === "kb" || searching, () => getJSON("/api/v1/kb").then((r) => r.data || []));
+  const cyclesQ = useCorpus("cycles", affectsMine, () => getJSON("/api/v1/cycles").then((r) => r.data?.cycles || r.data || []));
 
   // crops the farmer actually grows — names (text match) + production_id codes (registered_crops match)
   const { myNames, myIds } = useMemo(() => {
@@ -220,18 +224,26 @@ function LibraryInner() {
             ) : (
               <div className="lib-search-results">
                 <div className="lib-search-h">{searchHits.total} results across libraries</div>
-                {["crops", "chemicals", "pests", "diseases", "fertilizers", "livestock", "knowledge"].map((g) => (
-                  searchHits.groups[g].length === 0 ? null : (
+                {["crops", "chemicals", "pests", "diseases", "fertilizers", "livestock", "knowledge"].map((g) => {
+                  const grp = searchHits.groups[g];
+                  if (grp.length === 0) return null;
+                  const lim = searchMore[g] ? 50 : 5;
+                  return (
                     <div className="lib-search-group" key={g}>
-                      <div className="lib-search-group-h">{g} · {searchHits.groups[g].length}</div>
-                      {searchHits.groups[g].slice(0, 5).map((h) => (
+                      <div className="lib-search-group-h">{g} · {grp.length}</div>
+                      {grp.slice(0, lim).map((h) => (
                         <button className="lib-search-hit" key={h.id} style={{ display: "block", width: "100%", textAlign: "left", background: "none", border: "none", cursor: "pointer" }} onClick={() => { setSearch(""); openRow(h.kind, h.row); }}>
                           <strong>{h.label}</strong> <span>{h.id}</span>
                         </button>
                       ))}
+                      {grp.length > lim && (
+                        <button className="lib-search-hit" style={{ display: "block", background: "none", border: "none", cursor: "pointer", color: "var(--green-dk)" }} onClick={() => setSearchMore((s) => ({ ...s, [g]: true }))}>
+                          +{grp.length - lim} more
+                        </button>
+                      )}
                     </div>
-                  )
-                ))}
+                  );
+                })}
               </div>
             )
           )}
@@ -414,8 +426,8 @@ function LibraryInner() {
 
           {/* LIVESTOCK & VET */}
           {tab === "livestock" && (
-            (livdisQ.isError || vetQ.isError) ? <ErrorCard onRetry={() => { livdisQ.refetch(); vetQ.refetch(); }} />
-              : (livdisQ.isLoading && !livdisQ.data) || (vetQ.isLoading && !vetQ.data) ? <SkeletonGrid />
+            (livdisQ.isError && vetQ.isError) ? <ErrorCard onRetry={() => { livdisQ.refetch(); vetQ.refetch(); }} />
+              : (livdisQ.isLoading && !livdisQ.data) && (vetQ.isLoading && !vetQ.data) ? <SkeletonGrid />
               : (() => {
                 const livdis = livdisQ.data || [], vet = vetQ.data || [];
                 let lr = livdis.filter((r) => searchRow(r.name, r.attributes));
@@ -430,6 +442,7 @@ function LibraryInner() {
                       { id: "bees", label: "Bees", count: lc("bees") }, { id: "aqua", label: "Aquaculture", count: lc("aqua") },
                     ]} />
                     <div className="lib-section-h">Livestock diseases <span className="lib-section-c">{lr.length}</span></div>
+                    {livdisQ.isError && <div className="lib-card-id" style={{ margin: "2px 2px 8px" }}>Couldn't load livestock diseases — <button style={{ background: "none", border: "none", color: "var(--green-dk)", cursor: "pointer", padding: 0 }} onClick={() => livdisQ.refetch()}>retry</button>.</div>}
                     <div className="lib-card-grid">
                       {lr.map((r) => { const a = r.attributes || {}; const notif = (a.notifiable || "").toString().toLowerCase().includes("notifiable"); return (
                         <LibCard key={r.ref_id} onOpen={() => openRow("livdis", r)}>
@@ -441,6 +454,7 @@ function LibraryInner() {
                       ); })}
                     </div>
                     <div className="lib-section-h">Veterinary chemicals <span className="lib-section-c">{vr.length}</span></div>
+                    {vetQ.isError && <div className="lib-card-id" style={{ margin: "2px 2px 8px" }}>Couldn't load veterinary chemicals — <button style={{ background: "none", border: "none", color: "var(--green-dk)", cursor: "pointer", padding: 0 }} onClick={() => vetQ.refetch()}>retry</button>.</div>}
                     <div className="lib-card-grid">
                       {vr.map((r) => { const a = r.attributes || {}; const rx = (a.rx || "").toString().toLowerCase().includes("yes") || (a.rx || "").toString().toLowerCase().includes("prescript"); return (
                         <LibCard key={r.ref_id} onOpen={() => openRow("vet", r)}>
@@ -496,6 +510,7 @@ function LibraryInner() {
 /* ---- row detail overlay ---- */
 function RowDetail({ detail, onClose }) {
   useEsc(onClose);
+  const navigate = useNavigate();
   const { kind } = detail;
   const a = detail.row.attributes || detail.row;
   const id = detail.row.ref_id || detail.row.chemical_id;
@@ -547,7 +562,10 @@ function RowDetail({ detail, onClose }) {
           <div className="lib-prov"><Shield size={11} aria-hidden />Source: agronomist-reviewed · system library</div>
           <div className="row-detail-foot"><strong>Row ID:</strong> {id} · system library</div>
         </div>
-        <div className="overlay-foot"><button className="btn btn-primary" onClick={onClose}>Close</button></div>
+        <div className="overlay-foot">
+          <button className="btn btn-secondary" onClick={() => navigate(`/tis?q=${encodeURIComponent(`Tell me about ${name} (${id}) from the farm library${kind === "chem" ? " — including its withholding period before harvest" : ""}.`)}`)}>Ask TIS about this</button>
+          <button className="btn btn-primary" onClick={onClose}>Close</button>
+        </div>
       </div>
     </div>
   );
@@ -556,6 +574,7 @@ function RowDetail({ detail, onClose }) {
 /* ---- KB article reader (LB3 — fetches the body) ---- */
 function KbDetail({ row, onClose }) {
   useEsc(onClose);
+  const navigate = useNavigate();
   const id = row.kb_entry_id || row.article_id;
   const [art, setArt] = useState(null);
   const [err, setErr] = useState("");
@@ -575,12 +594,32 @@ function KbDetail({ row, onClose }) {
           <div className="lib-card-meta" style={{ marginBottom: 10 }}>{row.category || "Knowledge base"}<SysBadge /></div>
           {err ? <EmptyCard>{err}</EmptyCard>
             : !art ? <EmptyCard>Loading…</EmptyCard>
-            : <div style={{ fontSize: 13.5, color: "var(--soil)", lineHeight: 1.7, whiteSpace: "pre-wrap" }}>{art.content_md || art.content || "No content for this article yet."}</div>}
+            : <KbBody md={art.content_md || art.content} />}
         </div>
-        <div className="overlay-foot"><button className="btn btn-primary" onClick={onClose}>Close</button></div>
+        <div className="overlay-foot">
+          <button className="btn btn-secondary" onClick={() => navigate(`/tis?q=${encodeURIComponent(`From the knowledge base "${row.title}" — explain it for my farm.`)}`)}>Ask TIS about this</button>
+          <button className="btn btn-primary" onClick={onClose}>Close</button>
+        </div>
       </div>
     </div>
   );
+}
+
+/* ---- minimal, safe markdown for KB bodies (headings · bullets · bold) ---- */
+function KbBody({ md }) {
+  if (!md) return <EmptyCard>No content for this article yet.</EmptyCard>;
+  const inline = (t) => String(t).split(/(\*\*[^*]+\*\*)/g).map((p, i) => /^\*\*[^*]+\*\*$/.test(p) ? <strong key={i}>{p.slice(2, -2)}</strong> : <span key={i}>{p}</span>);
+  const out = []; let list = null;
+  const flush = () => { if (list) { out.push(<ul key={`u${out.length}`} style={{ margin: "6px 0 6px 18px" }}>{list}</ul>); list = null; } };
+  String(md).split(/\r?\n/).forEach((ln, i) => {
+    const t = ln.trim();
+    if (!t) { flush(); return; }
+    if (/^#{1,6}\s/.test(t)) { flush(); const lvl = t.match(/^#+/)[0].length; out.push(<div key={i} style={{ fontWeight: 700, fontSize: lvl <= 1 ? 15 : 13.5, margin: "10px 0 4px", color: "var(--soil)" }}>{inline(t.replace(/^#+\s/, ""))}</div>); return; }
+    if (/^[-*]\s/.test(t)) { (list = list || []).push(<li key={i} style={{ fontSize: 13.5, color: "var(--soil)", lineHeight: 1.6 }}>{inline(t.replace(/^[-*]\s/, ""))}</li>); return; }
+    flush(); out.push(<p key={i} style={{ fontSize: 13.5, color: "var(--soil)", lineHeight: 1.7, margin: "6px 0" }}>{inline(t)}</p>);
+  });
+  flush();
+  return <div>{out}</div>;
 }
 
 /* ---- How to use (honest — no per-row date/version promise; no faked My Library) ---- */
