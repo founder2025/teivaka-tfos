@@ -14,6 +14,33 @@ Legend: 🔒 LOCKED (approved; no redesign without new evidence) · ✅ PASS · 
 ---
 
 ## 🔒 LOCKED PAGES
+- **Decisions (/farm/insights · decisions)** — LOCKED 2026-06-27 (Operator-approved). Audited →
+  scorecard (5.5→5.0 after 8-persona) → 8-persona → redesigned + wireframe → stress-tested ×1 (11
+  scenarios) → optimized ×1. **#1 fix (DC1): the page can no longer tell a farmer "the farm is
+  running clear" on a failed load** — routed through `utils/api` (token refresh + honest errors),
+  the green all-clear is EARNED (only when the holds+signals+tasks trio actually loaded), with
+  per-section loading, cached-on-error (keeps the last values + a degraded banner when the network
+  drops mid-session), full ErrorCard, and no-farm states. **#2 fix (DC2/ST-B): "Holds" + the lead
+  call + the risk card read the REAL crop-compliance `blocked_count`** (the WHD gate, Inviolable #2)
+  — the faked "clear to sell / no active holds" activity-count is gone — and it's scoped HONESTLY to
+  CROP compliance so it can't imply farm-wide clearance it never checked. Also: ONE net
+  (`net_profit_fjd`; costs shown as income−net so the page can't display two totals); dropped the
+  hardcoded "normal mid-season" reassurance + the all-zero false "income ahead" (DC/ST-3); **synthetic
+  2-digit standing score removed** (DC4 — words from real net/ROI only); **removed the "review
+  lowest-net before spending" misadvice** that punishes Long-Term-Asset crops (Inviolable #4) + added
+  the long-term-negative caveat; **removed the capital-risk "expansion readiness"** (and its
+  avg-over-zeros bug) → factual portfolio summary; surfaces the engine's own `last_refresh_at` as a
+  stale banner (Strike #110 guard); enterprise table capped + show-all (ST-5); period label (ST-6);
+  aria-live on the call + larger tap targets (ST-2); context-rich **Ask-TIS on the specific call**;
+  width now matches the Analytics tab (TfpShell + main-inner, ST-4); ModeDropdown removed (DC6),
+  real farm name (DC7), formatMoney (DC10), merged routes (DC9). Wireframe:
+  docs/TFOS_Decisions_Redesign_Wireframe.md. Remainder filed (backend/scope — not faked): **animal/
+  poultry withholding in the holds number** (today crop-only); **farm-scoped tasks** (DC3 — `/tasks`
+  has no farm_id, labelled "across all your farms"); **per-enterprise `layer`** on the crops financials
+  rollup for full Inviolable-#4-aware ranking; collapse the two signal endpoints shared with Analytics
+  (DC11) into one read model; lift `CurrentFarmProvider` to FarmerShell (B31 — cross-tab farm desync);
+  composite `/farm/decisions` endpoint; real Opportunities/Forecasts; role-gating; regional aggregate;
+  voice/i18n. Deploy: frontend-only.
 - **Analytics (/farm/insights · analytics)** — LOCKED 2026-06-27 (Operator-approved). Audited →
   scorecard (6.5) → 8-persona → redesigned + wireframe → stress-tested ×1 → optimized ×1 →
   deploy-smoke fix. **#1 fix: the Decision board now leads with a "Right now" TRIAGE card** (top
