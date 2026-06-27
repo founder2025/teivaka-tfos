@@ -101,6 +101,7 @@ export default function CaptureEngine({ config = cropsConfig, onDone, onBack, pr
   const [verb, setVerb] = useState(null);
   const [spec, setSpec] = useState(null);          // chosen EventSpec (primary or a branch option)
   const [itemId, setItemId] = useState("");
+  const [anchorQuery, setAnchorQuery] = useState("");   // type-ahead for the anchor picker at scale
   const [values, setValues] = useState({});
   const [showDetail, setShowDetail] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -216,9 +217,20 @@ export default function CaptureEngine({ config = cropsConfig, onDone, onBack, pr
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [preselect]);
 
+  // Scope the anchor picker to the farmer's currently-selected farm (FAB3) — fail-open when no farm
+  // is selected or the current farm has no matching items, so capture is never blocked.
+  const currentFarmId = (() => { try { return localStorage.getItem("tfos_current_farm_id") || null; } catch { return null; } })();
+  const scopedItems = useMemo(() => {
+    if (!currentFarmId) return items;
+    const f = items.filter((c) => c.farm_id === currentFarmId);
+    return f.length ? f : items;
+  }, [items, currentFarmId]);
   const selectedItem = useMemo(
-    () => items.find((c) => c[ctx.idKey] === itemId) || null, [items, itemId, ctx.idKey],
+    () => scopedItems.find((c) => c[ctx.idKey] === itemId) || items.find((c) => c[ctx.idKey] === itemId) || null,
+    [scopedItems, items, itemId, ctx.idKey],
   );
+  // Auto-select when the scoped list resolves to exactly one item (zero extra taps).
+  useEffect(() => { if (!itemId && scopedItems.length === 1) setItemId(scopedItems[0][ctx.idKey]); }, [scopedItems, itemId, ctx.idKey]);
   // Show the farmer's chosen farm name in the anchors card — never the internal farm_id code.
   const anchorFarmName = useFarmName(selectedItem?.farm_id);
 
@@ -278,7 +290,7 @@ export default function CaptureEngine({ config = cropsConfig, onDone, onBack, pr
     if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
     if (mediaRef.current && recording) { try { mediaRef.current.stop(); } catch { /* noop */ } }
     setRecording(false); setRecSecs(0);
-    setOccurredDate(nowDateStr()); setOccurredTime(nowTimeStr()); setChemQuery(""); setLibQuery("");
+    setOccurredDate(nowDateStr()); setOccurredTime(nowTimeStr()); setChemQuery(""); setLibQuery(""); setAnchorQuery("");
     setEditOpen(false); setEditSaved(false); setEditPhoto(null);
     idemRef.current = null;   // fresh idempotency key per entry
     prefillRef.current = null;
@@ -701,12 +713,35 @@ export default function CaptureEngine({ config = cropsConfig, onDone, onBack, pr
               <span style={{ color: "var(--muted)" }}>Farm</span>
               <span style={{ fontWeight: 600 }}>{anchorFarmName || selectedItem?.farm_id || "—"}</span>
               <span style={{ color: "var(--muted)" }}>{ctx.contextLabel}</span>
-              {items.length === 1
+              {scopedItems.length === 1
                 ? <span style={{ fontWeight: 600 }}>{ctx.optionLabel(selectedItem)}</span>
-                : <select value={itemId} onChange={(e) => setItemId(e.target.value)} style={inputBox}>
+                : scopedItems.length <= 8
+                ? <select value={itemId} onChange={(e) => setItemId(e.target.value)} style={inputBox} aria-label={ctx.contextLabel}>
                     <option value="">{ctx.pickPrompt}</option>
-                    {items.map((c) => <option key={c[ctx.idKey]} value={c[ctx.idKey]}>{ctx.optionLabel(c)}</option>)}
-                  </select>}
+                    {scopedItems.map((c) => <option key={c[ctx.idKey]} value={c[ctx.idKey]}>{ctx.optionLabel(c)}</option>)}
+                  </select>
+                : (
+                  <div>
+                    {selectedItem && !anchorQuery && (
+                      <div style={{ fontWeight: 600 }}>{ctx.optionLabel(selectedItem)}{" "}
+                        <button type="button" onClick={() => setItemId("")} style={{ background: "none", border: "none", color: "var(--green-dk)", cursor: "pointer", fontSize: 12 }}>change</button>
+                      </div>
+                    )}
+                    {(!selectedItem || anchorQuery) && (<>
+                      <input value={anchorQuery} onChange={(e) => setAnchorQuery(e.target.value)} aria-label={`Search ${ctx.contextLabel}`}
+                        placeholder={`Search ${ctx.contextLabel.toLowerCase()}… (${scopedItems.length})`} style={{ ...inputBox, marginBottom: 6 }} />
+                      <div style={{ maxHeight: 220, overflowY: "auto", display: "flex", flexDirection: "column", gap: 6 }}>
+                        {scopedItems.filter((c) => !anchorQuery || ctx.optionLabel(c).toLowerCase().includes(anchorQuery.toLowerCase())).slice(0, 50).map((c) => (
+                          <button key={c[ctx.idKey]} type="button" onClick={() => { setItemId(c[ctx.idKey]); setAnchorQuery(""); }}
+                            style={{ textAlign: "left", padding: "10px 12px", borderRadius: 10, fontWeight: 600, fontSize: 14, cursor: "pointer",
+                              border: itemId === c[ctx.idKey] ? "2px solid var(--green)" : "1px solid var(--line)", background: itemId === c[ctx.idKey] ? "#eaf3ea" : "#fff" }}>
+                            {ctx.optionLabel(c)}
+                          </button>
+                        ))}
+                      </div>
+                    </>)}
+                  </div>
+                )}
               <span style={{ color: "var(--muted)" }}>Operator</span>
               <span style={{ fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}><User size={14} />{operator || "You"}</span>
             </div>
