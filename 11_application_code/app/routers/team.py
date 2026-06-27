@@ -99,6 +99,14 @@ async def create_invite(body: InviteCreate, user: dict = Depends(get_current_use
     role = (body.team_role or "WORKER").upper()
     if role not in TEAM_ROLES:
         raise HTTPException(status_code=422, detail="Unknown role")
+    # Authorization: only an owner or a manager can invite, and only owners may invite a Manager
+    # (a Worker/Viewer inviting — or a Manager minting another Manager — is privilege escalation).
+    inviter_role = (user.get("role") or "").upper()
+    _OWNER_ROLES = {"FOUNDER", "ADMIN", "OWNER", "FARMER"}
+    if inviter_role not in (_OWNER_ROLES | {"MANAGER"}):
+        raise HTTPException(status_code=403, detail="Only the farm owner or a manager can invite team members")
+    if role == "MANAGER" and inviter_role not in _OWNER_ROLES:
+        raise HTTPException(status_code=403, detail="Only the farm owner can invite a Manager")
     scope = (body.farm_scope or "ALL").strip() or "ALL"
     async with get_db_ctx() as db:
         scope_label = body.scope_label
