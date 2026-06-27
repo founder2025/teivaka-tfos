@@ -15,6 +15,7 @@ bypass RLS internally and return only sanitized fields.
 """
 
 import base64
+import json
 import os
 import re
 from datetime import datetime, timezone
@@ -98,6 +99,21 @@ async def _lookup_hash(db: AsyncSession, audit_hash: str) -> Optional[dict]:
         "farm_id": result.farm_id,
         "tenant_id": str(result.tenant_id),
     }
+
+
+async def _lookup_evidence(db: AsyncSession, audit_hash: str) -> Optional[dict]:
+    """Privacy-scoped report evidence (blocks + photos) for a Bank Evidence hash.
+    Uses the SECURITY DEFINER projection (mig 187); never breaks the verify page."""
+    try:
+        val = (await db.execute(text(
+            "SELECT audit.report_evidence_by_hash(:h) AS ev"), {"h": audit_hash})).scalar()
+        if val is None:
+            return None
+        if isinstance(val, str):
+            val = json.loads(val)
+        return val
+    except Exception:  # noqa: BLE001 — evidence is enrichment; proof must still render
+        return None
 
 
 async def _chain_integrity(db: AsyncSession, tenant_id: str) -> dict:
@@ -268,6 +284,12 @@ async def verify_html(
     if chain:
         chain_human = {**chain, "verified_at_human": _format_iso_human(chain.get("verified_at"))}
 
+    # The Bank Evidence QR should let a lender browse the evidence behind the report
+    # (location blocks + gallery photos) — scoped to this report's farm + period.
+    evidence = None
+    if payload.get("verified") and event and event.get("event_type") == "BANK_PDF_GENERATED":
+        evidence = await _lookup_evidence(db, payload["audit_hash"])
+
     context = {
         "request": request,
         "verified": payload.get("verified", False),
@@ -275,6 +297,7 @@ async def verify_html(
         "event": event_human,
         "chain": chain_human,
         "platform": payload["platform"],
+        "evidence": evidence,
     }
     response = templates.TemplateResponse("verify_result.html", context)
     response.headers["Cache-Control"] = "public, max-age=300"
