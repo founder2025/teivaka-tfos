@@ -31,7 +31,9 @@ import { formatMoney } from "../../utils/money";
 const LIST_LIMIT = 200; // backend caps le=200 (CA-BUG)
 // Editing/deleting cash retroactively changes the balance — management-only in the UI;
 // fail-open if role is unknown (authoritative gate filed backend, SS-CA5).
-function canManageCash() { const r = getCurrentUser()?.role; return !r || ["FOUNDER", "MANAGER", "ADMIN", "OWNER"].includes(r); }
+// The farm owner (FARMER) manages their own cash; only sub-roles (WORKER/VIEWER) are read-only.
+// Fail-open if role is unknown. (Authoritative gate is server-side — CA-C, staged.)
+function canManageCash() { const r = getCurrentUser()?.role; return !r || ["FOUNDER", "MANAGER", "ADMIN", "OWNER", "FARMER"].includes(r); }
 function emitToast(m) { window.dispatchEvent(new CustomEvent("tfos:toast", { detail: { message: m } })); }
 function todayISO() { return new Date().toLocaleDateString("en-CA", { timeZone: "Pacific/Fiji" }); } // Fiji day (CA4)
 function fjd0(v) { return formatMoney(v ?? 0, { decimals: 0 }); }
@@ -107,7 +109,8 @@ function DegradedBanner() {
 }
 
 function Tile({ label, value, sub, color, onClick }) {
-  return <div className="capital-tile" onClick={onClick} style={onClick ? { cursor: "pointer" } : null}>
+  const props = onClick ? { role: "button", tabIndex: 0, onClick, onKeyDown: (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick(); } }, style: { cursor: "pointer" } } : {};
+  return <div className="capital-tile" {...props}>
     <div className="capital-tile-label">{label}</div><div className="capital-tile-value" style={color ? { color } : null}>{value}</div><div className="capital-tile-sub">{sub}</div></div>;
 }
 // Honest-empty for a BUILT feature with no data yet (no "Building" badge — that implies unbuilt).
@@ -291,8 +294,9 @@ function CashInner() {
                   <Tile label="Events" value={filtered.length} sub="in window" />
                 </div>
                 {capNote && <div style={{ fontSize: 11, color: "var(--muted)", margin: "0 2px 8px" }}>{capNote}</div>}
-                <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
-                  <button className="btn btn-secondary btn-sm" disabled={filtered.length === 0} onClick={() => exportCashCSV(filtered, farmId)} title="Download these entries as a CSV cashbook"><ShieldCheck size={12} />Export CSV ({filtered.length})</button>
+                <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                  {atCap && <span style={{ fontSize: 10.5, color: "var(--muted)" }}>export covers latest {LIST_LIMIT}</span>}
+                  <button className="btn btn-secondary btn-sm" disabled={filtered.length === 0} onClick={() => exportCashCSV(filtered, farmId)} title={`Download these ${filtered.length} entries as a CSV cashbook${atCap ? ` (latest ${LIST_LIMIT} loaded)` : ""}`}><ShieldCheck size={12} />Export CSV ({filtered.length})</button>
                 </div>
                 <div className="gallery-filter-row" style={{ marginBottom: 8 }}>
                   <span style={{ fontSize: 10.5, color: "var(--muted)", textTransform: "uppercase", letterSpacing: ".5px", marginRight: 6, alignSelf: "center" }}>Direction:</span>
@@ -503,6 +507,7 @@ function EntryForm({ form, farmId, onClose, onSaved }) {
   const [method, setMethod] = useState(e.payment_method || "CASH");
   const [description, setDescription] = useState(e.description || "");
   const [cycleId, setCycleId] = useState(e.pu_id ? `${e.pu_id}|${e.production_id || ""}` : "");
+  const [showAnchor, setShowAnchor] = useState(!!e.pu_id);
   const [busy, setBusy] = useState(false);
   const lock = useRef(false); // submit-lock vs double-posted cash (CA20)
   const cats = CATEGORIES_BY_TYPE[type] || CATEGORIES_BY_TYPE.INCOME;
@@ -538,13 +543,16 @@ function EntryForm({ form, farmId, onClose, onSaved }) {
       <Field label="Payment method"><select value={method} onChange={(ev) => setMethod(ev.target.value)}>{PAYMENT_METHODS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></Field>
       {method === "CREDIT" && type === "EXPENSE" && <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 4 }}>Note: credit purchases currently reduce your balance straight away — proper payables tracking is on the roadmap.</div>}
       <Field label="Description"><input value={description} onChange={(ev) => setDescription(ev.target.value)} placeholder="What was this for" /></Field>
-      <Field label="Attach to a business (optional)">
-        <select value={cycleId} onChange={(ev) => setCycleId(ev.target.value)} aria-label="Attach to a cycle">
-          <option value="">Whole farm — not a specific business</option>
-          {cycleOpts.map((c) => <option key={c.cycle_id} value={`${c.pu_id}|${c.production_id || ""}`}>{c.production_name || c.farmer_label || c.cycle_id}{c.farmer_label && c.production_name ? ` · ${c.farmer_label}` : ""}</option>)}
-        </select>
-      </Field>
-      <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 2 }}>Attaching cash to a business lets it show up in that enterprise's profit & loss.</div>
+      {showAnchor ? (
+        <Field label="Attach to a business (optional)">
+          <select value={cycleId} onChange={(ev) => setCycleId(ev.target.value)} aria-label="Attach to a cycle">
+            <option value="">Whole farm — not a specific business</option>
+            {cycleOpts.map((c) => <option key={c.cycle_id} value={`${c.pu_id}|${c.production_id || ""}`}>{c.production_name || c.farmer_label || c.cycle_id}{c.farmer_label && c.production_name ? ` · ${c.farmer_label}` : ""}</option>)}
+          </select>
+        </Field>
+      ) : (
+        <button type="button" className="btn btn-secondary btn-sm" style={{ marginTop: 4 }} onClick={() => setShowAnchor(true)}><Plus size={11} />Attach to a business (for its profit &amp; loss)</button>
+      )}
       {isEdit && <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 6 }}>The date and in/out type can't be changed (locked to keep the audit trail honest). To fix those, delete this entry within 48h and re-add it.</div>}
     </Modal>
   );
