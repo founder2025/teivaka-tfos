@@ -28,11 +28,15 @@ export const poultryConfig = {
     optionLabel: (f) => `${f.flock_label || f.flock_id}${f.current_count != null ? ` · ${f.current_count} birds` : ""}`,
     shortLabel: (f) => f.flock_label || f.flock_id,
     contextLabel: "Flock",
+    contextLabelPlural: "flocks",
     loadingMsg: "Loading your flocks…",
     emptyMsg: "No active flock yet — place a flock first.",
     pickPrompt: "Select flock…",
     buildAnchors: (f) => ({ farm_id: f.farm_id, flock_id: f.flock_id, ...(f.current_pu_id ? { pu_id: f.current_pu_id } : {}) }),
     injectPayload: () => ({}),
+    // FAB13: pre-check whether a flock can be sold (mirrors the server gate so the
+    // farmer is warned BEFORE filling a sale form). Read-only; the hard gate still runs on submit.
+    saleEligibilityUrl: (f) => `/api/v1/flocks/${encodeURIComponent(f.flock_id)}/sale-eligibility`,
   },
   verbs: [
     {
@@ -41,7 +45,7 @@ export const poultryConfig = {
         { choiceLabel: "Collected eggs", event_type: "EGGS_COLLECTED", capture: [
           { name: "qty_eggs", ask: "How many eggs?", input: "number", tier: "quick" },
           { name: "broken_eggs", ask: "Broken", input: "number", tier: "detail" } ] },
-        { choiceLabel: "Sold / gave eggs", event_type: "EGGS_SOLD", autofillDate: ["sale_date"], capture: [
+        { choiceLabel: "Sold / gave eggs", event_type: "EGGS_SOLD", precheck: "sale", autofillDate: ["sale_date"], capture: [
           { name: "qty_eggs", ask: "How many eggs?", input: "number", tier: "quick" },
           { name: "total_revenue_fjd", ask: "Money received (FJD)", input: "number", tier: "quick" },
           { name: "disposition", ask: "Sold or given?", input: "choice", tier: "detail", options: opts({value:"SOLD",label:"Sold"},{value:"GIVEN",label:"Given"}) },
@@ -84,7 +88,7 @@ export const poultryConfig = {
           { name: "reason", ask: "Why?", input: "choice", tier: "quick", options: opts({value:"REPLACEMENT",label:"Replacement"},{value:"EXPANSION",label:"Expansion"},{value:"RECOVERY",label:"Recovery"}) },
           { name: "supplier_id", ask: "Supplier", input: "library", libraryType: "POULTRY_SUPPLIER", tier: "detail" },
           { name: "cost_fjd", ask: "Cost (FJD)", input: "number", tier: "detail" } ] },
-        { choiceLabel: "Sold birds", event_type: "BIRDS_SOLD", autofillDate: ["sale_date"], capture: [
+        { choiceLabel: "Sold birds", event_type: "BIRDS_SOLD", precheck: "sale", autofillDate: ["sale_date"], capture: [
           { name: "qty_sold", ask: "How many sold?", input: "number", tier: "quick" },
           { name: "sale_type", ask: "Sold as?", input: "choice", tier: "quick", options: opts({value:"LIVE_BIRD",label:"Live bird"},{value:"DRESSED",label:"Dressed"},{value:"EGGS_LAYER_END",label:"Spent layer"}) },
           { name: "total_revenue_fjd", ask: "Money received (FJD)", input: "number", tier: "quick" },
@@ -101,7 +105,7 @@ export const poultryConfig = {
           { name: "severity", ask: "How bad?", input: "choice", tier: "quick", options: opts({value:"MILD",label:"Mild"},{value:"MODERATE",label:"Moderate"},{value:"SEVERE",label:"Severe"},{value:"CLEARED",label:"Cleared / recovered"}) },
           { name: "qty_affected", ask: "Birds affected", input: "number", tier: "quick" },
           { name: "symptoms", ask: "Symptoms", input: "multichoice", tier: "quick", options: opts({value:"COUGHING",label:"Coughing"},{value:"SNEEZING",label:"Sneezing"},{value:"DIARRHEA",label:"Diarrhea"},{value:"LETHARGY",label:"Lethargy"},{value:"REDUCED_APPETITE",label:"Off feed"},{value:"REDUCED_PRODUCTION",label:"Fewer eggs"},{value:"SWELLING",label:"Swelling"},{value:"NASAL_DISCHARGE",label:"Runny nose"},{value:"EYE_DISCHARGE",label:"Runny eyes"},{value:"FEATHER_LOSS",label:"Feather loss"},{value:"LIMPING",label:"Limping"},{value:"OTHER",label:"Other"}) } ] },
-        { choiceLabel: "Vaccinated", event_type: "VACCINATION_GIVEN", capture: [
+        { choiceLabel: "Vaccinated", event_type: "VACCINATION_GIVEN", batch: true, capture: [
           { name: "vaccine_id", ask: "Which vaccine?", input: "library", libraryType: "POULTRY_VACCINE", tier: "quick" },
           { name: "route", ask: "How given?", input: "choice", tier: "quick", options: opts({value:"DRINKING_WATER",label:"In water"},{value:"INJECTION",label:"Injection"},{value:"EYE_DROP",label:"Eye drop"},{value:"SPRAY",label:"Spray"},{value:"OTHER",label:"Other"}) },
           { name: "qty_doses", ask: "Doses", input: "number", tier: "detail" } ] },
@@ -127,7 +131,7 @@ export const poultryConfig = {
         { choiceLabel: "Weighed birds", event_type: "WEIGHT_CHECK", capture: [
           { name: "avg_weight_g", ask: "Average weight (g)", input: "number", tier: "quick" },
           { name: "sample_size", ask: "Birds weighed", input: "number", tier: "quick" } ] },
-        { choiceLabel: "Temperature", event_type: "TEMPERATURE_RECORDED", capture: [
+        { choiceLabel: "Temperature", event_type: "TEMPERATURE_RECORDED", batch: true, capture: [
           { name: "temperature_celsius", ask: "Temperature (°C)", input: "number", tier: "quick" },
           { name: "time_of_day", ask: "When?", input: "choice", tier: "quick", options: opts({value:"MORNING",label:"Morning"},{value:"MIDDAY",label:"Midday"},{value:"AFTERNOON",label:"Afternoon"},{value:"EVENING",label:"Evening"},{value:"NIGHT",label:"Night"}) } ] },
         { choiceLabel: "Water used", event_type: "WATER_CONSUMED", capture: [
@@ -139,11 +143,11 @@ export const poultryConfig = {
     {
       id: "coop", label: "Coop & litter", descriptor: "litter, cleaning, moving birds", icon: "Home",
       resolve: { branch: { prompt: "What did you do?", options: [
-        { choiceLabel: "Changed litter", event_type: "LITTER_CHANGED", capture: [
+        { choiceLabel: "Changed litter", event_type: "LITTER_CHANGED", batch: true, capture: [
           { name: "litter_type", ask: "Litter type", input: "choice", tier: "quick", options: opts({value:"WOOD_SHAVINGS",label:"Wood shavings"},{value:"RICE_HUSK",label:"Rice husk"},{value:"SAWDUST",label:"Sawdust"},{value:"STRAW",label:"Straw"},{value:"OTHER",label:"Other"}) },
           { name: "qty_kg", ask: "Amount (kg)", input: "number", tier: "quick" },
           { name: "removed_litter_disposal", ask: "Old litter went to", input: "choice", tier: "quick", options: opts({value:"COMPOSTED",label:"Compost"},{value:"BURNED",label:"Burned"},{value:"BURIED",label:"Buried"},{value:"SPREAD_ON_FIELD",label:"On field"},{value:"OTHER",label:"Other"}) } ] },
-        { choiceLabel: "Cleaned coop", event_type: "COOP_CLEANED", capture: [
+        { choiceLabel: "Cleaned coop", event_type: "COOP_CLEANED", batch: true, capture: [
           { name: "cleaning_method", ask: "How?", input: "choice", tier: "quick", options: opts({value:"WATER_RINSE",label:"Water rinse"},{value:"DISINFECTANT_SPRAY",label:"Disinfectant"},{value:"FULL_DEEP_CLEAN",label:"Deep clean"},{value:"DRY_SWEEP",label:"Dry sweep"}) },
           { name: "cleaner_role", ask: "Who cleaned?", input: "choice", tier: "quick", options: opts({value:"OWNER",label:"Me"},{value:"WORKER",label:"Worker"},{value:"FAMILY",label:"Family"},{value:"EXTERNAL",label:"Hired"}) } ] },
         { choiceLabel: "Moved birds", event_type: "FLOCK_MOVED", capture: [
@@ -171,7 +175,7 @@ export const poultryConfig = {
         { choiceLabel: "Visitor came", event_type: "VISITOR_LOGGED", autofillDate: ["arrival_time"], capture: [
           { name: "visitor_type", ask: "Who visited?", input: "choice", tier: "quick", options: opts({value:"BUYER",label:"Buyer"},{value:"SUPPLIER",label:"Supplier"},{value:"VET",label:"Vet"},{value:"EXTENSION_OFFICER",label:"Extension officer"},{value:"INSPECTOR",label:"Inspector"},{value:"OTHER_FARMER",label:"Other farmer"},{value:"FAMILY",label:"Family"},{value:"OTHER",label:"Other"}) },
           { name: "purpose", ask: "Why?", input: "choice", tier: "quick", options: opts({value:"DELIVERY",label:"Delivery"},{value:"PURCHASE",label:"Purchase"},{value:"VETERINARY",label:"Veterinary"},{value:"INSPECTION",label:"Inspection"},{value:"CONSULTATION",label:"Consultation"},{value:"SOCIAL",label:"Social"},{value:"OTHER",label:"Other"}) } ] },
-        { choiceLabel: "Pest control", event_type: "PEST_CONTROL_APPLIED", capture: [
+        { choiceLabel: "Pest control", event_type: "PEST_CONTROL_APPLIED", batch: true, capture: [
           { name: "pest_target", ask: "Target pest", input: "choice", tier: "quick", options: opts({value:"RODENTS",label:"Rodents"},{value:"FLIES",label:"Flies"},{value:"MITES",label:"Mites"},{value:"LICE",label:"Lice"},{value:"COCKROACHES",label:"Cockroaches"},{value:"OTHER",label:"Other"}) },
           { name: "applicator_role", ask: "Who applied it?", input: "choice", tier: "quick", options: opts({value:"OWNER",label:"Me"},{value:"WORKER",label:"Worker"},{value:"EXTERNAL_PEST_CONTROL",label:"Hired pest control"}) },
           { name: "non_chemical_method", ask: "Non-chemical method", input: "choice", tier: "detail", options: opts({value:"TRAPS",label:"Traps"},{value:"PHYSICAL_REMOVAL",label:"Physical removal"},{value:"PREDATOR_BIRDS",label:"Predator birds"},{value:"OTHER",label:"Other"}) } ] },

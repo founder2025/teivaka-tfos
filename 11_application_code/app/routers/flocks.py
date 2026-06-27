@@ -143,6 +143,50 @@ async def list_flocks(
     )
 
 
+@router.get("/flocks/{flock_id}/sale-eligibility")
+async def flock_sale_eligibility(
+    flock_id: str,
+    user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_tenant_db),
+):
+    """Read-only pre-check: can this flock be sold right now?
+
+    Surfaces the SAME gates POST /events enforces at sale (Phase 6.6-1 vaccination
+    withholding + 6.6-2 SEVERE health block) so the (+) capture form can WARN the
+    farmer BEFORE they fill out a sale they can't complete — never instead of the
+    hard gate, which still runs server-side on submit. Importing the exact gate
+    functions keeps this warning from drifting away from the real block.
+    """
+    # Imported lazily to avoid any router import-order coupling at module load.
+    from app.routers.events import check_severe_health_block, check_vaccination_withholding
+
+    tenant_uuid = _resolve_tenant_uuid(user)
+
+    # Confirm the flock is visible to this tenant (RLS already scopes; 404 on miss).
+    flock_check = await db.execute(
+        text("SELECT flock_id FROM tenant.flocks WHERE flock_id = :fid"),
+        {"fid": flock_id},
+    )
+    if flock_check.first() is None:
+        raise HTTPException(404, error_envelope("flock_not_found", f"Flock {flock_id} not found."))
+
+    blocks: list[dict] = []
+
+    health = await check_severe_health_block(db, tenant_uuid, flock_id)
+    if health:
+        blocks.append({"type": "SEVERE_HEALTH", **health})
+
+    for sale_kind in ("eggs", "meat"):
+        wh = await check_vaccination_withholding(db, tenant_uuid, flock_id, sale_kind)
+        if wh:
+            blocks.append({"type": "WITHHOLDING", **wh})
+
+    return success_envelope(
+        {"flock_id": flock_id, "sellable": len(blocks) == 0, "blocks": blocks},
+        meta={"checked": ["SEVERE_HEALTH", "WITHHOLDING"]},
+    )
+
+
 @router.post("/flocks", status_code=status.HTTP_201_CREATED)
 async def create_flock(
     payload: FlockCreateRequest,

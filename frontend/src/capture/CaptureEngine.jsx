@@ -102,6 +102,9 @@ export default function CaptureEngine({ config = cropsConfig, onDone, onBack, pr
   const [spec, setSpec] = useState(null);          // chosen EventSpec (primary or a branch option)
   const [itemId, setItemId] = useState("");
   const [anchorQuery, setAnchorQuery] = useState("");   // type-ahead for the anchor picker at scale
+  const [saleBlocks, setSaleBlocks] = useState(null);   // FAB13: null=not checked/NA, []=clear, [..]=can't sell
+  const [batchMode, setBatchMode] = useState(false);    // FAB15: log one action across several anchors
+  const [batchIds, setBatchIds] = useState([]);
   const [values, setValues] = useState({});
   const [showDetail, setShowDetail] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -281,6 +284,28 @@ export default function CaptureEngine({ config = cropsConfig, onDone, onBack, pr
     return () => { off = true; };
   }, [libTypes.join(",")]);
 
+  // FAB13: when a SALE spec is aimed at a flock, ask the server whether it can be sold
+  // right now (withholding / SEVERE health) and warn BEFORE the form is filled. The hard
+  // gate still runs on submit; this degrades to silent no-op offline or if the endpoint is
+  // absent, so the frontend can ship independently of the backend.
+  useEffect(() => {
+    if (spec?.precheck !== "sale" || !selectedItem || !ctx.saleEligibilityUrl || isOffline()) { setSaleBlocks(null); return; }
+    const url = ctx.saleEligibilityUrl(selectedItem);
+    if (!url) { setSaleBlocks(null); return; }
+    let off = false;
+    setSaleBlocks(null);
+    (async () => {
+      try {
+        const res = await fetch(url, { headers: authHeaders() });
+        if (!res.ok) return;                       // 404 (not deployed) / other → stay silent
+        const body = await res.json().catch(() => null);
+        const blocks = body?.data?.blocks;
+        if (!off && Array.isArray(blocks)) setSaleBlocks(blocks);
+      } catch { /* network — the submit gate is authoritative */ }
+    })();
+    return () => { off = true; };
+  }, [spec, selectedItem, ctx]);
+
   // Clear the per-entry fields (values, evidence, notes, when) — keeps cycle + operator.
   function clearEntry() {
     setValues({}); setShowDetail(false); setError("");
@@ -291,6 +316,7 @@ export default function CaptureEngine({ config = cropsConfig, onDone, onBack, pr
     if (mediaRef.current && recording) { try { mediaRef.current.stop(); } catch { /* noop */ } }
     setRecording(false); setRecSecs(0);
     setOccurredDate(nowDateStr()); setOccurredTime(nowTimeStr()); setChemQuery(""); setLibQuery(""); setAnchorQuery("");
+    setSaleBlocks(null); setBatchMode(false); setBatchIds([]);
     setEditOpen(false); setEditSaved(false); setEditPhoto(null);
     idemRef.current = null;   // fresh idempotency key per entry
     prefillRef.current = null;
@@ -393,8 +419,16 @@ export default function CaptureEngine({ config = cropsConfig, onDone, onBack, pr
   }
   const mmss = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 
+  // FAB15: the anchors a batch submit will write to (one record each); empty unless batchMode.
+  const batchTargets = useMemo(
+    () => (batchMode ? scopedItems.filter((c) => batchIds.includes(c[ctx.idKey])) : []),
+    [batchMode, batchIds, scopedItems, ctx.idKey],
+  );
+
   async function submit() {
-    if (!spec || !selectedItem) return;
+    if (!spec) return;
+    if (batchMode) { if (batchTargets.length === 0) return; }
+    else if (!selectedItem) return;
     if (spec.validate) { const msg = spec.validate(values); if (msg) { setError(msg); return; } }
     setSubmitting(true); setError("");
     if (!idemRef.current) idemRef.current = newIdem();   // stable across retries of THIS entry (FAB12)
@@ -417,31 +451,49 @@ export default function CaptureEngine({ config = cropsConfig, onDone, onBack, pr
         if (r.queued) setResult({ queued: true });
         else setResult(config.submit.extractResult ? config.submit.extractResult(r.data) : { event_id: "", audit_hash: "" });
       } else {
-        const payload = {};
+        const base = {};
         for (const f of spec.capture) {
           if (f.name === "notes") continue;       // notes captured by the universal section below
           const v = values[f.name];
-          if (v !== undefined && v !== "" && v !== null) payload[f.name] = v;
+          if (v !== undefined && v !== "" && v !== null) base[f.name] = v;
         }
-        // Context inference: inject anchor-derived keys (e.g. crop production_id) so the farmer
-        // never re-types them. Auto-fill required date fields from the chosen date.
-        Object.assign(payload, ctx.injectPayload ? ctx.injectPayload(selectedItem) : {});
-        if (spec.autofillDate) for (const k of spec.autofillDate) if (payload[k] === undefined) payload[k] = occurredDate;
-        if (values.notes) payload.notes = values.notes;
-        const envelope = {
-          event_type: spec.event_type,
-          occurred_at: `${occurredDate}T${occurredTime || "12:00"}:00+12:00`,
-          anchors: ctx.buildAnchors(selectedItem),
-          payload,
-          ...(Object.keys(ev).length ? { evidence: ev } : {}),
+        if (values.notes) base.notes = values.notes;
+        // Per-anchor envelope: context inference injects anchor-derived keys (e.g. crop
+        // production_id) per item, so a batch over different cycles stays correct. Auto-fill
+        // required date fields from the chosen date.
+        const buildEnvelope = (item) => {
+          const payload = { ...base, ...(ctx.injectPayload ? ctx.injectPayload(item) : {}) };
+          if (spec.autofillDate) for (const k of spec.autofillDate) if (payload[k] === undefined) payload[k] = occurredDate;
+          return {
+            event_type: spec.event_type,
+            occurred_at: `${occurredDate}T${occurredTime || "12:00"}:00+12:00`,
+            anchors: ctx.buildAnchors(item),
+            payload,
+            ...(Object.keys(ev).length ? { evidence: ev } : {}),
+          };
         };
         // Pass any evidence not yet uploaded (offline / mid-upload) so it's stashed + sent on flush.
-        const r = await submitCapture({
-          endpoint: "/api/v1/events", body: envelope, idem: idemRef.current,
-          evidenceFiles: { photo_url: photoUrl ? null : photoFile, voice_url: voiceUrl ? null : voiceBlob },
-        });
-        if (r.queued) setResult({ queued: true });
-        else setResult({ event_id: r.data?.data?.event_id || "", audit_hash: r.data?.data?.audit_hash || "" });
+        const evFiles = { photo_url: photoUrl ? null : photoFile, voice_url: voiceUrl ? null : voiceBlob };
+
+        if (batchMode) {
+          // FAB15: one action → one real record per selected anchor, each with its own
+          // idempotency key (a re-tap can't duplicate the set). Partial failures are reported,
+          // never swallowed.
+          let saved = 0, queued = 0; const failed = [];
+          for (const item of batchTargets) {
+            try {
+              const r = await submitCapture({ endpoint: "/api/v1/events", body: buildEnvelope(item), idem: newIdem(), evidenceFiles: evFiles });
+              if (r.queued) queued++; else saved++;
+            } catch (e) { failed.push({ id: item[ctx.idKey], label: ctx.shortLabel(item), msg: e?.userMessage || e?.message || "Failed" }); }
+          }
+          setResult({ batch: { total: batchTargets.length, saved, queued, failed } });
+        } else {
+          const r = await submitCapture({
+            endpoint: "/api/v1/events", body: buildEnvelope(selectedItem), idem: idemRef.current, evidenceFiles: evFiles,
+          });
+          if (r.queued) setResult({ queued: true });
+          else setResult({ event_id: r.data?.data?.event_id || "", audit_hash: r.data?.data?.audit_hash || "" });
+        }
       }
       // Learn this farmer's routine (frequency + last values) for Quick-log + pre-fill. On-device.
       recordCapture({ eventType: spec.event_type, values });
@@ -499,11 +551,21 @@ export default function CaptureEngine({ config = cropsConfig, onDone, onBack, pr
     <div style={wrap}>
       <div style={{ textAlign: "center", padding: "24px 0 8px" }}>
         <Check size={56} style={{ color: "var(--green)" }} />
-        <h2 style={{ fontSize: 20, fontWeight: 700, marginTop: 12 }}>{editSaved ? "Correction saved" : "Saved"}</h2>
+        <h2 style={{ fontSize: 20, fontWeight: 700, marginTop: 12 }}>
+          {editSaved ? "Correction saved"
+            : result.batch ? (result.batch.failed.length ? "Partly saved" : "All saved")
+            : "Saved"}</h2>
         <p style={{ color: "var(--muted)", fontSize: 13, marginTop: 6 }}>
-          {result.queued
+          {result.batch
+            ? <>{result.batch.saved + result.batch.queued} of {result.batch.total} {ctx.contextLabelPlural || "records"} recorded{result.batch.queued ? ` (${result.batch.queued} will sync when online)` : ""}{result.batch.failed.length ? ` · ${result.batch.failed.length} failed` : ""}.</>
+            : result.queued
             ? "Saved on your device — it will sync automatically when you're back online."
             : <>Recorded {result.event_id}{result.audit_hash ? ` · ${result.audit_hash.slice(0, 12)}…` : ""}</>}</p>
+        {result.batch?.failed?.length > 0 && (
+          <div style={{ marginTop: 10, textAlign: "left", fontSize: 12.5, color: "#9a3b3b" }}>
+            {result.batch.failed.map((f) => <div key={f.id}>• {f.label || f.id}: {f.msg}</div>)}
+          </div>
+        )}
       </div>
 
       {canEditResult && !editOpen && (
@@ -577,6 +639,9 @@ export default function CaptureEngine({ config = cropsConfig, onDone, onBack, pr
   // --- capture ---  (notes handled by the universal Notes section, not as a config field)
   const quick = spec.capture.filter((f) => f.tier === "quick" && f.name !== "notes");
   const detail = spec.capture.filter((f) => f.tier === "detail" && f.name !== "notes");
+  const canBatch = !!spec.batch && !config.submit && scopedItems.length > 1;   // FAB15
+  const ready = batchMode ? batchTargets.length > 0 : !!selectedItem;
+  function toggleBatchId(id) { setBatchIds((s) => s.includes(id) ? s.filter((x) => x !== id) : [...s, id]); }
   function setVal(n, v) { setValues((s) => ({ ...s, [n]: v })); }
   function pickChemical(name, c) {
     setValues((s) => {
@@ -713,7 +778,9 @@ export default function CaptureEngine({ config = cropsConfig, onDone, onBack, pr
               <span style={{ color: "var(--muted)" }}>Farm</span>
               <span style={{ fontWeight: 600 }}>{anchorFarmName || selectedItem?.farm_id || "—"}</span>
               <span style={{ color: "var(--muted)" }}>{ctx.contextLabel}</span>
-              {scopedItems.length === 1
+              {batchMode
+                ? <span style={{ fontWeight: 600 }}>{batchIds.length} {(ctx.contextLabelPlural || "items")} selected</span>
+                : scopedItems.length === 1
                 ? <span style={{ fontWeight: 600 }}>{ctx.optionLabel(selectedItem)}</span>
                 : scopedItems.length <= 8
                 ? <select value={itemId} onChange={(e) => setItemId(e.target.value)} style={inputBox} aria-label={ctx.contextLabel}>
@@ -745,7 +812,64 @@ export default function CaptureEngine({ config = cropsConfig, onDone, onBack, pr
               <span style={{ color: "var(--muted)" }}>Operator</span>
               <span style={{ fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}><User size={14} />{operator || "You"}</span>
             </div>
+
+            {/* FAB15 — log this same action across several anchors at once (opt-in). */}
+            {canBatch && (
+              <div style={{ marginTop: 12, borderTop: "1px dashed var(--line)", paddingTop: 12 }}>
+                <button type="button" onClick={() => { setBatchMode((m) => !m); setBatchIds([]); }}
+                  aria-pressed={batchMode}
+                  style={{ display: "flex", alignItems: "center", gap: 8, background: "none", border: "none", cursor: "pointer",
+                    color: batchMode ? "var(--green-dk)" : "var(--muted)", fontWeight: 600, fontSize: 13, padding: 0 }}>
+                  <Users size={16} />{batchMode ? `Logging for several ${ctx.contextLabelPlural || "items"}` : `Log for several ${ctx.contextLabelPlural || "items"} at once`}
+                </button>
+                {batchMode && (
+                  <div style={{ marginTop: 10 }}>
+                    <button type="button"
+                      onClick={() => setBatchIds(batchIds.length === scopedItems.length ? [] : scopedItems.map((c) => c[ctx.idKey]))}
+                      style={{ background: "none", border: "none", color: "var(--green-dk)", cursor: "pointer", fontSize: 12.5, fontWeight: 600, padding: 0, marginBottom: 8 }}>
+                      {batchIds.length === scopedItems.length ? "Clear all" : "Select all"}
+                    </button>
+                    <div style={{ maxHeight: 220, overflowY: "auto", display: "flex", flexDirection: "column", gap: 6 }}>
+                      {scopedItems.map((c) => {
+                        const on = batchIds.includes(c[ctx.idKey]);
+                        return (
+                          <button key={c[ctx.idKey]} type="button" onClick={() => toggleBatchId(c[ctx.idKey])} aria-pressed={on}
+                            style={{ display: "flex", alignItems: "center", gap: 10, textAlign: "left", padding: "10px 12px", borderRadius: 10, cursor: "pointer",
+                              border: on ? "2px solid var(--green)" : "1px solid var(--line)", background: on ? "#eaf3ea" : "#fff", fontWeight: 600, fontSize: 14 }}>
+                            <span style={{ width: 18, height: 18, borderRadius: 5, flexShrink: 0, display: "grid", placeItems: "center",
+                              border: on ? "none" : "1.5px solid var(--line)", background: on ? "var(--green)" : "#fff" }}>
+                              {on && <Check size={13} style={{ color: "#fff" }} />}
+                            </span>
+                            {ctx.optionLabel(c)}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <p style={{ fontSize: 12, color: "var(--muted)", marginTop: 8, fontStyle: "italic" }}>
+                      Creates {batchIds.length || 0} separate record{batchIds.length === 1 ? "" : "s"} — one per {ctx.contextLabel.toLowerCase()}, same details on each.
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
+
+          {/* FAB13 — sale pre-check: warn (don't block) before the farmer fills a sale they can't complete. */}
+          {saleBlocks && saleBlocks.length > 0 && (
+            <div style={{ border: "1px solid #e6b8b8", background: "#fbedea", borderRadius: 12, padding: "12px 14px", marginBottom: 16 }}>
+              <div style={{ fontWeight: 700, color: "#8a2b2b", display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
+                <AlertTriangle size={16} /> This flock can't be sold yet
+              </div>
+              {saleBlocks.map((b, i) => (
+                <p key={i} style={{ fontSize: 13, color: "#7a3434", margin: "4px 0" }}>
+                  {b.type === "SEVERE_HEALTH"
+                    ? "A SEVERE health issue is open — log a CLEARED health observation first."
+                    : `${b.vaccine_name || "Vaccine"} withholding for ${b.sale_kind === "eggs" ? "eggs" : "meat"}: ${b.days_remaining} day(s) left (clears ${(b.withholding_until || "").slice(0, 10)}).`}
+                </p>
+              ))}
+              <p style={{ fontSize: 11.5, color: "#9a3b3b", marginTop: 6, fontStyle: "italic" }}>You can still fill this in, but it will be rejected on save until the block clears.</p>
+            </div>
+          )}
 
           {/* When */}
           <div style={{ display: "flex", gap: 10, marginBottom: 16 }}>
@@ -826,7 +950,7 @@ export default function CaptureEngine({ config = cropsConfig, onDone, onBack, pr
           {/* About to record — the audit preview */}
           <div style={{ border: "1px solid #cfe0cf", background: "#f0f6f0", borderRadius: 12, padding: "10px 12px", marginBottom: 14, fontSize: 12.5, color: "var(--green-dk)" }}>
             <div style={{ fontWeight: 700, marginBottom: 4, display: "flex", alignItems: "center", gap: 6 }}><ShieldCheck size={14} /> About to record</div>
-            {spec.event_type} · {selectedItem ? ctx.shortLabel(selectedItem) : "—"} · {prettyDate(occurredDate)} {occurredTime} · {operator || "You"}
+            {spec.event_type} · {batchMode ? `${batchTargets.length} ${ctx.contextLabelPlural || "items"}` : selectedItem ? ctx.shortLabel(selectedItem) : "—"} · {prettyDate(occurredDate)} {occurredTime} · {operator || "You"}
             {(() => { const e = [photoUrl && "photo", gps && "GPS", voiceUrl && "voice", witnessName.trim() && "witness"].filter(Boolean); return e.length ? ` · +${e.join(" +")}` : ""; })()}
           </div>
 
@@ -837,12 +961,13 @@ export default function CaptureEngine({ config = cropsConfig, onDone, onBack, pr
           {(photoUploading || voiceUploading) && !recording && (
             <p style={{ fontSize: 12, color: "var(--muted)", marginBottom: 8, textAlign: "center" }}>Photo/voice still uploading — you can save now; it attaches automatically.</p>
           )}
-          <button onClick={submit} disabled={submitting || !selectedItem || recording}
+          <button onClick={submit} disabled={submitting || !ready || recording}
             style={{ width: "100%", padding: 16, borderRadius: 14, border: "none", fontSize: 16, fontWeight: 700, color: "#fff",
-              background: (!selectedItem || recording) ? "#b8b8b8" : "var(--green)",
-              cursor: submitting || !selectedItem || recording ? "default" : "pointer",
+              background: (!ready || recording) ? "#b8b8b8" : "var(--green)",
+              cursor: submitting || !ready || recording ? "default" : "pointer",
               display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
-            {submitting ? <Loader2 size={18} /> : <Check size={18} />}{submitting ? "Saving…" : "Save"}</button>
+            {submitting ? <Loader2 size={18} /> : <Check size={18} />}
+            {submitting ? "Saving…" : batchMode && batchTargets.length > 1 ? `Save ${batchTargets.length} records` : "Save"}</button>
         </>)}
     </div>
   );
