@@ -11,7 +11,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ShieldCheck, MapPin, Sprout, AlertTriangle, RefreshCw, Pencil, Check, Clock,
-  Mail, Phone, BadgeCheck, Share2,
+  Mail, Phone, BadgeCheck, Share2, Sparkles, UserCheck,
 } from "lucide-react";
 import { C, getJSON, send } from "./_meCommon";
 import { formatMoney } from "../../utils/money";
@@ -90,7 +90,7 @@ function RefreshBtn({ onRefresh, refreshing }) {
   );
 }
 
-function Reputation({ trust, rep, onRefresh, refreshing, onShare }) {
+function Reputation({ trust, rep, onRefresh, refreshing, onShare, onVerify }) {
   const scored = trust?.status === "scored";
   return (
     <div style={{ display: "grid", gap: 12 }}>
@@ -121,8 +121,80 @@ function Reputation({ trust, rep, onRefresh, refreshing, onShare }) {
           <Stat label="Photo evidence" value={rep.photo_evidence} />
         </div>
       </div>
-      <button onClick={onShare} style={{ border: `1px solid ${C.greenDk}`, color: "var(--paper)", background: C.greenDk, borderRadius: 8, padding: "8px 12px", fontSize: 13, fontWeight: 700 }}><Share2 size={14} style={{ verticalAlign: -2, marginRight: 4 }} />Share my passport securely</button>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <button onClick={onVerify} style={{ border: `1px solid ${C.greenDk}`, color: C.greenDk, background: "var(--paper)", borderRadius: 8, padding: "8px 12px", fontSize: 13, fontWeight: 700 }}><UserCheck size={14} style={{ verticalAlign: -2, marginRight: 4 }} />Get verified</button>
+        <button onClick={onShare} style={{ border: `1px solid ${C.greenDk}`, color: "var(--paper)", background: C.greenDk, borderRadius: 8, padding: "8px 12px", fontSize: 13, fontWeight: 700 }}><Share2 size={14} style={{ verticalAlign: -2, marginRight: 4 }} />Share securely</button>
+      </div>
     </div>
+  );
+}
+
+function SummaryCard({ summary, busy, onGenerate, onAI }) {
+  return (
+    <div style={{ border: `1px solid ${C.line}`, borderRadius: 12, padding: 14, marginTop: 12, background: "var(--paper)" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}><Sparkles size={15} style={{ color: C.greenDk }} /><strong style={{ color: C.soil, fontSize: 13.5 }}>Executive summary</strong></div>
+        <button onClick={summary ? onAI : onGenerate} disabled={busy} style={{ border: `1px solid ${C.line}`, color: C.greenDk, borderRadius: 8, padding: "4px 10px", fontSize: 12, fontWeight: 600 }}>{busy ? "Working…" : summary ? "Refresh with AI" : "Generate"}</button>
+      </div>
+      {summary ? (
+        <>
+          <div style={{ fontSize: 13, color: C.soil, marginTop: 8, lineHeight: 1.55 }}>{summary.text}</div>
+          <div style={{ fontSize: 10.5, color: C.muted, marginTop: 6 }}>{summary.source === "ai" ? "AI-phrased · grounded in your records" : "Grounded summary from your records"}</div>
+        </>
+      ) : (
+        <div style={{ fontSize: 12.5, color: C.muted, marginTop: 6 }}>A 2-minute institutional read of your passport for a bank or buyer — built only from your real records.</div>
+      )}
+    </div>
+  );
+}
+
+function AttestSheet({ open, onClose }) {
+  const [list, setList] = useState([]);
+  const [form, setForm] = useState({ claim_type: "FARM_OWNERSHIP", verifier_source: "EXTENSION_OFFICER", verifier_label: "", subject_label: "" });
+  const [busy, setBusy] = useState(false);
+  const [created, setCreated] = useState(null);
+  const reload = useCallback(async () => { try { const d = await getJSON("/api/v1/attestations"); setList(d?.data?.attestations || []); } catch { /* noop */ } }, []);
+  useEffect(() => { if (open) { reload(); setCreated(null); } }, [open, reload]);
+  const create = async () => {
+    setBusy(true);
+    try { const d = await send("POST", "/api/v1/attestations", form); setCreated(d?.data); await reload(); }
+    catch (e) { toast(e.userMessage || e.message || "Couldn't create request"); } finally { setBusy(false); }
+  };
+  const copy = (url) => { try { navigator.clipboard.writeText(url); toast("Link copied"); } catch { /* noop */ } };
+  const CLAIMS = [["FARM_OWNERSHIP", "I own / operate this farm"], ["LAND_BOUNDARY", "I farm this land"], ["IDENTITY", "I'm a real farmer"]];
+  const SRC = [["EXTENSION_OFFICER", "Extension officer"], ["COOPERATIVE", "Cooperative"], ["LANDOWNER", "Landowner"], ["BUYER", "Buyer"], ["GOV_PROGRAMME", "Govt programme"]];
+  const inp = { width: "100%", border: `1px solid ${C.line}`, borderRadius: 8, padding: "8px 10px", fontSize: 13, marginTop: 4 };
+  return (
+    <Modal isOpen={open} onClose={onClose} title="Get verified" size="sm"
+      footer={<><button onClick={onClose} style={{ border: `1px solid ${C.line}`, borderRadius: 8, padding: "6px 12px", fontSize: 13 }}>Done</button><button onClick={create} disabled={busy} style={{ border: `1px solid ${C.greenDk}`, background: C.greenDk, color: "var(--paper)", borderRadius: 8, padding: "6px 12px", fontSize: 13, fontWeight: 700 }}>{busy ? "Creating…" : "Create request link"}</button></>}>
+      <div style={{ display: "grid", gap: 10 }}>
+        <div style={{ fontSize: 12, color: C.muted }}>Ask someone who knows your farm to confirm a fact. Their confirmation strengthens your verified reputation — independent confirmation counts far more than self-entry.</div>
+        {created && (
+          <div style={{ border: `1px solid ${C.green}`, background: "var(--green-tint)", borderRadius: 8, padding: 10 }}>
+            <div style={{ fontSize: 12, color: C.greenDk, fontWeight: 700 }}>Send this link to your verifier</div>
+            <div style={{ fontSize: 11.5, color: C.soil, wordBreak: "break-all", fontFamily: "monospace", marginTop: 4 }}>{created.url}</div>
+            <button onClick={() => copy(created.url)} style={{ border: `1px solid ${C.greenDk}`, color: C.greenDk, background: "var(--paper)", borderRadius: 8, padding: "4px 10px", fontSize: 12, fontWeight: 600, marginTop: 6 }}>Copy link</button>
+          </div>
+        )}
+        <label style={{ fontSize: 12.5, color: C.soil }}>What to confirm
+          <select value={form.claim_type} onChange={(e) => setForm({ ...form, claim_type: e.target.value })} style={inp}>{CLAIMS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></label>
+        <label style={{ fontSize: 12.5, color: C.soil }}>Who confirms it
+          <select value={form.verifier_source} onChange={(e) => setForm({ ...form, verifier_source: e.target.value })} style={inp}>{SRC.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></label>
+        <label style={{ fontSize: 12.5, color: C.soil }}>Their name (optional)
+          <input value={form.verifier_label} onChange={(e) => setForm({ ...form, verifier_label: e.target.value })} placeholder="e.g. Officer Mereani, Kadavu" style={inp} /></label>
+        {list.length > 0 && (
+          <div style={{ borderTop: `1px solid ${C.line}`, paddingTop: 8 }}>
+            <div style={{ fontSize: 11.5, fontWeight: 700, color: C.muted, marginBottom: 6 }}>YOUR REQUESTS</div>
+            {list.map((a) => (
+              <div key={a.request_id} style={{ display: "flex", justifyContent: "space-between", fontSize: 12, padding: "3px 0", color: C.soil }}>
+                <span>{a.claim_type.replace(/_/g, " ").toLowerCase()} · {a.verifier_source.replace(/_/g, " ").toLowerCase()}</span>
+                <span style={{ color: a.status === "CONFIRMED" ? C.greenDk : a.status === "DECLINED" ? "var(--red)" : C.muted, fontWeight: 600 }}>{a.status.toLowerCase()}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </Modal>
   );
 }
 
@@ -194,6 +266,9 @@ export default function Passport() {
   const [edit, setEdit] = useState(null); // {preferred_name, bio, languages}
   const [refreshing, setRefreshing] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
+  const [attestOpen, setAttestOpen] = useState(false);
+  const [summary, setSummary] = useState(null);
+  const [sumBusy, setSumBusy] = useState(false);
 
   const load = useCallback(async () => {
     setErr(false);
@@ -217,6 +292,17 @@ export default function Passport() {
     try { await send("POST", "/api/v1/passport/me/trust/refresh"); await load(); }
     catch (e) { toast(e.userMessage || e.message || "Couldn't refresh trust"); }
     finally { setRefreshing(false); }
+  };
+
+  const genSummary = async (ai) => {
+    setSumBusy(true);
+    try {
+      const d = ai ? await send("POST", "/api/v1/passport/me/summary/refresh")
+                   : await getJSON("/api/v1/passport/me/summary");
+      setSummary({ text: d?.data?.summary, source: d?.data?.source });
+      if (d?.data?.note) toast(d.data.note);
+    } catch (e) { toast(e.userMessage || e.message || "Couldn't generate summary"); }
+    finally { setSumBusy(false); }
   };
 
   if (err && !data) return (
@@ -279,6 +365,7 @@ export default function Passport() {
             <Stat label="On Teivaka since" value={id.member_since || "—"} sub={`${rep.photo_evidence} photos logged`} />
           </div>
           <TrustHeadline trust={data.trust} onView={() => setTab("reputation")} />
+          <SummaryCard summary={summary || data.summary} busy={sumBusy} onGenerate={() => genSummary(false)} onAI={() => genSummary(true)} />
         </>
       )}
 
@@ -295,9 +382,10 @@ export default function Passport() {
         </div>
       )}
 
-      {tab === "reputation" && <Reputation trust={data.trust} rep={rep} onRefresh={refreshTrust} refreshing={refreshing} onShare={() => setShareOpen(true)} />}
+      {tab === "reputation" && <Reputation trust={data.trust} rep={rep} onRefresh={refreshTrust} refreshing={refreshing} onShare={() => setShareOpen(true)} onVerify={() => setAttestOpen(true)} />}
 
       <ShareSheet open={shareOpen} onClose={() => setShareOpen(false)} />
+      <AttestSheet open={attestOpen} onClose={() => setAttestOpen(false)} />
 
       <Modal isOpen={!!edit} onClose={() => setEdit(null)} title="Edit passport details" size="sm"
         footer={<><button onClick={() => setEdit(null)} style={{ border: `1px solid ${C.line}`, borderRadius: 8, padding: "6px 12px", fontSize: 13 }}>Cancel</button><button onClick={saveProfile} style={{ border: `1px solid ${C.greenDk}`, color: "var(--paper)", background: C.greenDk, borderRadius: 8, padding: "6px 12px", fontSize: 13, fontWeight: 600 }}>Save</button></>}>

@@ -23,19 +23,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.middleware.rls import get_current_user, get_tenant_db
 from app.schemas.envelope import success_envelope
+from app.services.passport_summary import deterministic_summary, build_prompt
 
 router = APIRouter()
 
 _ACTIVE = ("PLANNED", "ACTIVE", "HARVESTING", "CLOSING")
 
 
-@router.get("/passport/me")
-async def get_my_passport(
-    db: AsyncSession = Depends(get_tenant_db),
-    user: dict = Depends(get_current_user),
-):
+async def _assemble_passport(db: AsyncSession, user: dict) -> dict:
     """Assemble the Agricultural Passport read-model from existing data (no duplicate
-    entry). Honest-empty where a real source doesn't exist yet."""
+    entry). Honest-empty where a real source doesn't exist yet. Reused by the summary."""
     uid = str(user["user_id"])
 
     u = (await db.execute(text(
@@ -114,7 +111,7 @@ async def get_my_passport(
         "identity": False,                       # no third-party KYC yet (Phase 5) — honest false
     }
 
-    return success_envelope({
+    return {
         "identity": {
             "preferred_name": prof.get("preferred_name") or u.get("full_name"),
             "legal_name": u.get("full_name"),
@@ -142,7 +139,66 @@ async def get_my_passport(
             "photo_evidence": int(photos),
         },
         "trust": trust,
-    })
+    }
+
+
+@router.get("/passport/me")
+async def get_my_passport(db: AsyncSession = Depends(get_tenant_db), user: dict = Depends(get_current_user)):
+    p = await _assemble_passport(db, user)
+    row = (await db.execute(text(
+        "SELECT summary, source, generated_at FROM tenant.passport_ai_summary LIMIT 1"))).mappings().first()
+    if row and row["summary"]:
+        p["summary"] = {"text": row["summary"], "source": row["source"],
+                        "generated_at": row["generated_at"].isoformat() if row["generated_at"] else None}
+    return success_envelope(p)
+
+
+async def _store_summary(db, user, summary_text, source, based_on):
+    await db.execute(text("""
+        INSERT INTO tenant.passport_ai_summary (tenant_id, summary, source, based_on, generated_at)
+        VALUES (cast(:t AS uuid), :s, :src, :b, now())
+        ON CONFLICT (tenant_id) DO UPDATE SET summary=EXCLUDED.summary, source=EXCLUDED.source,
+            based_on=EXCLUDED.based_on, generated_at=now()
+    """), {"t": str(user["tenant_id"]), "s": summary_text, "src": source, "b": based_on})
+
+
+@router.get("/passport/me/summary")
+async def get_my_summary(db: AsyncSession = Depends(get_tenant_db), user: dict = Depends(get_current_user)):
+    """Cached if it matches the current trust snapshot; else compute the grounded
+    deterministic summary + cache (DD-4 cache-per-snapshot). Never fabricated."""
+    p = await _assemble_passport(db, user)
+    based = (p.get("trust") or {}).get("computed_at")
+    cache = (await db.execute(text(
+        "SELECT summary, source, based_on FROM tenant.passport_ai_summary LIMIT 1"))).mappings().first()
+    fresh = cache and cache["summary"] and (
+        (based is None) or (cache["based_on"] and cache["based_on"].isoformat() == based))
+    if fresh:
+        return success_envelope({"summary": cache["summary"], "source": cache["source"]})
+    txt = deterministic_summary(p)
+    await _store_summary(db, user, txt, "deterministic", None)
+    return success_envelope({"summary": txt, "source": "deterministic"})
+
+
+@router.post("/passport/me/summary/refresh")
+async def refresh_my_summary(db: AsyncSession = Depends(get_tenant_db), user: dict = Depends(get_current_user)):
+    """Regenerate with LLM phrasing via the OpenClaw bridge — STRICTLY grounded
+    (Inviolable #1). Falls back to the deterministic summary if the bridge is unavailable."""
+    p = await _assemble_passport(db, user)
+    based = (p.get("trust") or {}).get("computed_at")
+    try:
+        from app.services.tis_service import bridge_chat
+        farm_id = (p.get("farms") or [{}])[0].get("farm_id")
+        out = await bridge_chat(build_prompt(p), str(user["user_id"]), farm_id)
+        if not out or len(out.strip()) < 40:
+            raise ValueError("empty")
+        txt = out.strip()
+        await _store_summary(db, user, txt, "ai", based)
+        return success_envelope({"summary": txt, "source": "ai"})
+    except Exception:  # noqa: BLE001 — never block on the LLM; ground deterministically
+        txt = deterministic_summary(p)
+        await _store_summary(db, user, txt, "deterministic", based)
+        return success_envelope({"summary": txt, "source": "deterministic",
+                                 "note": "AI phrasing unavailable right now — showing the grounded summary."})
 
 
 class ProfileUpdate(BaseModel):

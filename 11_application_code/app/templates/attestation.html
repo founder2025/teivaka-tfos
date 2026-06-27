@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Teivaka — Verify a farmer</title>
+<link rel="icon" href="/favicon.ico">
+<style>
+  :root { --soil:#5C4033; --cream:#F8F3E9; --green:#6AA84F; --green-dk:#2D6A4F; --red:#A32D2D; --border:#E6DED0; --muted:#8A8678; }
+  *{box-sizing:border-box} body{margin:0;background:var(--cream);color:var(--soil);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;line-height:1.55}
+  .wrap{max-width:480px;margin:0 auto;padding:32px 18px}
+  .brand{font-weight:800;color:var(--green-dk);font-size:18px;margin-bottom:18px}
+  .card{background:#fff;border:1px solid var(--border);border-radius:12px;padding:20px}
+  h1{font-size:19px;margin:0 0 10px}
+  .ask{font-size:15px;background:var(--cream);border-radius:8px;padding:14px;margin:12px 0}
+  .ask b{color:var(--green-dk)}
+  textarea{width:100%;border:1px solid var(--border);border-radius:8px;padding:10px;font-size:14px;margin-top:8px;font-family:inherit}
+  .btns{display:flex;gap:10px;margin-top:14px}
+  button{flex:1;border:none;border-radius:8px;padding:12px;font-size:15px;font-weight:700;cursor:pointer}
+  .confirm{background:var(--green-dk);color:#fff}
+  .decline{background:#fff;color:var(--red);border:1px solid var(--red)}
+  .badge{display:inline-flex;gap:8px;padding:10px 14px;border-radius:8px;font-weight:600;width:100%}
+  .ok{background:#E8F0E2;color:var(--green-dk);border:1px solid var(--green)}
+  .bad{background:#FDECEA;color:var(--red);border:1px solid var(--red)}
+  footer{font-size:11px;color:var(--muted);margin-top:18px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="brand">TEIVAKA</div>
+  <div class="card">
+    {% if state == "ask" %}
+    <h1>Confirm a farmer's record</h1>
+    <p style="font-size:14px;color:var(--muted)">A farmer has asked you, as their <b>{{ source_label }}</b>, to confirm the following. Only confirm what you personally know to be true.</p>
+    <div class="ask">This farmer <b>{{ claim_label }}</b>.{% if subject_label %}<br><br><span style="color:var(--muted)">Details:</span> {{ subject_label }}{% endif %}</div>
+    <form method="post" action="/a/{{ token }}/respond">
+      <textarea name="note" rows="2" placeholder="Optional note"></textarea>
+      <div class="btns">
+        <button class="confirm" name="decision" value="confirm" type="submit">Yes, I confirm</button>
+        <button class="decline" name="decision" value="decline" type="submit">I can't confirm</button>
+      </div>
+    </form>
+    <footer>Your confirmation is recorded on Teivaka's tamper-evident chain and strengthens this farmer's verified reputation. It is not a financial guarantee.</footer>
+
+    {% elif state == "thanks" %}
+    <div class="badge {{ 'ok' if confirmed else 'bad' }}">
+      {% if confirmed %}&#10003;&nbsp; Thank you — your confirmation is recorded.{% else %}Recorded — you declined to confirm.{% endif %}
+    </div>
+    <p style="font-size:14px;margin-top:14px">{% if confirmed %}This farmer's verified reputation has been updated. You can close this page.{% else %}No problem. Nothing was added to the farmer's record. You can close this page.{% endif %}</p>
+
+    {% else %}
+    <div class="badge bad">{{ message or "This link is not available." }}</div>
+    {% endif %}
+  </div>
+</div>
+</body>
+</html>
