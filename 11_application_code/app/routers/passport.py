@@ -147,13 +147,14 @@ async def _assemble_passport(db: AsyncSession, user: dict) -> dict:
 @router.get("/passport/me")
 async def get_my_passport(db: AsyncSession = Depends(get_tenant_db), user: dict = Depends(get_current_user)):
     p = await _assemble_passport(db, user)
-    # First load with no snapshot → compute once so the farmer sees real scores, not "Building" (P-4).
+    # First load with no snapshot → enqueue a background recompute (non-blocking, PR-2) so trust
+    # builds without slowing the request. The farmer sees honest "Building" now, scores next load
+    # (or instantly via the explicit Refresh button).
     if (p.get("trust") or {}).get("status") == "building":
         try:
-            from app.workers.trust_worker import refresh_tenant
-            await run_in_threadpool(refresh_tenant, str(user["tenant_id"]))
-            p = await _assemble_passport(db, user)
-        except Exception:  # noqa: BLE001 — keep the honest "Building" if compute fails
+            from app.workers.trust_worker import compute_trust_one
+            compute_trust_one.delay(str(user["tenant_id"]))
+        except Exception:  # noqa: BLE001 — enqueue is best-effort; nightly job + manual refresh cover it
             pass
     row = (await db.execute(text(
         "SELECT summary, source, generated_at FROM tenant.passport_ai_summary LIMIT 1"))).mappings().first()

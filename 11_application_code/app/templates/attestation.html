@@ -45,7 +45,7 @@
         <button class="decline" name="decision" value="decline" type="submit">I can't confirm</button>
       </div>
     </form>
-    <footer>Your name is recorded with this confirmation, which strengthens the farmer's verified reputation. If this page is opened from the same device as the farmer, it is recorded as self-reported, not independent. This is not a financial guarantee.</footer>
+    <footer>Your name is recorded with this confirmation and strengthens the farmer's reputation as a community attestation. Confirmations opened from the farmer's own device are flagged for transparency; verified-account confirmations (coming) will count for more. This is not a financial guarantee.</footer>
 
     {% elif state == "thanks" %}
     <div class="badge {{ 'ok' if confirmed else 'bad' }}">

@@ -20,7 +20,14 @@ from __future__ import annotations
 import math
 from datetime import date, datetime
 
-FORMULA_VERSION = "v2"  # v2: independence-gating + expiry/recency decay + production magnitude
+FORMULA_VERSION = "v3"  # v3: link-attestation channel-discount (no IP punishment) + decay + magnitude
+
+# Link-based attestations (officer/coop/landowner/buyer confirmed via a link) are real but
+# NOT identity-proofed — anyone with the link could click (PR-1). So they earn PARTIAL credit:
+# enough to clearly beat self-only, capped below a future account-verified (KYC) source.
+# When verifier ACCOUNTS ship (PP-27), account-channel confirmations get full weight.
+LINK_DISCOUNT = 0.7
+_SELF_SOURCES = ("SELF", "EMAIL", "PHONE")
 
 # Per-source confidence weights for claim_verifications (D4). SELF lowest; third parties highest.
 SOURCE_WEIGHTS = {
@@ -178,16 +185,24 @@ def _recency_factor(verified_at, as_of: date) -> float:
 
 
 def _claim_score(claims: list, claim_types: set, as_of: date) -> tuple:
-    """Weighted, self-capped score from claim_verifications. Honours expiry + recency decay (P-2)
-    and only counts INDEPENDENT third-party confirmations toward independence (PP-18)."""
+    """Weighted, self-capped score. Honours expiry + recency decay (P-2). A link-attested
+    third-party source earns PARTIAL (discounted) credit — real but not KYC-grade (PR-1):
+    we do NOT punish it by IP (false-positives in shared-NAT Fiji); we right-size its weight
+    and label it 'community-attested'. The IP-match `independent` flag is kept for transparency,
+    not used to deny credit. Full weight arrives with verifier ACCOUNTS (PP-27)."""
     rel = [c for c in claims if c.get("claim_type") in claim_types and c.get("status") == "VERIFIED"
            and not (_as_date(c.get("expires_at")) and _as_date(c.get("expires_at")) < as_of)]
-    weight = sum(SOURCE_WEIGHTS.get(c.get("source"), 0) * _recency_factor(c.get("verified_at"), as_of) for c in rel)
-    # independent = a non-self/contact source whose confirmation was NOT self-served (independent flag)
-    third_party = any(c.get("source") not in ("SELF", "EMAIL", "PHONE") and c.get("independent", True) for c in rel)
+    weight = 0.0
+    third_party = False
+    for c in rel:
+        w = SOURCE_WEIGHTS.get(c.get("source"), 0) * _recency_factor(c.get("verified_at"), as_of)
+        if c.get("source") not in _SELF_SOURCES:
+            w *= LINK_DISCOUNT          # community-attested (link) — partial credit
+            third_party = True
+        weight += w
     score = min(100, weight)
     if not third_party:
-        score = min(score, 20)   # self-asserted (or self-confirmed) alone never beyond low-Developing
+        score = min(score, 20)          # self/contact alone never beyond low-Developing
     sources = sorted({c.get("source") for c in rel})
     return int(round(score)), sources, third_party
 
@@ -195,9 +210,12 @@ def _claim_score(claims: list, claim_types: set, as_of: date) -> tuple:
 def identity(ev: dict) -> dict:
     as_of = ev.get("as_of") or date.today()
     score, sources, third = _claim_score(ev.get("claims", []), {"IDENTITY"}, as_of)
-    why = (f"Confirmed by: {', '.join(s.replace('_', ' ').title() for s in sources)}." if sources else "Not yet confirmed.")
-    if not third and sources:
-        why += " Self/contact only — an INDEPENDENT confirmation lifts this."
+    if third:
+        why = f"Community-attested by: {', '.join(s.replace('_', ' ').title() for s in sources if s not in _SELF_SOURCES)}."
+    elif sources:
+        why = "Self/contact only — a confirmation from an officer, coop or buyer lifts this."
+    else:
+        why = "Not yet confirmed."
     how = "Get verified by an extension officer, cooperative, government programme, or with a government ID."
     return _r("identity", score, why, sources, how)
 
@@ -219,13 +237,11 @@ def verification_history(ev: dict) -> dict:
     claims = [c for c in ev.get("claims", []) if c.get("status") == "VERIFIED"
               and not (_as_date(c.get("expires_at")) and _as_date(c.get("expires_at")) < as_of)]
     distinct = sorted({c.get("source") for c in claims})
-    # only INDEPENDENT non-self sources count toward "independent verification" (PP-18)
-    third = sorted({c.get("source") for c in claims
-                    if c.get("source") not in ("SELF", "EMAIL", "PHONE") and c.get("independent", True)})
-    score = min(100, len(distinct) * 10 + len(third) * 20)
-    why = (f"{len(distinct)} verification source(s)" + (f", {len(third)} independent." if third else ", all self/contact.")
+    community = sorted({c.get("source") for c in claims if c.get("source") not in _SELF_SOURCES})
+    score = min(100, len(distinct) * 10 + len(community) * 14)  # community-attested (link) discounted
+    why = (f"{len(distinct)} verification source(s)" + (f", {len(community)} community-attested." if community else ", all self/contact.")
            if distinct else "No verifications yet.")
-    how = "Each INDEPENDENT confirmation (officer, coop, buyer, bank) broadens and strengthens your trust."
+    how = "Each confirmation (officer, coop, buyer, bank) broadens your trust; verified accounts will count for more."
     return _r("verification_history", score, why, distinct, how)
 
 

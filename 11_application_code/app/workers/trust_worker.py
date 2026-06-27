@@ -154,6 +154,13 @@ def refresh_tenant(tenant_id: str) -> int:
         conn.close()
 
 
+@app.task(name="app.workers.trust_worker.compute_trust_one")
+def compute_trust_one(tenant_id: str):
+    """Single-tenant recompute — enqueued (non-blocking) by the passport on first load so trust
+    is built in the background instead of blocking the request (PR-2)."""
+    return refresh_tenant(tenant_id)
+
+
 @app.task(bind=True, name="app.workers.trust_worker.compute_all_trust_snapshots")
 def compute_all_trust_snapshots(self):
     """Nightly: recompute trust for every tenant (two-stage scan, Strike #95)."""

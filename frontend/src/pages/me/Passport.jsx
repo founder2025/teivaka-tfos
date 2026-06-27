@@ -75,11 +75,14 @@ function TrustHero({ trust, onView, onRefresh, refreshing }) {
   return (
     <div style={{ border: `1px solid ${C.line}`, borderLeft: `5px solid ${color}`, borderRadius: 14, padding: 16, background: "var(--paper)", marginBottom: 4 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-        <div onClick={onView} style={{ width: 64, height: 64, borderRadius: "50%", display: "grid", placeItems: "center", flexShrink: 0, cursor: "pointer", background: `conic-gradient(${color} ${score * 3.6}deg, var(--cream) 0deg)` }}>
-          <div style={{ width: 50, height: 50, borderRadius: "50%", background: "var(--paper)", display: "grid", placeItems: "center" }}>
-            <span style={{ fontWeight: 800, fontSize: 18, color }}>{scored ? score : "—"}</span>
-          </div>
-        </div>
+        <svg width={64} height={64} viewBox="0 0 36 36" onClick={onView} role="img"
+          aria-label={`Trust ${scored ? score + " out of 100" : "building"}, band ${b}`}
+          style={{ cursor: "pointer", flexShrink: 0 }}>
+          <circle cx="18" cy="18" r="15.9155" fill="none" stroke="var(--cream)" strokeWidth="3.2" />
+          <circle cx="18" cy="18" r="15.9155" fill="none" stroke={color} strokeWidth="3.2" strokeLinecap="round"
+            strokeDasharray={`${scored ? score : 0} 100`} transform="rotate(-90 18 18)" />
+          <text x="18" y="20.5" textAnchor="middle" fontSize="9" fontWeight="800" fill={color}>{scored ? score : "—"}</text>
+        </svg>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 11, color: C.muted, textTransform: "uppercase", letterSpacing: 0.4 }}>Evidence &amp; Reliability Confidence</div>
           <div style={{ fontSize: 18, fontWeight: 800, color }}>{b}</div>
