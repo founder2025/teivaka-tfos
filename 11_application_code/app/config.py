@@ -49,6 +49,7 @@ class Settings(BaseSettings):
     openai_api_key: str = ""
     whisper_model: str = "whisper-1"
     whisper_language: str = "en"
+    receipt_vision_model: str = "gpt-4o-mini"   # AI receipt/invoice reader (vision); cheap, reuses the OpenAI key
 
     # ── WhatsApp (Meta Cloud API — no Twilio) ─────────────────────────────────
     # Get these from: developers.facebook.com → your app → WhatsApp → API Setup

@@ -40,6 +40,7 @@ from app.routers import (
     shares,
     attestations,
     lots,
+    receipts,
     documents,
     verify,
     tis_public,
@@ -357,6 +358,7 @@ app.include_router(shares.html_router,         prefix="",                       
 app.include_router(attestations.router,        prefix=PREFIX,                         tags=["Attestations"])
 app.include_router(attestations.html_router,   prefix="",                             tags=["Attestation Portal (HTML)"])
 app.include_router(lots.router,                 prefix=PREFIX,                         tags=["Consignment Lots"])
+app.include_router(receipts.router,             prefix=PREFIX,                         tags=["AI Receipts"])
 app.include_router(lots.html_router,            prefix="",                             tags=["Lot Trace (HTML)"])
 app.include_router(documents.router,           prefix=PREFIX,                         tags=["Document Vault"])
 app.include_router(poultry_bank_evidence.router, prefix=PREFIX,                       tags=["POULTRY Bank Evidence"])
