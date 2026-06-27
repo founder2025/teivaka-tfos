@@ -410,3 +410,89 @@ Memberships are honest-empty until a real source exists (never a manual-entry wa
 
 These bind all phases. The Phase-1 plan above already complies (projection-only, honest Building,
 no public sharing, no duplicate entry).
+
+---
+
+## PHASE 2 BUILD PLAN — Trust Engine v1 (for go-ahead before code)
+
+**Goal:** turn the Passport's honest "Building" into a real, **explainable, evidence-weighted
+reputation** — *Evidence & Reliability Confidence, never a credit score* (D1). Every dimension shows
+`score · why · evidence behind it · how to improve`. Computed from data the farmer already logged
+(governing principle) + the multi-layer `claim_verifications` model (D4). Precomputed, never
+on-demand (Inviolable #3).
+
+### Architecture
+1. **Schema — migration 189 (apply-as-owner):**
+   - `tenant.claim_verifications` (the D4 model — see "RATIFIED DECISIONS" block). Phase 2 **auto-seeds**
+     the cheap claims at compute time: `IDENTITY/SELF`, `IDENTITY/EMAIL` (if email present),
+     `IDENTITY/PHONE` (if whatsapp present), `FARM_OWNERSHIP/SELF`, `LAND_BOUNDARY/SELF` (if GPS mapped).
+     Third-party attestations (officer/coop/buyer/gov/FI) are written by Phase 3 flows — until then
+     Identity/Farm read honestly low ("self-asserted").
+   - `tenant.trust_snapshots` (precomputed cache; FORCED RLS):
+     `(snapshot_id, tenant_id, subject_type, subject_id, dimension, score, band, evidence_count,
+       inputs jsonb, why text, how_to_improve text, computed_at)`. One row per dimension per subject.
+2. **Pure compute module — `app/services/trust_engine.py`** (no I/O; takes evidence dicts, returns
+   per-dimension results). One function per dimension → `{score, band, why, evidence[], how_to_improve}`.
+   Pure = unit-testable; formulas are documented constants, not a black box.
+3. **Precompute job — `app/tasks/trust_worker.py`** (Celery, nightly via beat + a manual refresh
+   endpoint). **Two-stage tenant scan (Strike #95):** iterate `tenant.tenants`, `SET LOCAL app.tenant_id`
+   per tenant, gather evidence counts, call `trust_engine`, upsert `tenant.trust_snapshots`. Reuses the
+   worker's cross-tenant pattern (B72). Idempotent (snapshot replaced per run).
+4. **API — extend `passport.py`:** `GET /passport/me` reads the latest snapshots (real dimensions +
+   overall band) instead of the "Building" stub; falls back to honest "Building" when no snapshot yet.
+   New `POST /passport/me/trust/refresh` (rate-limited) recomputes this tenant on demand.
+5. **Frontend — Passport "Reputation" tab:** render each dimension as a row (ring + score + `why` +
+   expandable `evidence` + `how to improve`), plus the **overall confidence band**. Mirrors the
+   Compliance "standing" UI we already ship. New farmers still see honest "Building — N seasons."
+
+### Dimensions v1 (each 0–100, transparent formula, tunable constants)
+| Dimension | Reads (existing tables) | v1 formula sketch (documented + tunable) | Anti-gaming |
+|---|---|---|---|
+| **Production** | `harvest_log`, closed `production_cycles` | seasons (closed cycles) + harvest records + yield **consistency** (lower CV = higher) | only CLOSED cycles count; outliers down-weighted |
+| **Operations** | `field_events` | logging **cadence over time** + % events with photo/GPS | rewards sustained cadence, not a one-day burst |
+| **Market** | `cash_ledger` INCOME, orders/buyers, `payables` | sales count + **repeat buyers** + buyer-confirmed ratio | buyer-confirmed ≫ self-reported |
+| **Compliance** | crop compliance views, `harvest_compliance_overrides` | start 100 − overrides − active holds − off-label/unidentified | overrides + expired/unknown subtract |
+| **Evidence completeness** *(meta)* | events vs media/GPS/witness coverage | % of loggable records carrying photo/GPS/witness | the confidence multiplier on the others |
+| **Record consistency** | `audit.verify_chain_for_tenant`, edit-window corrections | 100 if 0 chain breaks; − late edits / heavy corrections | chain breaks / backdating subtract |
+| **Identity** | `claim_verifications` (IDENTITY/*) | weighted sum of source confidences (SELF 5 … GOV_ID/FI 30), recency-decayed | **never "verified" on SELF alone** |
+| **Farm** | `claim_verifications` (FARM_OWNERSHIP, LAND_BOUNDARY) + GPS mapped | boundary mapped + ownership attestations | land claim needs a doc/officer (Phase 3/5) |
+| **Verification history** | `claim_verifications` count + recency | breadth (distinct sources) + recency | recency-decayed; stale verifications fade |
+
+**Overall = a confidence BAND, not a number presented as a score** (D1): e.g.
+*Building → Developing → Established → Strong*, derived from dimension coverage + independent
+verification, labelled **"Evidence & Reliability Confidence — not a lending decision."** The AI
+executive summary (Phase 3) narrates it; Phase 2 ships the band + the dimensions.
+
+### Binding rules
+- **Explainability contract:** every dimension returns all four fields; the UI shows `why` +
+  `how to improve` (no naked numbers). Cold-start = honest "Building" + the exact path, never a fake baseline.
+- **Precomputed only** (Inviolable #3): pages read `trust_snapshots`; never compute on load.
+- **No credit verdict** (D1): copy everywhere frames it as evidence confidence; the AI summary
+  carries the "tamper-evident, farmer-reported, not externally audited" caveat.
+- **Tunable, versioned formulas:** weights live in one constants block in `trust_engine.py`; a
+  `formula_version` is stamped into each snapshot's `inputs` so scores are reproducible/explainable.
+
+### Sequence
+- **2a** — migration 189 + `trust_engine.py` (Production/Operations/Market/Compliance) + Celery
+  precompute + passport reads snapshots + Reputation tab renders them. *Ship: real reputation from
+  existing data.*
+- **2b** — add Evidence-completeness / Record-consistency / Identity / Farm / Verification-history
+  dimensions + the overall band + `claim_verifications` auto-seed + manual refresh endpoint.
+
+### Verification gates
+`py_compile` + unit tests for `trust_engine` pure functions (deterministic, fixture-driven) +
+`npm run build`; migration staged apply-as-owner; Celery task functional-smoke (Strike #95 two-stage
+scan completes, snapshots written for F001); browser smoke (Reputation tab shows real dimensions +
+honest Building for an empty tenant). No fabricated scores.
+
+### Out of Phase 2 (explicit)
+Third-party attestation flows (officer/coop/buyer/gov/FI) + the AI executive summary + Share Sessions
+→ Phase 3. Document Vault → Phase 4. GOV_ID/FI sources → Phase 5.
+
+### Decisions needed before build
+- **DC-1 Band labels:** Building / Developing / Established / Strong (recommended) — or your preferred names.
+- **DC-2 Recompute cadence:** nightly + manual refresh (recommended for alpha) vs event-triggered (more infra).
+- **DC-3 Financial dimension in v1?** Include a **record-discipline** dimension (cashflow record length +
+  completeness — *not* profitability, per D1) — recommended yes — or defer to Phase 2b/3.
+- **DC-4 Subject scope:** per-farmer passport only in v1 (recommended) vs also per-farm trust now
+  (cooperatives/multi-farm later).
