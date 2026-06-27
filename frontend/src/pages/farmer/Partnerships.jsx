@@ -173,6 +173,7 @@ function AgreementModal({ farmId, existing, onClose, onSaved }) {
 // ── Distribution archive ─────────────────────────────────────────────
 function AgreementDetail({ agreement, distQ, onClose, onEdit }) {
   useEsc(onClose);
+  const navigate = useNavigate();
   const distributions = distQ.data || [];
   return (
     <div className="overlay-backdrop show" onClick={onClose}>
@@ -203,6 +204,7 @@ function AgreementDetail({ agreement, distQ, onClose, onEdit }) {
               ))}
         </div>
         <div className="overlay-foot">
+          <button className="btn btn-secondary" onClick={() => navigate(`/tis?q=${encodeURIComponent(`Is a ${agreement.rate_pct}% net profit-share with my landowner a fair, standard arrangement for leased land in Fiji?`)}`)}>Ask TIS</button>
           <button className="btn btn-secondary" onClick={onEdit}><Pencil size={13} />Edit agreement</button>
           <button className="btn btn-primary" onClick={onClose}>Close</button>
         </div>
@@ -222,10 +224,14 @@ function PartnershipsInner() {
   const [agreeOpen, setAgreeOpen] = useState(false);
   const [agreeDetail, setAgreeDetail] = useState(false);
   const [openGroups, setOpenGroups] = useState({});
+  const [pq, setPq] = useState("");
+  const term = pq.trim().toLowerCase();
+  const matchP = (p) => !term || `${p.name} ${p.notes || ""}`.toLowerCase().includes(term);
 
   const partnersQ = useQuery({ queryKey: ["pn-partners", farmId], enabled: !!farmId, retry: 1, queryFn: () => getJSON(`/api/v1/partners?farm_id=${encodeURIComponent(farmId)}`).then((r) => r.data || []) });
   const agreementQ = useQuery({ queryKey: ["pn-agree", farmId], enabled: !!farmId, retry: 1, queryFn: () => getJSON(`/api/v1/partnerships/agreement?farm_id=${encodeURIComponent(farmId)}`).then((r) => r.data?.agreement || null) });
-  const distQ = useQuery({ queryKey: ["pn-dist", farmId], enabled: !!farmId, retry: 1, queryFn: () => getJSON(`/api/v1/profit-share?farm_id=${encodeURIComponent(farmId)}`).then((r) => r.data || []) });
+  // lazy: only fetch splits when an agreement exists (the only place they're shown)
+  const distQ = useQuery({ queryKey: ["pn-dist", farmId], enabled: !!farmId && !!agreementQ.data, retry: 1, queryFn: () => getJSON(`/api/v1/profit-share?farm_id=${encodeURIComponent(farmId)}`).then((r) => r.data || []) });
   const buyersQ = useQuery({ queryKey: ["pn-buyers"], retry: 1, queryFn: () => getJSON("/api/v1/customers").then((r) => (r.data || []).length) });
   const suppliersQ = useQuery({ queryKey: ["pn-suppliers"], retry: 1, queryFn: () => getJSON("/api/v1/suppliers").then((r) => (r.data || []).length) });
 
@@ -236,7 +242,9 @@ function PartnershipsInner() {
   const byType = {};
   partners.forEach((p) => { (byType[p.partner_type] = byType[p.partner_type] || []).push(p); });
   const countFor = (t) => (t.id === "buyers" ? (buyersQ.data ?? null) : t.id === "suppliers" ? (suppliersQ.data ?? null) : (byType[t.id] || []).length);
-  const groupTotal = (g) => g.types.reduce((n, t) => n + (Number(countFor(t)) || 0), 0);
+  // group total + completeness count ONLY the farm's own partners — NOT the tenant-wide
+  // buyers/suppliers link-types (PX-1: those would inflate Commercial / "N of 5 active").
+  const groupTotal = (g) => g.types.reduce((n, t) => n + (t.link ? 0 : (byType[t.id] || []).length), 0);
   const groupsActive = PARTNER_GROUPS.filter((g) => groupTotal(g) > 0).length;
 
   const refresh = () => qc.invalidateQueries({ queryKey: ["pn-partners", farmId] });
@@ -289,9 +297,17 @@ function PartnershipsInner() {
                 : (
                   <>
                     <div style={{ fontSize: 12.5, color: "var(--muted)", margin: "2px 2px 10px" }}>Network · <strong style={{ color: "var(--soil)" }}>{groupsActive} of {PARTNER_GROUPS.length}</strong> groups active. Add the people and groups you work with — each builds your record.</div>
+                    {partners.length > 6 && (
+                      <div className="form-row" style={{ marginBottom: 10 }}>
+                        <input type="search" value={pq} onChange={(e) => setPq(e.target.value)} placeholder="Find a partner by name or note…" aria-label="Search partners" />
+                      </div>
+                    )}
                     {PARTNER_GROUPS.map((g) => {
                       const total = groupTotal(g);
-                      const isOpen = openGroups[g.id] ?? (total > 0);
+                      // during a search, hide groups with no matching partner; otherwise default-open when populated
+                      const groupHasMatch = g.types.some((t) => !t.link && (byType[t.id] || []).some(matchP));
+                      if (term && !groupHasMatch) return null;
+                      const isOpen = term ? true : (openGroups[g.id] ?? (total > 0));
                       return (
                         <div className="card" key={g.id} style={{ marginBottom: 12 }}>
                           <button onClick={() => setOpenGroups((s) => ({ ...s, [g.id]: !isOpen }))} aria-expanded={isOpen}
@@ -308,7 +324,8 @@ function PartnershipsInner() {
                             <div style={{ padding: "6px 8px" }}>
                               {g.types.map((t) => {
                                 const n = countFor(t);
-                                const list = byType[t.id] || [];
+                                const list = (byType[t.id] || []).filter(matchP);
+                                if (term && (t.link || list.length === 0)) return null;   // search: only matching people rows
                                 return (
                                   <div key={t.id}>
                                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 8px", borderBottom: "1px solid var(--cream-2)" }}>
@@ -325,7 +342,7 @@ function PartnershipsInner() {
                                     </div>
                                     {!t.link && list.map((p) => (
                                       <div key={p.partner_id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, padding: "7px 8px 7px 32px", borderBottom: "1px solid var(--cream-2)", background: "var(--cream-2)" }}>
-                                        <div style={{ fontSize: 12.5, color: "var(--soil)", minWidth: 0 }}>{p.name}{p.notes ? <span style={{ color: "var(--muted)", fontSize: 11.5 }}> · {p.notes}</span> : null}</div>
+                                        <div style={{ fontSize: 12.5, color: "var(--soil)", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.name}{p.notes ? <span style={{ color: "var(--muted)", fontSize: 11.5 }}> · {p.notes}</span> : null}</div>
                                         <div style={{ display: "flex", gap: 4, alignItems: "center", flexShrink: 0 }}>
                                           {p.phone && telHref(p.phone) && <a className="btn btn-sm btn-secondary" href={telHref(p.phone)} title={`Call ${p.phone}`} aria-label={`Call ${p.name}`}><Phone size={11} /></a>}
                                           {p.phone && waHref(p.phone) && <a className="btn btn-sm btn-secondary" href={waHref(p.phone)} target="_blank" rel="noreferrer" title="WhatsApp" aria-label={`WhatsApp ${p.name}`}><MessageCircle size={11} /></a>}
