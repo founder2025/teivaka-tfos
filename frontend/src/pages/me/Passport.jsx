@@ -200,7 +200,7 @@ function AttestSheet({ open, onClose }) {
 
 function ShareSheet({ open, onClose }) {
   const [shares, setShares] = useState([]);
-  const [form, setForm] = useState({ audience: "LOAN", share_reason: "", expiry_days: 30, password: "", one_time: false });
+  const [form, setForm] = useState({ audience: "LOAN", share_reason: "", expiry_days: 30, password: "", one_time: false, evidence: false });
   const [busy, setBusy] = useState(false);
   const [created, setCreated] = useState(null); // {url}
   const reload = useCallback(async () => { try { const d = await getJSON("/api/v1/shares"); setShares(d?.data?.shares || []); } catch { /* noop */ } }, []);
@@ -208,7 +208,11 @@ function ShareSheet({ open, onClose }) {
   const create = async () => {
     setBusy(true);
     try {
-      const d = await send("POST", "/api/v1/shares", { ...form, expiry_days: Number(form.expiry_days) || 30, password: form.password || null });
+      const d = await send("POST", "/api/v1/shares", {
+        audience: form.audience, share_reason: form.share_reason, one_time: form.one_time,
+        expiry_days: Number(form.expiry_days) || 30, password: form.password || null,
+        scope: { identity: true, reputation: true, trust: true, farm: true, evidence: form.evidence },
+      });
       setCreated(d?.data); await reload();
     } catch (e) { toast(e.userMessage || e.message || "Couldn't create link"); } finally { setBusy(false); }
   };
@@ -240,7 +244,9 @@ function ShareSheet({ open, onClose }) {
         </div>
         <label style={{ fontSize: 12.5, color: C.soil, display: "flex", alignItems: "center", gap: 6 }}>
           <input type="checkbox" checked={form.one_time} onChange={(e) => setForm({ ...form, one_time: e.target.checked })} />One-time link (opens once, then dies)</label>
-        <div style={{ fontSize: 11, color: C.muted }}>The viewer sees your identity, reputation, trust and farm — never your raw cash records or private notes. You own this share and can revoke it.</div>
+        <label style={{ fontSize: 12.5, color: C.soil, display: "flex", alignItems: "center", gap: 6 }}>
+          <input type="checkbox" checked={form.evidence} onChange={(e) => setForm({ ...form, evidence: e.target.checked })} />Include photo &amp; block evidence</label>
+        <div style={{ fontSize: 11, color: C.muted }}>The viewer sees your identity, reputation, trust and farm{form.evidence ? ", plus your field photos and blocks" : ""} — never your raw cash records or private notes. You own this share and can revoke it.</div>
 
         {shares.length > 0 && (
           <div style={{ borderTop: `1px solid ${C.line}`, paddingTop: 8 }}>

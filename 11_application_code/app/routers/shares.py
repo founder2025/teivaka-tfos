@@ -34,7 +34,9 @@ TEMPLATES_DIR = Path(__file__).resolve().parent.parent / "templates"
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
 _AUDIENCES = {"LOAN", "BUYER", "INSURANCE", "GOVERNMENT", "INVESTOR", "RESEARCHER", "NGO", "OTHER"}
-_SCOPE_KEYS = {"identity", "reputation", "trust", "farm"}  # v1 passport scope (report-evidence: later)
+# Default scope: identity/reputation/trust/farm shared by default; photo+block EVIDENCE is
+# opt-in (sensitive — the farmer chooses to include it per share).
+_DEFAULT_SCOPE = {"identity": True, "reputation": True, "trust": True, "farm": True, "evidence": False}
 
 
 def _hash_token(token: str) -> str:
@@ -62,7 +64,7 @@ async def create_share(body: ShareCreate, db: AsyncSession = Depends(get_tenant_
     audience = body.audience.upper() if body.audience else "OTHER"
     if audience not in _AUDIENCES:
         audience = "OTHER"
-    scope = {k: bool((body.scope or {}).get(k, True)) for k in _SCOPE_KEYS}  # default: share all v1 sections
+    scope = {k: bool((body.scope or {}).get(k, _DEFAULT_SCOPE[k])) for k in _DEFAULT_SCOPE}
     token = secrets.token_urlsafe(24)
     token_hash = _hash_token(token)
     expires_at = _now() + timedelta(days=body.expiry_days)
@@ -163,6 +165,26 @@ async def _assemble_scoped(db: AsyncSession, tenant_id: str, scope: dict) -> dic
         farms = (await db.execute(text(
             "SELECT farm_name, location_island FROM tenant.farms WHERE is_active=TRUE ORDER BY created_at"))).mappings().all()
         data["farms"] = [{"name": f["farm_name"], "location": f["location_island"]} for f in farms]
+    if scope.get("evidence"):
+        # Photo + block evidence — opt-in, permission-gated (only because this share grants it).
+        blocks = (await db.execute(text("""
+            SELECT pu.pu_name, COALESCE(pu.area_sqm, 0) AS area_sqm,
+                   (SELECT count(*) FROM tenant.production_cycles pc WHERE pc.pu_id = pu.pu_id
+                      AND pc.cycle_status IN ('ACTIVE','HARVESTING','CLOSING')) AS active_cycles
+            FROM tenant.production_units pu WHERE pu.is_active = TRUE ORDER BY pu.pu_name
+        """))).mappings().all()
+        photos = (await db.execute(text("""
+            SELECT event_type, event_date::date AS d, pu_id, photo_url, photo_sha256
+            FROM tenant.field_events WHERE photo_url IS NOT NULL AND deleted_at IS NULL
+            ORDER BY event_date DESC LIMIT 60
+        """))).mappings().all()
+        data["evidence"] = {
+            "blocks": [{"pu_name": b["pu_name"], "area_ha": round(float(b["area_sqm"] or 0) / 10000.0, 2),
+                        "active_cycles": int(b["active_cycles"])} for b in blocks],
+            "photos": [{"event": str(p["event_type"]).replace("_", " ").title(),
+                        "date": p["d"].isoformat() if p["d"] else None,
+                        "photo_url": p["photo_url"], "sha256": p["photo_sha256"]} for p in photos],
+        }
     return data
 
 
