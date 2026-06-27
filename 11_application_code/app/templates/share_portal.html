@@ -124,6 +124,17 @@
     </form>
   </div>
 
+  {% if v.documents %}
+  <div class="card">
+    <h2>Documents on file</h2>
+    {% for d in v.documents %}
+    <div class="row"><span class="label">{{ d.title or d.doc_type }} <span style="font-size:10px;color:var(--muted)">({{ d.doc_type|lower }})</span></span>
+      <span class="value" style="font-size:12px">{% if d.expiry_date %}exp {{ d.expiry_date }}{% else %}—{% endif %} &middot; {{ d.verification_status|lower }}</span></div>
+    {% endfor %}
+    <div style="font-size:11px;color:var(--muted);margin-top:8px">Document details are shared; the files themselves stay private to the farmer.</div>
+  </div>
+  {% endif %}
+
   {% else %}
   <div class="badge" style="background:#FDECEA;color:var(--red);border:1px solid var(--red);width:100%">{{ message or "This link is not available." }}</div>
   <div class="card"><p style="font-size:14px;margin:0">Ask the farmer for a fresh secure link. Farmers own their data on Teivaka and control every share — links can expire or be revoked at any time.</p></div>

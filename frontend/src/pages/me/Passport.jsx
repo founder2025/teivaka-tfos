@@ -14,6 +14,7 @@ import {
   Mail, Phone, BadgeCheck, Share2, Sparkles, UserCheck,
 } from "lucide-react";
 import { C, getJSON, send } from "./_meCommon";
+import { apiFetch } from "../../utils/api";
 import { formatMoney } from "../../utils/money";
 import Modal from "../../components/ui/Modal.jsx";
 
@@ -87,6 +88,71 @@ function RefreshBtn({ onRefresh, refreshing }) {
     <button onClick={onRefresh} disabled={refreshing} style={{ border: `1px solid ${C.line}`, color: C.greenDk, borderRadius: 8, padding: "4px 10px", fontSize: 12, fontWeight: 600 }}>
       {refreshing ? "Refreshing…" : <><RefreshCw size={12} style={{ verticalAlign: -2, marginRight: 4 }} />Refresh</>}
     </button>
+  );
+}
+
+function Documents() {
+  const [docs, setDocs] = useState(null);
+  const [form, setForm] = useState({ doc_type: "LEASE", title: "", expiry_date: "" });
+  const [file, setFile] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const DT = [["LEASE", "Lease"], ["CERTIFICATE", "Certificate"], ["ID", "ID document"], ["CONTRACT", "Contract"], ["INSURANCE", "Insurance"], ["PERMIT", "Permit"], ["OTHER", "Other"]];
+  const reload = useCallback(async () => { try { const d = await getJSON("/api/v1/documents"); setDocs(d?.data?.documents || []); } catch { setDocs([]); } }, []);
+  useEffect(() => { reload(); }, [reload]);
+  const upload = async () => {
+    if (!file) { toast("Pick a file (PDF or image)"); return; }
+    setBusy(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file); fd.append("doc_type", form.doc_type);
+      if (form.title) fd.append("title", form.title);
+      if (form.expiry_date) fd.append("expiry_date", form.expiry_date);
+      const r = await apiFetch("/api/v1/documents", { method: "POST", body: fd });
+      if (!r.ok) throw new Error((await r.json().catch(() => ({})))?.detail || "Upload failed");
+      toast("Document added"); setFile(null); setForm({ doc_type: "LEASE", title: "", expiry_date: "" }); await reload();
+    } catch (e) { toast(e.message || "Upload failed"); } finally { setBusy(false); }
+  };
+  const view = async (id, title) => {
+    try {
+      const r = await apiFetch(`/api/v1/documents/${id}/file`);
+      if (!r.ok) { toast("Couldn't open"); return; }
+      const b = await r.blob(); const url = URL.createObjectURL(b);
+      window.open(url, "_blank"); setTimeout(() => URL.revokeObjectURL(url), 60000);
+    } catch { toast("Couldn't open"); }
+  };
+  const del = async (id) => { try { await send("DELETE", `/api/v1/documents/${id}`); await reload(); } catch (e) { toast(e.userMessage || e.message || "Couldn't delete"); } };
+  const inp = { width: "100%", border: `1px solid ${C.line}`, borderRadius: 8, padding: "8px 10px", fontSize: 13, marginTop: 4 };
+  return (
+    <div style={{ display: "grid", gap: 12 }}>
+      <div style={{ border: `1px solid ${C.line}`, borderRadius: 12, padding: 14, background: "var(--paper)" }}>
+        <strong style={{ color: C.soil, fontSize: 13.5 }}>Add a document</strong>
+        <div style={{ fontSize: 12, color: C.muted, margin: "4px 0 8px" }}>Leases, certificates, IDs, contracts — PDF or image. Stored privately; you control who sees it.</div>
+        <div style={{ display: "grid", gap: 8 }}>
+          <input type="file" accept="application/pdf,image/*" onChange={(e) => setFile(e.target.files?.[0] || null)} style={{ fontSize: 13 }} />
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <select value={form.doc_type} onChange={(e) => setForm({ ...form, doc_type: e.target.value })} style={{ ...inp, width: "auto", marginTop: 0 }}>{DT.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>
+            <input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="Title (optional)" style={{ ...inp, flex: 1, minWidth: 120, marginTop: 0 }} />
+            <label style={{ fontSize: 11.5, color: C.muted }}>Expiry<input type="date" value={form.expiry_date} onChange={(e) => setForm({ ...form, expiry_date: e.target.value })} style={{ ...inp, width: 150 }} /></label>
+          </div>
+          <button onClick={upload} disabled={busy} style={{ border: `1px solid ${C.greenDk}`, background: C.greenDk, color: "var(--paper)", borderRadius: 8, padding: "8px 12px", fontSize: 13, fontWeight: 700, justifySelf: "start" }}>{busy ? "Uploading…" : "Upload document"}</button>
+        </div>
+      </div>
+      {docs === null ? <div style={{ color: C.muted, fontSize: 13 }}>Loading…</div>
+        : docs.length === 0 ? <div style={{ border: `1px solid ${C.line}`, borderRadius: 12, padding: 18, color: C.muted, fontSize: 13, textAlign: "center" }}>No documents yet. Add your lease, certificates or ID above — they stay private until you share them.</div>
+        : docs.map((d) => (
+          <div key={d.document_id} style={{ border: `1px solid ${d.expired ? "#e7c9c9" : C.line}`, borderRadius: 12, padding: 12, background: d.expired ? "#fdf3f3" : "var(--paper)", display: "flex", alignItems: "center", gap: 10 }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontWeight: 700, color: C.soil, fontSize: 13.5 }}>{d.title || d.doc_type} <span style={{ fontWeight: 500, color: C.muted, fontSize: 11.5 }}>· {d.doc_type.toLowerCase()}</span></div>
+              <div style={{ fontSize: 11.5, color: C.muted }}>
+                {d.expiry_date ? <span style={{ color: d.expired ? "var(--red)" : d.expiring_soon ? C.amber : C.muted, fontWeight: d.expired || d.expiring_soon ? 700 : 400 }}>{d.expired ? "Expired" : d.expiring_soon ? "Expiring soon" : "Expires"} {d.expiry_date} · </span> : ""}
+                {Math.round((d.byte_size || 0) / 1024)} KB · verified hash
+              </div>
+            </div>
+            <button onClick={() => view(d.document_id, d.title)} style={{ border: `1px solid ${C.line}`, color: C.greenDk, borderRadius: 8, padding: "5px 10px", fontSize: 12, fontWeight: 600 }}>View</button>
+            <button onClick={() => del(d.document_id)} aria-label="Delete" style={{ border: `1px solid ${C.line}`, color: "var(--red)", borderRadius: 8, padding: "5px 8px", fontSize: 12 }}>✕</button>
+          </div>
+        ))}
+    </div>
   );
 }
 
@@ -200,7 +266,7 @@ function AttestSheet({ open, onClose }) {
 
 function ShareSheet({ open, onClose }) {
   const [shares, setShares] = useState([]);
-  const [form, setForm] = useState({ audience: "LOAN", share_reason: "", expiry_days: 30, password: "", one_time: false, evidence: false });
+  const [form, setForm] = useState({ audience: "LOAN", share_reason: "", expiry_days: 30, password: "", one_time: false, evidence: false, documents: false });
   const [busy, setBusy] = useState(false);
   const [created, setCreated] = useState(null); // {url}
   const reload = useCallback(async () => { try { const d = await getJSON("/api/v1/shares"); setShares(d?.data?.shares || []); } catch { /* noop */ } }, []);
@@ -211,7 +277,7 @@ function ShareSheet({ open, onClose }) {
       const d = await send("POST", "/api/v1/shares", {
         audience: form.audience, share_reason: form.share_reason, one_time: form.one_time,
         expiry_days: Number(form.expiry_days) || 30, password: form.password || null,
-        scope: { identity: true, reputation: true, trust: true, farm: true, evidence: form.evidence },
+        scope: { identity: true, reputation: true, trust: true, farm: true, evidence: form.evidence, documents: form.documents },
       });
       setCreated(d?.data); await reload();
     } catch (e) { toast(e.userMessage || e.message || "Couldn't create link"); } finally { setBusy(false); }
@@ -246,6 +312,8 @@ function ShareSheet({ open, onClose }) {
           <input type="checkbox" checked={form.one_time} onChange={(e) => setForm({ ...form, one_time: e.target.checked })} />One-time link (opens once, then dies)</label>
         <label style={{ fontSize: 12.5, color: C.soil, display: "flex", alignItems: "center", gap: 6 }}>
           <input type="checkbox" checked={form.evidence} onChange={(e) => setForm({ ...form, evidence: e.target.checked })} />Include photo &amp; block evidence</label>
+        <label style={{ fontSize: 12.5, color: C.soil, display: "flex", alignItems: "center", gap: 6 }}>
+          <input type="checkbox" checked={form.documents} onChange={(e) => setForm({ ...form, documents: e.target.checked })} />Include document details (titles/dates only, not files)</label>
         <div style={{ fontSize: 11, color: C.muted }}>The viewer sees your identity, reputation, trust and farm{form.evidence ? ", plus your field photos and blocks" : ""} — never your raw cash records or private notes. You own this share and can revoke it.</div>
 
         {shares.length > 0 && (
@@ -323,7 +391,7 @@ export default function Passport() {
   if (!data) return <div style={{ maxWidth: 720, margin: "0 auto", padding: 16, color: C.muted }}>Loading your passport…</div>;
 
   const id = data.identity || {}; const rep = data.reputation || {}; const farms = data.farms || []; const v = id.verifications || {};
-  const TABS = [["overview", "Overview"], ["farm", "Farm"], ["reputation", "Reputation"]];
+  const TABS = [["overview", "Overview"], ["farm", "Farm"], ["reputation", "Reputation"], ["documents", "Documents"]];
 
   return (
     <div style={{ maxWidth: 720, margin: "0 auto", padding: 16 }}>
@@ -389,6 +457,7 @@ export default function Passport() {
       )}
 
       {tab === "reputation" && <Reputation trust={data.trust} rep={rep} onRefresh={refreshTrust} refreshing={refreshing} onShare={() => setShareOpen(true)} onVerify={() => setAttestOpen(true)} />}
+      {tab === "documents" && <Documents />}
 
       <ShareSheet open={shareOpen} onClose={() => setShareOpen(false)} />
       <AttestSheet open={attestOpen} onClose={() => setAttestOpen(false)} />

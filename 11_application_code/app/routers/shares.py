@@ -36,7 +36,8 @@ templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 _AUDIENCES = {"LOAN", "BUYER", "INSURANCE", "GOVERNMENT", "INVESTOR", "RESEARCHER", "NGO", "OTHER"}
 # Default scope: identity/reputation/trust/farm shared by default; photo+block EVIDENCE is
 # opt-in (sensitive — the farmer chooses to include it per share).
-_DEFAULT_SCOPE = {"identity": True, "reputation": True, "trust": True, "farm": True, "evidence": False}
+_DEFAULT_SCOPE = {"identity": True, "reputation": True, "trust": True, "farm": True,
+                  "evidence": False, "documents": False}
 
 
 def _hash_token(token: str) -> str:
@@ -185,6 +186,18 @@ async def _assemble_scoped(db: AsyncSession, tenant_id: str, scope: dict) -> dic
                         "date": p["d"].isoformat() if p["d"] else None,
                         "photo_url": p["photo_url"], "sha256": p["photo_sha256"]} for p in photos],
         }
+    if scope.get("documents"):
+        # Document METADATA only (title/type/dates/hash + verification) — never a file URL
+        # over a share (raw legal files stay behind the owner-gated route).
+        docs = (await db.execute(text("""
+            SELECT doc_type, title, issued_date, expiry_date, verification_status, sha256
+            FROM tenant.documents WHERE deleted_at IS NULL ORDER BY uploaded_at DESC LIMIT 50
+        """))).mappings().all()
+        data["documents"] = [{"doc_type": d["doc_type"], "title": d["title"],
+                              "issued_date": d["issued_date"].isoformat() if d["issued_date"] else None,
+                              "expiry_date": d["expiry_date"].isoformat() if d["expiry_date"] else None,
+                              "verification_status": d["verification_status"],
+                              "sha256": (d["sha256"] or "")[:12]} for d in docs]
     return data
 
 

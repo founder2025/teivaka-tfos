@@ -39,6 +39,7 @@ from app.routers import (
     passport,
     shares,
     attestations,
+    documents,
     verify,
     tis_public,
     chemicals,
@@ -354,6 +355,7 @@ app.include_router(shares.router,              prefix=PREFIX,                   
 app.include_router(shares.html_router,         prefix="",                             tags=["Share Portal (HTML)"])
 app.include_router(attestations.router,        prefix=PREFIX,                         tags=["Attestations"])
 app.include_router(attestations.html_router,   prefix="",                             tags=["Attestation Portal (HTML)"])
+app.include_router(documents.router,           prefix=PREFIX,                         tags=["Document Vault"])
 app.include_router(poultry_bank_evidence.router, prefix=PREFIX,                       tags=["POULTRY Bank Evidence"])
 app.include_router(crop_bank_evidence.router,  prefix=PREFIX,                         tags=["Crop Bank Evidence"])
 app.include_router(agronomy.router,            prefix=PREFIX,                         tags=["Agronomy"])
