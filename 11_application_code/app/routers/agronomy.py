@@ -34,6 +34,34 @@ ALLOWED_STAGES = {
 ALLOWED_COUNTRIES = {'FJI', 'PNG', 'SLB', 'VUT', 'WSM', 'TON'}
 
 
+@router.get("/agronomy/nutrition/crops")
+async def list_nutrition_crops(
+    country: Optional[str] = Query(None, max_length=3),
+    db: AsyncSession = Depends(get_tenant_db),
+):
+    """Crops that actually have a seeded nutrition protocol.
+
+    The Library Nutrition picker must list only resolvable crops, keyed by the
+    real `crop_key` (e.g. 'taro') — not the reference-library `ref_id` ('CRP-TAR'),
+    which never matches and 404s. Distinct crop_key + display name, optionally
+    scoped to a country (global rows always included).
+    """
+    country_upper = (country or "").upper().strip() or None
+    result = await db.execute(
+        text(
+            """
+            SELECT crop_key, MIN(crop_display_name) AS crop_display_name
+            FROM shared.crop_nutrition_protocols
+            WHERE (:ci IS NULL OR country_iso = :ci OR country_iso IS NULL)
+            GROUP BY crop_key
+            ORDER BY MIN(crop_display_name)
+            """
+        ),
+        {"ci": country_upper},
+    )
+    return {"data": [{"crop_key": r.crop_key, "crop_display_name": r.crop_display_name} for r in result]}
+
+
 @router.get("/agronomy/nutrition/{crop_key}/stages")
 async def get_nutrition_stages(
     crop_key: str,
