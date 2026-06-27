@@ -180,6 +180,7 @@ async def get_chemical_register(
                    CASE WHEN cl.registered_crops IS NOT NULL AND pc.production_id IS NOT NULL
                         THEN NOT (pc.production_id = ANY(cl.registered_crops))
                         ELSE false END                                       AS off_label,
+                   (fe.chemical_id IS NOT NULL AND cl.registered_crops IS NULL) AS reg_unknown,
                    u.full_name                                               AS applied_by,
                    fe.audit_hash                                             AS hash
             FROM tenant.field_events fe
@@ -205,6 +206,7 @@ async def get_chemical_register(
         d["active"] = bool(clear and clear > today)
         d["unspecified"] = bool(d["unspecified"])
         d["off_label"] = bool(d["off_label"])
+        d["reg_unknown"] = bool(d["reg_unknown"])
         d["dose"] = float(d["dose"]) if d["dose"] is not None else None
         d["chemical"] = d["chemical"] or ("Not identified" if d["unspecified"] else "Chemical")
         d["hash"] = (d["hash"] or "")[-8:]

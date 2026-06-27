@@ -16,7 +16,7 @@ import { useNavigate } from "react-router-dom";
 import { useFormModal } from "../../context/FormModalContext";
 import {
   Shield, Plus, Search, Clock, AlertTriangle, Check, HelpCircle, Lock, FlaskConical,
-  List, Award, Activity, Home, Cloud, FileText, Sparkles, RefreshCw,
+  List, Award, Activity, FileText, Sparkles, RefreshCw,
 } from "lucide-react";
 import TfpShell from "../../components/farm/TfpShell";
 import Modal from "../../components/ui/Modal.jsx";
@@ -64,18 +64,21 @@ function DualLayer() {
   );
 }
 
+// cls drives the prototype card border; amber states get their own accent so a
+// warning never reads as a hard red block (CC8).
 const STATE_META = {
-  blocked: { color: "var(--red)", label: "Harvest blocked", Icon: AlertTriangle, cls: "blocked" },
-  unknown: { color: "var(--amber)", label: "Needs attention", Icon: HelpCircle, cls: "blocked" },
-  off_label: { color: "var(--amber)", label: "Off-label", Icon: AlertTriangle, cls: "blocked" },
-  clear: { color: "var(--green-dk)", label: "Clear", Icon: Check, cls: "clear" },
+  blocked: { color: "var(--red)", label: "Harvest blocked", Icon: AlertTriangle, cls: "blocked", accent: null },
+  unknown: { color: "var(--amber)", label: "Needs attention", Icon: HelpCircle, cls: "clear", accent: "var(--amber)" },
+  off_label: { color: "var(--amber)", label: "Off-label", Icon: AlertTriangle, cls: "clear", accent: "var(--amber)" },
+  clear: { color: "var(--green-dk)", label: "Clear", Icon: Check, cls: "clear", accent: null },
 };
 
 // ── Status ───────────────────────────────────────────────────────────────────
-function StatusView({ compQ, cycles, overridesYtd, onOverride }) {
+function StatusView({ compQ, cycles, cyclesErr, overridesYtd, ovrErr, onOverride }) {
   const [filter, setFilter] = useState("all");
   const comp = compQ.data?.data || {};
   const blocks = comp.active_blocks ?? [];
+  const checkedN = comp.checked_cycles ?? 0;
   const blockedSet = new Set(blocks.map((b) => b.cycle_id));
   const active = (cycles ?? []).filter((c) => ["PLANNED", "ACTIVE", "HARVESTING", "CLOSING"].includes(c.cycle_status || c.status));
   const clearCards = active.filter((c) => !blockedSet.has(c.cycle_id)).map((c) => ({
@@ -85,6 +88,7 @@ function StatusView({ compQ, cycles, overridesYtd, onOverride }) {
   const blockedN = blocks.filter((b) => b.state === "blocked").length;
   const attentionN = blocks.length - blockedN;
   const clearN = clearCards.length;
+  const empty = checkedN === 0;   // no active crops at all (CC1)
   const soonest = blocks.filter((b) => b.state === "blocked" && b.days_remaining != null).sort((a, b) => a.days_remaining - b.days_remaining)[0];
 
   const shown = filter === "all" ? cards
@@ -95,7 +99,12 @@ function StatusView({ compQ, cycles, overridesYtd, onOverride }) {
   return (
     <QueryState q={compQ} label="compliance status">
       {/* Verdict — the one answer (cognitive load / decision) */}
-      {blockedN > 0 ? (
+      {empty ? (
+        <div className="card" style={{ padding: "14px 16px", marginBottom: 12, borderLeft: "4px solid var(--line)", color: "var(--muted)" }}>
+          <div style={{ fontWeight: 700, color: "var(--soil)", fontSize: 14, display: "flex", alignItems: "center", gap: 8 }}><FlaskConical size={16} />No active crops to check yet</div>
+          <div style={{ fontSize: 12.5, marginTop: 3 }}>Plant a cycle and log any sprays — withholding holds and harvest-safe status appear here automatically.</div>
+        </div>
+      ) : blockedN > 0 ? (
         <div className="card" style={{ padding: "14px 16px", marginBottom: 12, borderLeft: "4px solid var(--red)", background: "#fdf3f3" }}>
           <div style={{ fontWeight: 800, color: "var(--red)", fontSize: 15, display: "flex", alignItems: "center", gap: 8 }}><AlertTriangle size={17} />{blockedN} block{blockedN === 1 ? "" : "s"} can't be sold yet</div>
           {soonest && <div style={{ fontSize: 12.5, color: "var(--soil)", marginTop: 3 }}>Next clears in {soonest.days_remaining} day{soonest.days_remaining === 1 ? "" : "s"} · {soonest.clear_date} ({soonest.block_name || "block"})</div>}
@@ -117,8 +126,8 @@ function StatusView({ compQ, cycles, overridesYtd, onOverride }) {
         <div className="capital-tile" style={{ cursor: "pointer" }} onClick={() => setFilter("attention")}>
           <div className="capital-tile-label">Needs attention</div><div className="capital-tile-value" style={{ color: attentionN > 0 ? "var(--amber)" : "var(--soil)" }}>{attentionN}</div><div className="capital-tile-sub">unidentified / off-label</div></div>
         <div className="capital-tile" style={{ cursor: "pointer" }} onClick={() => setFilter("clear")}>
-          <div className="capital-tile-label">Harvest-safe</div><div className="capital-tile-value" style={{ color: "var(--green-dk)" }}>{clearN}</div><div className="capital-tile-sub">buyer-ready</div></div>
-        <div className="capital-tile"><div className="capital-tile-label">Overrides (YTD)</div><div className="capital-tile-value" style={{ color: overridesYtd > 0 ? "var(--amber)" : "var(--soil)" }}>{overridesYtd}</div><div className="capital-tile-sub">each is a ding</div></div>
+          <div className="capital-tile-label">Harvest-safe</div><div className="capital-tile-value" style={{ color: "var(--green-dk)" }}>{cyclesErr ? "—" : clearN}</div><div className="capital-tile-sub">{cyclesErr ? "couldn't load" : "buyer-ready"}</div></div>
+        <div className="capital-tile"><div className="capital-tile-label">Overrides (YTD)</div><div className="capital-tile-value" style={{ color: ovrErr ? "var(--muted)" : overridesYtd > 0 ? "var(--amber)" : "var(--soil)" }}>{ovrErr ? "—" : overridesYtd}</div><div className="capital-tile-sub">{ovrErr ? "couldn't load" : "each is a ding"}</div></div>
       </div>
       <div className="gallery-filter-row" style={{ margin: "12px 0" }}>
         {[["all", "All"], ["blocked", "Blocked"], ["attention", "Needs attention"], ["clear", "Clear"]].map(([k, l]) => (
@@ -130,7 +139,7 @@ function StatusView({ compQ, cycles, overridesYtd, onOverride }) {
           {shown.map((b) => {
             const m = STATE_META[b.state] || STATE_META.clear;
             return (
-              <div key={b.cycle_id} className={`comp-block-card ${m.cls}`}>
+              <div key={b.cycle_id} className={`comp-block-card ${m.cls}`} style={m.accent ? { borderLeft: `4px solid ${m.accent}` } : undefined}>
                 <div className="comp-block-head">
                   <div className={`comp-block-icon ${m.cls}`}><m.Icon size={18} /></div>
                   <div style={{ flex: 1 }}>
@@ -188,10 +197,10 @@ function AreasView({ blocked, clear, setTab }) {
       {card(Award, "Export certificates", "Not tracked yet", "var(--muted)", "Organic, GAP and export certificate status. Being built — no placeholders shown.", () => setTab("certs"))}
       {card(Shield, "Audit trail", "Hash-linked", "var(--green-dk)", "Every chemical application hash-linked and tamper-proof.", () => setTab("register"))}
       {card(AlertTriangle, "Violations & holds", blocked ? `${blocked} active` : "None", blocked ? "var(--red)" : "var(--green-dk)", "Anything blocked from sale or harvest right now shows here.", () => setTab("status"))}
-      {card(Activity, "Animal welfare", "Separate page", "var(--muted)", "Poultry/livestock health, treatment withholding and welfare are tracked in livestock compliance.", null)}
-      {card(Home, "Biosecurity", "Not tracked yet", "var(--muted)", "Visitor logs, quarantine and disease watch. Builds as you record farm-gate activity.", null)}
-      {card(Cloud, "Environmental", "Not tracked yet", "var(--muted)", "Waste, water use and chemical runoff. Builds as you log inputs and disposal.", null)}
-      {card(FileText, "Licenses & permits", "Not tracked yet", "var(--muted)", "Farm licence, chemical handler permit and expiry reminders. Builds as you add them.", null)}
+      {card(Activity, "Animal welfare & treatment", "Livestock page", "var(--muted)", "Poultry/livestock health, treatment withholding and welfare are tracked in livestock compliance.", null)}
+      <div className="card" style={{ padding: "12px 16px", marginBottom: 12, fontSize: 12, color: "var(--muted)" }}>
+        <strong style={{ color: "var(--soil)" }}>Not tracked yet:</strong> Biosecurity (visitor/quarantine logs), Environmental (waste, water, runoff), and Licenses &amp; permits (with expiry reminders). These build as the records behind them ship — shown here only when they hold real data, never as placeholders.
+      </div>
     </>
   );
 }
@@ -231,7 +240,7 @@ function RegisterView({ regQ, navigate }) {
                 {filtered.map((a) => (
                   <tr key={a.event_id}>
                     <td style={{ fontSize: 11 }}>{a.applied_date}</td>
-                    <td>{a.chemical}{a.unspecified && <span title="Chemical not identified" style={{ color: "var(--amber)", fontWeight: 700 }}> ⚠</span>}{a.off_label && <span title="Off-label" style={{ color: "var(--amber)", fontWeight: 700 }}> ⚑</span>}</td>
+                    <td>{a.chemical}{a.unspecified && <span title="Chemical not identified" style={{ color: "var(--amber)", fontWeight: 700 }}> ⚠</span>}{a.off_label && <span title="Off-label: not registered for this crop" style={{ color: "var(--amber)", fontWeight: 700 }}> ⚑</span>}{a.reg_unknown && <span title="Crop-registration data unavailable for this chemical" style={{ color: "var(--muted)", fontWeight: 700 }}> ·reg?</span>}</td>
                     <td style={{ fontSize: 11 }}>{a.block_name || "Block"}</td>
                     <td style={{ fontSize: 11.5 }}>{a.crop || "—"}</td>
                     <td style={{ fontSize: 11 }}>{a.dose != null ? `${a.dose}/L` : "—"}</td>
@@ -294,14 +303,15 @@ function OverridesView({ ovrQ }) {
 // ── Calendar ─────────────────────────────────────────────────────────────────
 function CalendarView({ compQ, navigate }) {
   const comp = compQ.data?.data || {};
-  const upcoming = comp.upcoming_clearances ?? [];
+  // All future WHD clearances, not just ≤14 days (CC6).
+  const upcoming = (comp.active_blocks ?? []).filter((b) => b.state === "blocked" && b.clear_date);
   return (
     <QueryState q={compQ} label="compliance calendar">
       <div className="page-header" style={{ paddingTop: 0 }}><div><h1 style={{ fontSize: 20 }}>Upcoming compliance events</h1><div className="subtitle">WHD clear-dates</div></div></div>
       <div style={{ background: "rgba(191,144,0,0.06)", borderLeft: "3px solid var(--amber)", borderRadius: 7, padding: "12px 14px", margin: "14px 0", fontSize: 12, color: "var(--soil)" }}>
         <strong>Spray advisory:</strong> check the 48h rain forecast before applying — rain washes chemical off (wasted) and risks runoff. <a onClick={() => navigate("/farm/weather")} style={{ color: "var(--green-dk)", cursor: "pointer", fontWeight: 600, textDecoration: "underline" }}>View weather</a>
       </div>
-      {upcoming.length === 0 ? <div className="card" style={{ padding: 24, textAlign: "center", color: "var(--muted)" }}>No upcoming WHD clearances in the next 14 days. Clear-dates appear here as chemicals are applied.</div>
+      {upcoming.length === 0 ? <div className="card" style={{ padding: 24, textAlign: "center", color: "var(--muted)" }}>No upcoming WHD clearances. Clear-dates appear here while a block is inside a withholding period.</div>
         : upcoming.map((e) => (
           <div className="comp-cal-row" key={e.cycle_id}>
             <div className="comp-cal-date">{e.clear_date}</div>
@@ -315,28 +325,31 @@ function CalendarView({ compQ, navigate }) {
 }
 
 // ── Analytics ────────────────────────────────────────────────────────────────
-function AnalyticsView({ regQ, comp, overridesYtd, navigate }) {
+function AnalyticsView({ regQ, comp, overridesYtd, dataErr, navigate }) {
   const apps = regQ.data?.data?.applications ?? [];
-  const byChem = {}; apps.forEach((a) => { const k = (a.chemical || "—").split(" ")[0]; byChem[k] = (byChem[k] || 0) + 1; });
+  const chemName = (a) => (a.unspecified ? "Unidentified" : (a.chemical || "—").split(" ")[0]);
+  const byChem = {}; apps.forEach((a) => { const k = chemName(a); byChem[k] = (byChem[k] || 0) + 1; });
   const maxC = Math.max(...Object.values(byChem), 1);
   const blocked = comp.blocked_count ?? 0;
   const attention = (comp.attention_count ?? 0) - blocked;
   // Honest "standing" — derived from real data, NOT an invented score (CO6/CO28).
+  // If holds/overrides failed to load we CANNOT assert "Clean" (CC3).
   const dings = [];
   if (overridesYtd > 0) dings.push(`${overridesYtd} override${overridesYtd === 1 ? "" : "s"} this year`);
   if (blocked > 0) dings.push(`${blocked} block${blocked === 1 ? "" : "s"} under active WHD`);
   if (attention > 0) dings.push(`${attention} unidentified/off-label application${attention === 1 ? "" : "s"}`);
-  const clean = dings.length === 0;
+  const clean = !dataErr && dings.length === 0;
+  const standColor = dataErr ? "var(--muted)" : clean ? "var(--green-dk)" : "var(--amber)";
   return (
     <QueryState q={regQ} label="compliance analytics">
       <div className="analytics-grid">
         <div className="analytics-card">
           <div className="analytics-card-title">Compliance standing</div>
           <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "10px 0" }}>
-            <span style={{ width: 44, height: 44, borderRadius: "50%", display: "grid", placeItems: "center", background: clean ? "rgba(45,106,79,0.12)" : "rgba(191,144,0,0.12)", color: clean ? "var(--green-dk)" : "var(--amber)" }}>{clean ? <Check size={22} /> : <AlertTriangle size={22} />}</span>
-            <div><div style={{ fontWeight: 800, fontSize: 16, color: clean ? "var(--green-dk)" : "var(--amber)" }}>{clean ? "Clean" : "Needs attention"}</div><div style={{ fontSize: 11.5, color: "var(--muted)" }}>{clean ? "0 overrides · 0 holds · 0 flags" : "live, from your records"}</div></div>
+            <span style={{ width: 44, height: 44, borderRadius: "50%", display: "grid", placeItems: "center", background: dataErr ? "rgba(0,0,0,0.05)" : clean ? "rgba(45,106,79,0.12)" : "rgba(191,144,0,0.12)", color: standColor }}>{dataErr ? <RefreshCw size={20} /> : clean ? <Check size={22} /> : <AlertTriangle size={22} />}</span>
+            <div><div style={{ fontWeight: 800, fontSize: 16, color: standColor }}>{dataErr ? "Can't confirm" : clean ? "Clean" : "Needs attention"}</div><div style={{ fontSize: 11.5, color: "var(--muted)" }}>{dataErr ? "reload to confirm — holds/overrides didn't load" : clean ? "0 overrides · 0 holds · 0 flags" : "live, from your records"}</div></div>
           </div>
-          {!clean && <ul style={{ margin: "4px 0 0 16px", fontSize: 12, color: "var(--soil)" }}>{dings.map((d) => <li key={d}>{d}</li>)}</ul>}
+          {!clean && !dataErr && <ul style={{ margin: "4px 0 0 16px", fontSize: 12, color: "var(--soil)" }}>{dings.map((d) => <li key={d}>{d}</li>)}</ul>}
         </div>
         <div className="analytics-card">
           <div className="analytics-card-title">Chemical use by type</div>
@@ -431,13 +444,13 @@ function CropComplianceInner() {
           </div>
 
           {!farmId ? <div className="card" style={{ padding: 20, color: "var(--muted)" }}>Select a farm to see its compliance.</div>
-            : tab === "status" ? <StatusView compQ={compQ} cycles={cycles} overridesYtd={overridesYtd} onOverride={setOverride} />
-            : tab === "areas" ? <AreasView blocked={blocked} clear={Math.max(0, checked - (comp.attention_count ?? 0))} setTab={setTab} />
+            : tab === "status" ? <StatusView compQ={compQ} cycles={cycles} cyclesErr={cyclesQ.isError} overridesYtd={overridesYtd} ovrErr={ovrQ.isError} onOverride={setOverride} />
+            : tab === "areas" ? <QueryState q={compQ} label="compliance areas"><AreasView blocked={blocked} clear={Math.max(0, checked - (comp.attention_count ?? 0))} setTab={setTab} /></QueryState>
             : tab === "register" ? <RegisterView regQ={regQ} navigate={navigate} />
             : tab === "certs" ? <CertsView />
             : tab === "overrides" ? <OverridesView ovrQ={ovrQ} />
             : tab === "calendar" ? <CalendarView compQ={compQ} navigate={navigate} />
-            : <AnalyticsView regQ={regQ} comp={comp} overridesYtd={overridesYtd} navigate={navigate} />}
+            : <AnalyticsView regQ={regQ} comp={comp} overridesYtd={overridesYtd} dataErr={compQ.isError || ovrQ.isError} navigate={navigate} />}
 
           <div style={{ marginTop: 14 }}>
             <button className="btn btn-secondary btn-sm" onClick={() => navigate("/farm/compliance/poultry")}>View livestock (poultry) compliance →</button>
