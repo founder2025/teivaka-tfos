@@ -58,6 +58,8 @@ def upgrade():
             total_kg        NUMERIC(12,2) NOT NULL DEFAULT 0,
             delivered_at    TIMESTAMPTZ,
             trace_token     TEXT NOT NULL UNIQUE,   -- plaintext capability (printed on the docket QR; reprintable)
+            trace_expires_at TIMESTAMPTZ,           -- NULL = no expiry; the docket QR can be killed
+            trace_revoked_at TIMESTAMPTZ,           -- kill switch for a leaked docket link
             notes           TEXT,
             created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
         )

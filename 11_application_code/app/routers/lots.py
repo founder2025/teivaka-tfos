@@ -60,6 +60,7 @@ class LotCreate(BaseModel):
 class LotDeliver(BaseModel):
     buyer_id: Optional[str] = None
     buyer_name: Optional[str] = Field(None, max_length=200)
+    force: bool = False   # override an uncleared-harvest warning (documented decision)
 
 
 # ───────────────────────── owner side ─────────────────────────
@@ -98,23 +99,36 @@ async def create_lot(body: LotCreate, db: AsyncSession = Depends(get_tenant_db),
         raise HTTPException(400, detail="A consignment needs at least one harvest allocation.")
     crop_name = body.crop_name
     total = 0.0
+    crops_seen: set[str] = set()
+    req_by_harvest: dict[str, float] = {}   # within-request allocation, so duplicates don't double-spend
     # Validate each allocation against the harvest's remaining (un-allocated) quantity.
+    # P0-1: lock the harvest row FOR UPDATE so two concurrent consignments can't both
+    # pass the remaining-check and double-sell the same kg (serialize on the harvest row).
     for it in body.items:
         h = (await db.execute(text("""
-            SELECT h.gross_yield_kg, h.production_id,
-                   COALESCE((SELECT SUM(li.kg) FROM tenant.lot_items li WHERE li.harvest_id = h.harvest_id), 0) AS allocated,
+            SELECT h.gross_yield_kg,
                    (SELECT production_name FROM shared.productions p WHERE p.production_id = h.production_id) AS production_name
             FROM tenant.harvest_log h
             WHERE h.harvest_id = cast(:hid AS uuid) AND h.harvest_date = cast(:hd AS date)
+            FOR UPDATE
         """), {"hid": it.harvest_id, "hd": it.harvest_date})).mappings().first()
         if not h:
             raise HTTPException(404, detail=f"Harvest {it.harvest_id} not found.")
-        remaining = float(h["gross_yield_kg"] or 0) - float(h["allocated"] or 0)
+        allocated = (await db.execute(text(
+            "SELECT COALESCE(SUM(kg),0) FROM tenant.lot_items WHERE harvest_id = cast(:hid AS uuid)"),
+            {"hid": it.harvest_id})).scalar() or 0
+        remaining = float(h["gross_yield_kg"] or 0) - float(allocated) - req_by_harvest.get(it.harvest_id, 0.0)
         if it.kg > remaining + _TOL:
             raise HTTPException(400, detail=f"Over-allocation: {it.kg} kg requested but only {round(remaining,2)} kg remains on that harvest.")
+        req_by_harvest[it.harvest_id] = req_by_harvest.get(it.harvest_id, 0.0) + it.kg
         total += it.kg
+        if h["production_name"]:
+            crops_seen.add(h["production_name"])
         if not crop_name and h["production_name"]:
             crop_name = h["production_name"]
+    # P1-6 (label integrity): a consignment must be a single commodity.
+    if len(crops_seen) > 1:
+        raise HTTPException(400, detail=f"A consignment must be one crop — these harvests span {', '.join(sorted(crops_seen))}. Create one lot per crop.")
 
     token = secrets.token_urlsafe(18)
     lot_code = "LOT-" + secrets.token_hex(4).upper()
@@ -143,7 +157,8 @@ async def create_lot(body: LotCreate, db: AsyncSession = Depends(get_tenant_db),
 @router.get("/lots")
 async def list_lots(db: AsyncSession = Depends(get_tenant_db), user: dict = Depends(get_current_user)):
     rows = (await db.execute(text("""
-        SELECT lot_id, lot_code, crop_name, buyer_name, status, total_kg, delivered_at, created_at, trace_token
+        SELECT lot_id, lot_code, crop_name, buyer_name, status, total_kg, delivered_at, created_at,
+               trace_token, trace_revoked_at
         FROM tenant.lots ORDER BY created_at DESC LIMIT 100
     """))).mappings().all()
     out = []
@@ -153,9 +168,21 @@ async def list_lots(db: AsyncSession = Depends(get_tenant_db), user: dict = Depe
         for k in ("delivered_at", "created_at"):
             d[k] = d[k].isoformat() if d[k] else None
         tok = d.pop("trace_token")
+        d["trace_revoked"] = d.pop("trace_revoked_at") is not None
         d["trace_url"] = f"https://teivaka.com/verify/lot/{tok}"
         out.append(d)
     return success_envelope({"lots": out})
+
+
+@router.post("/lots/{lot_id}/revoke-trace")
+async def revoke_trace(lot_id: str, db: AsyncSession = Depends(get_tenant_db), user: dict = Depends(get_current_user)):
+    """P0-3 kill switch — revoke a leaked/printed consignment trace link."""
+    res = await db.execute(text(
+        "UPDATE tenant.lots SET trace_revoked_at = now() WHERE lot_id = cast(:l AS uuid) AND trace_revoked_at IS NULL"),
+        {"l": lot_id})
+    if res.rowcount == 0:
+        raise HTTPException(404, detail="Lot not found or already revoked")
+    return success_envelope({"lot_id": lot_id, "trace_revoked": True})
 
 
 async def _assemble_lot(db: AsyncSession, lot_id: str) -> Optional[dict]:
@@ -177,9 +204,21 @@ async def _assemble_lot(db: AsyncSession, lot_id: str) -> Optional[dict]:
     """)) ).mappings().all()
 
     pu_ids = sorted({str(i["pu_id"]) for i in items if i["pu_id"]})
-    harvested_kg = sum(float(i["gross_yield_kg"] or 0) for i in items)
+    hids = sorted({str(i["harvest_id"]) for i in items if i["harvest_id"]})
     delivered_kg = sum(float(i["kg"] or 0) for i in items)
-    all_cleared = all(bool(i["chemical_compliance_cleared"]) for i in items) if items else False
+    # P0-4: the integrity check is TOTAL allocated across ALL lots ≤ what was harvested
+    # from these source harvests — not just this lot's slice (which is trivially ≤ gross).
+    harvested_kg = 0.0
+    allocated_all = 0.0
+    if hids:
+        harvested_kg = float((await db.execute(text(
+            "SELECT COALESCE(SUM(gross_yield_kg),0) FROM tenant.harvest_log WHERE harvest_id = ANY(:h)"),
+            {"h": hids})).scalar() or 0)
+        allocated_all = float((await db.execute(text(
+            "SELECT COALESCE(SUM(kg),0) FROM tenant.lot_items WHERE harvest_id = ANY(:h)"),
+            {"h": hids})).scalar() or 0)
+    # Legacy rows can carry NULL compliance (pre-015a trigger) — treat NULL as n/a, not a fail.
+    all_cleared = all(i["chemical_compliance_cleared"] is not False for i in items) if items else False
 
     inputs, photos, blocks = [], [], []
     if pu_ids:
@@ -219,7 +258,9 @@ async def _assemble_lot(db: AsyncSession, lot_id: str) -> Optional[dict]:
         "photos": [{"event": str(p["event_type"]).replace("_", " ").title(), "date": _iso(p["date"]),
                     "photo_url": p["photo_url"], "sha256": p["photo_sha256"]} for p in photos],
         "mass_balance": {"harvested_kg": round(harvested_kg, 2), "delivered_kg": round(delivered_kg, 2),
-                         "ok": delivered_kg <= harvested_kg + _TOL},
+                         "allocated_total_kg": round(allocated_all, 2),
+                         "elsewhere_kg": round(max(0.0, allocated_all - delivered_kg), 2),
+                         "ok": allocated_all <= harvested_kg + _TOL},
         "compliance": {"withholding_observed": all_cleared},
     }
 
@@ -234,7 +275,20 @@ async def get_lot(lot_id: str, db: AsyncSession = Depends(get_tenant_db), user: 
 
 @router.post("/lots/{lot_id}/deliver")
 async def deliver_lot(lot_id: str, body: LotDeliver, db: AsyncSession = Depends(get_tenant_db), user: dict = Depends(get_current_user)):
-    """Freeze the consignment and mark it delivered to a buyer."""
+    """Freeze the consignment and mark it delivered to a buyer. Re-validates integrity (P1-6):
+    blocks on a failing mass balance; requires force=true to ship uncleared harvests."""
+    bundle = await _assemble_lot(db, lot_id)
+    if not bundle:
+        raise HTTPException(404, detail="Lot not found")
+    mb = bundle["mass_balance"]
+    if not mb["ok"]:
+        raise HTTPException(409, detail=(
+            f"Mass balance fails — {mb['allocated_total_kg']} kg allocated exceeds "
+            f"{mb['harvested_kg']} kg harvested across these source harvests. Fix allocations first."))
+    if not bundle["compliance"]["withholding_observed"] and not body.force:
+        raise HTTPException(409, detail=(
+            "One or more source harvests are not chemical-withholding cleared. "
+            "Set force=true to deliver anyway (recorded as your decision)."))
     res = await db.execute(text("""
         UPDATE tenant.lots
         SET status = 'DELIVERED', delivered_at = now(),
@@ -256,11 +310,22 @@ async def trace_lot(token: str, request: Request, db: AsyncSession = Depends(get
         ctx.setdefault("request", request)
         return templates.TemplateResponse("verify_lot.html", ctx)
 
+    from app.routers.verify import _rate_limit_check  # P0-2: shared Redis limiter
+    await _rate_limit_check(request)
+
     row = (await db.execute(text("SELECT * FROM audit.resolve_lot_trace(:tok)"),
                             {"tok": token.strip()})).mappings().first()
     if not row:
         return page(state="invalid")
     await db.execute(text("SELECT set_config('app.tenant_id', :t, true)"), {"t": str(row["tenant_id"])})
+    # P0-3: honour the kill switch + expiry on the (plaintext, printed) trace token.
+    st = (await db.execute(text(
+        "SELECT trace_revoked_at, trace_expires_at FROM tenant.lots WHERE lot_id = cast(:l AS uuid)"),
+        {"l": str(row["lot_id"])})).mappings().first() or {}
+    if st.get("trace_revoked_at"):
+        return page(state="invalid", msg="The farmer has revoked this consignment link.")
+    if st.get("trace_expires_at") and st["trace_expires_at"] < _now():
+        return page(state="invalid", msg="This consignment link has expired.")
     bundle = await _assemble_lot(db, str(row["lot_id"]))
     if not bundle:
         return page(state="invalid")
@@ -268,10 +333,12 @@ async def trace_lot(token: str, request: Request, db: AsyncSession = Depends(get
 
 
 @html_router.get("/verify/lot/{token}/qr.png")
-async def lot_qr(token: str):
+async def lot_qr(token: str, request: Request):
     """Public QR PNG of the consignment trace link — for the delivery docket / carton label."""
     from fastapi.responses import Response
+    from app.routers.verify import _rate_limit_check
     from app.routers.poultry_bank_evidence import generate_qr_image
+    await _rate_limit_check(request)
     buf = generate_qr_image(f"https://teivaka.com/verify/lot/{token}")
     return Response(content=buf.getvalue(), media_type="image/png",
                     headers={"Cache-Control": "public, max-age=86400"})

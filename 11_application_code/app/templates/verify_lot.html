@@ -75,10 +75,11 @@
     <div class="mb">
       <div class="box"><div class="v">{{ b.mass_balance.harvested_kg }}</div><div class="l">Harvested (source)</div></div>
       <div class="box"><div class="v">{{ b.mass_balance.delivered_kg }}</div><div class="l">In this lot</div></div>
+      {% if b.mass_balance.elsewhere_kg %}<div class="box"><div class="v">{{ b.mass_balance.elsewhere_kg }}</div><div class="l">Other lots</div></div>{% endif %}
     </div>
     <div class="row" style="margin-top:10px"><span class="label">Balance check</span>
       <span class="value" style="color:{{ 'var(--green-dp)' if b.mass_balance.ok else 'var(--red)' }}">
-        {{ '✓ Consistent — lot does not exceed harvest' if b.mass_balance.ok else '✗ Lot exceeds recorded harvest' }}</span></div>
+        {{ '✓ Consistent — total allocated ≤ harvested' if b.mass_balance.ok else '✗ Over-allocated — exceeds recorded harvest' }}</span></div>
   </div>
 
   {% if b.blocks %}
@@ -129,7 +130,7 @@
   {% endif %}
 
   {% else %}
-  <div class="alert">This consignment link is not valid.</div>
+  <div class="alert">{{ msg or "This consignment link is not valid." }}</div>
   <div class="card"><p style="font-size:14px;margin:0">Ask the farmer or exporter for a fresh trace link. Every Teivaka consignment carries a unique, verifiable code.</p></div>
   {% endif %}
 

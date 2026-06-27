@@ -100,7 +100,19 @@ export default function Consignments() {
   const [created, setCreated] = useState(null);
   const load = useCallback(async () => { try { const d = await getJSON("/api/v1/lots"); setLots(d?.data?.lots || []); } catch { setLots([]); } }, []);
   useEffect(() => { load(); }, [load]);
-  const deliver = async (id) => { try { await send("POST", `/api/v1/lots/${id}/deliver`, {}); toast("Marked delivered"); await load(); } catch (e) { toast(e.userMessage || e.message || "Couldn't update"); } };
+  const deliver = async (id, force = false) => {
+    try { await send("POST", `/api/v1/lots/${id}/deliver`, force ? { force: true } : {}); toast("Marked delivered"); await load(); }
+    catch (e) {
+      const msg = e.userMessage || e.message || "Couldn't update";
+      if (!force && /withholding/i.test(msg)) { if (window.confirm(`${msg}\n\nDeliver anyway?`)) return deliver(id, true); }
+      else toast(msg);
+    }
+  };
+  const revoke = async (id) => {
+    if (!window.confirm("Revoke this consignment link? Anyone holding the printed QR will no longer see the trace.")) return;
+    try { await send("POST", `/api/v1/lots/${id}/revoke-trace`); toast("Link revoked"); await load(); }
+    catch (e) { toast(e.userMessage || e.message || "Couldn't revoke"); }
+  };
 
   return (
     <div style={{ maxWidth: 720, margin: "0 auto", padding: 16 }}>
@@ -127,10 +139,14 @@ export default function Consignments() {
                 <span style={{ fontSize: 11, fontWeight: 700, color: l.status === "DELIVERED" ? C.greenDk : C.amber }}>{l.status === "DELIVERED" ? <><Check size={11} style={{ verticalAlign: -1 }} /> Delivered</> : "Draft"}</span>
               </div>
               <div style={{ fontSize: 12.5, color: C.muted, marginTop: 3 }}>{l.total_kg} kg{l.buyer_name ? ` · ${l.buyer_name}` : ""}{l.delivered_at ? ` · ${l.delivered_at.slice(0, 10)}` : ""}</div>
+              {l.trace_revoked && <div style={{ fontSize: 11.5, color: "var(--red)", fontWeight: 600, marginTop: 4 }}>⚠ Trace link revoked</div>}
               <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
-                <a href={l.trace_url} target="_blank" rel="noopener noreferrer" style={{ border: `1px solid ${C.line}`, color: C.greenDk, borderRadius: 8, padding: "5px 10px", fontSize: 12, fontWeight: 600, textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 4 }}><QrCode size={13} />Trace page</a>
-                <a href={`${l.trace_url}/qr.png`} target="_blank" rel="noopener noreferrer" style={{ border: `1px solid ${C.line}`, color: C.greenDk, borderRadius: 8, padding: "5px 10px", fontSize: 12, fontWeight: 600, textDecoration: "none" }}>QR for docket</a>
+                {!l.trace_revoked && <>
+                  <a href={l.trace_url} target="_blank" rel="noopener noreferrer" style={{ border: `1px solid ${C.line}`, color: C.greenDk, borderRadius: 8, padding: "5px 10px", fontSize: 12, fontWeight: 600, textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 4 }}><QrCode size={13} />Trace page</a>
+                  <a href={`${l.trace_url}/qr.png`} target="_blank" rel="noopener noreferrer" style={{ border: `1px solid ${C.line}`, color: C.greenDk, borderRadius: 8, padding: "5px 10px", fontSize: 12, fontWeight: 600, textDecoration: "none" }}>QR for docket</a>
+                </>}
                 {l.status !== "DELIVERED" && <button onClick={() => deliver(l.lot_id)} style={{ border: `1px solid ${C.greenDk}`, background: C.greenDk, color: "var(--paper)", borderRadius: 8, padding: "5px 10px", fontSize: 12, fontWeight: 700, display: "inline-flex", alignItems: "center", gap: 4 }}><Truck size={13} />Mark delivered</button>}
+                {!l.trace_revoked && <button onClick={() => revoke(l.lot_id)} style={{ border: "1px solid var(--red)", color: "var(--red)", background: "var(--paper)", borderRadius: 8, padding: "5px 10px", fontSize: 12, fontWeight: 600 }}>Revoke link</button>}
               </div>
             </div>
           ))}
