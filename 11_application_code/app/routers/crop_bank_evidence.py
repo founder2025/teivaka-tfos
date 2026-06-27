@@ -17,6 +17,7 @@ Sources (all real, tenant + farm scoped):
 """
 import hashlib
 import io
+import os
 from datetime import datetime, timezone
 from typing import Optional
 from uuid import UUID
@@ -48,6 +49,48 @@ from app.routers.poultry_bank_evidence import (
 )
 
 router = APIRouter()
+
+# Teivaka logo for the PDF letterhead. Drop the brand PNG here to brand every
+# report; absent → the wordmark title renders instead (non-breaking, RC4).
+_LOGO_PATH = os.path.normpath(os.path.join(os.path.dirname(__file__), "..", "static", "teivaka-logo.png"))
+
+
+def _logo_flowable(width=4.2 * cm):
+    """Return a sized RLImage of the Teivaka logo, or None if the file isn't present."""
+    try:
+        if os.path.exists(_LOGO_PATH):
+            img = RLImage(_LOGO_PATH)
+            ratio = (img.imageHeight or 1) / float(img.imageWidth or 1)
+            img.drawWidth = width
+            img.drawHeight = width * ratio
+            return img
+    except Exception:  # noqa: BLE001 — branding must never break a bankable PDF
+        return None
+    return None
+
+
+async def _evidence_sources(db, tid, farm_id, ps_date, pe_date, period_start, period_end):
+    """The evidence behind the numbers: location blocks + gallery photos (hash-bound).
+    Shared by the PDF appendix and the /sources endpoint so on-screen == document."""
+    blocks = (await db.execute(text("""
+        SELECT pu.pu_id, pu.pu_name,
+               COALESCE(pu.area_sqm, 0) AS area_sqm,
+               (SELECT COUNT(*) FROM tenant.production_cycles pc
+                  WHERE pc.pu_id = pu.pu_id AND pc.tenant_id = :tid
+                    AND pc.cycle_status IN ('ACTIVE','HARVESTING','CLOSING')) AS active_cycles
+          FROM tenant.production_units pu
+         WHERE pu.tenant_id = :tid AND pu.farm_id = :fid AND pu.is_active = TRUE
+         ORDER BY pu.pu_name
+    """), {"tid": tid, "fid": farm_id})).mappings().all()
+    photos = (await db.execute(text("""
+        SELECT event_id::text AS event_id, event_type, event_date::date AS d,
+               pu_id, photo_url, photo_sha256, audit_hash
+          FROM tenant.field_events
+         WHERE tenant_id = :tid AND farm_id = :fid AND photo_url IS NOT NULL
+           AND event_date >= :ps AND event_date < :pe
+         ORDER BY event_date DESC LIMIT 200
+    """), {"tid": tid, "fid": farm_id, "ps": period_start, "pe": period_end})).mappings().all()
+    return [dict(b) for b in blocks], [dict(p) for p in photos]
 
 
 @router.get("/crops/bank-evidence")
@@ -134,6 +177,9 @@ async def crop_bank_evidence(
     active_cycles = int(assets.active_cycles or 0)
     crops_tracked = int(assets.crops_tracked or 0)
     area_ha = float(assets.area_sqm or 0) / 10000.0
+
+    # 5b. Evidence behind the numbers — blocks + photos (appendix + QR target)
+    blocks_ev, photos_ev = await _evidence_sources(db, tid, farm_id, ps_date, pe_date, period_start, period_end)
 
     # 6. Statement of activity — merge cash + harvests + field events (cap 30)
     activity: list[tuple] = []
@@ -246,7 +292,11 @@ async def crop_bank_evidence(
         ]))
         return t
 
-    # Header
+    # Header — Teivaka logo letterhead (graceful: wordmark if the file is absent)
+    _logo = _logo_flowable()
+    if _logo is not None:
+        elements.append(_logo)
+        elements.append(Spacer(1, 0.2 * cm))
     elements.append(Paragraph("Monthly Cashflow &amp; Production Statement &mdash; Crop / Whole-Farm", title_style))
     elements.append(Paragraph(f"<b>{farm_name}</b> &nbsp;&nbsp; <font size='8' color='#8A8678'><font face='Courier'>{farm_id}</font></font>", subtitle_style))
     elements.append(Paragraph(f"Period: <b>{long_period_label(period_start, period_end)}</b>", meta_style))
@@ -316,6 +366,43 @@ async def crop_bank_evidence(
             ("TOPPADDING", (0, 0), (-1, -1), 3), ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
         ]))
         elements.append(at)
+
+    # Evidence behind this report — location blocks + photo evidence (the QR/verify
+    # index made tangible: the document carries the provenance of its numbers).
+    elements.append(Paragraph("EVIDENCE BEHIND THIS REPORT", section_style))
+    elements.append(Paragraph(
+        f"These figures trace to {len(blocks_ev)} location block(s) and {len(photos_ev)} "
+        f"hash-bound photo(s). Each photo's content is SHA-256-bound into the audit chain; scan "
+        f"the QR or open the verify URL to re-check the chain these belong to.", body_style))
+    if blocks_ev:
+        brows = [["BLOCK", "AREA", "ACTIVE CYCLES"]]
+        for b in blocks_ev[:25]:
+            brows.append([str(b["pu_name"] or b["pu_id"]), f"{(float(b['area_sqm']) / 10000.0):,.2f} ha", str(int(b["active_cycles"]))])
+        bt = Table(brows, colWidths=[9 * cm, 3.5 * cm, 4.5 * cm])
+        bt.setStyle(TableStyle([
+            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"), ("FONTSIZE", (0, 0), (-1, -1), 8),
+            ("TEXTCOLOR", (0, 0), (-1, -1), COLOR_SOIL), ("LINEBELOW", (0, 0), (-1, 0), 0.5, COLOR_SOIL),
+            ("ALIGN", (1, 0), (-1, -1), "RIGHT"),
+            ("TOPPADDING", (0, 0), (-1, -1), 3), ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+        ]))
+        elements.append(bt)
+    if photos_ev:
+        elements.append(Spacer(1, 0.2 * cm))
+        elements.append(Paragraph("Photo evidence (most recent first):", body_style))
+        prows = [["DATE", "EVENT", "BLOCK", "CONTENT HASH (SHA-256)"]]
+        for p in photos_ev[:20]:
+            sh = (p.get("photo_sha256") or "")[:16]
+            prows.append([p["d"].strftime("%d %b") if p.get("d") else "", str(p["event_type"]).replace("_", " ").title()[:22], str(p.get("pu_id") or "")[:16], (sh + "…") if sh else "—"])
+        ptbl = Table(prows, colWidths=[2.2 * cm, 5.0 * cm, 4.0 * cm, 5.8 * cm])
+        ptbl.setStyle(TableStyle([
+            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"), ("FONTSIZE", (0, 0), (-1, -1), 7),
+            ("FONTNAME", (3, 1), (3, -1), "Courier"),
+            ("TEXTCOLOR", (0, 0), (-1, -1), COLOR_SOIL), ("LINEBELOW", (0, 0), (-1, 0), 0.5, COLOR_SOIL),
+            ("TOPPADDING", (0, 0), (-1, -1), 3), ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+        ]))
+        elements.append(ptbl)
+        if len(photos_ev) > 20:
+            elements.append(Paragraph(f"… and {len(photos_ev) - 20} more photo(s) in the online evidence browser.", meta_style))
 
     # Footer + QR
     elements.append(Spacer(1, 0.5 * cm))
@@ -388,3 +475,93 @@ async def crop_bank_evidence(
             "X-Export-Id": str(export_id),
         },
     )
+
+
+async def _resolve_farm(db, tid, farm_id):
+    if farm_id:
+        row = (await db.execute(text(
+            "SELECT farm_id, farm_name FROM tenant.farms WHERE farm_id=:fid AND tenant_id=:tid"),
+            {"fid": farm_id, "tid": tid})).first()
+    else:
+        row = (await db.execute(text(
+            "SELECT farm_id, farm_name FROM tenant.farms WHERE is_active=TRUE AND tenant_id=:tid "
+            "ORDER BY created_at, farm_id LIMIT 1"), {"tid": tid})).first()
+    return row
+
+
+async def _latest_anchor(db, tid, farm_id):
+    """Most recent Bank-Evidence anchor hash for this farm (for the verify URL/QR)."""
+    return (await db.execute(text("""
+        SELECT this_hash FROM audit.events
+         WHERE tenant_id = cast(:tid AS uuid) AND event_type = 'BANK_PDF_GENERATED'
+           AND payload->>'farm_id' = :fid
+         ORDER BY occurred_at DESC LIMIT 1
+    """), {"tid": tid, "fid": farm_id})).scalar()
+
+
+@router.get("/crops/bank-evidence/sources")
+async def crop_bank_evidence_sources(
+    period: Optional[str] = Query(None),
+    farm_id: Optional[str] = Query(None),
+    user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_tenant_db),
+):
+    """The evidence + period totals behind the Bank Evidence numbers — ONE source of
+    truth so the on-screen card matches the signed PDF (RC18), and the browse-friendly
+    evidence panel (blocks + photos)."""
+    tid = str(_resolve_tenant_uuid(user))
+    if not period:
+        now = datetime.now(timezone.utc); period = f"{now.year:04d}-{now.month:02d}"
+    period_start, period_end = _parse_period(period)
+    ps_date, pe_date = period_start.date(), period_end.date()
+    farm = await _resolve_farm(db, tid, farm_id)
+    if not farm:
+        raise HTTPException(404, error_envelope("no_farm", "No matching farm for this tenant."))
+    farm_id = farm.farm_id
+
+    totals = (await db.execute(text("""
+        SELECT
+          COALESCE(SUM(amount_fjd) FILTER (WHERE transaction_type='INCOME'),0)  AS cin,
+          COALESCE(SUM(amount_fjd) FILTER (WHERE transaction_type='EXPENSE'),0) AS cout
+        FROM tenant.cash_ledger
+        WHERE tenant_id=:tid AND farm_id=:fid AND transaction_date>=:ps AND transaction_date<:pe
+    """), {"tid": tid, "fid": farm_id, "ps": ps_date, "pe": pe_date})).first()
+    cin = float(totals.cin or 0); cout = float(totals.cout or 0)
+    hk = (await db.execute(text("""
+        SELECT COALESCE(SUM(gross_yield_kg),0) AS kg, COUNT(*) AS n FROM tenant.harvest_log
+        WHERE tenant_id=:tid AND farm_id=:fid AND harvest_date>=:ps AND harvest_date<:pe
+    """), {"tid": tid, "fid": farm_id, "ps": ps_date, "pe": pe_date})).first()
+    blocks, photos = await _evidence_sources(db, tid, farm_id, ps_date, pe_date, period_start, period_end)
+    anchor = await _latest_anchor(db, tid, farm_id)
+    return {"data": {
+        "farm_id": farm_id, "farm_name": farm.farm_name, "period": period,
+        "earned_fjd": round(cin, 2), "spent_fjd": round(cout, 2), "net_fjd": round(cin - cout, 2),
+        "harvest_kg": round(float(hk.kg or 0), 2), "harvest_events": int(hk.n or 0),
+        "blocks": [{"pu_id": b["pu_id"], "pu_name": b["pu_name"],
+                    "area_ha": round(float(b["area_sqm"] or 0) / 10000.0, 3),
+                    "active_cycles": int(b["active_cycles"])} for b in blocks],
+        "photos": [{"event_id": p["event_id"], "event": str(p["event_type"]).replace("_", " ").title(),
+                    "date": p["d"].isoformat() if p["d"] else None, "pu_id": p["pu_id"],
+                    "photo_url": p["photo_url"], "sha256": p["photo_sha256"], "audit_hash": p["audit_hash"]}
+                   for p in photos],
+        "anchor_hash": anchor,
+        "verify_url": f"https://teivaka.com/verify/{anchor}" if anchor else None,
+    }}
+
+
+@router.get("/crops/bank-evidence/qr.png")
+async def crop_bank_evidence_qr(
+    period: Optional[str] = Query(None),
+    farm_id: Optional[str] = Query(None),
+    user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_tenant_db),
+):
+    """QR PNG for the report's verify URL — lets the page show a scannable code without a
+    frontend QR lib. Encodes the latest anchor's verify page, else the public verify home."""
+    tid = str(_resolve_tenant_uuid(user))
+    farm = await _resolve_farm(db, tid, farm_id)
+    anchor = await _latest_anchor(db, tid, farm.farm_id) if farm else None
+    url = f"https://teivaka.com/verify/{anchor}" if anchor else "https://teivaka.com/verify"
+    buf = generate_qr_image(url)
+    return Response(content=buf.read(), media_type="image/png",
+                    headers={"Cache-Control": "no-store"})
