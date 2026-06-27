@@ -11,7 +11,7 @@
  *    in the modal; <img> error fallback; real downloadable evidence pack (photos + verify manifest).
  * Honest "Building" (as the prototype marks): AI analysis, Video. Delete omitted (needs a real endpoint).
  */
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { Image as ImageIcon, Download, Share2, Check, MapPin, Sprout, Shield, Package, FileText, X, MessageCircle, Mail, ShieldCheck, Search, AlertTriangle, RefreshCw } from "lucide-react";
 import TfpShell from "../../components/farm/TfpShell";
@@ -87,6 +87,10 @@ export default function Gallery() {
   const [selected, setSelected] = useState(() => new Set());
   const [modalId, setModalId] = useState(null);
   const [emailOpen, setEmailOpen] = useState(false);
+  const [render, setRender] = useState(60);   // client render cap (speed) — show in batches
+  const [capped, setCapped] = useState(false);
+  const [moreErr, setMoreErr] = useState(false);
+  const autoLoads = useRef(0);
 
   const fetchPage = useCallback(async (offset) => {
     const url = `/api/v1/field-events?limit=${PAGE}&offset=${offset}${farmId ? `&farm_id=${encodeURIComponent(farmId)}` : ""}`;
@@ -108,9 +112,9 @@ export default function Gallery() {
 
   const loadMore = async () => {
     if (nextOffset == null) return;
-    setLoadingMore(true);
+    setLoadingMore(true); setMoreErr(false);
     try { const { rows, next } = await fetchPage(nextOffset); setEvents((e) => [...(e || []), ...rows]); setNextOffset(next); }
-    catch { setLoadErr(true); } finally { setLoadingMore(false); }
+    catch { setMoreErr(true); } finally { setLoadingMore(false); }
   };
 
   const photos = useMemo(() => (events || [])
@@ -137,6 +141,18 @@ export default function Gallery() {
     (!verifiedOnly || !!p.sha256) &&
     (!q || `${p.label} ${p.event} ${p.block} ${p.observation}`.toLowerCase().includes(q))
   ), [photos, filter, verifiedOnly, q]);
+
+  // Trust-critical controls (Verified-only + text search) auto-exhaust paging so they cover
+  // history, not just loaded pages — bounded + honest cap. Category pills stay loaded + manual.
+  const exhausting = verifiedOnly || !!q;
+  useEffect(() => { autoLoads.current = 0; setCapped(false); }, [q, verifiedOnly]);
+  useEffect(() => {
+    if (!exhausting || nextOffset == null || loadingMore) return;
+    if (autoLoads.current < 15) { autoLoads.current += 1; loadMore(); }
+    else setCapped(true);
+  }, [exhausting, nextOffset, loadingMore, events]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { setRender(60); }, [filter, verifiedOnly, q, view]);
+  const shown = useMemo(() => filtered.slice(0, render), [filtered, render]);
 
   const selCount = selected.size;
   const selectedPhotos = useMemo(() => photos.filter((p) => selected.has(p.id)), [photos, selected]);
@@ -168,9 +184,18 @@ export default function Gallery() {
   };
 
   const modalPhoto = modalId ? photos.find((p) => p.id === modalId) : null;
-  const loadMoreBtn = nextOffset != null && (
-    <div style={{ textAlign: "center", margin: "14px 0" }}>
-      <button className="btn btn-secondary" onClick={loadMore} disabled={loadingMore}>{loadingMore ? <><RefreshCw size={14} className="animate-spin" />Loading…</> : "Load more photos"}</button>
+  const tail = (
+    <div style={{ textAlign: "center", margin: "14px 0", fontSize: 12, color: "var(--muted)" }} aria-live="polite">
+      {render < filtered.length ? (
+        <button className="btn btn-secondary" onClick={() => setRender((r) => r + 60)}>Show more ({filtered.length - render})</button>
+      ) : exhausting && nextOffset != null && !capped ? (
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><RefreshCw size={13} className="animate-spin" />Searching all your photos…</span>
+      ) : capped ? (
+        <span>Searched the most recent records — narrow the view (date/category) to go deeper.</span>
+      ) : nextOffset != null ? (
+        <button className="btn btn-secondary" onClick={loadMore} disabled={loadingMore}>{loadingMore ? <><RefreshCw size={14} className="animate-spin" />Loading…</> : "Load more records"}</button>
+      ) : null}
+      {moreErr && <div style={{ color: "var(--red)", marginTop: 6, cursor: "pointer" }} onClick={loadMore}>Couldn't load more — tap to retry.</div>}
     </div>
   );
 
@@ -234,19 +259,19 @@ export default function Gallery() {
                   return <button key={id} className={`filter-pill${filter === id ? " active" : ""}`} onClick={() => setFilter(id)}>{label}<span className="filter-pill-count">{count}</span></button>;
                 })}
               </div>
-              <Grid items={filtered} selected={selected} onOpen={setModalId} onToggle={toggle} />
-              {loadMoreBtn}
+              <Grid items={shown} selected={selected} onOpen={setModalId} onToggle={toggle} />
+              {tail}
             </>
           ) : view === "timeline" ? (
-            <Timeline photos={filtered} selected={selected} onOpen={setModalId} onToggle={toggle} more={loadMoreBtn} />
+            <Timeline photos={shown} selected={selected} onOpen={setModalId} onToggle={toggle} more={tail} />
           ) : view === "location" ? (
-            <ByLocation photos={filtered} selected={selected} onOpen={setModalId} onToggle={toggle} more={loadMoreBtn} />
+            <ByLocation photos={shown} selected={selected} onOpen={setModalId} onToggle={toggle} more={tail} />
           ) : view === "groups" ? (
-            <RecordGroups photos={filtered} selected={selected} onOpen={setModalId} onToggle={toggle} more={loadMoreBtn} />
+            <RecordGroups photos={shown} selected={selected} onOpen={setModalId} onToggle={toggle} more={tail} />
           ) : view === "ai" ? (
             <Building title="Photo analysis" body="Once on, TFOS reads your field photos to spot crop disease, check ripeness, count livestock and flag problems — each finding logged as an event so it strengthens your record. Turns on as your photo log grows." />
           ) : (
-            <EvidencePacks selCount={selCount} onGoPhotos={() => setView("photos")} onDownloadPack={downloadPack} onBankEvidence={() => navigate("/farm/reports", { state: { photoIds: [...selected] } })} />
+            <EvidencePacks selCount={selCount} onGoPhotos={() => setView("photos")} onDownloadPack={downloadPack} />
           )}
 
           {/* action bar — works in ANY view */}
@@ -339,7 +364,7 @@ function Building({ title, body, inline }) {
     </div>
   );
 }
-function EvidencePacks({ selCount, onGoPhotos, onDownloadPack, onBankEvidence }) {
+function EvidencePacks({ selCount, onGoPhotos, onDownloadPack }) {
   return (
     <>
       <SecHead title="Evidence packs" sub="Bundle photos with their audit events into a pack a bank can verify" />
@@ -351,10 +376,7 @@ function EvidencePacks({ selCount, onGoPhotos, onDownloadPack, onBankEvidence })
         {selCount ? (
           <>
             <div style={{ fontSize: 12.5, color: "var(--soil)", margin: "6px 0 10px", lineHeight: 1.5 }}>{selCount} photo{selCount === 1 ? "" : "s"} selected. Download the photos plus a manifest listing each one's event, block, date and verify link — a pack a bank can independently check.</div>
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              <button className="btn btn-primary btn-sm" onClick={onDownloadPack}><Download size={13} /> Download evidence pack</button>
-              <button className="btn btn-secondary btn-sm" onClick={onBankEvidence}><FileText size={13} /> Open in Bank Evidence</button>
-            </div>
+            <button className="btn btn-primary btn-sm" onClick={onDownloadPack}><Download size={13} /> Download evidence pack</button>
           </>
         ) : (
           <>
