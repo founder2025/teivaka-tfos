@@ -15,6 +15,7 @@ hash-chaining LOT_DELIVERED into audit.events is a later phase.
 """
 import secrets
 from datetime import datetime, timezone
+from decimal import Decimal
 from pathlib import Path
 from typing import Optional
 
@@ -35,7 +36,8 @@ html_router = APIRouter()  # /verify/lot/{token} (public)
 TEMPLATES_DIR = Path(__file__).resolve().parent.parent / "templates"
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
-_TOL = 0.05  # kg tolerance — wet harvest vs graded delivery shouldn't false-flag
+_TOL = 0.05            # float — read-side (display) comparisons
+_TOL_D = Decimal("0.05")  # Decimal — write-side kg math (asyncpg numeric needs Decimal, not float)
 
 
 def _now():
@@ -46,7 +48,7 @@ def _now():
 class LotItemIn(BaseModel):
     harvest_id: str
     harvest_date: str            # YYYY-MM-DD (hypertable PK component)
-    kg: float = Field(..., gt=0)
+    kg: Decimal = Field(..., gt=0)   # Decimal — numeric column; float breaks asyncpg
 
 
 class LotCreate(BaseModel):
@@ -103,9 +105,9 @@ async def create_lot(body: LotCreate, db: AsyncSession = Depends(get_tenant_db),
     if not body.items:
         raise HTTPException(400, detail="A consignment needs at least one harvest allocation.")
     crop_name = body.crop_name
-    total = 0.0
+    total = Decimal("0")
     crops_seen: set[str] = set()
-    req_by_harvest: dict[str, float] = {}   # within-request allocation, so duplicates don't double-spend
+    req_by_harvest: dict[str, Decimal] = {}   # within-request allocation, so duplicates don't double-spend
     # Validate each allocation against the harvest's remaining (un-allocated) quantity.
     # P0-1: lock the harvest row FOR UPDATE so two concurrent consignments can't both
     # pass the remaining-check and double-sell the same kg (serialize on the harvest row).
@@ -126,13 +128,14 @@ async def create_lot(body: LotCreate, db: AsyncSession = Depends(get_tenant_db),
         pname = (await db.execute(text(
             "SELECT production_name FROM shared.productions WHERE production_id = :pid"),
             {"pid": h["production_id"]})).scalar()
-        allocated = (await db.execute(text(
+        allocated = Decimal((await db.execute(text(
             "SELECT COALESCE(SUM(kg),0) FROM tenant.lot_items WHERE harvest_id = :hid"),
-            {"hid": it.harvest_id})).scalar() or 0
-        remaining = float(h["gross_yield_kg"] or 0) - float(allocated) - req_by_harvest.get(it.harvest_id, 0.0)
-        if it.kg > remaining + _TOL:
+            {"hid": it.harvest_id})).scalar() or 0)
+        gross = Decimal(h["gross_yield_kg"] or 0)
+        remaining = gross - allocated - req_by_harvest.get(it.harvest_id, Decimal("0"))
+        if it.kg > remaining + _TOL_D:
             raise HTTPException(400, detail=f"Over-allocation: {it.kg} kg requested but only {round(remaining,2)} kg remains on that harvest.")
-        req_by_harvest[it.harvest_id] = req_by_harvest.get(it.harvest_id, 0.0) + it.kg
+        req_by_harvest[it.harvest_id] = req_by_harvest.get(it.harvest_id, Decimal("0")) + it.kg
         total += it.kg
         if pname:
             crops_seen.add(pname)
