@@ -75,6 +75,17 @@
     background: var(--cream); padding: 10px 12px; border-radius: 6px;
     border: 1px solid var(--border); margin-top: 8px;
   }
+  .subhd { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
+  .photos { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 8px; }
+  .ph-c { border: 1px solid var(--border); border-radius: 6px; overflow: hidden; background: #fff; }
+  .ph-c img { width: 100%; height: 72px; object-fit: cover; display: block; cursor: zoom-in; }
+  .ph-c .cap { padding: 3px 5px; font-size: 9px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .lb { position: fixed; inset: 0; background: rgba(34,24,16,.92); display: none; align-items: center; justify-content: center; z-index: 50; padding: 20px; }
+  .lb.on { display: flex; }
+  .lb img { max-width: 100%; max-height: 82vh; border-radius: 10px; box-shadow: 0 8px 40px rgba(0,0,0,.5); }
+  .lb .cap { position: absolute; bottom: 22px; left: 0; right: 0; text-align: center; color: #F8F3E9; font-size: 13px; }
+  .lb .cls { position: absolute; top: 16px; right: 20px; color: #fff; font-size: 30px; cursor: pointer; line-height: 1; }
+  .lb a { color: #9FD685; }
 </style>
 {% if verified %}
 <script type="application/ld+json">
@@ -146,9 +157,36 @@
     <div class="hash-block">{{ audit_hash }}</div>
   </div>
 
+  {% if evidence and (evidence.blocks or evidence.photos) %}
+  <div class="card">
+    <h2>Evidence behind this report</h2>
+    {% if evidence.blocks %}
+    <div class="subhd" style="margin-bottom:6px">Location blocks ({{ evidence.blocks|length }})</div>
+    {% for b in evidence.blocks %}<div class="row"><span class="label">{{ b.pu_name }}</span><span class="value">{{ b.area_ha }} ha &middot; {{ b.active_cycles }} active</span></div>{% endfor %}
+    {% endif %}
+    {% if evidence.photos %}
+    <div class="subhd" style="margin:14px 0 8px">Photo evidence ({{ evidence.photos|length }})</div>
+    <div class="photos">
+      {% for p in evidence.photos %}
+      <div class="ph-c">
+        <img src="{{ p.photo_url }}" alt="" loading="lazy"
+             onclick="openLB(this.src, {{ ((p.event_type|replace('_',' ')|title) ~ ' · ' ~ (p.date or ''))|tojson }}, {{ (p.sha256 or '')|tojson }})">
+        <div class="cap">{{ p.date }}{% if p.sha256 %} &middot; &#10003;{% endif %}</div>
+      </div>
+      {% endfor %}
+    </div>
+    <p style="font-size:11.5px;color:var(--muted);margin:10px 0 0">Tap any photo to enlarge and verify its hash independently. These are the field photos and blocks that back this report's numbers.</p>
+    {% endif %}
+  </div>
+  {% endif %}
+
   <div class="card">
     <h2>What this confirms</h2>
-    <p style="font-size: 14px; margin: 0; color: var(--soil);">This page confirms one thing: the report is <strong>genuine</strong> &mdash; it exists in Teivaka's audit chain and has not been altered or backdated since it was recorded (tamper-evident). It does <strong>not</strong> display the farm's data. The farm's photos, blocks, production, financials and history are private &mdash; viewable only through a secure, time-limited link the farmer grants. Farmers own their data; Teivaka verifies it; institutions access it only with the farmer's permission.</p>
+    {% if evidence and (evidence.blocks or evidence.photos) %}
+    <p style="font-size: 14px; margin: 0; color: var(--soil);">This report is <strong>genuine</strong> &mdash; it exists in Teivaka's audit chain and has not been altered or backdated (tamper-evident) &mdash; and the blocks and photos above are the evidence that backs its numbers, each anchored to the same chain. Money records, private notes and personal data are <strong>not</strong> shown. This evidence is visible to anyone holding this report; for a time-limited, revocable view the farmer can also send a secure passport link.</p>
+    {% else %}
+    <p style="font-size: 14px; margin: 0; color: var(--soil);">This page confirms the report is <strong>genuine</strong> &mdash; it exists in Teivaka's audit chain and has not been altered or backdated since it was recorded (tamper-evident). The farm's financials, notes and personal data are private &mdash; viewable only through a secure, time-limited link the farmer grants. Farmers own their data; Teivaka verifies it; institutions access it only with the farmer's permission.</p>
+    {% endif %}
   </div>
   {% else %}
   <div class="badge unverified">
@@ -173,5 +211,28 @@
     <a href="https://teivaka.com">Teivaka Agriculture Ecosystem</a> &middot; {{ platform.verify_method }}
   </footer>
 </div>
+
+<div class="lb" id="lb" onclick="closeLB(event)">
+  <span class="cls" onclick="closeLB(event)">&times;</span>
+  <img id="lbImg" src="" alt="">
+  <div class="cap"><span id="lbCap"></span> <span id="lbHash"></span>
+    <a id="lbVerify" href="#" target="_blank" rel="noopener" style="display:none;text-decoration:underline;margin-left:8px">Verify independently &rarr;</a>
+  </div>
+</div>
+<script>
+  function openLB(src, cap, sha){
+    document.getElementById('lbImg').src = src;
+    document.getElementById('lbCap').textContent = cap || '';
+    document.getElementById('lbHash').innerHTML = sha ? '&middot; <b>&#10003; SHA-256 ' + sha.slice(0,16) + '…</b>' : '';
+    var vf = document.getElementById('lbVerify');
+    if (sha) { vf.href = '/verify/photo/' + sha; vf.style.display = 'inline'; } else { vf.style.display = 'none'; }
+    document.getElementById('lb').classList.add('on');
+  }
+  function closeLB(e){
+    if (e && e.target && e.target.id === 'lbImg') return;
+    document.getElementById('lb').classList.remove('on');
+  }
+  document.addEventListener('keydown', function(e){ if (e.key === 'Escape') closeLB(); });
+</script>
 </body>
 </html>

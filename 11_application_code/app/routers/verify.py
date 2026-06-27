@@ -268,6 +268,19 @@ async def verify_html(
     if chain:
         chain_human = {**chain, "verified_at_human": _format_iso_human(chain.get("verified_at"))}
 
+    # Evidence behind a Bank Evidence report (Operator decision 2026-06-27, softens D2):
+    # for a BANK_PDF_GENERATED hash ONLY, show the blocks + photos that back the numbers
+    # — the report hash is the capability (only someone the farmer handed the report to
+    # has it). Scoped to that report's evidence; never money, notes or identities.
+    evidence = None
+    if payload.get("verified") and event and event.get("event_type") == "BANK_PDF_GENERATED":
+        raw = (await db.execute(text(
+            "SELECT audit.report_evidence_by_hash(:h) AS r"), {"h": audit_hash.lower().strip()})).scalar()
+        import json as _json
+        ev = raw if isinstance(raw, dict) else (_json.loads(raw) if raw else None)
+        if ev and (ev.get("blocks") or ev.get("photos")):
+            evidence = ev
+
     # PUBLIC PAGE = PROOF ONLY (Operator decision 2026-06-27, D2). This page answers
     # exactly one question — "is this report genuine?" — and exposes NO farm data
     # (no photos, blocks, GPS, financials, history, PII). Evidence is delivered only
@@ -278,6 +291,7 @@ async def verify_html(
         "audit_hash": payload["audit_hash"],
         "event": event_human,
         "chain": chain_human,
+        "evidence": evidence,
         "platform": payload["platform"],
     }
     response = templates.TemplateResponse("verify_result.html", context)
