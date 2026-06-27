@@ -92,15 +92,26 @@ function TriageCard({ signals, cd, onDrill, onTask, onCash }) {
   );
 }
 
-function ErrorCard({ onRetry }) {
+// Status-aware: a 404 means the SELECTED farm isn't under this account (typically a
+// farm_id left in localStorage from a previous login) — that's recoverable by re-picking,
+// not a "try again". Everything else is a genuine load problem. (Pre-redesign the old
+// non-throwing get() hid both as an empty "no signals configured" — this surfaces them honestly.)
+function ErrorCard({ error, onRetry, onPickFarm }) {
+  const notFound = error?.status === 404;
   return (
     <div className="card" style={{ padding: 24 }}>
       <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
         <AlertTriangle size={18} style={{ color: "var(--amber)", flexShrink: 0, marginTop: 2 }} />
         <div>
-          <div style={{ fontWeight: 700, color: "var(--soil)" }}>Couldn't load this view</div>
-          <div style={{ fontSize: 12.5, color: "var(--muted)", marginTop: 3 }}>This is a loading problem, not missing data. Try again.</div>
-          <button className="btn btn-secondary btn-sm" style={{ marginTop: 10 }} onClick={onRetry}><RefreshCw size={13} />Retry</button>
+          <div style={{ fontWeight: 700, color: "var(--soil)" }}>{notFound ? "This farm isn't available" : "Couldn't load this view"}</div>
+          <div style={{ fontSize: 12.5, color: "var(--muted)", marginTop: 3 }}>
+            {notFound
+              ? "The selected farm may have been removed, or it isn't under your account. Choose another farm to see its analytics."
+              : "This is a loading problem, not missing data. Try again."}
+          </div>
+          <button className="btn btn-secondary btn-sm" style={{ marginTop: 10 }} onClick={notFound ? onPickFarm : onRetry}>
+            <RefreshCw size={13} />{notFound ? "Choose another farm" : "Retry"}
+          </button>
         </div>
       </div>
     </div>
@@ -944,7 +955,7 @@ function LabourAnalyticsView({ workers, labor, navigate }) {
 // ── Page ───────────────────────────────────────────────────────────────────
 function AnalyticsInner() {
   const navigate = useNavigate();
-  const { farmId } = useCurrentFarm();
+  const { farmId, setFarmId } = useCurrentFarm();
   const [view, setView] = useState("signals");
   const [drill, setDrill] = useState(null);   // signal_id
   const [taskFor, setTaskFor] = useState(null); // signal object
@@ -1000,7 +1011,7 @@ function AnalyticsInner() {
                 {TABS.map(([id, l, s]) => <div key={id} role="tab" tabIndex={0} aria-selected={view === id} className={`task-tab ${view === id ? "active" : ""}`} onClick={() => { setView(id); setDrill(null); }} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setView(id); setDrill(null); } }}>{l}<span className="task-tab-count" style={{ fontSize: 10 }}>{s}</span></div>)}
               </div>
               {!farmId ? <div className="card" style={{ padding: 20, color: "var(--muted)" }}>Select a farm to see its analytics.</div>
-                : activeQ?.isError ? <ErrorCard onRetry={() => activeQ.refetch()} />
+                : activeQ?.isError ? <ErrorCard error={activeQ.error} onRetry={() => activeQ.refetch()} onPickFarm={() => setFarmId(null)} />
                 : view === "signals" ? (sigQ.isLoading ? <div className="card" style={{ padding: 20, color: "var(--muted)" }}>Loading…</div> : <SignalsView data={sigQ.data} onDrill={setDrill} onTask={setTaskFor} />)
                 : view === "profit" ? (cycQ.isLoading ? <div className="card" style={{ padding: 20, color: "var(--muted)" }}>Loading…</div> : <ProfitView cycles={cycles} />)
                 : view === "productivity" ? <ProductivityView cycles={cycles} />
