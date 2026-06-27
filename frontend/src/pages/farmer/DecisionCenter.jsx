@@ -155,30 +155,34 @@ function DecisionInner() {
   const staleH = ageHours(sigQ.data?.last_refresh_at);
   const stale = staleH != null && staleH >= 24;
 
-  // honesty gates — "have data" tolerates a stale cache (so offline still shows the last load)
-  const trioLoaded = !!holdsQ.data && !!sigQ.data && !!tasksQ.data;
-  const trioLoading = (holdsQ.isLoading || sigQ.isLoading || tasksQ.isLoading) && !trioLoaded;
-  const anyError = [finQ, cropsQ, tasksQ, sigQ, holdsQ].some((q) => q.isError);
-  const haveAnything = finQ.data || cropsQ.data || tasksQ.data || sigQ.data || holdsQ.data;
-  const initialLoading = !!farmId && !haveAnything && !anyError;
-  const hardFail = !!farmId && !haveAnything && anyError;
+  // honesty gates. Decision signals (sigQ) are ADVISORY — crop holds + tasks are the
+  // authoritative safety+urgency inputs, so the CALL and the page gate on those, never on
+  // sigQ. A signals-feed failure shows a quiet inline note, never a page-wide alarm.
+  // "have data" tolerates a stale cache so offline still shows the last load.
+  const coreLoaded = !!holdsQ.data && !!tasksQ.data;
+  const coreLoading = (holdsQ.isLoading || tasksQ.isLoading) && !coreLoaded;
+  const coreError = [finQ, cropsQ, tasksQ, holdsQ].some((q) => q.isError);
+  const sigDown = sigQ.isError && !sigQ.data;   // advisory feed unavailable
+  const haveCore = finQ.data || cropsQ.data || tasksQ.data || holdsQ.data;
+  const initialLoading = !!farmId && !haveCore && !coreError;
+  const hardFail = !!farmId && !haveCore && coreError;
 
   // THE CALL — crop holds first (safety), then critical signal, then urgent task, then earned all-clear
   let call;
   if (holds > 0) {
     call = { color: C.red, icon: AlertTriangle, title: `Stop — ${holds} crop compliance hold${holds === 1 ? "" : "s"}`, sub: "Clear these before selling or harvesting.", label: "Open compliance", act: () => go("compliance") };
-  } else if (critSignals.length) {
+  } else if (sigQ.data && critSignals.length) {
     const b = critSignals[0];
     call = { color: C.red, icon: AlertTriangle, title: `Stop — ${b.signal_message || b.signal_type}`, sub: b.suggested_action || "Review before selling.", label: "Open compliance", act: () => go("compliance") };
   } else if (urgent.length) {
     const u = urgent[0];
     call = { color: C.amber, icon: ListChecks, title: u.imperative, sub: `${u.source_module || "Task"}${u.body_md ? ` — ${u.body_md}` : ""}`, label: "Go to tasks", act: () => go("tasks") };
-  } else if (trioLoaded) {
+  } else if (coreLoaded) {
     call = { color: C.green, icon: CheckCircle2, title: "Nothing urgent right now", sub: "No crop holds and no urgent tasks across the farm. Keep the routine going.", label: "Plan ahead", act: () => go("cycles") };
-  } else if (trioLoading) {
-    call = { color: C.muted, icon: RefreshCw, title: "Reading your farm…", sub: "Checking holds, signals and tasks.", label: null, act: null, spin: true };
+  } else if (coreLoading) {
+    call = { color: C.muted, icon: RefreshCw, title: "Reading your farm…", sub: "Checking crop holds and tasks.", label: null, act: null, spin: true };
   } else {
-    call = { color: C.muted, icon: AlertTriangle, title: "Couldn't read everything", sub: "Some of today's decision data didn't load — retry before relying on this.", label: "Retry", act: refetchAll };
+    call = { color: C.muted, icon: AlertTriangle, title: "Couldn't read everything", sub: "Your crop holds or tasks didn't load — retry before relying on this.", label: "Retry", act: refetchAll };
   }
   const CallIcon = call.icon;
 
@@ -234,7 +238,7 @@ function DecisionInner() {
             <span>These decision signals are <strong>{staleH >= 48 ? `${Math.round(staleH / 24)} days` : `${Math.round(staleH)} hours`} old</strong> — the engine may be behind. Treat them as indicative until it refreshes.</span>
           </div>
         )}
-        {anyError && (
+        {coreError && (
           <div className="rounded-2xl border p-3 text-xs flex gap-2 items-center justify-between" style={{ background: "rgba(163,45,45,0.06)", borderColor: C.red, color: C.soil }}>
             <span className="flex gap-2 items-center"><AlertTriangle size={14} style={{ color: C.red, flexShrink: 0 }} aria-hidden />Couldn't refresh part of this page — showing the last values that loaded.</span>
             <button className="text-xs px-3 py-1.5 rounded-lg shrink-0" style={{ color: C.greenDk, border: `1px solid ${C.border}` }} onClick={refetchAll}>Retry</button>
@@ -289,10 +293,11 @@ function DecisionInner() {
         <Card>
           <Head icon={ListChecks} title="What needs you" link="All tasks →" onLink={() => go("tasks")} />
           <div className="px-4 pb-3">
-            {trioLoading ? <Loading /> : rows.length === 0 ? (
-              trioLoaded
+            {sigDown && <div className="text-[11px] mb-1.5 flex items-center gap-1.5" style={{ color: C.muted }}><AlertTriangle size={12} style={{ color: C.amber }} aria-hidden />Decision signals are temporarily unavailable — showing holds and tasks.</div>}
+            {coreLoading ? <Loading /> : rows.length === 0 ? (
+              coreLoaded
                 ? <div className="py-3.5 text-sm" style={{ color: C.muted }}>No crop holds and nothing urgent. The farm is running clear.</div>
-                : <div className="py-3.5 text-sm flex items-center gap-2" style={{ color: C.muted }}><AlertTriangle size={14} style={{ color: C.amber }} aria-hidden />Couldn't load holds, signals or tasks — retry above before relying on this.</div>
+                : <div className="py-3.5 text-sm flex items-center gap-2" style={{ color: C.muted }}><AlertTriangle size={14} style={{ color: C.amber }} aria-hidden />Couldn't load crop holds or tasks — retry above before relying on this.</div>
             ) : rows.map((sg, i) => {
               const p = pill(sg.sev);
               return (

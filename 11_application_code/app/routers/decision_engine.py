@@ -74,56 +74,74 @@ async def get_decision_signals(
         params["signal_type"] = signal_type.upper()
     outer_where = " AND ".join(outer)
 
-    result = await db.execute(
-        text(f"""
-            SELECT latest.signal_id, latest.signal_type, latest.signal_category,
-                   latest.severity, latest.signal_message, latest.suggested_action,
-                   latest.crop_name, latest.metric_value, latest.signal_status,
-                   latest.computed_at
-            FROM (
-                SELECT DISTINCT ON (dss.signal_id)
-                    dss.signal_id,
-                    dsc.signal_name                                              AS signal_type,
-                    dsc.signal_category,
-                    CASE dss.signal_status WHEN 'RED' THEN 'CRITICAL'
-                                           WHEN 'AMBER' THEN 'HIGH'
-                                           ELSE 'LOW' END                        AS severity,
-                    COALESCE(dss.notes, dsc.signal_name)                         AS signal_message,
-                    dss.notes                                                    AS suggested_action,
-                    NULL::text                                                   AS crop_name,
-                    dss.computed_value                                           AS metric_value,
-                    dss.signal_status,
-                    dss.snapshot_date                                            AS computed_at
-                FROM tenant.decision_signal_snapshots dss
-                JOIN tenant.decision_signal_config dsc
-                  ON dsc.signal_id = dss.signal_id AND dsc.tenant_id = dss.tenant_id
-                WHERE dss.farm_id = :farm_id AND dss.tenant_id = :tid AND dsc.is_active = true
-                ORDER BY dss.signal_id, dss.snapshot_date DESC
-            ) latest
-            WHERE {outer_where}
-            ORDER BY CASE latest.severity WHEN 'CRITICAL' THEN 0 WHEN 'HIGH' THEN 1 WHEN 'MEDIUM' THEN 2 ELSE 3 END,
-                     latest.computed_at DESC
-            LIMIT :limit
-        """),
-        params,
-    )
-    signals = [dict(r) for r in result.mappings().all()]
+    # Advisory feed — never 500 the decision page. Run the read inside a SAVEPOINT so a
+    # failure (e.g. a tenant with no config, or any engine-read error) rolls back cleanly
+    # without poisoning the request transaction (the farm_check above must stay committable;
+    # mirrors the Strike #113 per-signal SAVEPOINT pattern). On failure: log the real cause
+    # (Sentry + docker logs) and return an honest empty advisory result, degraded=True.
+    signals: list = []
+    last_at = None
+    degraded = False
+    try:
+        async with db.begin_nested():
+            result = await db.execute(
+                text(f"""
+                    SELECT latest.signal_id, latest.signal_type, latest.signal_category,
+                           latest.severity, latest.signal_message, latest.suggested_action,
+                           latest.crop_name, latest.metric_value, latest.signal_status,
+                           latest.computed_at
+                    FROM (
+                        SELECT DISTINCT ON (dss.signal_id)
+                            dss.signal_id,
+                            dsc.signal_name                                              AS signal_type,
+                            dsc.signal_category,
+                            CASE dss.signal_status WHEN 'RED' THEN 'CRITICAL'
+                                                   WHEN 'AMBER' THEN 'HIGH'
+                                                   ELSE 'LOW' END                        AS severity,
+                            COALESCE(dss.notes, dsc.signal_name)                         AS signal_message,
+                            dss.notes                                                    AS suggested_action,
+                            NULL::text                                                   AS crop_name,
+                            dss.computed_value                                           AS metric_value,
+                            dss.signal_status,
+                            dss.snapshot_date                                            AS computed_at
+                        FROM tenant.decision_signal_snapshots dss
+                        JOIN tenant.decision_signal_config dsc
+                          ON dsc.signal_id = dss.signal_id AND dsc.tenant_id = dss.tenant_id
+                        WHERE dss.farm_id = :farm_id AND dss.tenant_id = :tid AND dsc.is_active = true
+                        ORDER BY dss.signal_id, dss.snapshot_date DESC
+                    ) latest
+                    WHERE {outer_where}
+                    ORDER BY CASE latest.severity WHEN 'CRITICAL' THEN 0 WHEN 'HIGH' THEN 1 WHEN 'MEDIUM' THEN 2 ELSE 3 END,
+                             latest.computed_at DESC
+                    LIMIT :limit
+                """),
+                params,
+            )
+            signals = [dict(r) for r in result.mappings().all()]
 
-    last_row = (await db.execute(
-        text("""
-            SELECT MAX(snapshot_date) AS last_at
-            FROM tenant.decision_signal_snapshots
-            WHERE farm_id = :farm_id AND tenant_id = :tid
-        """),
-        {"farm_id": str(farm_id), "tid": str(user["tenant_id"])},
-    )).mappings().first()
+            last_row = (await db.execute(
+                text("""
+                    SELECT MAX(snapshot_date) AS last_at
+                    FROM tenant.decision_signal_snapshots
+                    WHERE farm_id = :farm_id AND tenant_id = :tid
+                """),
+                {"farm_id": str(farm_id), "tid": str(user["tenant_id"])},
+            )).mappings().first()
+            last_at = last_row["last_at"] if last_row else None
+    except Exception:
+        logger.exception(
+            "decision-engine signals read failed (farm=%s tenant=%s) — returning empty advisory result",
+            farm_id, user["tenant_id"],
+        )
+        signals, last_at, degraded = [], None, True
 
     return {
         "farm_id": str(farm_id),
         "farm_code": farm["farm_code"],
         "signals": signals,
         "total_signals": len(signals),
-        "last_refresh_at": str(last_row["last_at"]) if last_row and last_row["last_at"] else None,
+        "last_refresh_at": str(last_at) if last_at else None,
+        "degraded": degraded,
         "note": "Live from decision_signal_snapshots (latest per signal); AMBER/RED only.",
     }
 
