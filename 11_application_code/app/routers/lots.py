@@ -112,15 +112,19 @@ async def create_lot(body: LotCreate, db: AsyncSession = Depends(get_tenant_db),
     # P0-1: lock the harvest row FOR UPDATE so two concurrent consignments can't both
     # pass the remaining-check and double-sell the same kg (serialize on the harvest row).
     uncleared = False
+    validated: list[dict] = []   # (hid, hd_obj, kg) — carry the DB harvest_date object to the insert
     for it in body.items:
         # P0-1: serialize per-harvest with a txn-scoped advisory lock (robust on the
         # harvest_log hypertable, where row FOR UPDATE is unreliable). Released on commit.
         await db.execute(text("SELECT pg_advisory_xact_lock(hashtext(:hid))"), {"hid": it.harvest_id})
+        # Look up by harvest_id alone (unique HRV code). harvest_date is timestamptz; never
+        # bind the frontend ISO string to a date param (asyncpg can't encode str→date).
         h = (await db.execute(text("""
-            SELECT gross_yield_kg, chemical_compliance_cleared, production_id
+            SELECT gross_yield_kg, chemical_compliance_cleared, production_id, harvest_date
             FROM tenant.harvest_log
-            WHERE harvest_id = :hid AND harvest_date = cast(:hd AS date)
-        """), {"hid": it.harvest_id, "hd": it.harvest_date})).mappings().first()
+            WHERE harvest_id = :hid
+            LIMIT 1
+        """), {"hid": it.harvest_id})).mappings().first()
         if not h:
             raise HTTPException(404, detail=f"Harvest {it.harvest_id} not found.")
         if h["chemical_compliance_cleared"] is False:
@@ -137,6 +141,7 @@ async def create_lot(body: LotCreate, db: AsyncSession = Depends(get_tenant_db),
             raise HTTPException(400, detail=f"Over-allocation: {it.kg} kg requested but only {round(remaining,2)} kg remains on that harvest.")
         req_by_harvest[it.harvest_id] = req_by_harvest.get(it.harvest_id, Decimal("0")) + it.kg
         total += it.kg
+        validated.append({"hid": it.harvest_id, "hd": h["harvest_date"], "kg": it.kg})
         if pname:
             crops_seen.add(pname)
         if not crop_name and pname:
@@ -163,11 +168,11 @@ async def create_lot(body: LotCreate, db: AsyncSession = Depends(get_tenant_db),
     """), {"t": str(user["tenant_id"]), "u": str(user["user_id"]), "code": lot_code, "crop": crop_name,
            "bid": (body.buyer_id or ""), "bname": body.buyer_name, "tot": round(total, 2),
            "status": status, "deliv": body.deliver_now, "tok": token, "notes": body.notes})).scalar()
-    for it in body.items:
+    for v in validated:
         await db.execute(text("""
             INSERT INTO tenant.lot_items (lot_id, tenant_id, harvest_id, harvest_date, kg)
-            VALUES (cast(:l AS uuid), cast(:t AS uuid), :hid, cast(:hd AS date), :kg)
-        """), {"l": str(lot_id), "t": str(user["tenant_id"]), "hid": it.harvest_id, "hd": it.harvest_date, "kg": it.kg})
+            VALUES (cast(:l AS uuid), cast(:t AS uuid), :hid, :hd, :kg)
+        """), {"l": str(lot_id), "t": str(user["tenant_id"]), "hid": v["hid"], "hd": v["hd"], "kg": v["kg"]})
 
     return success_envelope({
         "lot_id": str(lot_id), "lot_code": lot_code, "total_kg": round(total, 2), "status": status,
@@ -219,7 +224,7 @@ async def _assemble_lot(db: AsyncSession, lot_id: str) -> Optional[dict]:
                h.gross_yield_kg, h.pu_id, h.production_id, h.chemical_compliance_cleared,
                pu.pu_name, pu.latitude, pu.longitude
         FROM tenant.lot_items li
-        LEFT JOIN tenant.harvest_log h ON h.harvest_id = li.harvest_id AND h.harvest_date = li.harvest_date
+        LEFT JOIN tenant.harvest_log h ON h.harvest_id = li.harvest_id
         LEFT JOIN tenant.production_units pu ON pu.pu_id = h.pu_id
         ORDER BY li.harvest_date
     """)) ).mappings().all()
