@@ -243,7 +243,6 @@ function FarmSettingsInner() {
   const subQ = useQuery({ queryKey: ["set-sub"], queryFn: () => getJSON("/api/v1/subscriptions/current"), retry: 1 });
   const recordsQ = useQuery({ queryKey: ["set-records"], queryFn: () => getJSON("/api/v1/me/records"), retry: 1 });
   const chainQ = useQuery({ queryKey: ["set-chain"], queryFn: () => getJSON("/api/v1/me/chain-status"), retry: 1 });
-  const listingsQ = useQuery({ queryKey: ["set-listings"], queryFn: () => getJSON("/api/v1/community/listings?mine=true"), retry: 1 });
   const verifQ = useQuery({ queryKey: ["set-verif"], queryFn: () => getJSON("/api/v1/me/verification"), retry: 1 });
   // farm-level (lazy on farm)
   const farmQ = useQuery({ queryKey: ["set-farm", farmId], queryFn: () => getJSON(`/api/v1/farms/${encodeURIComponent(farmId)}`), enabled: !!farmId, retry: 1 });
@@ -252,6 +251,8 @@ function FarmSettingsInner() {
   const wxQ = useQuery({ queryKey: ["set-wx", farmId], queryFn: () => getJSON(`/api/v1/weather/forecast/${encodeURIComponent(farmId)}?range=daily`).catch(() => ({ data: [] })), enabled: !!farmId });
   const zonesQ = useQuery({ queryKey: ["set-zones", farmId], queryFn: () => getJSON(`/api/v1/zones?farm_id=${encodeURIComponent(farmId)}`), enabled: !!farmId, retry: 1 });
   const puQ = useQuery({ queryKey: ["set-pu", farmId], queryFn: () => getJSON(`/api/v1/production-units?farm_id=${encodeURIComponent(farmId)}`), enabled: !!farmId, retry: 1 });
+  // Marketplace listings live in the farm section — don't fetch them until a farm is selected (speed).
+  const listingsQ = useQuery({ queryKey: ["set-listings", farmId], queryFn: () => getJSON("/api/v1/community/listings?mine=true"), enabled: !!farmId, retry: 1 });
 
   const farm = farmQ.data?.data || {};
   const team = teamQ.data?.data ?? [];
@@ -305,7 +306,10 @@ function FarmSettingsInner() {
         <div className="main-inner">
           <div className="page-header">
             <div><h1>Settings</h1><div className="subtitle">Your account, your farm, and how TFOS works for you</div></div>
-            <div className="page-actions"><FarmSelector /></div>
+            <div className="page-actions">
+              <button className="btn btn-secondary" style={{ fontSize: 12 }} onClick={() => navigate(`/tis?q=${encodeURIComponent("Explain my TFOS settings — team roles, what each plan includes, and whether sharing my farm location is safe.")}`)}><Cog size={13} />Ask TIS</button>
+              <FarmSelector />
+            </div>
           </div>
 
           <SectionHeader>Your account</SectionHeader>
@@ -333,7 +337,7 @@ function FarmSettingsInner() {
           </SettingsCard>
 
           {/* Team */}
-          <SettingsCard icon={Users} title="Team" desc="Who can use your farms and what they can do">
+          <SettingsCard icon={Users} title="Team" desc="Members across your account · roles control what they can do (invites can be scoped to one farm)">
             {teamQ.isLoading ? <CardLoading /> : teamQ.isError ? <CardError onRetry={() => teamQ.refetch()} label="Couldn't load your team" /> : (
               <>
                 {team.map((m) => (
