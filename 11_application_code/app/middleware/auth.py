@@ -115,6 +115,13 @@ class AuthMiddleware:
         "/api/v1/community/uploads/",
         # team invite accept flow: token-gated public preview + account creation
         "/api/v1/team/invites/",
+        # TATI public portals — token-gated, no account (the unguessable, hashed,
+        # expiring, revocable token IS the credential; same model as /verify/).
+        #   /s/<token>            Share Session portal (scoped passport view)
+        #   /a/<token>            Attestation portal (community confirmation)
+        #   /a/<token>/respond    Attestation POST (verifier submits confirmation)
+        "/s/",
+        "/a/",
     )
 
     async def __call__(self, request: Request, call_next):
