@@ -23,7 +23,9 @@ function Builder({ open, onClose, onCreated }) {
   useEffect(() => {
     if (!open) return;
     setPicks({}); setBuyer(""); setDeliverNow(false);
-    getJSON("/api/v1/lots/available-harvests").then((d) => setAvail(d?.data?.harvests || [])).catch(() => setAvail([]));
+    getJSON("/api/v1/lots/available-harvests")
+      .then((d) => setAvail(d?.data?.harvests || []))
+      .catch((e) => { setAvail([]); toast(e.userMessage || e.message || "Couldn't load harvests — try again"); });
   }, [open]);
   const chosen = Object.values(picks);
   // A consignment is one crop — lock to the first picked crop, disable the rest (no server 400).
@@ -107,7 +109,7 @@ export default function Consignments() {
   const [lots, setLots] = useState([]);
   const [open, setOpen] = useState(false);
   const [created, setCreated] = useState(null);
-  const load = useCallback(async () => { try { const d = await getJSON("/api/v1/lots"); setLots(d?.data?.lots || []); } catch { setLots([]); } }, []);
+  const load = useCallback(async () => { try { const d = await getJSON("/api/v1/lots"); setLots(d?.data?.lots || []); } catch (e) { setLots([]); toast(e.userMessage || e.message || "Couldn't load consignments"); } }, []);
   useEffect(() => { load(); }, [load]);
   const deliver = async (id, force = false) => {
     try { await send("POST", `/api/v1/lots/${id}/deliver`, force ? { force: true } : {}); toast("Marked delivered"); await load(); }
