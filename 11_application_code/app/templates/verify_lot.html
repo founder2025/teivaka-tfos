@@ -68,6 +68,7 @@
     {% else %}
     <div class="seal warn">&#9888;&nbsp; One or more source harvests are not withholding-cleared — verify before export</div>
     {% endif %}
+    {% if b.summary %}<p style="font-size:13px;color:var(--muted);margin:12px 0 0">{{ b.summary }}</p>{% endif %}
   </div>
 
   <div class="card">
@@ -120,7 +121,7 @@
     <div class="photos">
       {% for p in b.photos %}
       <div class="ph-c">
-        <img src="{{ p.photo_url }}" alt="" loading="lazy"
+        <img src="{{ p.photo_url }}" alt="{{ p.event }} photo, {{ p.date }}" loading="lazy"
              onclick="openLB(this.src, {{ (p.event ~ ' · ' ~ (p.date or ''))|tojson }}, {{ (p.sha256 or '')|tojson }})">
         <div class="cap">{{ p.date }}{% if p.sha256 %} &middot; &#10003;{% endif %}</div>
       </div>

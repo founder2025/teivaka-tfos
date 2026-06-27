@@ -50,11 +50,13 @@ class LotItemIn(BaseModel):
 
 
 class LotCreate(BaseModel):
-    crop_name: Optional[str] = Field(None, max_length=120)
+    crop_name: Optional[str] = Field(None, max_length=120)   # auto-derived from harvests if omitted
     buyer_id: Optional[str] = None
     buyer_name: Optional[str] = Field(None, max_length=200)
     notes: Optional[str] = Field(None, max_length=500)
     items: list[LotItemIn]
+    deliver_now: bool = False   # one-step create + deliver (handing goods over right now)
+    force: bool = False         # ship uncleared harvests on a deliver_now (documented decision)
 
 
 class LotDeliver(BaseModel):
@@ -67,14 +69,17 @@ class LotDeliver(BaseModel):
 @router.get("/lots/available-harvests")
 async def available_harvests(db: AsyncSession = Depends(get_tenant_db), user: dict = Depends(get_current_user)):
     """Harvests with un-allocated kg remaining — the pool a farmer builds a lot from."""
+    # Speed: single GROUP BY pass (was a correlated subquery per row).
     rows = (await db.execute(text("""
         SELECT h.harvest_id, h.harvest_date, h.gross_yield_kg, h.pu_id, h.production_id,
-               h.chemical_compliance_cleared,
-               p.production_name, pu.pu_name,
-               COALESCE((SELECT SUM(li.kg) FROM tenant.lot_items li WHERE li.harvest_id = h.harvest_id), 0) AS allocated
+               h.chemical_compliance_cleared, p.production_name, pu.pu_name,
+               COALESCE(SUM(li.kg), 0) AS allocated
         FROM tenant.harvest_log h
         LEFT JOIN shared.productions p ON p.production_id = h.production_id
         LEFT JOIN tenant.production_units pu ON pu.pu_id = h.pu_id
+        LEFT JOIN tenant.lot_items li ON li.harvest_id = h.harvest_id
+        GROUP BY h.harvest_id, h.harvest_date, h.gross_yield_kg, h.pu_id, h.production_id,
+                 h.chemical_compliance_cleared, p.production_name, pu.pu_name
         ORDER BY h.harvest_date DESC
         LIMIT 300
     """))).mappings().all()
@@ -104,9 +109,10 @@ async def create_lot(body: LotCreate, db: AsyncSession = Depends(get_tenant_db),
     # Validate each allocation against the harvest's remaining (un-allocated) quantity.
     # P0-1: lock the harvest row FOR UPDATE so two concurrent consignments can't both
     # pass the remaining-check and double-sell the same kg (serialize on the harvest row).
+    uncleared = False
     for it in body.items:
         h = (await db.execute(text("""
-            SELECT h.gross_yield_kg,
+            SELECT h.gross_yield_kg, h.chemical_compliance_cleared,
                    (SELECT production_name FROM shared.productions p WHERE p.production_id = h.production_id) AS production_name
             FROM tenant.harvest_log h
             WHERE h.harvest_id = cast(:hid AS uuid) AND h.harvest_date = cast(:hd AS date)
@@ -114,6 +120,8 @@ async def create_lot(body: LotCreate, db: AsyncSession = Depends(get_tenant_db),
         """), {"hid": it.harvest_id, "hd": it.harvest_date})).mappings().first()
         if not h:
             raise HTTPException(404, detail=f"Harvest {it.harvest_id} not found.")
+        if h["chemical_compliance_cleared"] is False:
+            uncleared = True
         allocated = (await db.execute(text(
             "SELECT COALESCE(SUM(kg),0) FROM tenant.lot_items WHERE harvest_id = cast(:hid AS uuid)"),
             {"hid": it.harvest_id})).scalar() or 0
@@ -129,19 +137,25 @@ async def create_lot(body: LotCreate, db: AsyncSession = Depends(get_tenant_db),
     # P1-6 (label integrity): a consignment must be a single commodity.
     if len(crops_seen) > 1:
         raise HTTPException(400, detail=f"A consignment must be one crop — these harvests span {', '.join(sorted(crops_seen))}. Create one lot per crop.")
+    # One-step deliver re-validates like /deliver (mass balance is guaranteed by the per-item checks).
+    if body.deliver_now and uncleared and not body.force:
+        raise HTTPException(409, detail=(
+            "One or more source harvests are not chemical-withholding cleared. "
+            "Set force=true to deliver anyway (recorded as your decision)."))
 
+    status = "DELIVERED" if body.deliver_now else "DRAFT"
     token = secrets.token_urlsafe(18)
     lot_code = "LOT-" + secrets.token_hex(4).upper()
     lot_id = (await db.execute(text("""
         INSERT INTO tenant.lots (tenant_id, owner_user_id, lot_code, crop_name, buyer_id, buyer_name,
-                                 status, total_kg, trace_token, notes)
+                                 status, total_kg, delivered_at, trace_token, notes)
         VALUES (cast(:t AS uuid), cast(:u AS uuid), :code, :crop,
                 CASE WHEN :bid = '' THEN NULL ELSE cast(:bid AS uuid) END, :bname,
-                'DRAFT', :tot, :tok, :notes)
+                :status, :tot, CASE WHEN :deliv THEN now() ELSE NULL END, :tok, :notes)
         RETURNING lot_id
     """), {"t": str(user["tenant_id"]), "u": str(user["user_id"]), "code": lot_code, "crop": crop_name,
            "bid": (body.buyer_id or ""), "bname": body.buyer_name, "tot": round(total, 2),
-           "tok": token, "notes": body.notes})).scalar()
+           "status": status, "deliv": body.deliver_now, "tok": token, "notes": body.notes})).scalar()
     for it in body.items:
         await db.execute(text("""
             INSERT INTO tenant.lot_items (lot_id, tenant_id, harvest_id, harvest_date, kg)
@@ -149,7 +163,7 @@ async def create_lot(body: LotCreate, db: AsyncSession = Depends(get_tenant_db),
         """), {"l": str(lot_id), "t": str(user["tenant_id"]), "hid": it.harvest_id, "hd": it.harvest_date, "kg": it.kg})
 
     return success_envelope({
-        "lot_id": str(lot_id), "lot_code": lot_code, "total_kg": round(total, 2),
+        "lot_id": str(lot_id), "lot_code": lot_code, "total_kg": round(total, 2), "status": status,
         "token": token, "trace_url": f"https://teivaka.com/verify/lot/{token}",
     })
 
@@ -244,7 +258,19 @@ async def _assemble_lot(db: AsyncSession, lot_id: str) -> Optional[dict]:
     def _iso(x):
         return x.isoformat() if x else None
 
+    # Grounded one-line summary (NOT LLM — a verification artifact must never carry
+    # hallucinated phrasing; every token here is computed from the records above).
+    _dts = sorted([i["harvest_date"] for i in items if i["harvest_date"]])
+    _when = ""
+    if _dts:
+        _when = f" · harvested {_dts[0].isoformat()}" + (f"–{_dts[-1].isoformat()}" if _dts[-1] != _dts[0] else "")
+    _nb = len(blocks)
+    _wh = "withholding observed" if all_cleared else "withholding NOT cleared on some harvests"
+    summary = (f"{round(delivered_kg)} kg of {lot['crop_name'] or 'produce'} from "
+               f"{_nb} block{'' if _nb == 1 else 's'} · {_wh}{_when}.")
+
     return {
+        "summary": summary,
         "lot": {"lot_code": lot["lot_code"], "crop_name": lot["crop_name"], "buyer_name": lot["buyer_name"],
                 "status": lot["status"], "total_kg": float(lot["total_kg"] or 0),
                 "delivered_at": _iso(lot["delivered_at"]), "created_at": _iso(lot["created_at"])},

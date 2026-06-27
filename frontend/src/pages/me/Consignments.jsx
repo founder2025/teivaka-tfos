@@ -18,13 +18,16 @@ function Builder({ open, onClose, onCreated }) {
   const [avail, setAvail] = useState([]);
   const [picks, setPicks] = useState({});          // harvest_id -> {kg, ...row}
   const [buyer, setBuyer] = useState("");
-  const [crop, setCrop] = useState("");
+  const [deliverNow, setDeliverNow] = useState(false);
   const [busy, setBusy] = useState(false);
   useEffect(() => {
     if (!open) return;
-    setPicks({}); setBuyer(""); setCrop("");
+    setPicks({}); setBuyer(""); setDeliverNow(false);
     getJSON("/api/v1/lots/available-harvests").then((d) => setAvail(d?.data?.harvests || [])).catch(() => setAvail([]));
   }, [open]);
+  const chosen = Object.values(picks);
+  // A consignment is one crop — lock to the first picked crop, disable the rest (no server 400).
+  const lockedCrop = chosen.length ? chosen[0].production_name : null;
   const toggle = (h) => setPicks((p) => {
     const n = { ...p };
     if (n[h.harvest_id]) delete n[h.harvest_id];
@@ -32,45 +35,51 @@ function Builder({ open, onClose, onCreated }) {
     return n;
   });
   const setKg = (id, kg) => setPicks((p) => ({ ...p, [id]: { ...p[id], kg } }));
-  const chosen = Object.values(picks);
   const total = chosen.reduce((s, x) => s + (Number(x.kg) || 0), 0);
-  const create = async () => {
+  const submit = async (force = false) => {
     if (!chosen.length) { toast("Pick at least one harvest"); return; }
     setBusy(true);
     try {
       const d = await send("POST", "/api/v1/lots", {
-        crop_name: crop || null, buyer_name: buyer || null,
+        buyer_name: buyer || null, deliver_now: deliverNow, force,
         items: chosen.map((x) => ({ harvest_id: x.harvest_id, harvest_date: x.harvest_date, kg: Number(x.kg) })),
       });
       onCreated(d?.data); onClose();
-    } catch (e) { toast(e.userMessage || e.message || "Couldn't create consignment"); } finally { setBusy(false); }
+    } catch (e) {
+      const msg = e.userMessage || e.message || "Couldn't create consignment";
+      if (!force && /withholding/i.test(msg)) { setBusy(false); if (window.confirm(`${msg}\n\nDeliver anyway?`)) return submit(true); return; }
+      toast(msg);
+    } finally { setBusy(false); }
   };
+  const cta = deliverNow ? "Create & deliver" : "Create";
   return (
     <Modal isOpen={open} onClose={onClose} title="New consignment" size="sm"
-      footer={<><button onClick={onClose} style={{ border: `1px solid ${C.line}`, borderRadius: 8, padding: "6px 12px", fontSize: 13 }}>Cancel</button><button onClick={create} disabled={busy || !chosen.length} style={{ border: `1px solid ${C.greenDk}`, background: C.greenDk, color: "var(--paper)", borderRadius: 8, padding: "6px 12px", fontSize: 13, fontWeight: 700 }}>{busy ? "Creating…" : `Create (${total.toFixed(0)} kg)`}</button></>}>
+      footer={<><button onClick={onClose} style={{ border: `1px solid ${C.line}`, borderRadius: 8, padding: "6px 12px", fontSize: 13 }}>Cancel</button><button onClick={() => submit(false)} disabled={busy || !chosen.length} style={{ border: `1px solid ${C.greenDk}`, background: C.greenDk, color: "var(--paper)", borderRadius: 8, padding: "6px 12px", fontSize: 13, fontWeight: 700 }}>{busy ? "Working…" : `${cta} (${total.toFixed(0)} kg)`}</button></>}>
       <div style={{ display: "grid", gap: 10 }}>
         <label style={{ fontSize: 12.5, color: C.soil }}>Buyer / exporter (optional)
-          <input value={buyer} onChange={(e) => setBuyer(e.target.value)} placeholder="e.g. Pacific Exporters Ltd" style={inp} /></label>
-        <label style={{ fontSize: 12.5, color: C.soil }}>Crop label (optional — auto-filled from harvests)
-          <input value={crop} onChange={(e) => setCrop(e.target.value)} placeholder="e.g. Ginger" style={inp} /></label>
-        <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: ".5px", marginTop: 4 }}>Available harvests</div>
+          <input value={buyer} onChange={(e) => setBuyer(e.target.value)} placeholder="e.g. Pacific Exporters Ltd" style={inp} aria-label="Buyer or exporter name" /></label>
+        <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: ".5px", marginTop: 4 }}>
+          Available harvests{lockedCrop ? ` · ${lockedCrop} only` : ""}</div>
         {avail.length === 0 ? <div style={{ fontSize: 13, color: C.muted }}>No harvests with un-allocated quantity. Log a harvest first.</div> :
           avail.map((h) => {
             const on = !!picks[h.harvest_id];
+            const blocked = lockedCrop && h.production_name !== lockedCrop && !on;
             return (
-              <div key={h.harvest_id} style={{ border: `1px solid ${on ? C.greenDk : C.line}`, borderRadius: 10, padding: 10, background: on ? "var(--green-tint)" : "var(--paper)" }}>
-                <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, cursor: "pointer" }}>
-                  <input type="checkbox" checked={on} onChange={() => toggle(h)} />
+              <div key={h.harvest_id} style={{ border: `1px solid ${on ? C.greenDk : C.line}`, borderRadius: 10, padding: 10, background: on ? "var(--green-tint)" : "var(--paper)", opacity: blocked ? 0.45 : 1 }}>
+                <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, cursor: blocked ? "not-allowed" : "pointer" }}>
+                  <input type="checkbox" checked={on} disabled={blocked} onChange={() => toggle(h)} aria-label={`Add ${h.production_name || "harvest"} from ${h.pu_name || "block"}, ${h.remaining_kg} kg available`} />
                   <span style={{ flex: 1 }}>{h.production_name || "Harvest"} · {h.pu_name || "block"}<div style={{ fontSize: 11, color: C.muted }}>{h.harvest_date} · {h.remaining_kg} kg available {h.compliance_cleared ? "· ✓ cleared" : "· ⚠ not cleared"}</div></span>
                 </label>
                 {on && <div style={{ marginTop: 6, display: "flex", alignItems: "center", gap: 6 }}>
-                  <span style={{ fontSize: 12, color: C.muted }}>kg in this lot</span>
-                  <input type="number" min="0" max={h.remaining_kg} step="0.1" value={picks[h.harvest_id].kg}
+                  <label style={{ fontSize: 12, color: C.muted }} htmlFor={`kg-${h.harvest_id}`}>kg in this lot</label>
+                  <input id={`kg-${h.harvest_id}`} type="number" min="0" max={h.remaining_kg} step="0.1" value={picks[h.harvest_id].kg}
                     onChange={(e) => setKg(h.harvest_id, e.target.value)} style={{ ...inp, width: 110, marginTop: 0 }} />
                 </div>}
               </div>
             );
           })}
+        <label style={{ fontSize: 12.5, color: C.soil, display: "flex", alignItems: "center", gap: 6, marginTop: 2 }}>
+          <input type="checkbox" checked={deliverNow} onChange={(e) => setDeliverNow(e.target.checked)} />Handing over now — mark delivered</label>
       </div>
     </Modal>
   );
