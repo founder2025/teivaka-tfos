@@ -27,6 +27,7 @@ import { isNative, nativeTakePhoto, nativeGetPosition } from "../native/bridge";
 import { submitCapture, ensureCaptureSync } from "./submitCapture";
 import { newIdem } from "./offlineQueue";
 import { recordCapture, lastValues } from "./captureMemory";
+import { cachedJSON } from "./referenceCache";
 
 const ICONS = {
   Eye, Droplet, Scissors, ShieldCheck, Sprout, Warehouse, Coins, Leaf, CalendarPlus, CalendarCheck,
@@ -180,9 +181,7 @@ export default function CaptureEngine({ config = cropsConfig, onDone, onBack, pr
     setLoadingItems(true); setItemsError(false);
     (async () => {
       try {
-        const res = await fetch(ctx.loader, { headers: authHeaders() });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const body = await res.json().catch(() => null);
+        const body = await cachedJSON(`items:${ctx.loader}`, ctx.loader, authHeaders());  // offline → last cached anchors
         const list = ctx.extract(body) || [];
         if (!off) {
           setItems(list);
@@ -233,10 +232,10 @@ export default function CaptureEngine({ config = cropsConfig, onDone, onBack, pr
       setLoadingChems(true);
       try {
         const pid = encodeURIComponent(selectedItem.production_id);
-        let body = await (await fetch(`/api/v1/chemicals?registered_for=${pid}`, { headers: authHeaders() })).json().catch(() => null);
+        let body = await cachedJSON(`chem:${selectedItem.production_id}`, `/api/v1/chemicals?registered_for=${pid}`, authHeaders()).catch(() => null);
         let list = body?.data ?? [];
         if (!Array.isArray(list) || list.length === 0) {           // fallback: no crop-registered rows -> full catalog
-          body = await (await fetch(`/api/v1/chemicals`, { headers: authHeaders() })).json().catch(() => null);
+          body = await cachedJSON("chem:all", `/api/v1/chemicals`, authHeaders()).catch(() => null);
           list = body?.data ?? [];
         }
         if (!off) setChemicals(Array.isArray(list) ? list : []);
@@ -259,7 +258,7 @@ export default function CaptureEngine({ config = cropsConfig, onDone, onBack, pr
       try {
         const out = {};
         for (const lt of libTypes) {
-          const body = await (await fetch(`/api/v1/farm-libraries?library_type=${encodeURIComponent(lt)}`, { headers: authHeaders() })).json().catch(() => null);
+          const body = await cachedJSON(`lib:${lt}`, `/api/v1/farm-libraries?library_type=${encodeURIComponent(lt)}`, authHeaders()).catch(() => null);
           let list = body?.data ?? body ?? [];
           if (list && !Array.isArray(list)) list = list.items || [];
           out[lt] = list || [];

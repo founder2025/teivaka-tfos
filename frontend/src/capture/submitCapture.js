@@ -53,7 +53,9 @@ export async function submitCapture({ endpoint, method = "POST", body, idem, evi
     return { queued: true, idem: idemKey };
   }
 
-  const payload = { ...body, offline_id: idemKey };
+  // `idempotency_key` is what POST /events dedupes on (events.py); `offline_id` covers the
+  // cash-ledger path. Sending both makes replays/double-taps return the original on every endpoint.
+  const payload = { ...body, idempotency_key: idemKey, offline_id: idemKey };
   if (isOffline()) return queueIt(payload);
 
   // Online: upload evidence inline, then send the event.
@@ -64,7 +66,7 @@ export async function submitCapture({ endpoint, method = "POST", body, idem, evi
       payload.evidence = evidence;
     }
   } catch (e) {
-    if (e?.kind === "network") return queueIt({ ...body, offline_id: idemKey });  // lost signal mid-upload
+    if (e?.kind === "network") return queueIt(payload);  // lost signal mid-upload
     // a non-network upload failure (4xx/5xx) — proceed without that evidence rather than block the log
   }
 
