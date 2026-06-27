@@ -249,7 +249,7 @@ async def _assemble_lot(db: AsyncSession, lot_id: str) -> Optional[dict]:
     inputs, photos, blocks = [], [], []
     if pu_ids:
         inputs = [dict(r) for r in (await db.execute(text("""
-            SELECT fe.event_date::date AS date, fe.application_rate,
+            SELECT fe.event_date::date AS date,
                    cl.chem_name, cl.withholding_period_days
             FROM tenant.field_events fe
             JOIN shared.chemical_library cl ON cl.chemical_id = fe.chemical_id
@@ -291,7 +291,6 @@ async def _assemble_lot(db: AsyncSession, lot_id: str) -> Optional[dict]:
         "blocks": [{"pu_name": b["pu_name"], "area_ha": round(float(b["area_sqm"] or 0) / 10000.0, 2),
                     "latitude": b["latitude"], "longitude": b["longitude"]} for b in blocks],
         "inputs": [{"chem_name": x["chem_name"], "date": _iso(x["date"]),
-                    "application_rate": (float(x["application_rate"]) if x["application_rate"] is not None else None),
                     "withholding_days": x["withholding_period_days"]} for x in inputs],
         "photos": [{"event": str(p["event_type"]).replace("_", " ").title(), "date": _iso(p["date"]),
                     "photo_url": p["photo_url"], "sha256": p["photo_sha256"]} for p in photos],

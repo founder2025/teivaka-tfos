@@ -110,7 +110,7 @@
     <h2>What went in (chemical use record)</h2>
     {% for x in b.inputs %}
     <div class="row"><span class="label">{{ x.chem_name }}{% if x.date %} &middot; {{ x.date }}{% endif %}</span>
-      <span class="value">{% if x.application_rate %}{{ x.application_rate }} &middot; {% endif %}WHD {{ x.withholding_days }}d</span></div>
+      <span class="value">WHD {{ x.withholding_days }}d</span></div>
     {% endfor %}
   </div>
   {% endif %}
