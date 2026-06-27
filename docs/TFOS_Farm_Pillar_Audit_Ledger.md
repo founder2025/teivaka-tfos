@@ -14,6 +14,31 @@ Legend: 🔒 LOCKED (approved; no redesign without new evidence) · ✅ PASS · 
 ---
 
 ## 🔒 LOCKED PAGES
+- **Settings (/farm/settings)** — LOCKED 2026-06-27 (Operator-approved). Audited (SET1–SET8) →
+  scorecard (6.0→5.5 after 8-persona) → 8-persona → redesigned + wireframe → stress-tested ×1 (11
+  scenarios) → optimized ×1. **#1 (security): invite privilege-escalation closed** — `create_invite`
+  is now role-gated (only owner/manager invite; only an owner mints a Manager; was open — a Worker
+  could invite a Manager). **#2 (privacy, SX-1): location-sharing made opt-in for new users** —
+  migration `197_location_optin_default` flips `tenant.users.share_location` DEFAULT → false (was
+  mig 164 DEFAULT true / opt-out); the Preferences row leads with a prominent consent callout (ON
+  flagged amber, "only verified members", easy off). **Existing opted-in users left unchanged —
+  backfill is a FILED Operator consent decision.** **#3 (SET1): api.js getJSON/send** (token refresh
+  + humanised errors); per-card loading / error+retry / honest-empty; **Preference toggles+pills
+  DISABLED until prefs load** — kills the load-flash false-default write. **SET2: account/farm
+  split** — Preferences/Team/Plan/Governance/Data render WITHOUT a farm; only Farm-setup/Land/Crops/
+  Marketplace need one; sectioned "Your account" / "This farm" (cut the 9-card wall). Also: owner-only
+  actions hidden from WORKER/VIEWER (Invite-Manager owners-only); **real "Reset password"** via
+  /auth/forgot-password (was a dead toast); **revoke a pending invite**; plan shows tier+status+
+  trial-end + price/TIS-day/farm limits; lazy listings (farm-gated); a11y shared Modal (role=dialog+
+  Esc+focus) on all six modals; formatMoney; Ask-TIS settings helper. Strengths kept: ID-stable
+  hash-chained renames (zone/block/cycle), governance chain-integrity surfacing, real data export,
+  honest M-PAiSA "in progress" / weather / WhatsApp connections. Wireframe:
+  docs/TFOS_Settings_Redesign_Wireframe.md. **FILED (backend/decision, not faked): share_location
+  backfill of existing opted-in users → off (Operator consent call); member remove / role-change
+  (no endpoint); PIN + device/session management (no endpoint); honest i18n — language pref saved but
+  app not translated (B42); composite /settings read (~13 queries); FARMER-vs-server farm-edit-gate
+  role-taxonomy reconcile (SX-3); governance "view full log".** Deploy: frontend npm run build +
+  backend build --no-cache api + alembic upgrade head as owner (migration 197 + invite gate).
 - **Cash (/farm/money · cash)** — LOCKED 2026-06-27 (Operator-approved). Audited (CA-A + CA-B–CA-H)
   → scorecard (4.0 — capped by CA-A) → 8-persona → redesigned + wireframe → stress-tested ×1 (11
   scenarios) → optimized ×1. **#1 fix — CA-A SHOWSTOPPER: the page rendered $0 + an empty ledger
