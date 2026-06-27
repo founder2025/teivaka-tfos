@@ -111,17 +111,21 @@ async def create_lot(body: LotCreate, db: AsyncSession = Depends(get_tenant_db),
     # pass the remaining-check and double-sell the same kg (serialize on the harvest row).
     uncleared = False
     for it in body.items:
+        # P0-1: serialize per-harvest with a txn-scoped advisory lock (robust on the
+        # harvest_log hypertable, where row FOR UPDATE is unreliable). Released on commit.
+        await db.execute(text("SELECT pg_advisory_xact_lock(hashtext(:hid))"), {"hid": it.harvest_id})
         h = (await db.execute(text("""
-            SELECT h.gross_yield_kg, h.chemical_compliance_cleared,
-                   (SELECT production_name FROM shared.productions p WHERE p.production_id = h.production_id) AS production_name
-            FROM tenant.harvest_log h
-            WHERE h.harvest_id = :hid AND h.harvest_date = cast(:hd AS date)
-            FOR UPDATE
+            SELECT gross_yield_kg, chemical_compliance_cleared, production_id
+            FROM tenant.harvest_log
+            WHERE harvest_id = :hid AND harvest_date = cast(:hd AS date)
         """), {"hid": it.harvest_id, "hd": it.harvest_date})).mappings().first()
         if not h:
             raise HTTPException(404, detail=f"Harvest {it.harvest_id} not found.")
         if h["chemical_compliance_cleared"] is False:
             uncleared = True
+        pname = (await db.execute(text(
+            "SELECT production_name FROM shared.productions WHERE production_id = :pid"),
+            {"pid": h["production_id"]})).scalar()
         allocated = (await db.execute(text(
             "SELECT COALESCE(SUM(kg),0) FROM tenant.lot_items WHERE harvest_id = :hid"),
             {"hid": it.harvest_id})).scalar() or 0
@@ -130,10 +134,10 @@ async def create_lot(body: LotCreate, db: AsyncSession = Depends(get_tenant_db),
             raise HTTPException(400, detail=f"Over-allocation: {it.kg} kg requested but only {round(remaining,2)} kg remains on that harvest.")
         req_by_harvest[it.harvest_id] = req_by_harvest.get(it.harvest_id, 0.0) + it.kg
         total += it.kg
-        if h["production_name"]:
-            crops_seen.add(h["production_name"])
-        if not crop_name and h["production_name"]:
-            crop_name = h["production_name"]
+        if pname:
+            crops_seen.add(pname)
+        if not crop_name and pname:
+            crop_name = pname
     # P1-6 (label integrity): a consignment must be a single commodity.
     if len(crops_seen) > 1:
         raise HTTPException(400, detail=f"A consignment must be one crop — these harvests span {', '.join(sorted(crops_seen))}. Create one lot per crop.")
