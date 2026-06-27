@@ -23,16 +23,90 @@
 import { useState } from "react";
 import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import { Plus, X, ArrowLeft, ArrowRight, Check, Clock } from "lucide-react";
+import { Plus, X, ArrowLeft, ArrowRight, Check, Clock, AlertTriangle, RefreshCw, Download } from "lucide-react";
 import TfpShell from "../../components/farm/TfpShell";
 import { CurrentFarmProvider, useCurrentFarm } from "../../context/CurrentFarmContext";
 import FarmSelector from "../../components/farm/FarmSelector";
 import { useFarmName } from "../../utils/farmName";
+import { getJSON } from "../../utils/api";
 
 function authHeaders() { const t = localStorage.getItem("tfos_access_token"); return t ? { "Content-Type": "application/json", Authorization: `Bearer ${t}` } : { "Content-Type": "application/json" }; }
 function emitToast(m) { window.dispatchEvent(new CustomEvent("tfos:toast", { detail: { message: m } })); }
-async function get(url) { const r = await fetch(url, { headers: authHeaders() }); if (!r.ok) throw new Error(`HTTP ${r.status}`); return (await r.json())?.data; }
+// Route through the shared client → token auto-refresh + farmer-readable errors (no stuck 401).
+async function get(url) { return (await getJSON(url))?.data; }
 function num(v) { return Number(v ?? 0); }
+function snapshotAgeH(iso) { if (!iso) return null; const t = Date.parse(iso); return Number.isFinite(t) ? (Date.now() - t) / 3600000 : null; }
+
+// Stale-snapshot warning — the Decision Engine has died silently before (Strike #110), so a
+// timestamp alone isn't enough; flag loudly once signals are ≥24h old.
+function StaleBanner({ ageH }) {
+  if (ageH == null || ageH < 24) return null;
+  const txt = ageH >= 48 ? `${Math.round(ageH / 24)} days old` : `${Math.round(ageH)} hours old`;
+  return (
+    <div className="card" style={{ padding: "10px 14px", marginBottom: 10, background: "rgba(191,144,0,0.10)", border: "1px solid var(--amber)", color: "var(--soil)", fontSize: 12.5, display: "flex", gap: 8, alignItems: "center" }}>
+      <AlertTriangle size={15} style={{ color: "var(--amber)", flexShrink: 0 }} />
+      <span>These signals are <strong>{txt}</strong> — the Decision Engine may be behind. Treat them as indicative until it refreshes.</span>
+    </div>
+  );
+}
+
+// "Right now" triage — leads the page so decision-making starts with ONE thing, not 13 tabs.
+function TriageCard({ signals, onDrill, onTask }) {
+  const live = signals.filter((s) => s.status !== "BUILDING");
+  if (live.length === 0) return null;
+  const reds = live.filter((s) => s.status === "RED");
+  const ambers = live.filter((s) => s.status === "AMBER");
+  if (reds.length === 0 && ambers.length === 0) {
+    return (
+      <div className="card" style={{ padding: "12px 16px", marginBottom: 10, background: "var(--green-tint)", border: "1px solid var(--green)", display: "flex", gap: 10, alignItems: "center" }}>
+        <Check size={18} style={{ color: "var(--green-dk)", flexShrink: 0 }} />
+        <div><div style={{ fontWeight: 700, color: "var(--soil)" }}>All clear right now</div><div style={{ fontSize: 12, color: "var(--muted)" }}>{live.length} signal{live.length === 1 ? "" : "s"} tracked · nothing needs action today.</div></div>
+      </div>
+    );
+  }
+  const top = reds[0] || ambers[0];
+  const sev = reds.length ? "red" : "amber";
+  return (
+    <div className="card" style={{ padding: "14px 16px", marginBottom: 10, border: `1px solid var(--${sev})`, background: sev === "red" ? "rgba(163,45,45,0.06)" : "rgba(191,144,0,0.08)" }}>
+      <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: 0.6, textTransform: "uppercase", color: "var(--muted)" }}>Right now · what matters most</div>
+      <div style={{ display: "flex", gap: 10, alignItems: "flex-start", marginTop: 6, flexWrap: "wrap" }}>
+        <span style={{ fontSize: 10.5, fontWeight: 800, padding: "3px 8px", borderRadius: 6, color: "#fff", background: `var(--${sev})`, flexShrink: 0 }}>{top.status}</span>
+        <div style={{ flex: 1, minWidth: 140 }}>
+          <div style={{ fontWeight: 700, color: "var(--soil)" }}>{top.name}{top.value != null ? ` · ${Number(top.value).toLocaleString()}` : ""}</div>
+          {top.notes && <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 2 }}>{top.notes}</div>}
+          <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 3 }}>{reds.length} red · {ambers.length} amber need attention</div>
+        </div>
+        <div style={{ display: "flex", gap: 6 }}>
+          <button className="btn btn-primary" style={{ fontSize: 11, padding: "5px 10px" }} onClick={() => onTask(top)}>Generate task</button>
+          <button className="btn btn-secondary" style={{ fontSize: 11, padding: "5px 10px" }} onClick={() => onDrill(top.signal_id)}>Detail</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ErrorCard({ onRetry }) {
+  return (
+    <div className="card" style={{ padding: 24 }}>
+      <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+        <AlertTriangle size={18} style={{ color: "var(--amber)", flexShrink: 0, marginTop: 2 }} />
+        <div>
+          <div style={{ fontWeight: 700, color: "var(--soil)" }}>Couldn't load this view</div>
+          <div style={{ fontSize: 12.5, color: "var(--muted)", marginTop: 3 }}>This is a loading problem, not missing data. Try again.</div>
+          <button className="btn btn-secondary btn-sm" style={{ marginTop: 10 }} onClick={onRetry}><RefreshCw size={13} />Retry</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function exportCyclesCSV(cycles, farmName) {
+  const esc = (s) => `"${String(s ?? "").replace(/"/g, '""')}"`;
+  const head = ["Cycle", "Crop", "Status", "Revenue FJD", "Input cost", "Labour cost", "Other cost", "Total cost", "Margin FJD", "Margin %"];
+  const body = (cycles || []).map((c) => [c.label, c.crop || c.production_name || "", c.status || "", c.revenue, c.input_cost, c.labor_cost, c.other_cost, c.total_cost, c.margin, c.margin_pct].map(esc).join(","));
+  const url = URL.createObjectURL(new Blob([[head.map(esc).join(","), ...body].join("\r\n")], { type: "text/csv;charset=utf-8" }));
+  const a = document.createElement("a"); a.href = url; a.download = `${farmName || "farm"}_profitability.csv`; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+}
 function fjd0(v) { if (v == null || Number.isNaN(Number(v))) return "FJD —"; return `FJD ${Math.round(Number(v)).toLocaleString("en-FJ")}`; }
 function fjd2(v) { if (v == null || Number.isNaN(Number(v))) return "FJD —"; return `FJD ${Number(v).toLocaleString("en-FJ", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`; }
 function todayISO() { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; }
@@ -903,9 +977,16 @@ function AnalyticsInner() {
   const flips = flipQ.data?.flips ?? [];
   const liveN = signals.filter((s) => s.status !== "BUILDING").length;
   const snapTime = sigQ.data?.last_snapshot_at ? String(sigQ.data.last_snapshot_at).slice(11, 16) : null;
+  const staleAgeH = snapshotAgeH(sigQ.data?.last_snapshot_at);
+  // the primary query behind each view → drives the error/retry gate (kpi/inventory/labour
+  // swallow errors to empty by design, so they aren't gated here)
+  const activeQ = ({ signals: sigQ, profit: cycQ, productivity: cycQ, perunit: cycQ, compare: cycQ, findings: cycQ, benchmark: cycQ, cashdemand: cdQ, fliplog: flipQ, forecasts: fcQ })[view] || null;
   const drillSignal = drill ? signals.find((s) => s.signal_id === drill) : null;
 
-  function ack(s) { snooze(s.signal_id); emitToast("Signal acknowledged · snoozed 24h · stays visible in the grid"); force((n) => n + 1); }
+  function ack(s) {
+    if (s.status === "RED") { emitToast("A red signal can't be snoozed — address it or generate a task."); return; }
+    snooze(s.signal_id); emitToast("Signal acknowledged · snoozed 24h · stays visible in the grid"); force((n) => n + 1);
+  }
 
   return (
     <TfpShell>
@@ -919,13 +1000,17 @@ function AnalyticsInner() {
                 <div><h1>Analytics</h1><div className="subtitle">Decision board · {liveN} live signal{liveN === 1 ? "" : "s"} · pre-computed by the Decision Engine{snapTime ? ` · last snapshot ${snapTime}` : ""}</div></div>
                 <div className="page-actions">
                   {snapTime && <span className="event-anchor-chip" style={{ cursor: "pointer" }} onClick={() => emitToast(`Signals are pre-computed by the Decision Engine. Last snapshot ${snapTime}.`)}><Clock size={12} />Snapshot {snapTime}</span>}
+                  {cycles.length > 0 && <button className="btn btn-secondary" style={{ fontSize: 12 }} onClick={() => exportCyclesCSV(cycles, farmId)}><Download size={12} />Export</button>}
                   <FarmSelector />
                 </div>
               </div>
+              <StaleBanner ageH={staleAgeH} />
+              {sigQ.data && <TriageCard signals={sigQ.data.signals ?? []} onDrill={setDrill} onTask={setTaskFor} />}
               <div className="cycle-view-tabs">
                 {TABS.map(([id, l, s]) => <div key={id} className={`task-tab ${view === id ? "active" : ""}`} onClick={() => { setView(id); setDrill(null); }}>{l}<span className="task-tab-count" style={{ fontSize: 10 }}>{s}</span></div>)}
               </div>
               {!farmId ? <div className="card" style={{ padding: 20, color: "var(--muted)" }}>Select a farm to see its analytics.</div>
+                : activeQ?.isError ? <ErrorCard onRetry={() => activeQ.refetch()} />
                 : view === "signals" ? (sigQ.isLoading ? <div className="card" style={{ padding: 20, color: "var(--muted)" }}>Loading…</div> : <SignalsView data={sigQ.data} onDrill={setDrill} onTask={setTaskFor} />)
                 : view === "profit" ? (cycQ.isLoading ? <div className="card" style={{ padding: 20, color: "var(--muted)" }}>Loading…</div> : <ProfitView cycles={cycles} />)
                 : view === "productivity" ? <ProductivityView cycles={cycles} />
