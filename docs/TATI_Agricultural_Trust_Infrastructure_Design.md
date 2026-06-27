@@ -276,3 +276,90 @@ QR encodes →  https://teivaka.com/v/{share_token}      (NEW: share token, not 
 4. **KYC partner** — who verifies identity (extension officers? coops? gov ID?) — gates Phase 5; not buildable honestly without it.
 
 **Recommended first build on approval: Phase 1 (Passport read-model)** — highest visible value, zero new capture burden on the farmer, 100% reuse of the evidence spine you already trust.
+
+---
+
+## RATIFIED DECISIONS (Operator, 2026-06-27) — these now bind the design
+
+**D1 — Trust framing = Evidence & Reliability Confidence (NOT creditworthiness).** Teivaka never
+decides loan-worthiness; it provides verified evidence + transparent confidence. The Trust Engine
+explains *why* each level exists from verified evidence; the lending decision stays with the
+institution. (Locks §4's framing; the AI summary gives a confidence band with the "tamper-evident,
+farmer-reported, not externally audited" caveat — never a credit verdict.)
+
+**D2 — QR portal = secure + permission-based; NOT public by default.** QR codes mint **share
+tokens** with configurable scope, expiry, optional password, revocation, and a full access log
+(who viewed, when). Farmers own their data. → Supersedes §5's "public raw-hash can stay" line:
+- The **public `/verify/{hash}` stays PROOF-ONLY** (chain status; no blocks/photos).
+- All **evidence/passport content is behind a share token** (`passport_shares`), never public-by-hash.
+- **Action item:** the mig-187 public evidence projection must be **gated** — either reverted to
+  proof-only now, or replaced by share-token access in Phase 3 (Operator to choose interim).
+
+**D3 — Document Vault deferred to Phase 4.** Initial release = Passport · Evidence Engine · Trust
+Engine · QR Verification Portal · automatic profile generation. No vault in the core. (Locks roadmap.)
+
+**D4 — Verification = multi-layer, claim-level, accumulating (NOT a single "Verified Farmer" badge).**
+This is an architectural elevation. Verify **claims, not just people**. Every major claim carries its
+own independent verification status + evidence, and trust **accumulates** as more independent sources
+confirm. → Supersedes the single `identity_verifications` table with a general **`claim_verifications`** model:
+
+```
+tenant.claim_verifications
+  (verification_id, tenant_id,
+   claim_type   [IDENTITY | FARM_OWNERSHIP | LAND_BOUNDARY | PRODUCTION | SALE |
+                 COMPLIANCE | TRAINING | MEMBERSHIP | ...],
+   claim_ref    text,          -- the entity verified (user_id / farm_id / cycle_id / harvest_id / order_id …)
+   source       [SELF | PHONE | EMAIL | GOV_ID | EXTENSION_OFFICER | COOPERATIVE |
+                 LANDOWNER | BUYER | GOV_PROGRAMME | FINANCIAL_INSTITUTION],
+   source_ref   text,          -- who/which institution attested
+   status       [PENDING | VERIFIED | REJECTED | EXPIRED],
+   confidence_weight int,      -- per-source weight (self lowest; gov/FI/officer highest)
+   evidence_audit_hash text,   -- the audit.events row that backs this attestation
+   verified_at, expires_at, created_at)
+```
+- **A claim's verification level = the aggregation of its confirmations** (recency-decayed, capped):
+  e.g. FARM_OWNERSHIP self-asserted (weak) → + LANDOWNER confirmation → + EXTENSION_OFFICER →
+  "strongly verified." More independent sources = higher confidence, shown transparently.
+- **Source weights (starting point, tunable):** SELF 5 · PHONE 10 · EMAIL 10 · BUYER 15 ·
+  COOPERATIVE 20 · LANDOWNER 25 · EXTENSION_OFFICER 25 · GOV_PROGRAMME 25 · GOV_ID 30 ·
+  FINANCIAL_INSTITUTION 30. A claim never reads "verified" on SELF alone.
+- The Trust Engine's Identity / Farm / Production / Market / Compliance dimensions **read
+  `claim_verifications`** for the verified-evidence portion of each score.
+- Every attestation **emits an `audit.events` row** (the verification is itself tamper-evident).
+- Each verification can **expire** → the claim's level decays → prompts re-verification (honest, living).
+
+**Net effect of D1–D4 on the roadmap:** Phase 1 (Passport read-model) unchanged. Phase 2 (Trust v1)
+reads `claim_verifications` + auto-claims (PHONE/EMAIL/SELF seeded from existing signup data). Phase 3
+delivers the **share-token portal** (D2) + claim-attestation flows (officer/coop/landowner/buyer).
+Phase 4 = Document Vault (D3). Phase 5 folds in GOV_ID / FINANCIAL_INSTITUTION sources as partners land.
+
+---
+
+## PHASE 1 BUILD PLAN (Passport read-model) — for go-ahead before code
+
+**Goal:** a living Agricultural Passport that is 100% a *projection* of existing TFOS data — the
+farmer adds nothing. Trust shows real headline stats + honest "Building" (Phase 2 fills the engine).
+
+**Backend (`routers/passport.py`, NEW):**
+- `GET /api/v1/passport/me` → assembles the read-model from existing sources (no new heavy queries
+  invented): identity (`/me` + `passport_profile`), farm (`/farms/{id}` + production_units/Locations),
+  production (`/financials/crops`, `harvest_log` counts), financial headline (`/financials/farm`),
+  reputation stats (seasons = closed cycles, years-on-Teivaka = tenant created_at, verified
+  production/sales counts), timeline (reuse the FarmHistory source merge).
+- One small migration (apply-as-owner): `tenant.passport_profile` (preferred_name, bio, languages[],
+  professional_photo_url + sha256). Everything else is projected — **Golden Rule honoured**.
+- `GET/PUT /api/v1/passport/me/profile` for the *only* manual fields (photo, bio, languages).
+
+**Frontend (`pages/me/Passport.jsx`, NEW; route `/me/passport`):**
+- Mobile-first Overview / Farm / Reputation tabs (wireframe §7), TEIVAKA logo, api.js + formatMoney,
+  honest empty/Building states, shared Modal, lucide icons, ErrorCard/Retry — the locked fix kit.
+- Reuse: Locations map (farm boundaries), Gallery photos, FarmHistory timeline normaliser.
+- Trust ring shows **"Building — N seasons of evidence"** (no fake score until Phase 2).
+- A "Share my passport" button is present but **disabled with "Coming in the secure-sharing release"**
+  (honest — real shares land in Phase 3; no fake public link, honouring D2).
+
+**Verification gates:** `py_compile` + `npm run build`; migration staged apply-as-owner; browser smoke
+(passport loads real data for F001; honest Building; no console/network errors). No fabricated numbers.
+
+**Out of Phase 1 (explicit):** Trust math (Phase 2), share tokens/portal upgrade (Phase 3), Document
+Vault (Phase 4), GOV_ID/FI verification (Phase 5).
