@@ -21,8 +21,33 @@
   /* header */
   .top{display:flex;align-items:center;justify-content:space-between;padding:8px 2px 16px}
   .logo{display:flex;align-items:center;gap:9px}
-  .logo img{width:34px;height:34px;border-radius:8px;object-fit:contain}
-  .logo .name{font-weight:800;color:var(--green-dp);font-size:17px;letter-spacing:.2px}
+  .logo img{width:46px;height:46px;border-radius:10px;object-fit:contain;background:#fff;padding:3px;box-shadow:0 1px 3px rgba(74,53,38,.12)}
+  .logo .name{font-weight:800;color:var(--green-dp);font-size:20px;letter-spacing:.2px}
+
+  /* farm profile: crop chips, verticals, layer mix */
+  .chips{display:flex;flex-wrap:wrap;gap:6px}
+  .chip{background:#EAF3E4;color:var(--green-dp);border:1px solid #CFE4C2;border-radius:99px;
+    padding:5px 11px;font-size:12.5px;font-weight:600}
+  .chip .x{color:var(--green);font-weight:700;margin-left:4px;font-size:11px}
+  .chip.alt{background:#FBF1DC;color:#7A5B12;border-color:#EBDCB6}
+  .pf-grp{margin-bottom:14px}
+  .pf-grp:last-child{margin-bottom:0}
+  .pf-lab{font-size:10px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:7px}
+  .layer-row{display:flex;align-items:center;gap:10px;font-size:13px;padding:4px 0}
+  .layer-row .nm{flex:1;font-weight:600}
+  .layer-row .ct{color:var(--muted);font-size:12px}
+  .pf-stats{display:flex;gap:18px;margin-top:4px}
+  .pf-stats .v{font-size:18px;font-weight:800;color:var(--green-dp)}
+  .pf-stats .l{font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px}
+
+  /* lightbox */
+  .lb{position:fixed;inset:0;background:rgba(34,24,16,.92);display:none;align-items:center;justify-content:center;z-index:50;padding:20px}
+  .lb.on{display:flex}
+  .lb img{max-width:100%;max-height:82vh;border-radius:10px;box-shadow:0 8px 40px rgba(0,0,0,.5)}
+  .lb .cap{position:absolute;bottom:22px;left:0;right:0;text-align:center;color:#F8F3E9;font-size:13px}
+  .lb .cap b{color:#9FD685}
+  .lb .cls{position:absolute;top:16px;right:20px;color:#fff;font-size:30px;font-weight:300;cursor:pointer;line-height:1}
+  .ph-c img{cursor:zoom-in}
   .top .kind{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:1.2px;text-align:right;line-height:1.35}
   .top .kind b{display:block;color:var(--soil);font-size:11px;letter-spacing:1.4px}
 
@@ -205,6 +230,40 @@
   </div>
   {% endif %}
 
+  {# ── Farm profile: what's grown, farming types, 3-layer mix, land ── #}
+  {% if v.profile and (v.profile.crops or v.profile.verticals or v.profile.layers or v.profile.blocks) %}
+  <div class="card">
+    <h2>Farm Profile</h2>
+    {% if v.profile.crops %}
+    <div class="pf-grp">
+      <div class="pf-lab">What this farmer grows ({{ v.profile.crops|length }})</div>
+      <div class="chips">{% for c in v.profile.crops %}<span class="chip">{{ c.name }}{% if c.cycles > 1 %}<span class="x">×{{ c.cycles }}</span>{% endif %}</span>{% endfor %}</div>
+    </div>
+    {% endif %}
+    {% if v.profile.verticals %}
+    <div class="pf-grp">
+      <div class="pf-lab">Types of farming</div>
+      <div class="chips">{% for t in v.profile.verticals %}<span class="chip alt">{{ t }}</span>{% endfor %}</div>
+    </div>
+    {% endif %}
+    {% if v.profile.layers %}
+    <div class="pf-grp">
+      <div class="pf-lab">Production focus (3-layer mix)</div>
+      {% for l in v.profile.layers %}<div class="layer-row"><span class="nm">{{ l.label }}</span><span class="ct">{{ l.n }} cycle{{ '' if l.n == 1 else 's' }}</span></div>{% endfor %}
+    </div>
+    {% endif %}
+    {% if v.profile.blocks %}
+    <div class="pf-grp">
+      <div class="pf-lab">Land under management</div>
+      <div class="pf-stats">
+        <div><div class="v">{{ v.profile.land_ha }}<span style="font-size:12px"> ha</span></div><div class="l">Total area</div></div>
+        <div><div class="v">{{ v.profile.blocks }}</div><div class="l">Blocks</div></div>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+  {% endif %}
+
   {# ── Evidence (opt-in) ── #}
   {% if v.evidence %}
   <div class="card">
@@ -218,8 +277,9 @@
     <div class="photos">
       {% for p in v.evidence.photos %}
       <div class="ph-c">
-        <img src="{{ p.photo_url }}" alt="{{ p.event }}" loading="lazy">
-        <div class="cap">{{ p.date }}{% if p.sha256 %} &middot; <b>&#10003; hashed</b>{% endif %}</div>
+        <img src="{{ p.photo_url }}" alt="{{ p.event }}" loading="lazy"
+             onclick="openLB(this.src, {{ (p.event ~ ' · ' ~ (p.date or ''))|tojson }}, {{ (p.sha256 or '')|tojson }})">
+        <div class="cap">{{ p.event }} &middot; {{ p.date }}{% if p.sha256 %} &middot; <b>&#10003; hashed</b>{% endif %}</div>
       </div>
       {% endfor %}
     </div>
@@ -262,5 +322,24 @@
     <br><br><a href="https://teivaka.com">Teivaka Agriculture Ecosystem →</a>
   </footer>
 </div>
+
+<div class="lb" id="lb" onclick="closeLB(event)">
+  <span class="cls" onclick="closeLB(event)">&times;</span>
+  <img id="lbImg" src="" alt="">
+  <div class="cap"><span id="lbCap"></span> <span id="lbHash"></span></div>
+</div>
+<script>
+  function openLB(src, cap, sha){
+    document.getElementById('lbImg').src = src;
+    document.getElementById('lbCap').textContent = cap || '';
+    document.getElementById('lbHash').innerHTML = sha ? '&middot; <b>&#10003; SHA-256 ' + sha.slice(0,16) + '…</b>' : '';
+    document.getElementById('lb').classList.add('on');
+  }
+  function closeLB(e){
+    if(e && e.target && e.target.id === 'lbImg') return;
+    document.getElementById('lb').classList.remove('on');
+  }
+  document.addEventListener('keydown', function(e){ if(e.key === 'Escape') closeLB(); });
+</script>
 </body>
 </html>
