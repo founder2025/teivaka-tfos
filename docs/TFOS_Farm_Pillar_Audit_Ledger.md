@@ -14,6 +14,18 @@ Legend: 🔒 LOCKED (approved; no redesign without new evidence) · ✅ PASS · 
 ---
 
 ## 🔒 LOCKED PAGES
+- **Gallery (/farm/records · gallery)** — LOCKED 2026-06-27 (Operator-approved). Audited → scorecard
+  (6.0) → 8-persona → redesigned + wireframe → stress-tested ×2 → optimized. Page-local findings
+  resolved: 200-event cap → pagination; honest copy ("field & event logs", not faked "every
+  enterprise"); unified tile (tamper-evident badge + geotag + select + keyboard) across all views;
+  action bar in any view; **Verified-only + search auto-exhaust** (bounded, honest cap); precise
+  "Tamper-evident" wording (byte-integrity since logging, not capture authenticity); 401≠empty;
+  Fiji dates; captured-by + GPS + OSM link in modal; <img> error fallback; **real downloadable
+  evidence pack** (photos + verify manifest) replacing the dead Bank-Evidence navigate; render cap
+  for paint speed. Wireframe: docs/TFOS_Gallery_Redesign_Wireframe.md. Remainder filed (backend,
+  named — not faked): multi-source photos (harvests/poultry/cash — harvests list GET returns no
+  photo_url; poultry none), EXIF capture-time, thumbnail variants + server photo index, Leaflet map
+  view, AI photo analysis, cross-farm/worker filter, zip download, offline/PWA, i18n. Deploy: frontend-only.
 - **History (/farm/history)** — LOCKED 2026-06-27 (Operator-approved). Audited → scorecard (4.0,
   capped by being unreachable) → 8-persona → redesigned + wireframe → stress-tested ×2 → optimized
   ×2. Page-local findings resolved: **made reachable** (was lazy-imported but never routed; /farm/history
