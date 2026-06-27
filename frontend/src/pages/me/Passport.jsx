@@ -11,7 +11,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ShieldCheck, MapPin, Sprout, AlertTriangle, RefreshCw, Pencil, Check, Clock,
-  Mail, Phone, BadgeCheck, Share2, Sparkles, UserCheck,
+  Mail, Phone, BadgeCheck, Share2, Sparkles, UserCheck, Package,
 } from "lucide-react";
 import { C, getJSON, send } from "./_meCommon";
 import { apiFetch } from "../../utils/api";
@@ -539,7 +539,10 @@ export default function Passport() {
             </div>
           ) : null}
 
-          <button onClick={() => navigate("/farm/locations")} style={{ border: `1px solid ${C.line}`, color: C.greenDk, borderRadius: 8, padding: "8px 12px", fontSize: 13, fontWeight: 600 }}><MapPin size={14} style={{ verticalAlign: -2, marginRight: 4 }} />View farm map &amp; blocks</button>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <button onClick={() => navigate("/farm/locations")} style={{ border: `1px solid ${C.line}`, color: C.greenDk, borderRadius: 8, padding: "8px 12px", fontSize: 13, fontWeight: 600 }}><MapPin size={14} style={{ verticalAlign: -2, marginRight: 4 }} />View farm map &amp; blocks</button>
+            <button onClick={() => navigate("/me/consignments")} style={{ border: `1px solid ${C.greenDk}`, background: C.greenDk, color: "var(--paper)", borderRadius: 8, padding: "8px 12px", fontSize: 13, fontWeight: 700 }}><Package size={14} style={{ verticalAlign: -2, marginRight: 4 }} />Consignments &amp; export trace</button>
+          </div>
         </div>
       )}
 
