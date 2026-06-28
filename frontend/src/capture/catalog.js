@@ -55,9 +55,9 @@ const FLOW_RANK = {
 // The three level-1 doors. Each maps to the config verticals it contains; WHOLE is
 // universal. Icons are lucide names resolved in LogSheet.
 export const DOORS = [
-  { key: "PLANT",  label: "Plant-based",  sub: "Crops · trees · nursery",        icon: "Sprout",   verticals: ["CROPS"] },
-  { key: "ANIMAL", label: "Animal-based", sub: "Poultry · livestock · bees",     icon: "PawPrint", verticals: ["POULTRY", "LIVESTOCK"] },
-  { key: "WHOLE",  label: "Whole-farm",   sub: "Money · labour · notes",         icon: "Banknote", verticals: ["MONEY"] },
+  { key: "PLANT",  label: "Plant-based",  sub: "Crops · nursery",                 icon: "Sprout",   verticals: ["CROPS"] },
+  { key: "ANIMAL", label: "Animal-based", sub: "Poultry · cattle · goats · pigs", icon: "PawPrint", verticals: ["POULTRY", "LIVESTOCK"] },
+  { key: "WHOLE",  label: "Whole-farm",   sub: "Money · loans · labour",          icon: "Banknote", verticals: ["MONEY"] },
 ];
 
 // Condensed mode = the handful every farmer logs (mirrors the prototype's 8-essential
