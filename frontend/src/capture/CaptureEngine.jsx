@@ -131,6 +131,11 @@ export default function CaptureEngine({ config = cropsConfig, onDone, onBack, pr
   const [libraries, setLibraries] = useState({});   // { library_type: items[] }
   const [loadingLibs, setLoadingLibs] = useState(false);
   const [libQuery, setLibQuery] = useState("");
+  // Crop variety picker (shared.crop_varieties, scoped to the cycle's production_id) + free-text fallback.
+  const [varieties, setVarieties] = useState([]);
+  const [loadingVarieties, setLoadingVarieties] = useState(false);
+  const [varietyQuery, setVarietyQuery] = useState("");
+  const [varietyOther, setVarietyOther] = useState(false);
   // Universal Event Form: when + who + evidence (the bankability layer).
   const [operator, setOperator] = useState("");
   const [occurredDate, setOccurredDate] = useState(nowDateStr());
@@ -293,6 +298,24 @@ export default function CaptureEngine({ config = cropsConfig, onDone, onBack, pr
     return () => { off = true; };
   }, [libTypes.join(",")]);
 
+  // Crop varieties for the chosen cycle's crop (Strike #100 catalog), loaded only when a spec
+  // needs the variety picker. Offline → last cached; the backend appends an "Other (specify)" row.
+  const needsVariety = useMemo(() => !!spec?.capture?.some((f) => f.input === "variety"), [spec]);
+  useEffect(() => {
+    if (!needsVariety || !selectedItem?.production_id) { setVarieties([]); return; }
+    let off = false;
+    (async () => {
+      setLoadingVarieties(true);
+      try {
+        const pid = encodeURIComponent(selectedItem.production_id);
+        const body = await cachedJSON(`varieties:${selectedItem.production_id}`, `/api/v1/crop-varieties?production_id=${pid}`, authHeaders()).catch(() => null);
+        const list = body?.data?.varieties ?? [];
+        if (!off) setVarieties(Array.isArray(list) ? list : []);
+      } finally { if (!off) setLoadingVarieties(false); }
+    })();
+    return () => { off = true; };
+  }, [needsVariety, selectedItem?.production_id]);
+
   // FAB13: when a SALE spec is aimed at a flock, ask the server whether it can be sold
   // right now (withholding / SEVERE health) and warn BEFORE the form is filled. The hard
   // gate still runs on submit; this degrades to silent no-op offline or if the endpoint is
@@ -325,6 +348,7 @@ export default function CaptureEngine({ config = cropsConfig, onDone, onBack, pr
     if (mediaRef.current && recording) { try { mediaRef.current.stop(); } catch { /* noop */ } }
     setRecording(false); setRecSecs(0);
     setOccurredDate(nowDateStr()); setOccurredTime(nowTimeStr()); setChemQuery(""); setLibQuery(""); setAnchorQuery("");
+    setVarietyQuery(""); setVarietyOther(false);
     setSaleBlocks(null); setBatchMode(false); setBatchIds([]);
     if (voiceStopRef.current) { try { voiceStopRef.current(); } catch { /* noop */ } voiceStopRef.current = null; }
     setVoiceListening(false); setVoiceHeard(""); setVoiceNote("");
@@ -739,6 +763,39 @@ export default function CaptureEngine({ config = cropsConfig, onDone, onBack, pr
                 ))}
               </div>
             </>)}
+        </div>
+      );
+    }
+    if (f.input === "variety") {
+      const filtered = varietyQuery
+        ? varieties.filter((x) => (x.variety_name || "").toLowerCase().includes(varietyQuery.toLowerCase()) || (x.local_name || "").toLowerCase().includes(varietyQuery.toLowerCase()))
+        : varieties;
+      if (!selectedItem?.production_id) return <p style={{ color: "var(--muted)", fontSize: 13 }}>Pick a crop above to see its varieties.</p>;
+      if (loadingVarieties) return <p style={{ color: "var(--muted)", fontSize: 13 }}>Loading varieties…</p>;
+      if (varieties.length === 0) return <input value={v} onChange={(e) => setVal(f.name, e.target.value)} placeholder="Type the variety" style={inputBox} />;
+      return (
+        <div>
+          {varieties.length > 6 && (
+            <input placeholder="Search variety…" value={varietyQuery} onChange={(e) => setVarietyQuery(e.target.value)}
+              style={{ width: "100%", padding: 10, borderRadius: 10, border: "1px solid var(--line)", fontSize: 14, marginBottom: 8 }} />
+          )}
+          <div style={{ maxHeight: 220, overflowY: "auto", display: "flex", flexDirection: "column", gap: 6 }}>
+            {filtered.map((x) => {
+              const isOther = x.variety_id === "OTHER";
+              const selected = isOther ? varietyOther : (!varietyOther && v === x.variety_name);
+              return (
+                <button key={x.variety_id} onClick={() => { if (isOther) { setVarietyOther(true); setVal(f.name, ""); } else { setVarietyOther(false); setVal(f.name, x.variety_name); } }}
+                  style={{ textAlign: "left", padding: "10px 12px", borderRadius: 10, fontWeight: 600, fontSize: 14, cursor: "pointer",
+                    border: selected ? "2px solid var(--green)" : "1px solid var(--line)", background: selected ? "#eaf3ea" : "#fff" }}>
+                  {x.variety_name}{x.local_name ? <span style={{ fontSize: 11, color: "var(--muted)", fontWeight: 400 }}> · {x.local_name}</span> : null}
+                </button>
+              );
+            })}
+          </div>
+          {varietyOther && (
+            <input autoFocus value={v} onChange={(e) => setVal(f.name, e.target.value)} placeholder="Type the variety"
+              style={{ ...inputBox, marginTop: 8 }} />
+          )}
         </div>
       );
     }

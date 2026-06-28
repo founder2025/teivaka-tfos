@@ -11,9 +11,11 @@
  * to existing rich, audit-emitting pages (Start a crop → CycleNew, Nursery → NurseryNew,
  * Harvest → HarvestNew, Close a crop → CycleList/Detail). CHEMICAL_APPLIED uses the
  * `chemical` input (picker from GET /api/v1/chemicals + WHD read-back — Inviolable #2).
- * KNOWN GAP (honest): the nursery page (POST /api/v1/nursery) persists nursery_batches
- * but does NOT yet emit an audit.events row (legacy register, pre-dates the (+) contract)
- * — filed for backend audit-emit follow-up. CYCLE_CREATED/CLOSED + HARVEST already audit.
+ * AUDIT: every (+) action emits an audit.events row — nursery included (B91 closed
+ * 2026-06-22: log_nursery_batch emits NURSERY_BATCH_CREATED). CYCLE_CREATED/CLOSED + HARVEST audit too.
+ * PLANTING.variety reads the shared.crop_varieties catalog (input:"variety", scoped to the
+ * cycle's production_id) with an "Other (specify)" free-text fallback — Strike #100 catalog,
+ * now wired into the engine path. product_name (fertilizer) + buyer stay free-text pending catalogs.
  * STILL SEQUENCED: INPUT_PURCHASED/INPUT_RECEIVED (Money pillar), ORDER_RECEIVED.
  */
 const opts = (...vs) => vs.map((v) => (typeof v === "string" ? { value: v, label: v } : v));
@@ -106,7 +108,7 @@ export const cropsConfig = {
       resolve: { branch: { prompt: "What did you do?", options: [
         { choiceLabel: "Planted", event_type: "PLANTING", capture: [
           { name: "plant_count", ask: "How many plants", input: "number", tier: "quick" },
-          { name: "variety", ask: "Variety", input: "text", tier: "detail" },
+          { name: "variety", ask: "Variety", input: "variety", tier: "detail" },
           { name: "spacing_cm", ask: "Spacing (cm)", input: "number", tier: "detail" } ] },
         { choiceLabel: "Transplanted", event_type: "TRANSPLANT_LOGGED", capture: [
           { name: "plants_transplanted", ask: "How many seedlings", input: "number", tier: "quick" },
