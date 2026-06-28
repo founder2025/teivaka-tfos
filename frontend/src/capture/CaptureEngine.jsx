@@ -28,6 +28,8 @@ import { submitCapture, ensureCaptureSync } from "./submitCapture";
 import { newIdem } from "./offlineQueue";
 import { recordCapture, lastValues } from "./captureMemory";
 import { cachedJSON } from "./referenceCache";
+import { listen, isSpeechRecognitionSupported } from "../utils/speech";
+import { draftFromTranscript } from "./voiceDraft";
 
 const ICONS = {
   Eye, Droplet, Scissors, ShieldCheck, Sprout, Warehouse, Coins, Leaf, CalendarPlus, CalendarCheck,
@@ -105,6 +107,11 @@ export default function CaptureEngine({ config = cropsConfig, onDone, onBack, pr
   const [saleBlocks, setSaleBlocks] = useState(null);   // FAB13: null=not checked/NA, []=clear, [..]=can't sell
   const [batchMode, setBatchMode] = useState(false);    // FAB15: log one action across several anchors
   const [batchIds, setBatchIds] = useState([]);
+  // Slice 3 — voice-to-fill (on-device STT → deterministic draft; strictly additive).
+  const [voiceListening, setVoiceListening] = useState(false);
+  const [voiceHeard, setVoiceHeard] = useState("");
+  const [voiceNote, setVoiceNote] = useState("");
+  const voiceStopRef = useRef(null);
   const [values, setValues] = useState({});
   const [showDetail, setShowDetail] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -147,6 +154,7 @@ export default function CaptureEngine({ config = cropsConfig, onDone, onBack, pr
   const preAppliedRef = useRef(false);
   const idemRef = useRef(null);   // idempotency key for the entry being captured (FAB12)
   const prefillRef = useRef(null);
+  const prefillSeedRef = useRef({});   // what memory pre-filled, so voice can override it (but not typed input)
 
   // Drain any captures queued offline in a previous session + wire the reconnect flush.
   useEffect(() => { ensureCaptureSync(); }, []);
@@ -164,6 +172,7 @@ export default function CaptureEngine({ config = cropsConfig, onDone, onBack, pr
       .map((f) => f.name));
     const seed = {};
     for (const [k, v] of Object.entries(lv)) if (allowed.has(k)) seed[k] = v;
+    prefillSeedRef.current = seed;
     if (Object.keys(seed).length) setValues((s) => ({ ...seed, ...s }));
   }, [spec]);
 
@@ -317,9 +326,12 @@ export default function CaptureEngine({ config = cropsConfig, onDone, onBack, pr
     setRecording(false); setRecSecs(0);
     setOccurredDate(nowDateStr()); setOccurredTime(nowTimeStr()); setChemQuery(""); setLibQuery(""); setAnchorQuery("");
     setSaleBlocks(null); setBatchMode(false); setBatchIds([]);
+    if (voiceStopRef.current) { try { voiceStopRef.current(); } catch { /* noop */ } voiceStopRef.current = null; }
+    setVoiceListening(false); setVoiceHeard(""); setVoiceNote("");
     setEditOpen(false); setEditSaved(false); setEditPhoto(null);
     idemRef.current = null;   // fresh idempotency key per entry
     prefillRef.current = null;
+    prefillSeedRef.current = {};
   }
   function pickVerb(v) {
     // "link" verbs hand off to an existing rich page (cycle/nursery/harvest)
@@ -418,6 +430,40 @@ export default function CaptureEngine({ config = cropsConfig, onDone, onBack, pr
     if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
   }
   const mmss = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+
+  // Slice 3 — speak one sentence; map it onto THIS verb's known fields (never overwrites what the
+  // farmer already typed, never auto-submits). Pure on-device; degrades to the manual form if STT
+  // is unsupported or nothing matches. The full transcript always lands in Notes so nothing is lost.
+  const voiceSupported = isSpeechRecognitionSupported();
+  function startVoiceFill() {
+    if (voiceListening) { try { voiceStopRef.current?.(); } catch { /* noop */ } return; }
+    setVoiceHeard(""); setVoiceNote(""); setVoiceListening(true);
+    voiceStopRef.current = listen({
+      lang: "en-US",
+      onResult: ({ transcript }) => {
+        const { values: draft, heard, matched } = draftFromTranscript(transcript, spec, { libraries });
+        setVoiceHeard(heard);
+        setValues((s) => {
+          const next = { ...s };
+          const seed = prefillSeedRef.current || {};
+          for (const [k, val] of Object.entries(draft)) {
+            if (k === "notes") { if (!next.notes) next.notes = val; continue; }
+            const cur = next[k];
+            const empty = cur === undefined || cur === "" || cur === null || (Array.isArray(cur) && cur.length === 0);
+            // Override only what's empty or was auto-seeded by memory; never a value the farmer typed.
+            const onlySeeded = k in seed && String(cur) === String(seed[k]);
+            if (empty || onlySeeded) next[k] = val;
+          }
+          return next;
+        });
+        setVoiceNote(matched
+          ? `Filled ${matched} field${matched === 1 ? "" : "s"} from what you said — check each one below.`
+          : "Couldn't pick out the details — saved it to Notes; fill the fields below.");
+      },
+      onError: () => setVoiceNote("Didn't catch that — try again, or just type it in."),
+      onEnd: () => setVoiceListening(false),
+    });
+  }
 
   // FAB15: the anchors a batch submit will write to (one record each); empty unless batchMode.
   const batchTargets = useMemo(
@@ -771,6 +817,21 @@ export default function CaptureEngine({ config = cropsConfig, onDone, onBack, pr
         )
         : items.length === 0 ? <p style={{ color: "#9a3b3b" }}>{ctx.emptyMsg}</p>
         : (<>
+          {/* Slice 3 — voice-to-fill: speak once, review the draft. Additive; hidden where unsupported. */}
+          {voiceSupported && (
+            <div style={{ marginBottom: 16 }}>
+              <button type="button" onClick={startVoiceFill}
+                style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+                  padding: "12px 14px", borderRadius: 12, fontWeight: 700, fontSize: 14, cursor: "pointer",
+                  border: voiceListening ? "2px solid #9a3b3b" : "1px solid var(--green)",
+                  background: voiceListening ? "#fbedea" : "#eaf3ea", color: voiceListening ? "#9a3b3b" : "var(--green-dk)" }}>
+                {voiceListening ? <><Square size={16} /> Listening… tap to stop</> : <><Mic size={16} /> Fill by voice</>}
+              </button>
+              {voiceHeard && <p style={{ fontSize: 12.5, color: "var(--muted)", marginTop: 8 }}>Heard: “{voiceHeard}”</p>}
+              {voiceNote && <p style={{ fontSize: 12.5, color: "var(--green-dk)", marginTop: 4, fontWeight: 600 }}>{voiceNote}</p>}
+            </div>
+          )}
+
           {/* Anchors — Farm · <context> · Operator (the 4-anchor identity on every record) */}
           <div style={card}>
             <div style={cardHead}>Anchors · farm · {ctx.contextLabel.toLowerCase()} · operator</div>
