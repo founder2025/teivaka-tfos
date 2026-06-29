@@ -174,6 +174,7 @@ function CycleDetailInner() {
       <div className="flex flex-wrap gap-2">
         <ActionBtn onClick={() => navigate("/farm/cycles")}>← Back to list</ActionBtn>
         <ActionBtn onClick={() => openFormModal("crops", { cycleId })}>+ Log event</ActionBtn>
+        <ActionBtn onClick={() => navigate(`/farm/harvest/new?cycle=${encodeURIComponent(cycleId)}`)}>🌾 Log harvest</ActionBtn>
         <ActionBtn onClick={() => navigate(`/tis?q=${encodeURIComponent(`What should I do next on my ${c.production_name || "crop"} cycle in ${c.pu_farmer_label || "this block"}?`)}`)}>✨ Ask AI</ActionBtn>
         {transitions.map((next) => (
           <ActionBtn key={next} onClick={() => transition(next)} disabled={!!acting} danger={next === "FAILED"}>

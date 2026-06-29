@@ -21,8 +21,8 @@
  * All sub-components are at module scope so re-rendering the parent does not
  * re-mount inputs (focus-loss bug the brief flagged).
  */
-import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { ChevronLeft, ShieldCheck, Check, Loader2, User } from "lucide-react";
 import { completeLinkedTask } from "../../utils/taskBridge";
 
@@ -150,6 +150,9 @@ function ComplianceModal({ open, detail, onClose }) {
 
 export default function HarvestNew() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const preCycle = searchParams.get("cycle");   // cross-link from CycleDetail "Log harvest"
+  const preAppliedRef = useRef(false);
 
   const [cycles, setCycles]               = useState([]);
   const [cyclesLoading, setCyclesLoading] = useState(true);
@@ -215,6 +218,14 @@ export default function HarvestNew() {
     return () => { cancelled = true; };
   }, []);
 
+  // Cross-link preselect: ?cycle=<id> picks that cycle's crop; the auto-select
+  // below then locks onto the exact cycle. Applied once, after cycles load.
+  useEffect(() => {
+    if (preAppliedRef.current || !preCycle || cycles.length === 0) return;
+    const c = cycles.find((x) => x.cycle_id === preCycle);
+    if (c) { preAppliedRef.current = true; setCropId(c.production_id); }
+  }, [preCycle, cycles]);
+
   // Cycles filtered to selected crop.
   const filteredCycles = useMemo(() => {
     if (!cropId) return [];
@@ -226,12 +237,13 @@ export default function HarvestNew() {
     setCycleId("");
   }, [cropId]);
 
-  // Auto-select first cycle when filtered list resolves to a single option.
+  // Auto-select the cycle: prefer a preselected ?cycle= when it's in the list,
+  // else the first option.
   useEffect(() => {
-    if (!cycleId && filteredCycles.length > 0) {
-      setCycleId(filteredCycles[0].cycle_id);
-    }
-  }, [cycleId, filteredCycles]);
+    if (cycleId || filteredCycles.length === 0) return;
+    const pre = preCycle && filteredCycles.some((c) => c.cycle_id === preCycle);
+    setCycleId(pre ? preCycle : filteredCycles[0].cycle_id);
+  }, [cycleId, filteredCycles, preCycle]);
 
   const selectedCycle = useMemo(
     () => filteredCycles.find((c) => c.cycle_id === cycleId) || null,
