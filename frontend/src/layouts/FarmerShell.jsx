@@ -35,6 +35,7 @@ import TopAppBar from "../components/nav/TopAppBar";
 import BottomNav from "../components/nav/BottomNav";
 import LeftRail from "../components/nav/LeftRail";
 import ScrollManager from "../components/nav/ScrollManager";
+import NotificationWatcher from "../components/nav/NotificationWatcher";
 import PillarSubNavStrip from "../components/nav/PillarSubNavStrip";
 import { useIsNarrow } from "../hooks/useIsNarrow";
 import { useUniversalLogShortcut } from "../components/nav/UniversalLogButton";
@@ -346,6 +347,7 @@ function ShellContent() {
       }}
     >
       <ScrollManager />
+      <NotificationWatcher />
       <TopAppBar />
       <LeftRail />
       <div

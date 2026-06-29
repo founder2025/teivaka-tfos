@@ -261,7 +261,7 @@ class ApplyBody(BaseModel):
 async def apply_to_listing(listing_id: str, body: ApplyBody, user: dict = Depends(get_current_user)):
     async with get_db_ctx() as db:
         listing = (await db.execute(text(
-            "SELECT poster_user_id, status, apply_deadline FROM community.job_listings WHERE listing_id = :l"),
+            "SELECT poster_user_id, role_title, status, apply_deadline FROM community.job_listings WHERE listing_id = :l"),
             {"l": listing_id})).mappings().first()
         if not listing:
             raise HTTPException(404, detail="Listing not found")
@@ -284,6 +284,9 @@ async def apply_to_listing(listing_id: str, body: ApplyBody, user: dict = Depend
                 VALUES (:a, :l, :t, :u, :cn)
             """), {"a": aid, "l": listing_id, "t": str(user["tenant_id"]), "u": str(user["user_id"]),
                    "cn": (body.cover_note or None)})
+            from app.routers.feed import _notify  # lazy import avoids load-time cycle
+            await _notify(db, listing["poster_user_id"], user["user_id"], "JOB_APPLIED",
+                          body=f"New applicant for your job: {listing['role_title']}")
             await db.commit()
         except IntegrityError:  # unique(listing_id, applicant) race
             raise HTTPException(409, detail="You've already applied to this listing")
@@ -349,7 +352,8 @@ async def decide_application(application_id: str, status: str = Query(...), user
         raise HTTPException(400, detail="status must be SHORTLISTED|DECLINED")
     async with get_db_ctx() as db:
         app = (await db.execute(text("""
-            SELECT a.application_id, l.poster_user_id FROM community.job_applications a
+            SELECT a.application_id, a.applicant_user_id, l.poster_user_id, l.role_title
+            FROM community.job_applications a
             JOIN community.job_listings l ON l.listing_id = a.listing_id WHERE a.application_id = :a"""),
             {"a": application_id})).mappings().first()
         if not app:
@@ -359,6 +363,11 @@ async def decide_application(application_id: str, status: str = Query(...), user
         await db.execute(text(
             "UPDATE community.job_applications SET status=:s, decided_at=now() WHERE application_id=:a"),
             {"s": status, "a": application_id})
+        from app.routers.feed import _notify  # lazy import avoids load-time cycle
+        ntype = "JOB_SHORTLISTED" if status == "SHORTLISTED" else "JOB_DECLINED"
+        msg = (f"You were shortlisted for {app['role_title']}" if status == "SHORTLISTED"
+               else f"Your application for {app['role_title']} wasn't successful this time")
+        await _notify(db, app["applicant_user_id"], user["user_id"], ntype, body=msg)
         await db.commit()
     return {"data": {"application_id": application_id, "status": status}}
 
@@ -379,8 +388,9 @@ async def hire_applicant(listing_id: str, body: HireBody, user: dict = Depends(g
     async with get_db_ctx() as db:
         await _assert_owns_listing(db, listing_id, user)
         app = (await db.execute(text(
-            "SELECT application_id, applicant_user_id, status FROM community.job_applications "
-            "WHERE application_id=:a AND listing_id=:l"), {"a": body.application_id, "l": listing_id})).mappings().first()
+            "SELECT a.application_id, a.applicant_user_id, a.status, l.role_title "
+            "FROM community.job_applications a JOIN community.job_listings l ON l.listing_id = a.listing_id "
+            "WHERE a.application_id=:a AND a.listing_id=:l"), {"a": body.application_id, "l": listing_id})).mappings().first()
         if not app:
             raise HTTPException(404, detail="Application not found for this listing")
         if app["status"] == "ACCEPTED":  # JA17: idempotent — never re-hire (would duplicate the worker)
@@ -400,6 +410,9 @@ async def hire_applicant(listing_id: str, body: HireBody, user: dict = Depends(g
               AND (SELECT count(*) FROM community.job_applications
                    WHERE listing_id=:l AND status='ACCEPTED') >= positions
         """), {"l": listing_id})
+        from app.routers.feed import _notify  # lazy import avoids load-time cycle
+        await _notify(db, app["applicant_user_id"], user["user_id"], "JOB_HIRED",
+                      body=f"🎉 You're hired for {app['role_title']}! Open it to view the employer and message them.")
         await db.commit()
 
     worker_result = None
