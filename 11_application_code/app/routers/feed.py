@@ -416,6 +416,39 @@ async def list_feed(
     return {"data": posts}
 
 
+# ----------------------------------------------------------------------------- feed signals
+class SignalBatch(BaseModel):
+    signals: list[dict] = []   # [{post_id, type, value?}] — loose by design; validated below
+
+
+_SIGNAL_TYPES = {"IMPRESSION", "CLICK", "DWELL", "HIDE", "OPEN"}
+
+
+@router.post("/feed/signals", status_code=202)
+async def log_feed_signals(body: SignalBatch, user: dict = Depends(get_current_user)):
+    """Append engagement signals (Feed v2 Slice 1 — the ranking/flywheel foundation).
+    Best-effort + capped: a logging failure must never affect the user. Cross-tenant
+    community.* append-only log; consumed by ranking + outcome models in later slices."""
+    rows = [
+        {"u": str(user["user_id"]), "p": str(s.get("post_id")),
+         "t": s.get("type"), "v": s.get("value") if isinstance(s.get("value"), int) else None}
+        for s in (body.signals or [])[:100]
+        if s.get("post_id") and s.get("type") in _SIGNAL_TYPES
+    ]
+    if not rows:
+        return {"data": {"logged": 0}}
+    try:
+        async with get_db_ctx() as db:
+            await db.execute(text(
+                "INSERT INTO community.feed_signals (user_id, post_id, signal_type, value) "
+                "VALUES (:u, :p, :t, :v)"
+            ), rows)   # SQLAlchemy executemany over the list
+            await db.commit()
+    except Exception:  # noqa: BLE001 — signals are non-critical; never surface
+        return {"data": {"logged": 0}}
+    return {"data": {"logged": len(rows)}}
+
+
 # ----------------------------------------------------------------------------- trust score
 @router.get("/trust-score")
 async def trust_score(user: dict = Depends(get_current_user)):
