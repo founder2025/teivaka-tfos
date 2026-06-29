@@ -60,7 +60,7 @@ export const PILLAR_SUB_NAV = {
       { path: "/farm/cycles",       label: "Production",   icon: Sprout },
       { path: "/farm/field-events", label: "Field log",    icon: Activity },
       { path: "/farm/resources",    label: "Resources",    icon: Package },
-      { path: "/farm/market",       label: "Market",       icon: Truck },
+      { path: "/farm/market",       label: "Buyers",       icon: Truck },
       { path: "/farm/money",        label: "Money",        icon: Wallet },
       { path: "/farm/compliance",   label: "Compliance",   icon: Shield },
       { path: "/farm/records",      label: "Records",      icon: FileText },
@@ -110,10 +110,10 @@ export const FARM_NAV_GROUPS = [
     ],
   },
   {
-    kind: "group", id: "sell", label: "Sell", sub: "Market · money",
+    kind: "group", id: "sell", label: "Sell", sub: "Buyers · money",
     icon: Coins, color: "#C9A227",
     items: [
-      { path: "/farm/market", label: "Market", icon: Truck },
+      { path: "/farm/market", label: "Buyers", icon: Truck },
       { path: "/farm/money",  label: "Money",  icon: Wallet },
     ],
   },

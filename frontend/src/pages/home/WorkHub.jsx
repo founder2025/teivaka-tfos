@@ -8,8 +8,9 @@
  */
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Briefcase, Truck, Plus, X, Sparkles } from "lucide-react";
+import { Briefcase, Truck, Plus, X, Sparkles, Megaphone } from "lucide-react";
 import TfpShell from "../../components/farm/TfpShell";
+import SponsorCorner from "../../components/home/SponsorCorner";
 
 const Jobs = lazy(() => import("../farmer/Jobs"));
 const ServiceHub = lazy(() => import("../farmer/ServiceHub"));
@@ -66,7 +67,7 @@ export default function WorkHub() {
       <main className="main-content">
         <div className="main-inner" style={{ maxWidth: 880 }}>
           <div className="page-header">
-            <div className="subtitle">Work & hire across the Teivaka network — jobs and on-demand services.</div>
+            <div className="subtitle">Across the Teivaka network — jobs, on-demand services, and promotions.</div>
             <div className="page-actions" style={{ flexWrap: "wrap", gap: 8 }}>
               <button className="btn btn-secondary" onClick={() => navigate("/tis?q=" + encodeURIComponent("How do I use the Teivaka network to hire workers or find farm work?"))}><Sparkles size={14} />Ask AI</button>
               <button className="btn btn-primary" onClick={() => setChooser(true)}><Plus size={14} />Post to the network</button>
@@ -76,12 +77,15 @@ export default function WorkHub() {
           <div className="cycle-view-tabs" role="tablist" aria-label="Work & hire">
             <TabBtn id="jobs" Icon={Briefcase} label="Jobs" />
             <TabBtn id="services" Icon={Truck} label="Services" />
+            <TabBtn id="promotions" Icon={Megaphone} label="Promotions" />
           </div>
 
           <Suspense fallback={<div className="card" style={{ padding: 20, color: "var(--muted)" }}>Loading…</div>}>
             {sub === "jobs"
               ? <Jobs key={`j${k}`} embedded initialTab={jobsTab} />
-              : <ServiceHub key={`s${k}`} embedded initialTab={svcTab} />}
+              : sub === "services"
+              ? <ServiceHub key={`s${k}`} embedded initialTab={svcTab} />
+              : <SponsorCorner />}
           </Suspense>
         </div>
       </main>

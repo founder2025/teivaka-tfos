@@ -23,7 +23,7 @@ const C = { soil: "var(--soil)", greenDk: "var(--green-dk)", border: "var(--line
 const GROUPS = [
   ["Plan", [["Overview", "/farm", Eye], ["Tasks", "/farm/tasks", CheckSquare], ["Weather", "/farm/weather", Cloud]]],
   ["Grow", [["Enterprises", "/farm/enterprises", Layers], ["Production", "/farm/cycles", Sprout], ["Resources", "/farm/resources", Package]]],
-  ["Sell", [["Market", "/farm/market", Truck], ["Money", "/farm/money", Wallet]]],
+  ["Sell", [["Buyers", "/farm/market", Truck], ["Money", "/farm/money", Wallet]]],
   ["Prove", [["Compliance", "/farm/compliance", ShieldCheck], ["Records", "/farm/records", FileText]]],
   ["Improve", [["Insights", "/farm/insights", BarChart3]]],
   ["Account", [["Library", "/farm/library", BookOpen], ["Partnerships", "/farm/partnerships", Share2], ["Settings", "/farm/settings", Settings]]],
