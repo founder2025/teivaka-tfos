@@ -2,11 +2,10 @@
  * Leaderboard.jsx — Gamification Leaderboard (stub)
  * Full build: weekly/monthly rankings, badges, crop categories, regional leaderboards.
  */
-import FarmerLayout from "../../components/farmer/FarmerLayout";
 const C = { soil: "var(--soil)", green: "var(--green)", cream: "var(--cream)", border: "var(--line)", gold: "var(--amber)" };
 export default function Leaderboard() {
   return (
-    <FarmerLayout>
+    <>
       <div className="flex flex-col items-center justify-center py-24 text-center">
         <div className="text-6xl mb-4">🏆</div>
         <h1 className="text-2xl font-bold mb-2"
@@ -22,6 +21,6 @@ export default function Leaderboard() {
           In Development
         </span>
       </div>
-    </FarmerLayout>
+    </>
   );
 }

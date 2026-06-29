@@ -47,7 +47,6 @@ const Promote       = lazy(() => import("./pages/me/Promote"));
 const MeVerification = lazy(() => import("./pages/me/MeVerification"));
 const FieldEventNew = lazy(() => import("./pages/farmer/FieldEventNew"));
 const KnowledgeBase = lazy(() => import("./pages/farmer/KnowledgeBase"));
-const FarmManager   = lazy(() => import("./pages/farmer/FarmManager"));
 const FarmsManage   = lazy(() => import("./pages/farmer/FarmsManage"));
 const TIS           = lazy(() => import("./pages/farmer/TIS"));
 const TISHistory    = lazy(() => import("./pages/farmer/TISHistory"));
@@ -307,10 +306,13 @@ export default function App() {
           <Route path="/farms"        element={<MarketingPage pageKey="farms" />} />
           <Route path="/community" element={<Navigate to="/home" replace />} />
           <Route path="/community/map" element={<Navigate to="/farm/locations" replace />} />
-          <Route path="/kb" element={
-            <FarmerRoute><KnowledgeBase /></FarmerRoute>
-          } />
           <Route element={<FarmerRoute><FarmerShell /></FarmerRoute>}>
+            {/* Folded onto the shared shell (audit Slice 2) — these rendered the
+                legacy FarmerLayout (second nav) before; now they get the real
+                shell + universal back. */}
+            <Route path="/kb"          element={<KnowledgeBase />} />
+            <Route path="/calendar"    element={<Calendar />} />
+            <Route path="/leaderboard" element={<Leaderboard />} />
             {/* HOME + CLASSROOM render inside the shared FarmerShell so all four
                 pillars share one top bar / logo / nav. Content is .tfp-wrapped and
                 the sub-view is derived from the route. */}
@@ -433,12 +435,6 @@ export default function App() {
 
           <Route path="/harvest" element={
             <FarmerRoute><HarvestLog /></FarmerRoute>
-          } />
-          <Route path="/calendar" element={
-            <FarmerRoute><Calendar /></FarmerRoute>
-          } />
-          <Route path="/leaderboard" element={
-            <FarmerRoute><Leaderboard /></FarmerRoute>
           } />
 
           {/* ── Fallback ────────────────────────────────────────────────── */}

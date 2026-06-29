@@ -2,11 +2,10 @@
  * FarmerCalendar.jsx — Farm Calendar (stub)
  * Full build: planting schedules, task reminders, weather events.
  */
-import FarmerLayout from "../../components/farmer/FarmerLayout";
 const C = { soil: "var(--soil)", green: "var(--green)", cream: "var(--cream)", border: "var(--line)", gold: "var(--amber)" };
 export default function FarmerCalendar() {
   return (
-    <FarmerLayout>
+    <>
       <div className="flex flex-col items-center justify-center py-24 text-center">
         <div className="text-6xl mb-4">📅</div>
         <h1 className="text-2xl font-bold mb-2"
@@ -21,6 +20,6 @@ export default function FarmerCalendar() {
           In Development
         </span>
       </div>
-    </FarmerLayout>
+    </>
   );
 }
