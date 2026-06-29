@@ -1304,6 +1304,10 @@ async def get_profile(target_id: str, user: dict = Depends(get_current_user)):
             "SELECT 1 FROM community.follows WHERE follower_user_id=cast(:t AS uuid) AND followed_user_id=cast(:v AS uuid)"),
             {"v": viewer, "t": target_id})).first())
         connected = i_follow and they_follow
+        # Match/Notify Slice 2b: an active marketplace match (hired job / claimed service)
+        # lets the two parties message each other from the profile (defensive — errors→False).
+        from app.core.match import active_match
+        is_matched = (not is_you) and await active_match(db, viewer, str(u["user_id"]))
         level = 3 if is_you else (2 if connected else (1 if i_follow else 0))
 
         vis = dict(_DEFAULT_VIS)
@@ -1375,7 +1379,7 @@ async def get_profile(target_id: str, user: dict = Depends(get_current_user)):
             "avatar_url": u["avatar_url"], "cover_url": u["cover_url"], "verified": u["verified"],
             "joined": (u["created_at"].isoformat() if (u["created_at"] and allowed("joined")) else None),
             "phone": (u["whatsapp_number"] if allowed("phone") else None),
-            "is_you": is_you, "is_following": i_follow, "is_connected": connected,
+            "is_you": is_you, "is_following": i_follow, "is_connected": connected, "is_matched": is_matched,
             "field_visibility": (vis if is_you else None),
             "stats": {"posts": posts_n, "followers": followers_n, "following": following_n,
                       "records": (records_n if allowed("records") else None),
