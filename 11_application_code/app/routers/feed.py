@@ -260,9 +260,7 @@ async def list_feed(
                        u.full_name AS author_name, u.avatar_url AS author_avatar, {vexpr} AS author_verified,
                        orig.body AS repost_body, ou.full_name AS repost_author_name, ou.avatar_url AS repost_author_avatar,
                        orig.author_profession AS repost_author_profession,
-                       (SELECT count(*) FROM community.feed_likes fl WHERE fl.post_id = fp.post_id) AS like_count,
-                       (SELECT count(*) FROM community.feed_replies fr WHERE fr.post_id = fp.post_id AND fr.status = 'active') AS reply_count,
-                       (SELECT count(*) FROM community.feed_posts rp WHERE rp.repost_of_id = fp.post_id AND rp.status = 'active') AS repost_count,
+                       fp.like_count, fp.reply_count, fp.repost_count,   -- denormalized (Feed v2 Slice 1b)
                        EXISTS (SELECT 1 FROM community.feed_likes fl WHERE fl.post_id = fp.post_id AND fl.user_id = :uid) AS liked,
                        EXISTS (SELECT 1 FROM community.feed_saves fs WHERE fs.post_id = fp.post_id AND fs.user_id = :uid) AS saved,
                        (SELECT reaction FROM community.feed_reactions rx WHERE rx.target_type = 'post' AND rx.target_id = fp.post_id AND rx.user_id = :uid) AS my_reaction
@@ -373,9 +371,7 @@ async def list_feed(
                    u.full_name AS author_name, u.avatar_url AS author_avatar, {vexpr} AS author_verified,
                    orig.body AS repost_body, ou.full_name AS repost_author_name, ou.avatar_url AS repost_author_avatar,
                    orig.author_profession AS repost_author_profession,
-                   (SELECT count(*) FROM community.feed_likes fl WHERE fl.post_id = fp.post_id) AS like_count,
-                   (SELECT count(*) FROM community.feed_replies fr WHERE fr.post_id = fp.post_id AND fr.status = 'active') AS reply_count,
-                   (SELECT count(*) FROM community.feed_posts rp WHERE rp.repost_of_id = fp.post_id AND rp.status = 'active') AS repost_count,
+                   fp.like_count, fp.reply_count, fp.repost_count,   -- denormalized (Feed v2 Slice 1b — kills the N+1)
                    EXISTS (SELECT 1 FROM community.feed_likes fl WHERE fl.post_id = fp.post_id AND fl.user_id = :uid) AS liked,
                    EXISTS (SELECT 1 FROM community.feed_saves fs WHERE fs.post_id = fp.post_id AND fs.user_id = :uid) AS saved,
                    (SELECT reaction FROM community.feed_reactions rx WHERE rx.target_type = 'post' AND rx.target_id = fp.post_id AND rx.user_id = :uid) AS my_reaction
@@ -656,6 +652,10 @@ async def like_post(post_id: str, user: dict = Depends(get_current_user)):
             INSERT INTO community.feed_likes (post_id, user_id) VALUES (:pid, :uid)
             ON CONFLICT DO NOTHING
         """), {"pid": post_id, "uid": str(user["user_id"])})
+        # recount-on-write (drift-proof; immune to dup/double-tap) — Feed v2 Slice 1b
+        await db.execute(text("UPDATE community.feed_posts SET like_count = "
+                              "(SELECT count(*) FROM community.feed_likes WHERE post_id = :pid) WHERE post_id = :pid"),
+                         {"pid": post_id})
         await _notify(db, await _post_author(db, post_id), user["user_id"], "LIKE",
                       post_id=post_id, body=f"{user.get('full_name','Someone')} liked your post")
     return {"data": {"post_id": post_id, "liked": True}}
@@ -666,6 +666,9 @@ async def unlike_post(post_id: str, user: dict = Depends(get_current_user)):
     async with get_rls_db(str(user["tenant_id"])) as db:
         await db.execute(text("DELETE FROM community.feed_likes WHERE post_id = :pid AND user_id = :uid"),
                          {"pid": post_id, "uid": str(user["user_id"])})
+        await db.execute(text("UPDATE community.feed_posts SET like_count = "
+                              "(SELECT count(*) FROM community.feed_likes WHERE post_id = :pid) WHERE post_id = :pid"),
+                         {"pid": post_id})
     return {"data": {"post_id": post_id, "liked": False}}
 
 
@@ -712,6 +715,9 @@ async def repost(post_id: str, body: RepostBody, user: dict = Depends(community_
             "pid": new_id, "tid": str(user["tenant_id"]), "uid": str(user["user_id"]), "prof": prof,
             "body": (body.body or "").strip() or "Reposted", "orig": post_id, "audit_hash": uuid.uuid4().hex[:12],
         })
+        await db.execute(text("UPDATE community.feed_posts SET repost_count = "
+                              "(SELECT count(*) FROM community.feed_posts WHERE repost_of_id = :pid AND status = 'active') "
+                              "WHERE post_id = :pid"), {"pid": post_id})
         await _notify(db, await _post_author(db, post_id), user["user_id"], "REPOST",
                       post_id=post_id, body=f"{user.get('full_name','Someone')} reposted your post")
     return {"data": {"post_id": new_id, "repost_of_id": post_id}}
@@ -821,6 +827,9 @@ async def add_reply(post_id: str, body: ReplyCreate, user: dict = Depends(commun
             "tid": str(user["tenant_id"]), "uid": str(user["user_id"]), "prof": prof,
             "body": body.body.strip(), "photos": body.photos or [],
         })
+        await db.execute(text("UPDATE community.feed_posts SET reply_count = "
+                              "(SELECT count(*) FROM community.feed_replies WHERE post_id = :pid AND status = 'active') "
+                              "WHERE post_id = :pid"), {"pid": post_id})
         await _notify(db, await _post_author(db, post_id), user["user_id"], "REPLY",
                       post_id=post_id, reply_id=reply_id,
                       body=f"{user.get('full_name','Someone')} replied to your post")
