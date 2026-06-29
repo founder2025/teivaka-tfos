@@ -416,6 +416,23 @@ async def hire_applicant(listing_id: str, body: HireBody, user: dict = Depends(g
                       body=f"🎉 You're hired for {app['role_title']}! Open it to view the employer and message them.")
         await db.commit()
 
+    # Bank-verifiable record of the hire (Match/Notify Slice 3) — emitted on the
+    # employer's hash-chained audit in its own RLS-scoped block, AFTER the hire is
+    # committed, and best-effort so an audit hiccup can never break a completed hire.
+    try:
+        from uuid import UUID
+        from app.db.session import get_rls_db
+        from app.core.audit_chain import emit_audit_event
+        async with get_rls_db(str(user["tenant_id"])) as adb:
+            await emit_audit_event(
+                db=adb, tenant_id=UUID(str(user["tenant_id"])), event_type="JOB_HIRED",
+                payload={"listing_id": listing_id, "application_id": body.application_id,
+                         "applicant_user_id": str(app["applicant_user_id"]), "role_title": app["role_title"]},
+                actor_user_id=UUID(str(user["user_id"])),
+                entity_type="job_application", entity_id=body.application_id)
+    except Exception:  # noqa: BLE001 — hire already committed; audit is best-effort
+        pass
+
     worker_result = None
     worker_error = None
     if body.add_to_labour and body.farm_id and body.daily_rate_fjd is not None:

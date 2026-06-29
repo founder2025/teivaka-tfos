@@ -528,7 +528,7 @@ These are shipped, tested, and revenue/UX-critical. Editing them risks regressio
 - `04_environment/Caddyfile.production`
 - `/opt/tis-bridge/server.js` and the `tis-bridge` systemd service
 - The `tis` systemd service (OpenClaw)
-- Alembic migrations 001 through current head `199_marketplace_notif_types` (single head as of 2026-06-29; widens feed_notifications.type CHECK for marketplace notifications — Match/Notify Slice 1). Never edit a stamped migration — write a new one. Verify head with `docker exec teivaka_api alembic current`. NOTE (B78 ordering): `alembic stamp <new_rev>` must run AFTER the backend image is rebuilt — the container only gets the new migration file on rebuild; stamping before the rebuild fails with "Can't locate revision" (surfaced 2026-06-22, migration 159).
+- Alembic migrations 001 through current head `200_marketplace_match_audit` (single head as of 2026-06-29; registers JOB_HIRED/SERVICE_JOB_COMPLETED/MARKETPLACE_MATCHED in the event catalog + rebuilds the audit.events CHECK — Match/Notify Slice 3 bank-verifiable hire). Never edit a stamped migration — write a new one. Verify head with `docker exec teivaka_api alembic current`. NOTE (B78 ordering): `alembic stamp <new_rev>` must run AFTER the backend image is rebuilt — the container only gets the new migration file on rebuild; stamping before the rebuild fails with "Can't locate revision" (surfaced 2026-06-22, migration 159).
 
 Both the floating TISWidget and the `/tis` page are live; they share `POST /tis/chat`.
 
