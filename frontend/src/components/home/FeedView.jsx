@@ -22,7 +22,7 @@ import PhotoLightbox from "./PhotoLightbox";
 const API = "/api/v1/community";
 // Shared wrapper (utils/api): token auto-refresh on 401 + truthful error
 // classification (err.kind network|server|client, err.userMessage).
-import { getJSON, send } from "../../utils/api";
+import { getJSON, send, apiFetch } from "../../utils/api";
 // Engagement signal producers (Slice 1.1) — best-effort IMPRESSION/CLICK logging.
 import { impression, click } from "../../utils/feedSignals";
 // Loud feedback — routed through the shell Toast. No silent failures.
@@ -792,18 +792,34 @@ export default function FeedView({ initialFilter = "all", groupId = null }) {
   const [more, setMore] = useState(false);
   const [end, setEnd] = useState(false);
   const PAGE = 20;
+  // Keyset pagination (Slice 2b): next page is an opaque cursor, not an offset —
+  // index-range scan, O(log n), so page 50 is as fast as page 1. ETag lets the
+  // silent focus-refresh return 304 (no body) when nothing changed.
+  const cursorRef = useRef(null);
+  const etagRef = useRef(null);
 
   const load = (silent) => {
-    if (!silent) setPosts(null);
+    if (!silent) { setPosts(null); etagRef.current = null; } // fresh load → full, never conditional
     setEnd(false);
-    getJSON(`${API}/feed?filter=${filter}&verified_only=${verifiedOnly}&limit=${PAGE}&offset=0`)
-      .then((r) => { const d = r.data || []; setPosts(d); setEnd(d.length < PAGE); })
-      .catch((e) => { setPosts([]); if (!silent) toast(`Couldn't load the feed: ${e.userMessage || e.message || e}`, "error"); });
+    const headers = silent && etagRef.current ? { "If-None-Match": etagRef.current } : {};
+    apiFetch(`${API}/feed?filter=${filter}&verified_only=${verifiedOnly}&limit=${PAGE}`, { headers })
+      .then(async (r) => {
+        if (r.status === 304) return;                 // unchanged — keep current posts
+        if (!r.ok) throw new Error(String(r.status));
+        const et = r.headers.get("ETag"); if (et) etagRef.current = et;
+        const j = await r.json();
+        const d = j.data || [];
+        setPosts(d);
+        cursorRef.current = j.next_cursor || null;
+        setEnd(!j.next_cursor);
+      })
+      .catch((e) => { if (!silent) { setPosts([]); toast(`Couldn't load the feed: ${e.userMessage || e.message || e}`, "error"); } });
   };
   const loadMore = () => {
+    if (!cursorRef.current) { setEnd(true); return; }
     setMore(true);
-    getJSON(`${API}/feed?filter=${filter}&verified_only=${verifiedOnly}&limit=${PAGE}&offset=${posts.length}`)
-      .then((r) => { const d = r.data || []; setPosts((cur) => [...cur, ...d]); setEnd(d.length < PAGE); })
+    getJSON(`${API}/feed?filter=${filter}&verified_only=${verifiedOnly}&limit=${PAGE}&cursor=${encodeURIComponent(cursorRef.current)}`)
+      .then((r) => { const d = r.data || []; setPosts((c) => [...c, ...d]); cursorRef.current = r.next_cursor || null; setEnd(!r.next_cursor); })
       .catch(() => {}).finally(() => setMore(false));
   };
   useEffect(() => { load(); /* eslint-disable-next-line */ }, [filter, verifiedOnly]);

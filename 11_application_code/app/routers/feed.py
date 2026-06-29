@@ -25,9 +25,12 @@ provenance (community.* has no RLS). FKs to tenant.users.
 """
 import os
 import re
+import json
+import base64
+import hashlib
 import pathlib
 import shutil
-from fastapi import APIRouter, Depends, HTTPException, Query, status, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, Query, status, UploadFile, File, Request, Response
 from fastapi.responses import FileResponse
 from sqlalchemy import text
 from pydantic import BaseModel
@@ -82,6 +85,31 @@ _MENTION_RE = re.compile(r"@\[([^\]]+)\]")
 
 def _pid():
     return "CPST-" + uuid.uuid4().hex[:8].upper()
+
+
+# --- keyset pagination (Feed v2 Slice 2b) --------------------------------------
+# The cursor is the last row's full sort key (pinned, rank_score, created_at,
+# post_id). The next page is "everything strictly after this row" in the DESC
+# ordering — a single index-range scan, NOT OFFSET n (which scans+discards n rows
+# every page). Opaque base64(JSON) so the client treats it as a token.
+def _encode_cursor(row) -> str:
+    payload = {
+        "p": bool(row["pinned"]),
+        "r": row["rank_score"],
+        "c": row["created_at"].isoformat() if row.get("created_at") else None,
+        "i": row["post_id"],
+    }
+    return base64.urlsafe_b64encode(json.dumps(payload).encode()).decode()
+
+
+def _decode_cursor(s):
+    try:
+        d = json.loads(base64.urlsafe_b64decode(s.encode()).decode())
+        if all(k in d for k in ("p", "r", "c", "i")):
+            return d
+    except Exception:  # noqa: BLE001 — a malformed cursor falls back to page 1, never 500s
+        return None
+    return None
 
 
 # Runtime feature detection — so a not-yet-applied migration can NEVER 500 a
@@ -235,10 +263,13 @@ class ShareBody(BaseModel):
 # ----------------------------------------------------------------------------- list feed
 @router.get("/feed")
 async def list_feed(
+    request: Request,
+    response: Response,
     filter: str = Query("all"),
     verified_only: bool = Query(False),
     author: str = Query(None),
     post_id: str = Query(None),
+    cursor: str = Query(None),
     limit: int = Query(30, ge=1, le=100),
     offset: int = Query(0, ge=0),
     user: dict = Depends(get_current_user),
@@ -350,6 +381,19 @@ async def list_feed(
             where.append("fp.author_user_id = :author")
             params["author"] = author
 
+        # Keyset pagination (Slice 2b): "everything strictly after the cursor row"
+        # in the DESC sort order — an index-range scan instead of OFFSET. All four
+        # key columns are NOT NULL, so the row-comparison is well-defined.
+        cur = _decode_cursor(cursor) if cursor else None
+        if cur:
+            where.append("(fp.pinned, fp.rank_score, fp.created_at, fp.post_id) < "
+                         "(:c_pinned, :c_rank, (:c_created)::timestamptz, :c_pid)")
+            params["c_pinned"] = bool(cur["p"])
+            params["c_rank"] = cur["r"]
+            params["c_created"] = cur["c"]
+            params["c_pid"] = cur["i"]
+            params["offset"] = 0  # keyset replaces offset
+
         # viewer-level suppression — only if migration 094's tables exist (degrade
         # gracefully if not yet applied, rather than 500 the whole feed).
         if await _has_table(db, "feed_hidden", ("user_id", "post_id")):
@@ -371,6 +415,7 @@ async def list_feed(
                    u.full_name AS author_name, u.avatar_url AS author_avatar, {vexpr} AS author_verified,
                    orig.body AS repost_body, ou.full_name AS repost_author_name, ou.avatar_url AS repost_author_avatar,
                    orig.author_profession AS repost_author_profession,
+                   fp.rank_score,                                    -- for the keyset cursor (Slice 2b)
                    fp.like_count, fp.reply_count, fp.repost_count,   -- denormalized (Feed v2 Slice 1b — kills the N+1)
                    EXISTS (SELECT 1 FROM community.feed_likes fl WHERE fl.post_id = fp.post_id AND fl.user_id = :uid) AS liked,
                    EXISTS (SELECT 1 FROM community.feed_saves fs WHERE fs.post_id = fp.post_id AND fs.user_id = :uid) AS saved,
@@ -392,6 +437,28 @@ async def list_feed(
         """), params)).mappings().all()
 
         posts = [dict(r) for r in rows]
+
+        # next_cursor from the LAST row in SQL order (computed before the page-local
+        # bump below, so pagination stays gap-free regardless of display reordering).
+        next_cursor = _encode_cursor(posts[-1]) if posts and len(posts) == limit else None
+
+        # ETag / 304 (Slice 2b) on the standard first page only. The feed silently
+        # refreshes on window-focus; when nothing changed we return 304 with no body,
+        # so a returning low-bandwidth user re-pulls nothing. Computed from the page's
+        # ids + engagement counts (sorted → order-independent) so it busts on real
+        # change. Done BEFORE the reactions query so a 304 also skips that DB work.
+        is_first_page = (not cur) and offset == 0 and not author and not post_id
+        if is_first_page:
+            basis = "|".join(
+                f"{p['post_id']}:{p.get('like_count')}:{p.get('reply_count')}:{p.get('repost_count')}"
+                for p in sorted(posts, key=lambda x: x["post_id"])
+            )
+            etag = 'W/"' + hashlib.sha1(basis.encode()).hexdigest() + '"'
+            if request.headers.get("if-none-match") == etag:
+                return Response(status_code=304, headers={"ETag": etag, "Cache-Control": "private, no-cache"})
+            response.headers["ETag"] = etag
+            response.headers["Cache-Control"] = "private, no-cache"
+
         ids = [p["post_id"] for p in posts]
         summ = {}
         if ids:
@@ -420,7 +487,7 @@ async def list_feed(
                     0 if p.get("pinned") else 1,                  # pinned stay on top
                     0 if (p.get("vertical") in tf) else 1,        # then followed-topic posts
                 ))
-    return {"data": posts}
+    return {"data": posts, "next_cursor": next_cursor}
 
 
 # ----------------------------------------------------------------------------- feed signals
