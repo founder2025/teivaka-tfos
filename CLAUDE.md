@@ -522,7 +522,7 @@ These are shipped, tested, and revenue/UX-critical. Editing them risks regressio
 - `frontend/src/pages/ResetPassword.jsx`
 - `frontend/src/pages/farmer/TIS.jsx` (full-page TIS tab)
 - `frontend/src/components/TISWidget.jsx` (floating chat — bottom-right of every farmer page)
-- `frontend/src/components/farmer/FarmerLayout.jsx` trial-chip logic + `/auth/me` fetch
+- `frontend/src/layouts/FarmerShell.jsx` (live farmer shell) + `frontend/src/components/nav/MeMenu.jsx` (trial-chip logic + `/auth/me` fetch). NOTE: the old `components/farmer/FarmerLayout.jsx` was the legacy shell carrying this; it was retired + deleted 2026-06-29 (only 3 stub pages used it; live trial chip is now in MeMenu).
 - `frontend/src/App.jsx` routing
 - `frontend/index.html` SEO meta tags, `frontend/public/robots.txt`, `frontend/public/sitemap.xml`
 - `04_environment/Caddyfile.production`

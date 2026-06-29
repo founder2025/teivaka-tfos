@@ -313,6 +313,7 @@ export default function App() {
             <Route path="/kb"          element={<KnowledgeBase />} />
             <Route path="/calendar"    element={<Calendar />} />
             <Route path="/leaderboard" element={<Leaderboard />} />
+            <Route path="/harvest"     element={<HarvestLog />} />
             {/* HOME + CLASSROOM render inside the shared FarmerShell so all four
                 pillars share one top bar / logo / nav. Content is .tfp-wrapped and
                 the sub-view is derived from the route. */}
@@ -432,10 +433,6 @@ export default function App() {
 
             <Route path="/stub/phase-:phaseNum" element={<ComingSoon dynamic />} />
           </Route>
-
-          <Route path="/harvest" element={
-            <FarmerRoute><HarvestLog /></FarmerRoute>
-          } />
 
           {/* ── Fallback ────────────────────────────────────────────────── */}
           <Route path="*" element={<NotFound />} />
