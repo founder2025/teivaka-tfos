@@ -23,6 +23,8 @@ const API = "/api/v1/community";
 // Shared wrapper (utils/api): token auto-refresh on 401 + truthful error
 // classification (err.kind network|server|client, err.userMessage).
 import { getJSON, send } from "../../utils/api";
+// Engagement signal producers (Slice 1.1) — best-effort IMPRESSION/CLICK logging.
+import { impression, click } from "../../utils/feedSignals";
 // Loud feedback — routed through the shell Toast. No silent failures.
 const toast = (message, type) => {
   try { window.dispatchEvent(new CustomEvent("tfos:toast", { detail: { message, type } })); }
@@ -504,7 +506,20 @@ function PostCard({ post, me, onChange, onRemoved }) {
   const [audienceOpen, setAudienceOpen] = useState(false);
   const [lightbox, setLightbox] = useState(null); // photo index or null
   const [expanded, setExpanded] = useState(false); // long-body "…more" toggle
+  const cardRef = useRef(null);
   useEffect(() => { setP(post); setEditText(post.body); }, [post]);
+  // IMPRESSION (Slice 1.1): fire once the card actually enters the viewport —
+  // honest "was seen", not "was fetched". Falls back to fire-on-mount where
+  // IntersectionObserver is unavailable.
+  useEffect(() => {
+    const el = cardRef.current;
+    if (!el || typeof IntersectionObserver === "undefined") { impression(post.post_id); return undefined; }
+    const io = new IntersectionObserver((entries) => {
+      if (entries.some((e) => e.isIntersecting)) { impression(post.post_id); io.disconnect(); }
+    }, { threshold: 0.5 });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [post.post_id]);
   const mine = p.author_user_id === me?.user_id;
 
   const saveEdit = async () => {
@@ -520,10 +535,12 @@ function PostCard({ post, me, onChange, onRemoved }) {
 
   const toggleLike = async () => {
     const liked = !p.liked;
+    if (liked) click(p.post_id);
     setP({ ...p, liked, like_count: p.like_count + (liked ? 1 : -1) });
     try { await send(liked ? "POST" : "DELETE", `${API}/feed/${p.post_id}/like`); } catch { setP(p); }
   };
   const setReaction = async (key) => {
+    click(p.post_id);
     setShowTray(false);
     const same = p.my_reaction === key;
     const reactions = { ...(p.reactions || {}) };
@@ -533,11 +550,12 @@ function PostCard({ post, me, onChange, onRemoved }) {
     try { await send(same ? "DELETE" : "PUT", `${API}/feed/${p.post_id}/react`, same ? undefined : { reaction: key }); } catch { /* keep */ }
   };
   const toggleSave = async () => {
-    const saved = !p.saved; setP({ ...p, saved });
+    const saved = !p.saved; if (saved) click(p.post_id); setP({ ...p, saved });
     try { await send(saved ? "POST" : "DELETE", `${API}/feed/${p.post_id}/save`); toast(saved ? "Saved ✓" : "Removed from saved", "success"); }
     catch (e) { setP(p); toast(`Couldn't ${saved ? "save" : "unsave"}: ${e.message || e}`, "error"); }
   };
   const repost = async () => {
+    click(p.post_id);
     try { await send("POST", `${API}/feed/${p.post_id}/repost`, {}); toast("Reposted ✓", "success"); onChange?.(); }
     catch (e) { toast(`Couldn't repost: ${e.message || e}`, "error"); }
   };
@@ -569,15 +587,15 @@ function PostCard({ post, me, onChange, onRemoved }) {
 
   const summaryKeys = Object.keys(p.reactions || {}).filter((k) => p.reactions[k] > 0);
   return (
-    <div className="cm-post-card">
+    <div className="cm-post-card" ref={cardRef}>
       {p.is_repost && p.repost_author_name && (
         <div className="cm-repost-banner"><Repeat2 size={12} /> Reposted</div>
       )}
       <div className="cm-post-head">
-        <div className="cm-post-avatar" onClick={() => p.author_user_id && navigate(`/u/${p.author_user_id}`)} style={{ cursor: "pointer" }}><Avatar src={p.author_avatar} name={p.author_name} size={40} /></div>
+        <div className="cm-post-avatar" onClick={() => { if (p.author_user_id) { click(p.post_id); navigate(`/u/${p.author_user_id}`); } }} style={{ cursor: "pointer" }}><Avatar src={p.author_avatar} name={p.author_name} size={40} /></div>
         <div className="cm-post-author-block">
           <div className="cm-post-author-row">
-            <span className="cm-post-author-name" onClick={() => p.author_user_id && navigate(`/u/${p.author_user_id}`)} style={{ cursor: "pointer" }}>{p.author_name}</span>
+            <span className="cm-post-author-name" onClick={() => { if (p.author_user_id) { click(p.post_id); navigate(`/u/${p.author_user_id}`); } }} style={{ cursor: "pointer" }}>{p.author_name}</span>
             {p.author_verified && <BadgeCheck size={13} className="cm-verified-tick" />}
             <span className="cm-prof-badge">{personaLabel(p.author_profession)}</span>
             {p.is_question && <span className="cm-prof-badge" style={{ background: "rgba(191,144,0,0.14)", color: "var(--amber,var(--amber))" }}><HelpCircle size={10} /> Question</span>}
@@ -644,7 +662,7 @@ function PostCard({ post, me, onChange, onRemoved }) {
       {p.link_audit_hash && (
         <a className="cm-link-record" href={`/verify/${p.link_audit_hash}`} target="_blank" rel="noreferrer"><Link2 size={12} />Linked record · {p.link_audit_hash}</a>
       )}
-      {p.photos?.length > 0 && <PostMedia photos={p.photos} onOpen={setLightbox} />}
+      {p.photos?.length > 0 && <PostMedia photos={p.photos} onOpen={(i) => { click(p.post_id); setLightbox(i); }} />}
 
       {summaryKeys.length > 0 && (
         <div className="v103-react-summary">
@@ -656,9 +674,9 @@ function PostCard({ post, me, onChange, onRemoved }) {
         <button className={`cm-action-btn ${p.liked ? "cm-action-active" : ""}`} onClick={toggleLike}><Star size={13} />Like · {p.like_count || 0}</button>
         {p.comments_enabled === false
           ? <button className="cm-action-btn" disabled title="Comments are turned off" style={{ opacity: 0.5, cursor: "default" }}><MessageSquare size={13} />Comments off</button>
-          : <button className="cm-action-btn" onClick={() => setShowReplies(!showReplies)}><MessageSquare size={13} />Reply · {p.reply_count || 0}</button>}
+          : <button className="cm-action-btn" onClick={() => { if (!showReplies) click(p.post_id); setShowReplies(!showReplies); }}><MessageSquare size={13} />Reply · {p.reply_count || 0}</button>}
         <button className="cm-action-btn" onClick={repost}><Repeat2 size={13} />Repost{p.repost_count ? ` · ${p.repost_count}` : ""}</button>
-        <button className="cm-action-btn" onClick={() => setShare(true)}><Share2 size={13} />Share</button>
+        <button className="cm-action-btn" onClick={() => { click(p.post_id); setShare(true); }}><Share2 size={13} />Share</button>
         <button className={`cm-action-btn ${p.my_reaction ? "cm-action-active" : ""}`} onClick={() => setShowTray(!showTray)}><Smile size={13} />{p.my_reaction ? (RX[p.my_reaction]?.label || "Reacted") : "React"}</button>
         <button className={`cm-action-btn ${p.saved ? "cm-action-active" : ""}`} style={{ marginLeft: "auto" }} onClick={toggleSave}><BookOpen size={13} />{p.saved ? "Saved" : "Save"}</button>
       </div>
