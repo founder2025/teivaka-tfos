@@ -28,7 +28,6 @@ import Groups from "../../components/home/Groups";
 import { useFlags, DisabledNotice } from "../../utils/useFlags.jsx";
 import Marketplace from "../../components/home/Marketplace";
 import WorkHub from "./WorkHub";
-import { StoriesRow, NewsCard } from "../../components/home/FeedExtras";
 import SponsorCorner from "../../components/home/SponsorCorner";
 import NearYouRail from "../../components/home/NearYouRail";
 import { useIsNarrow } from "../../hooks/useIsNarrow";
@@ -225,7 +224,6 @@ export default function HomePillar() {
   if (gateFlag && !flagOn(gateFlag)) {
     body = <DisabledNotice what={head ? head[0] : "This area"} />;
   } else if (view === "feed") {
-    const postCount = posts == null ? null : posts.length;
     body = wide ? (
       // Feed v2 — stream-first: a farmer reaches a post in one screen. The vanity/social
       // widgets (stats, stories, news) are cut; "what's happening" + trends move to the
