@@ -386,8 +386,13 @@ async def list_feed(
         # key columns are NOT NULL, so the row-comparison is well-defined.
         cur = _decode_cursor(cursor) if cursor else None
         if cur:
+            # Every cursor param needs an explicit cast: in ROW(...) < ROW($1..$4)
+            # Postgres builds the right-hand record from the params first, so it
+            # can't infer their types from the left columns (asyncpg → "could not
+            # determine data type of parameter"). Cast all four.
             where.append("(fp.pinned, fp.rank_score, fp.created_at, fp.post_id) < "
-                         "(:c_pinned, :c_rank, (:c_created)::timestamptz, :c_pid)")
+                         "(:c_pinned::boolean, :c_rank::double precision, "
+                         "(:c_created)::timestamptz, :c_pid::text)")
             params["c_pinned"] = bool(cur["p"])
             params["c_rank"] = cur["r"]
             params["c_created"] = cur["c"]
