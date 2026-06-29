@@ -30,6 +30,7 @@ import Marketplace from "../../components/home/Marketplace";
 import WorkHub from "./WorkHub";
 import { StoriesRow, NewsCard } from "../../components/home/FeedExtras";
 import SponsorCorner from "../../components/home/SponsorCorner";
+import NearYouRail from "../../components/home/NearYouRail";
 import { useIsNarrow } from "../../hooks/useIsNarrow";
 import "../../styles/feed.css";
 
@@ -239,6 +240,7 @@ export default function HomePillar() {
           <FeedView initialFilter="all" />
         </div>
         <aside style={{ width: 300, flexShrink: 0, position: "sticky", top: 72 }}>
+          <NearYouRail />
           <SponsorCorner />
           <TrendingTopics />
           <UpcomingEvents />
@@ -250,6 +252,7 @@ export default function HomePillar() {
         <StatsStrip posts={postCount} connections={connections} />
         <WhatsHappening posts={posts} />
         <WeatherStrip />
+        <NearYouRail compact />
         <SponsorCorner compact />
         <NewsCard />
         <StoriesRow />
