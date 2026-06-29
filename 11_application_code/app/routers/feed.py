@@ -384,7 +384,20 @@ async def list_feed(
             LEFT JOIN community.feed_posts orig ON orig.post_id = fp.repost_of_id
             LEFT JOIN tenant.users ou ON ou.user_id = orig.author_user_id
             WHERE {' AND '.join(where)}
-            ORDER BY fp.pinned DESC, fp.created_at DESC
+            -- Relevance ranking (Feed v2): recency is the backbone (newer = higher),
+            -- with additive, hours-equivalent boosts. ORDER-BY only — never filters or
+            -- drops a post; degrades to pure recency when no boost applies. Notices
+            -- (pinned) stay on top.
+            ORDER BY fp.pinned DESC,
+                     ( - extract(epoch from (now() - fp.created_at)) / 3600.0
+                       + CASE WHEN {vexpr} THEN 36 ELSE 0 END                                  -- verified author ≈ +1.5 days
+                       + CASE WHEN EXISTS (SELECT 1 FROM community.topic_follows tf
+                                           WHERE tf.user_id = :uid AND tf.topic = fp.vertical)
+                              THEN 48 ELSE 0 END                                               -- a crop/topic you follow ≈ +2 days
+                       + CASE WHEN fp.is_question AND fp.best_answer_reply_id IS NULL
+                              THEN 24 ELSE 0 END                                               -- open question you could answer ≈ +1 day
+                     ) DESC,
+                     fp.created_at DESC
             LIMIT :limit OFFSET :offset
         """), params)).mappings().all()
 

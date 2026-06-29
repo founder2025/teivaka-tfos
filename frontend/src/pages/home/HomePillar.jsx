@@ -227,38 +227,32 @@ export default function HomePillar() {
   } else if (view === "feed") {
     const postCount = posts == null ? null : posts.length;
     body = wide ? (
+      // Feed v2 — stream-first: a farmer reaches a post in one screen. The vanity/social
+      // widgets (stats, stories, news) are cut; "what's happening" + trends move to the
+      // aside so the main column is greeting → weather → the ranked stream.
       <div style={{ display: "flex", gap: 20, alignItems: "flex-start" }}>
         <div style={{ flex: 1, minWidth: 0 }}>
           <Greeting me={me} />
-          <StatsStrip posts={postCount} connections={connections} />
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 320px", gap: 16, marginBottom: 16, alignItems: "start" }}>
-            <WhatsHappening posts={posts} />
-            <WeatherStrip />
-          </div>
-          <NewsCard />
-          <StoriesRow />
+          <WeatherStrip />
           <FeedView initialFilter="all" />
         </div>
         <aside style={{ width: 300, flexShrink: 0, position: "sticky", top: 72 }}>
           <NearYouRail />
           <SponsorCorner />
+          <WhatsHappening posts={posts} />
           <TrendingTopics />
           <UpcomingEvents />
         </aside>
       </div>
     ) : (
+      // Mobile = maximally stream-first: greeting → weather → needs-near-you → the feed.
       <>
         <Greeting me={me} />
-        <StatsStrip posts={postCount} connections={connections} />
-        <WhatsHappening posts={posts} />
         <WeatherStrip />
         <NearYouRail compact />
-        <SponsorCorner compact />
-        <NewsCard />
-        <StoriesRow />
         <FeedView initialFilter="all" />
+        <SponsorCorner compact />
         <TrendingTopics />
-        <UpcomingEvents />
       </>
     );
   } else if (view === "following") {
