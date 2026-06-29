@@ -15,6 +15,7 @@ app = Celery(
         "app.workers.maintenance_worker",
         "app.workers.weather_worker",
         "app.workers.trust_worker",
+        "app.workers.community_worker",
         "app.tasks.health_monitor",
     ]
 )
@@ -57,6 +58,7 @@ app.conf.update(
         "app.workers.maintenance_worker.*":     {"queue": "maintenance"},
         "app.workers.weather_worker.*":         {"queue": "maintenance"},
         "app.workers.trust_worker.*":           {"queue": "maintenance"},
+        "app.workers.community_worker.*":        {"queue": "maintenance"},
     },
 
     # Beat schedule (all times UTC, Fiji = UTC+12)
@@ -135,6 +137,14 @@ app.conf.update(
         "fetch-cyclones-3h": {
             "task": "app.workers.weather_worker.fetch_cyclones",
             "schedule": crontab(minute=20, hour="*/3"),
+            "options": {"queue": "maintenance"},
+        },
+        # Feed rank refresh (Feed v2 Slice 2a) — every 10 min. Keeps the
+        # precomputed rank_score boosts current (verified author, open-question
+        # flipping); recency order is self-stable between runs.
+        "recompute-feed-rank": {
+            "task": "app.workers.community_worker.recompute_feed_rank",
+            "schedule": crontab(minute="*/10"),
             "options": {"queue": "maintenance"},
         },
         # Infra health monitor — cheap probes every 15 min at :00 :15 :30 :45

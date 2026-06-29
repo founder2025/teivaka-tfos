@@ -380,20 +380,14 @@ async def list_feed(
             LEFT JOIN community.feed_posts orig ON orig.post_id = fp.repost_of_id
             LEFT JOIN tenant.users ou ON ou.user_id = orig.author_user_id
             WHERE {' AND '.join(where)}
-            -- Relevance ranking (Feed v2): recency is the backbone (newer = higher),
-            -- with additive, hours-equivalent boosts. ORDER-BY only — never filters or
-            -- drops a post; degrades to pure recency when no boost applies. Notices
+            -- Relevance ranking (Feed v2 Slice 2a): the heavy per-request sort is
+            -- gone. Order is the precomputed, index-backed rank_score (recency
+            -- backbone + verified + open-question boosts; set at INSERT and refreshed
+            -- by the recompute_feed_rank beat task), so this is an index-ordered scan,
+            -- never a full sort. "Topics you follow" relevance is applied page-locally
+            -- below (kept out of the global sort so the index stays usable). Notices
             -- (pinned) stay on top.
-            ORDER BY fp.pinned DESC,
-                     ( - extract(epoch from (now() - fp.created_at)) / 3600.0
-                       + CASE WHEN {vexpr} THEN 36 ELSE 0 END                                  -- verified author ≈ +1.5 days
-                       + CASE WHEN EXISTS (SELECT 1 FROM community.topic_follows tf
-                                           WHERE tf.user_id = :uid AND tf.topic = fp.vertical)
-                              THEN 48 ELSE 0 END                                               -- a crop/topic you follow ≈ +2 days
-                       + CASE WHEN fp.is_question AND fp.best_answer_reply_id IS NULL
-                              THEN 24 ELSE 0 END                                               -- open question you could answer ≈ +1 day
-                     ) DESC,
-                     fp.created_at DESC
+            ORDER BY fp.pinned DESC, fp.rank_score DESC, fp.created_at DESC, fp.post_id DESC
             LIMIT :limit OFFSET :offset
         """), params)).mappings().all()
 
@@ -409,6 +403,23 @@ async def list_feed(
                 summ.setdefault(rr["target_id"], {})[rr["reaction"]] = rr["n"]
         for p in posts:
             p["reactions"] = summ.get(p["post_id"], {})
+
+        # Page-local personalization (Feed v2 Slice 2a): float posts whose topic you
+        # follow toward the top of the fetched page, without disturbing pinned-on-top
+        # or the global rank backbone. Kept out of the SQL ORDER BY so the rank_score
+        # index stays usable; stable sort preserves rank order within each group.
+        if posts:
+            try:
+                tf = {r[0] for r in (await db.execute(text(
+                    "SELECT topic FROM community.topic_follows WHERE user_id = :uid"),
+                    {"uid": uid})).all()}
+            except Exception:  # noqa: BLE001 — personalization is best-effort
+                tf = set()
+            if tf:
+                posts.sort(key=lambda p: (
+                    0 if p.get("pinned") else 1,                  # pinned stay on top
+                    0 if (p.get("vertical") in tf) else 1,        # then followed-topic posts
+                ))
     return {"data": posts}
 
 
@@ -507,16 +518,22 @@ async def create_feed_post(body: PostCreate, user: dict = Depends(community_writ
             pt = "QUESTION" if body.is_question else ("PHOTO" if body.photos else "UPDATE")
         g_col = ", group_id" if group_id else ""
         g_val = ", :group_id" if group_id else ""
+        # Score the post at INSERT (Feed v2 Slice 2a) so it's correctly ranked
+        # immediately, not stuck at the default 0 until the next beat run. Recency
+        # is ~0 for a brand-new post; only the open-question boost applies (verified
+        # is refreshed by the recompute_feed_rank beat task).
+        insert_rank = 24.0 if body.is_question else 0.0
         await db.execute(text(f"""
             INSERT INTO community.feed_posts
                 (post_id, tenant_id, author_user_id, author_profession, country, reach, kind,
                  body, post_type, is_question, audience, location, vertical, photos, mentions,
-                 link_audit_hash, audit_hash{g_col})
+                 link_audit_hash, audit_hash, rank_score, ranked_at{g_col})
             VALUES
                 (:post_id, :tenant_id, :author_user_id, :prof, :country, :reach, :kind,
                  :body, :post_type, :is_question, :audience, :location, :vertical, :photos, :mentions,
-                 :link, :audit_hash{g_val})
+                 :link, :audit_hash, :rank_score, now(){g_val})
         """), {
+            "rank_score": insert_rank,
             **({"group_id": group_id} if group_id else {}),
             "post_id": post_id,
             "tenant_id": str(user["tenant_id"]),
