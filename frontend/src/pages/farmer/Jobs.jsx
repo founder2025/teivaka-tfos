@@ -14,8 +14,9 @@
  */
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Briefcase, MapPin, X, Sparkles, Plus, AlertTriangle, ChevronDown, Check, Users } from "lucide-react";
+import { Briefcase, MapPin, X, Sparkles, Plus, AlertTriangle, ChevronDown, Check, Users, MessageCircle, User } from "lucide-react";
 import TfpShell from "../../components/farm/TfpShell";
+import { useChat } from "../../context/ChatContext";
 import { getJSON, send } from "../../utils/api";
 import { getCurrentUser } from "../../utils/auth";
 import { formatMoney } from "../../utils/money";
@@ -103,6 +104,7 @@ function ListingCard({ l, children }) {
 
 export default function Jobs({ embedded = false, initialTab }) {
   const navigate = useNavigate();
+  const chat = useChat();
   const myId = getCurrentUser()?.sub;
   const [tab, setTab] = useState(initialTab || "find");
   const [empFilter, setEmpFilter] = useState("");
@@ -237,6 +239,10 @@ export default function Jobs({ embedded = false, initialTab }) {
                       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                         <span style={pill(a.status === "ACCEPTED" ? "#eef7ee" : a.status === "DECLINED" ? "#f3f3f3" : "var(--cream)", a.status === "ACCEPTED" ? C.greenDk : C.muted)}>{APP_STATUS[a.status] || a.status}</span>
                         {a.status === "ACCEPTED" && <span style={{ fontSize: 11.5, color: C.greenDk }}>Hired — confirm your start with {a.poster_org_name || "the employer"}</span>}
+                        {a.status === "ACCEPTED" && a.poster_user_id && (<>
+                          <button className="btn btn-secondary btn-sm" onClick={() => navigate(`/u/${a.poster_user_id}`)}><User size={13} style={{ verticalAlign: "-2px" }} /> View profile</button>
+                          <button className="btn btn-primary btn-sm" onClick={() => chat.openWith({ user_id: a.poster_user_id, full_name: a.poster_org_name || "Employer" })}><MessageCircle size={13} style={{ verticalAlign: "-2px" }} /> Message</button>
+                        </>)}
                         {(a.status === "APPLIED" || a.status === "SHORTLISTED") && <button className="btn btn-secondary btn-sm" onClick={() => withdraw(a.application_id)}>Withdraw</button>}
                       </div>
                     </div>
@@ -364,6 +370,8 @@ function PostListingModal({ onClose, onSaved, edit }) {
 }
 
 function ApplicantsModal({ listing, onClose, onHire, onChanged }) {
+  const chat = useChat();
+  const navigate = useNavigate();
   const [rows, setRows] = useState(undefined);
   const [busy, setBusy] = useState(false);
   const load = () => getJSON(`/api/v1/job-listings/${listing.listing_id}/applications`).then((r) => setRows(r?.data || [])).catch(() => setRows([]));
@@ -402,6 +410,12 @@ function ApplicantsModal({ listing, onClose, onHire, onChanged }) {
             {a.experience_note && <div style={{ fontSize: 12, color: C.muted, marginTop: 3 }}>{a.experience_note}</div>}
             {a.cover_note && <div style={{ fontSize: 12, color: C.soil, marginTop: 4, fontStyle: "italic" }}>“{a.cover_note}”</div>}
             {a.status === "ACCEPTED" && (a.phone || a.whatsapp) && <div style={{ fontSize: 12, color: C.greenDk, marginTop: 4 }}>Contact: {a.phone || ""}{a.whatsapp ? ` · WhatsApp ${a.whatsapp}` : ""}</div>}
+            {a.status === "ACCEPTED" && a.applicant_user_id && (
+              <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
+                <button className="btn btn-secondary btn-sm" onClick={() => navigate(`/u/${a.applicant_user_id}`)}><User size={13} style={{ verticalAlign: "-2px" }} /> View profile</button>
+                <button className="btn btn-primary btn-sm" onClick={() => chat.openWith({ user_id: a.applicant_user_id, full_name: a.display_name || "Applicant" })}><MessageCircle size={13} style={{ verticalAlign: "-2px" }} /> Message</button>
+              </div>
+            )}
             {a.status !== "ACCEPTED" && a.status !== "DECLINED" && (
               <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
                 <button className="btn btn-primary btn-sm" onClick={() => onHire(a)}><Check size={13} style={{ verticalAlign: "-2px" }} /> Hire</button>

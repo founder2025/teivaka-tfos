@@ -300,7 +300,8 @@ async def my_applications(user: dict = Depends(get_current_user)):
             SELECT a.application_id, a.status, a.applied_at, a.cover_note,
                    l.listing_id, l.role_title, l.employment_type, l.location, l.pay_rate_fjd,
                    l.pay_period, l.pay_negotiable, l.poster_org_name,
-                   CASE WHEN a.status = 'ACCEPTED' THEN l.poster_org_name ELSE NULL END AS contact_org
+                   CASE WHEN a.status = 'ACCEPTED' THEN l.poster_org_name ELSE NULL END AS contact_org,
+                   CASE WHEN a.status = 'ACCEPTED' THEN l.poster_user_id::text ELSE NULL END AS poster_user_id
             FROM community.job_applications a JOIN community.job_listings l ON l.listing_id = a.listing_id
             WHERE a.applicant_user_id = :u ORDER BY a.applied_at DESC"""), {"u": str(user["user_id"])}))
         return {"data": rows}

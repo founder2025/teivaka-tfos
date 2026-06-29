@@ -55,8 +55,9 @@ async def _connected(db, a, b) -> bool:
     users: EITHER party follows the other (you can DM anyone you follow, and
     reply to anyone who follows you) OR either party has an ACTIVE marketplace
     listing — AND neither party has blocked the other. Recipients always see
-    inbound threads via /connections."""
-    return bool((await db.execute(text("""
+    inbound threads via /connections. ALSO: an active marketplace MATCH (hired job /
+    claimed service) unlocks DM between the two parties (Match/Notify Slice 2)."""
+    base = bool((await db.execute(text("""
         SELECT (
             EXISTS (SELECT 1 FROM community.follows WHERE follower_user_id=:a AND followed_user_id=:b)
             OR EXISTS (SELECT 1 FROM community.follows WHERE follower_user_id=:b AND followed_user_id=:a)
@@ -69,6 +70,10 @@ async def _connected(db, a, b) -> bool:
                OR (bk.blocker_user_id=cast(:b AS uuid) AND bk.blocked_user_id=cast(:a AS uuid))
         )
     """), {"a": str(a), "b": str(b)})).scalar())
+    if base:
+        return True
+    from app.core.match import active_match  # match also AND-checks not-blocked; errors → False
+    return await active_match(db, a, b)
 
 
 async def _publish(target_uid, payload: dict):
