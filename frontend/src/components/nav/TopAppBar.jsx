@@ -1,5 +1,5 @@
-import { Link } from "react-router-dom";
-import { Menu, Search } from "lucide-react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Menu, Search, ArrowLeft } from "lucide-react";
 import { useEffect, useState } from "react";
 import PillarTabs from "./PillarTabs";
 import RightCluster from "./RightCluster";
@@ -51,6 +51,54 @@ function RailToggle() {
       onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
     >
       <Menu size={20} strokeWidth={1.75} />
+    </button>
+  );
+}
+
+// Universal back affordance (audit Slice 1). Pillar/hub ROOTS show no back —
+// the bottom nav / pillar tabs are the way around them. Every leaf (forms, detail,
+// sub-pages) gets ONE consistent back: real in-app history when it exists, else a
+// logical parent so a deep-link / cold-load / refresh never dead-ends.
+const BACK_ROOTS = new Set([
+  "/home", "/farm", "/classroom", "/tis", "/me",
+  "/farm/money", "/farm/market", "/farm/records", "/farm/insights", "/farm/resources",
+  "/farm/poultry",
+]);
+function isRootPath(p) {
+  return BACK_ROOTS.has(p) || p.startsWith("/home/") || p.startsWith("/classroom/");
+}
+function parentOf(p) {
+  if (p.startsWith("/farm/poultry/")) return "/farm/poultry";
+  if (p.startsWith("/farm/cycles/")) return "/farm/cycles";
+  if (p.startsWith("/tis/")) return "/tis";
+  if (p.startsWith("/me/")) return "/me";
+  if (p.startsWith("/farm/")) return "/farm";
+  const i = p.lastIndexOf("/");
+  return i > 0 ? p.slice(0, i) : "/home";
+}
+function BackButton() {
+  const { pathname } = useLocation();
+  const navigate = useNavigate();
+  if (isRootPath(pathname)) return null;
+  function goBack() {
+    // react-router tracks position in window.history.state.idx; >0 means there's
+    // an in-app entry to return to. Otherwise fall back to the logical parent.
+    const idx = typeof window !== "undefined" ? window.history.state?.idx : 0;
+    if (idx && idx > 0) navigate(-1);
+    else navigate(parentOf(pathname));
+  }
+  return (
+    <button
+      type="button"
+      onClick={goBack}
+      aria-label="Back"
+      title="Back"
+      className="flex items-center justify-center transition-colors"
+      style={{ width: 36, height: 36, borderRadius: 8, color: C.soil, background: "transparent" }}
+      onMouseEnter={(e) => { e.currentTarget.style.background = C.hoverBg; }}
+      onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+    >
+      <ArrowLeft size={20} strokeWidth={1.75} />
     </button>
   );
 }
@@ -155,6 +203,7 @@ export default function TopAppBar() {
       >
         {/* Left: hamburger + brand + search-icon (universal). */}
         <div className="flex items-center flex-shrink-0" style={{ gap: 12 }}>
+          <BackButton />
           {!narrow && <RailToggle />}
           <Link to="/home" className="flex items-center flex-shrink-0" aria-label="teivaka home">
             <TeivakaLogo />
