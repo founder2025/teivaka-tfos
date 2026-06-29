@@ -50,9 +50,11 @@ export default function Modal({
   const onCloseRef = useRef(onClose);
   useEffect(() => { onCloseRef.current = onClose; });
 
-  // ESC closes; lock body scroll while open; autofocus once on open.
+  // ESC closes; lock body scroll while open; autofocus once on open; return focus
+  // to the triggering element on close (a11y — audit Slice 3).
   useEffect(() => {
     if (!isOpen) return;
+    const prevFocus = typeof document !== "undefined" ? document.activeElement : null;
     function onKey(e) {
       if (e.key === "Escape") onCloseRef.current?.();
     }
@@ -69,6 +71,8 @@ export default function Modal({
       document.removeEventListener("keydown", onKey);
       document.body.style.overflow = prevOverflow;
       clearTimeout(tid);
+      // Return focus to whatever was focused when the modal opened (the trigger).
+      prevFocus?.focus?.();
     };
   }, [isOpen]);
 
