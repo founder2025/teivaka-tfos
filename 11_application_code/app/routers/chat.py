@@ -613,6 +613,13 @@ async def chat_report(body: ReportChatBody, user: dict = Depends(get_current_use
             VALUES (cast(:r AS uuid), cast(:t AS uuid), cast(:m AS uuid), :reason)
         """), {"r": str(user["user_id"]), "t": body.reported_user_id,
                "m": body.message_id, "reason": reason})
+        # Also surface to the unified moderation queue (feed_flags) so a moderator
+        # actually sees chat abuse — chat_reports alone was never read by anyone.
+        await db.execute(text("""
+            INSERT INTO community.feed_flags
+                (reporter_user_id, reason, target_type, target_id, reported_user_id, category)
+            VALUES (cast(:r AS uuid), :reason, 'USER', :t, cast(:t AS uuid), 'CHAT')
+        """), {"r": str(user["user_id"]), "t": body.reported_user_id, "reason": reason})
     return {"data": {"reported": True}}
 
 

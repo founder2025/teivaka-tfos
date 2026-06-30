@@ -9,7 +9,7 @@
  */
 import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
-import { Search, MapPin, BadgeCheck, MessageCircle, Bookmark, Share2, X, ChevronLeft, ChevronRight, Tag, CheckCircle2, RotateCcw, Image as ImageIcon } from "lucide-react";
+import { Search, MapPin, BadgeCheck, MessageCircle, Bookmark, Share2, X, ChevronLeft, ChevronRight, Tag, CheckCircle2, RotateCcw, Flag, Image as ImageIcon } from "lucide-react";
 import { getJSON, send } from "../../utils/api";
 import { uploadMedia } from "../../utils/imageCompress";
 import { useChat } from "../../context/ChatContext";
@@ -245,6 +245,19 @@ function ListingDetail({ l, onClose, onChanged }) {
     chat.setDropdownOpen?.(false);
     onClose();
   };
+  // Report a listing to moderators (fraud/scam/wrong-info). Lands in the unified
+  // moderation queue so a moderator can take it off the marketplace.
+  const reportListing = async () => {
+    const reason = window.prompt("Why are you reporting this listing? (e.g. scam, fake, wrong info)");
+    if (!reason || !reason.trim()) return;
+    try {
+      await send("POST", "/api/v1/community/report", {
+        target_type: "LISTING", target_id: l.listing_id,
+        reported_user_id: l.created_by || null, reason: reason.trim(), category: "MARKETPLACE",
+      });
+      toast("Reported to moderators ✓ — thank you.", "success");
+    } catch (e) { toast(`Couldn't report: ${e.userMessage || e.message}`, "error"); }
+  };
   // WANTED cards are demand records (id "DEM-<uuid>") — close via the demand path.
   const closeRequest = async () => {
     if (!window.confirm("Close this request?")) return;
@@ -344,6 +357,7 @@ function ListingDetail({ l, onClose, onChanged }) {
               <button className="btn btn-secondary" onClick={message}><MessageCircle size={14} /> Message {l.category === "WANTED" ? "buyer" : "seller"}</button>
               {l.category !== "WANTED" && <button className="btn btn-secondary" onClick={toggleSave}><Bookmark size={14} /> {saved ? "Saved ✓" : "Save"}</button>}
               <button className="btn btn-secondary" onClick={shareToFeed}><Share2 size={14} /> Share to feed</button>
+              <button className="btn btn-secondary" onClick={reportListing} title="Report this listing"><Flag size={14} /> Report</button>
             </>
           )}
         </div>

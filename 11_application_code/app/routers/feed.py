@@ -1193,10 +1193,48 @@ async def report_post(post_id: str, body: ReportBody, user: dict = Depends(get_c
         raise HTTPException(status_code=422, detail="A reason is required")
     async with get_rls_db(str(user["tenant_id"])) as db:
         await db.execute(text("""
-            INSERT INTO community.feed_flags (post_id, reporter_user_id, reason)
-            VALUES (:pid, :uid, :reason)
+            INSERT INTO community.feed_flags (post_id, reporter_user_id, reason, target_type, target_id)
+            VALUES (:pid, :uid, :reason, 'POST', :pid)
         """), {"pid": post_id, "uid": str(user["user_id"]), "reason": body.reason.strip()})
     return {"data": {"post_id": post_id, "reported": True}}
+
+
+# Generic report — the unified entry point for every reportable target (listings,
+# users, messages, groups), all landing in the SAME moderation queue (feed_flags)
+# so a scam listing / abusive DM actually reaches a human. Rate-limited (anti
+# report-spam), fail-open. (Posts/replies keep their dedicated endpoints above,
+# which write the same queue.)
+_REPORT_TARGETS = {"POST", "REPLY", "LISTING", "USER", "MESSAGE", "GROUP"}
+
+
+class GenericReport(BaseModel):
+    target_type: str
+    target_id: str
+    reported_user_id: Optional[str] = None
+    reason: str
+    category: Optional[str] = None
+
+
+@router.post("/report")
+async def report_target(body: GenericReport, user: dict = Depends(rate_limit_only("report", 20, 3600))):
+    tt = (body.target_type or "").upper()
+    if tt not in _REPORT_TARGETS:
+        raise HTTPException(status_code=422, detail="Unknown report target")
+    if not (body.reason and body.reason.strip()):
+        raise HTTPException(status_code=422, detail="A reason is required")
+    if not (body.target_id and str(body.target_id).strip()):
+        raise HTTPException(status_code=422, detail="Missing target")
+    async with get_rls_db(str(user["tenant_id"])) as db:
+        await db.execute(text("""
+            INSERT INTO community.feed_flags
+                (reporter_user_id, reason, target_type, target_id, reported_user_id, category,
+                 post_id, reply_id)
+            VALUES (:uid, :reason, :tt, :tid, cast(:ruid AS uuid), :cat,
+                    CASE WHEN :tt = 'POST'  THEN :tid END,
+                    CASE WHEN :tt = 'REPLY' THEN :tid END)
+        """), {"uid": str(user["user_id"]), "reason": body.reason.strip(), "tt": tt,
+               "tid": str(body.target_id), "ruid": body.reported_user_id, "cat": (body.category or None)})
+    return {"data": {"reported": True, "target_type": tt}}
 
 
 # ----------------------------------------------------------------------------- uploads
@@ -1373,13 +1411,24 @@ async def list_flags(status_filter: str = Query("OPEN"), user: dict = Depends(ge
             params["st"] = status_filter.upper()
         rows = (await db.execute(text(f"""
             SELECT fl.flag_id, fl.post_id, fl.reply_id, fl.reason, fl.status, fl.created_at,
+                   COALESCE(fl.target_type,
+                            CASE WHEN fl.post_id IS NOT NULL THEN 'POST'
+                                 WHEN fl.reply_id IS NOT NULL THEN 'REPLY' END) AS target_type,
+                   COALESCE(fl.target_id, fl.post_id, fl.reply_id) AS target_id,
+                   fl.category, fl.action_taken, fl.reported_user_id,
                    r.full_name AS reporter_name,
                    fp.body AS post_body, fp.status AS post_status, fp.author_profession,
-                   au.full_name AS author_name
+                   au.full_name AS author_name,
+                   cl.listing_title, cl.listing_status,
+                   ru.full_name AS reported_user_name
             FROM community.feed_flags fl
             LEFT JOIN tenant.users r ON r.user_id = fl.reporter_user_id
-            LEFT JOIN community.feed_posts fp ON fp.post_id = fl.post_id
+            LEFT JOIN community.feed_posts fp
+                   ON fp.post_id = COALESCE(fl.post_id, CASE WHEN fl.target_type = 'POST' THEN fl.target_id END)
             LEFT JOIN tenant.users au ON au.user_id = fp.author_user_id
+            LEFT JOIN community.listings cl
+                   ON cl.listing_id = CASE WHEN fl.target_type = 'LISTING' THEN fl.target_id END
+            LEFT JOIN tenant.users ru ON ru.user_id = fl.reported_user_id
             {clause}
             ORDER BY fl.created_at DESC LIMIT 100
         """), params)).mappings().all()
@@ -1387,7 +1436,7 @@ async def list_flags(status_filter: str = Query("OPEN"), user: dict = Depends(ge
 
 
 class FlagAction(BaseModel):
-    action: str  # HIDE | DISMISS | RESTORE
+    action: str  # HIDE | RESTORE | REMOVE_LISTING | DISMISS
 
 
 @router.post("/flags/{flag_id}/action")
@@ -1397,25 +1446,33 @@ async def action_flag(flag_id: str, body: FlagAction, user: dict = Depends(get_c
     act = (body.action or "").upper()
     async with get_rls_db(str(user["tenant_id"])) as db:
         flag = (await db.execute(text(
-            "SELECT post_id FROM community.feed_flags WHERE flag_id = :f"), {"f": flag_id})).mappings().first()
+            "SELECT post_id, target_type, target_id FROM community.feed_flags WHERE flag_id = :f"),
+            {"f": flag_id})).mappings().first()
         if not flag:
             raise HTTPException(status_code=404, detail="Flag not found")
-        if act == "HIDE" and flag["post_id"]:
-            await db.execute(text("UPDATE community.feed_posts SET status='hidden' WHERE post_id=:p"), {"p": flag["post_id"]})
-            new_status = "ACTIONED"
-        elif act == "RESTORE" and flag["post_id"]:
-            await db.execute(text("UPDATE community.feed_posts SET status='active' WHERE post_id=:p"), {"p": flag["post_id"]})
-            new_status = "DISMISSED"
+        post_id = flag["post_id"] or (flag["target_id"] if flag["target_type"] == "POST" else None)
+        if act == "HIDE" and post_id:
+            await db.execute(text("UPDATE community.feed_posts SET status='hidden' WHERE post_id=:p"), {"p": post_id})
+            new_status, taken = "ACTIONED", "post_hidden"
+        elif act == "RESTORE" and post_id:
+            await db.execute(text("UPDATE community.feed_posts SET status='active' WHERE post_id=:p"), {"p": post_id})
+            new_status, taken = "DISMISSED", "post_restored"
+        elif act == "REMOVE_LISTING" and flag["target_type"] == "LISTING" and flag["target_id"]:
+            # ARCHIVED is an allowed listing_status and is excluded from browse
+            # (which requires ACTIVE) — distinct from owner-CLOSED.
+            await db.execute(text("UPDATE community.listings SET listing_status='ARCHIVED', updated_at=now() WHERE listing_id=:l"),
+                             {"l": flag["target_id"]})
+            new_status, taken = "ACTIONED", "listing_removed"
         elif act == "DISMISS":
-            new_status = "DISMISSED"
+            new_status, taken = "DISMISSED", "dismissed"
         else:
-            raise HTTPException(status_code=422, detail="Unknown action")
+            raise HTTPException(status_code=422, detail="Unknown or inapplicable action")
         await db.execute(text("""
             UPDATE community.feed_flags
-               SET status=:s, reviewed_by=:by, reviewed_at=now()
+               SET status=:s, action_taken=:t, reviewed_by=:by, reviewed_at=now()
              WHERE flag_id=:f
-        """), {"s": new_status, "by": str(user["user_id"]), "f": flag_id})
-    return {"data": {"flag_id": flag_id, "status": new_status}}
+        """), {"s": new_status, "t": taken, "by": str(user["user_id"]), "f": flag_id})
+    return {"data": {"flag_id": flag_id, "status": new_status, "action": taken}}
 
 
 # ----------------------------------------------------------------------------- public profile
