@@ -639,6 +639,11 @@ async def create_feed_post(body: PostCreate, user: dict = Depends(community_writ
                     entity_type="post", entity_id=post_id, region=country,
                     props={"has_photo": bool(body.photos), "is_question": body.is_question,
                            "group_id": group_id, "audience": body.audience, "reach": reach})
+    # Automated first-pass moderation (Slice 2): flag obvious scam/spam into the
+    # queue for review. Runs AFTER the post is committed, best-effort — never
+    # blocks the post, never auto-hides.
+    from app.core import content_safety
+    await content_safety.auto_flag("POST", post_id, user["user_id"], body.body)
     return {"data": {"post_id": post_id}}
 
 

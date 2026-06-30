@@ -256,6 +256,11 @@ async def create_listing(body: ListingCreate, user: dict = Depends(community_wri
             "link_audit_hash": (body.link_audit_hash or None),
             **({"price_basis": basis, "details": __import__("json").dumps(body.details or {})} if has_099 else {}),
         })
+    # Automated first-pass moderation (Slice 2): flag obvious scam/spam listings
+    # into the queue for review. Best-effort — never blocks the listing.
+    from app.core import content_safety
+    await content_safety.auto_flag("LISTING", listing_id, user["user_id"],
+                                   f"{body.listing_title or ''} {body.listing_description or ''}")
     return {"data": {"listing_id": listing_id, "listing_status": "ACTIVE"}}
 
 @router.patch("/listings/{listing_id}/close")

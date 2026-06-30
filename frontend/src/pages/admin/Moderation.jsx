@@ -55,6 +55,7 @@ export default function Moderation() {
               <div key={f.flag_id} style={{ background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 10, padding: 14, marginBottom: 10 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6, flexWrap: "wrap" }}>
                   <span style={{ background: "rgba(31,41,55,0.10)", color: "var(--soil)", fontSize: 10, fontWeight: 800, padding: "2px 8px", borderRadius: 8, letterSpacing: 0.4 }}>{tt}</span>
+                  {f.category === "AUTO" && <span title="Auto-detected by the spam/scam classifier" style={{ background: "rgba(179,38,30,0.12)", color: "var(--red)", fontSize: 10, fontWeight: 800, padding: "2px 8px", borderRadius: 8, letterSpacing: 0.4 }}>🤖 AUTO</span>}
                   <span style={{ background: "rgba(191,144,0,0.15)", color: "var(--amber)", fontSize: 10.5, fontWeight: 700, padding: "2px 8px", borderRadius: 8, textTransform: "uppercase" }}>{f.reason}</span>
                   <span style={{ fontSize: 11.5, color: "var(--muted)" }}>reported by {f.reporter_name || "—"} · {fmt(f.created_at)}</span>
                   <span style={{ marginLeft: "auto", fontSize: 10.5, color: "var(--muted)" }}>{f.status}{f.action_taken ? ` · ${f.action_taken}` : (f.post_status === "hidden" ? " · post hidden" : "")}</span>
