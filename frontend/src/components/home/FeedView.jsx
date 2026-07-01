@@ -19,6 +19,7 @@ import { getCurrentUser } from "../../utils/auth";
 import { useIsNarrow } from "../../hooks/useIsNarrow";
 import Avatar from "../ui/Avatar";
 import TrustBadge from "../ui/TrustBadge";
+import WhoToFollow from "./WhoToFollow";
 import PhotoLightbox from "./PhotoLightbox";
 
 const API = "/api/v1/community";
@@ -997,13 +998,15 @@ export default function FeedView({ initialFilter = "all", groupId = null }) {
           {posts == null ? <div className="cm-empty">Loading feed…</div> :
             posts.length === 0 ? (
               filter === "following" ? (
-                <div className="cm-empty" style={{ textAlign: "center", padding: "28px 18px" }}>
-                  <Users size={26} style={{ color: "var(--green-dk)" }} />
-                  <div style={{ fontWeight: 800, color: "var(--soil)", fontSize: 16, marginTop: 8 }}>Your people, in one place</div>
-                  <div style={{ fontSize: 13, color: "var(--muted)", margin: "6px auto 14px", maxWidth: 320, lineHeight: 1.5 }}>
-                    Follow farmers, buyers and mentors — their posts show here. Find people to follow in the Directory.
+                <div>
+                  <div className="cm-empty" style={{ textAlign: "center", padding: "18px 18px 10px" }}>
+                    <Users size={26} style={{ color: "var(--green-dk)" }} />
+                    <div style={{ fontWeight: 800, color: "var(--soil)", fontSize: 16, marginTop: 8 }}>Your people, in one place</div>
+                    <div style={{ fontSize: 13, color: "var(--muted)", margin: "6px auto 4px", maxWidth: 320, lineHeight: 1.5 }}>
+                      Follow farmers, buyers and mentors — their posts show here.
+                    </div>
                   </div>
-                  <button className="btn btn-primary" onClick={() => navigate("/home/directory")}><Users size={14} /> Find people to follow</button>
+                  <WhoToFollow title="Who to follow" limit={8} onFollowed={() => load(true)} />
                 </div>
               ) : (filter === "all" && !verifiedOnly) ? (
                 <div className="cm-empty" style={{ textAlign: "center", padding: "28px 18px" }}>
@@ -1022,6 +1025,10 @@ export default function FeedView({ initialFilter = "all", groupId = null }) {
                   <button className="btn btn-secondary" style={{ alignSelf: "center", margin: "4px auto" }} disabled={more} onClick={loadMore}>
                     {more ? "Loading…" : "Load more"}
                   </button>
+                )}
+                {/* thin Following graph → keep growing it (F2) */}
+                {filter === "following" && posts.length < 5 && (
+                  <div style={{ marginTop: 12 }}><WhoToFollow title="Grow your Following" limit={5} onFollowed={() => load(true)} /></div>
                 )}
               </>}
 

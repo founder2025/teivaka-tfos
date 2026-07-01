@@ -1280,6 +1280,46 @@ async def my_verifiable_records(user: dict = Depends(get_current_user)):
     } for r in rows]}
 
 
+@router.get("/suggested-follows")
+async def suggested_follows(user: dict = Depends(get_current_user), limit: int = Query(6, ge=1, le=20)):
+    """Who-to-follow (Following F2). People you don't follow, ranked by EARNED TRUST
+    + same-country + recency — never raw popularity (Gate-7 locked principle).
+    Excludes self / already-followed / blocked / suspended. Best-effort; honest-empty."""
+    uid = str(user["user_id"])
+    async with get_db_ctx() as db:
+        _prof, vcountry = await _profile_of(db, uid)
+        vexpr = await _verified_expr(db)
+        has_blocks = await _has_table(db, "user_blocks", ("user_id", "blocked_user_id"))
+        blocks = ("""AND NOT EXISTS (SELECT 1 FROM community.user_blocks b
+                        WHERE (b.user_id = cast(:uid AS uuid) AND b.blocked_user_id = u.user_id)
+                           OR (b.user_id = u.user_id AND b.blocked_user_id = cast(:uid AS uuid)))"""
+                  if has_blocks else "")
+        rows = (await db.execute(text(f"""
+            SELECT u.user_id, u.full_name, u.avatar_url, u.account_type, u.country,
+                   ut.level AS trust_level, {vexpr} AS verified
+            FROM tenant.users u
+            LEFT JOIN community.user_trust ut ON ut.user_id = u.user_id
+            WHERE u.is_active = TRUE
+              AND u.user_id <> cast(:uid AS uuid)
+              AND NOT EXISTS (SELECT 1 FROM community.follows f
+                              WHERE f.follower_user_id = cast(:uid AS uuid) AND f.followed_user_id = u.user_id)
+              AND NOT EXISTS (SELECT 1 FROM community.user_suspensions s
+                              WHERE s.user_id = u.user_id AND (s.until IS NULL OR s.until > now()))
+              {blocks}
+            ORDER BY (ut.level = 'TRUSTED')  DESC NULLS LAST,
+                     (ut.level = 'VERIFIED') DESC NULLS LAST,
+                     (u.country = :vcountry) DESC NULLS LAST,
+                     (ut.level = 'ACTIVE')   DESC NULLS LAST,
+                     u.created_at DESC
+            LIMIT :limit
+        """), {"uid": uid, "vcountry": vcountry, "limit": limit})).mappings().all()
+    return {"data": [{
+        "user_id": str(r["user_id"]), "full_name": r["full_name"], "avatar_url": r["avatar_url"],
+        "profession": (r["account_type"] or "FARMER").lower(), "country": r["country"],
+        "trust_level": r["trust_level"], "verified": r["verified"],
+    } for r in rows]}
+
+
 # ----------------------------------------------------------------------------- uploads
 @router.post("/uploads")
 async def upload_media(file: UploadFile = File(...), user: dict = Depends(community_write("upload", 20))):
