@@ -44,6 +44,14 @@ const priceLine = (l) => {
   if ((l.price_basis || "kg") === "budget") return `Budget: ${v}`;
   return `${v}${BASIS_SUFFIX[l.price_basis || "kg"] ?? "/kg"}`;
 };
+// Fair-price verdict (M1) — honest, from real district data only. null = no signal.
+function fairPriceChip(price, avg) {
+  if (avg == null || !price || avg <= 0) return null;
+  const r = Number(price) / Number(avg);
+  if (r <= 0.92) return { label: "Good price", sub: "below the district average", bg: "rgba(106,168,79,.16)", fg: "#2f6b1f" };
+  if (r <= 1.12) return { label: "Fair price", sub: "around the district average", bg: "rgba(106,168,79,.12)", fg: "#2f6b1f" };
+  return { label: "Above average", sub: `~${Math.round((r - 1) * 100)}% over district avg`, bg: "rgba(191,144,0,.14)", fg: "var(--amber)" };
+}
 // Profession-aware default category (just a default — freely changeable).
 const PROF_DEFAULT_CAT = { commercial_buyer: "WANTED", agri_input_supplier: "INPUTS", logistics_operator: "SERVICES", trade_importer: "WANTED", commodity_exporter: "WANTED" };
 const fjd = (v) => formatMoney(v);
@@ -225,6 +233,16 @@ function ListingDetail({ l, onClose, onChanged }) {
   const [idx, setIdx] = useState(0);
   const [saved, setSaved] = useState(!!l.is_saved);
   const photos = l.photos || [];
+  // Fair-price signal (M1) — compare this listing to the recent district average
+  // (per-kg only; honest-empty when there's no data).
+  const [mktAvg, setMktAvg] = useState(null);
+  useEffect(() => {
+    const pid = l.production_id;
+    if (!pid || l.price_per_kg_fjd == null || (l.price_basis || "kg") !== "kg") { setMktAvg(null); return; }
+    getJSON(`/api/v1/marketplace/market-prices/${pid}`)
+      .then((r) => { const s = r?.stats || r?.data?.stats; setMktAvg(s?.avg_price_fjd ?? null); })
+      .catch(() => setMktAvg(null));
+  }, [l.production_id, l.price_basis, l.price_per_kg_fjd]);
   const act = async (method, path, okMsg) => {
     try { await send(method, `${API}/listings/${l.listing_id}/${path}`); toast(okMsg, "success"); onChanged(); onClose(); }
     catch (e) { toast(`${e.userMessage || e.message}`, "error"); }
@@ -306,8 +324,14 @@ function ListingDetail({ l, onClose, onChanged }) {
           <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
             <span style={{ fontSize: 22, fontWeight: 800, color: "var(--soil)" }}>{priceLine(l)}</span>
             {l.negotiable && <span style={{ fontSize: 11.5, color: "var(--green-dk)", fontWeight: 600 }}>negotiable</span>}
+            {(() => { const c = fairPriceChip(l.price_per_kg_fjd, mktAvg); return c ? (
+              <span title={c.sub} style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11.5, fontWeight: 700, background: c.bg, color: c.fg, borderRadius: 8, padding: "3px 9px" }}><Tag size={11} />{c.label}</span>
+            ) : null; })()}
             <span style={{ fontSize: 11.5, color: "var(--muted)" }}>{CAT_LABEL[l.category] || l.category}{l.quantity_available_kg ? ` · ${Number(l.quantity_available_kg)} kg` : ""}</span>
           </div>
+          {mktAvg != null && (l.price_basis || "kg") === "kg" && (
+            <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 2 }}>Recent district average: {fjd(mktAvg)}/kg</div>
+          )}
           <div style={{ fontSize: 12.5, color: "var(--muted)", margin: "4px 0 10px" }}>
             <MapPin size={12} /> {l.category === "SERVICES" ? "Service area: " : ""}{[l.pickup_location, l.island].filter(Boolean).join(", ") || "Location on request"}
             {l.created_at ? ` · listed ${new Date(l.created_at).toLocaleDateString()}` : ""}
