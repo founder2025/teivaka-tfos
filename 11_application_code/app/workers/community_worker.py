@@ -105,12 +105,17 @@ def recompute_trust_levels():
         for tid in tenant_ids:
             try:
                 cur.execute("SET app.tenant_id = %s", (str(tid),))
+                # audit.events is TENANT-scoped (no per-user author column) — count the
+                # tenant's hash-chained records once under its RLS context; every user
+                # in the farm shares that "track record".
+                cur.execute("SELECT count(*) AS n FROM audit.events")
+                trow = cur.fetchone()
+                trec = int(trow["n"]) if trow else 0
                 cur.execute(
                     """
                     SELECT u.user_id,
                            COALESCE(u.kyc_verified, FALSE)   AS kyc,
                            COALESCE(u.email_verified, FALSE) AS email,
-                           (SELECT count(*) FROM audit.events e WHERE e.created_by = u.user_id) AS records,
                            (SELECT count(*) FROM community.feed_posts p
                              WHERE p.author_user_id = u.user_id AND p.link_audit_hash IS NOT NULL) AS linked
                     FROM tenant.users u
@@ -118,7 +123,7 @@ def recompute_trust_levels():
                     """, (str(tid),))
                 rows = cur.fetchall()
                 for r in rows:
-                    level, score = level_from_signals(r["kyc"], r["email"], r["records"], 0, r["linked"])
+                    level, score = level_from_signals(r["kyc"], r["email"], trec, 0, r["linked"])
                     cur.execute(
                         """
                         INSERT INTO community.user_trust (user_id, level, score, kyc, verified_records, computed_at)
@@ -126,7 +131,7 @@ def recompute_trust_levels():
                         ON CONFLICT (user_id) DO UPDATE
                            SET level = EXCLUDED.level, score = EXCLUDED.score, kyc = EXCLUDED.kyc,
                                verified_records = EXCLUDED.verified_records, computed_at = now()
-                        """, (str(r["user_id"]), level, score, bool(r["kyc"]), int(r["records"])))
+                        """, (str(r["user_id"]), level, score, bool(r["kyc"]), trec))
                     total += 1
                 conn.commit()
             except Exception as te:  # noqa: BLE001 — one tenant's failure must not abort the batch

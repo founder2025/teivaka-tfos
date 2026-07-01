@@ -72,8 +72,10 @@ async def compute_trust(db, user_id) -> dict:
     except Exception:
         pass
     try:
-        records = (await db.execute(text(
-            "SELECT count(*) FROM audit.events WHERE created_by = cast(:u AS uuid)"), {"u": uid})).scalar() or 0
+        # audit.events is TENANT-scoped (no per-user author column). The session is
+        # already in this user's tenant (RLS), so this counts the farm's real
+        # hash-chained records — the "track record" behind the trust ladder.
+        records = (await db.execute(text("SELECT count(*) FROM audit.events"))).scalar() or 0
     except Exception:
         pass
 
