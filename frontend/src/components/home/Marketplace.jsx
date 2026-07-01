@@ -306,6 +306,15 @@ function ListingDetail({ l, onClose, onChanged }) {
       onChanged(); onClose();
     } catch (e) { toast(`${e.userMessage || e.message}`, "error"); }
   };
+  // M2 — universal enquiry for Livestock/Tools/WANTED: records a REQUESTED order in
+  // the ledger + notifies the seller. Track it in My orders.
+  const enquire = async () => {
+    try {
+      await send("POST", `/api/v1/marketplace/listings/${l.listing_id}/enquire`, {});
+      toast("Sent to the seller ✓ — track it in My orders.", "success");
+      onChanged(); onClose();
+    } catch (e) { toast(`${e.userMessage || e.message}`, "error"); }
+  };
   return (
     <div className="overlay-backdrop show" style={{ alignItems: "center", padding: 16 }} onClick={onClose}>
       <div className="overlay-modal" style={{ maxWidth: 620, maxHeight: "92vh", overflowY: "auto" }} onClick={(e) => e.stopPropagation()}>
@@ -380,6 +389,9 @@ function ListingDetail({ l, onClose, onChanged }) {
               {l.category === "SERVICES" && l.listing_status === "ACTIVE" && (
                 <button className="btn btn-primary" onClick={requestService}><CheckCircle2 size={14} /> Request service</button>
               )}
+              {["LIVESTOCK", "TOOLS", "WANTED"].includes(l.category) && l.listing_status === "ACTIVE" && (
+                <button className="btn btn-primary" onClick={enquire}><CheckCircle2 size={14} /> {l.category === "WANTED" ? "Make an offer" : "Reserve / enquire"}</button>
+              )}
               <button className="btn btn-secondary" onClick={message}><MessageCircle size={14} /> Message {l.category === "WANTED" ? "buyer" : "seller"}</button>
               {l.category !== "WANTED" && <button className="btn btn-secondary" onClick={toggleSave}><Bookmark size={14} /> {saved ? "Saved ✓" : "Save"}</button>}
               <button className="btn btn-secondary" onClick={shareToFeed}><Share2 size={14} /> Share to feed</button>
@@ -388,6 +400,58 @@ function ListingDetail({ l, onClose, onChanged }) {
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+/* ---------------- my orders (M2) ---------------- */
+const ORDER_STATUS = {
+  REQUESTED: { label: "Requested", bg: "rgba(191,144,0,.14)", fg: "var(--amber)" },
+  ACCEPTED:  { label: "Accepted",  bg: "rgba(44,110,138,.14)", fg: "#2C6E8A" },
+  DONE:      { label: "Done",      bg: "rgba(106,168,79,.16)", fg: "#2f6b1f" },
+  CANCELLED: { label: "Cancelled", bg: "rgba(31,41,55,.10)",   fg: "var(--muted)" },
+  DISPUTED:  { label: "Problem",   bg: "rgba(179,38,30,.12)",  fg: "var(--red)" },
+};
+function MyOrders({ navigate }) {
+  const [data, setData] = useState(null);
+  const load = () => getJSON("/api/v1/marketplace/my-orders").then((r) => setData(r.data || { buying: [], selling: [] })).catch(() => setData({ buying: [], selling: [] }));
+  useEffect(() => { load(); }, []);
+  const act = async (order_id, action) => {
+    try { await send("POST", `/api/v1/marketplace/orders/${order_id}/status`, { action }); toast("Updated ✓", "success"); load(); }
+    catch (e) { toast(`${e.userMessage || e.message}`, "error"); }
+  };
+  if (data == null) return <div className="card" style={{ padding: 20, color: "var(--muted)" }}>Loading…</div>;
+  const Section = ({ title, rows, role }) => (
+    <div style={{ marginBottom: 18 }}>
+      <div style={{ fontWeight: 800, color: "var(--soil)", fontSize: 14, marginBottom: 8 }}>{title}</div>
+      {rows.length === 0 ? <div className="card" style={{ padding: 16, color: "var(--muted)" }}>{role === "buying" ? "You haven't ordered or enquired yet." : "No incoming orders yet."}</div> :
+        rows.map((o) => {
+          const s = ORDER_STATUS[o.status] || ORDER_STATUS.REQUESTED;
+          return (
+            <div key={o.order_id} className="card" style={{ padding: 14, marginBottom: 8 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                <span style={{ fontWeight: 700, color: "var(--soil)", fontSize: 13.5, flex: 1, minWidth: 0 }}>{o.listing_title}</span>
+                <span style={{ background: s.bg, color: s.fg, fontSize: 10.5, fontWeight: 700, padding: "2px 8px", borderRadius: 8 }}>{s.label}</span>
+              </div>
+              <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 3 }}>
+                {role === "buying" ? `from ${o.seller_name || "seller"}` : `to ${o.buyer_name || "buyer"}`}
+                {o.quantity ? ` · ${o.quantity}${o.unit ? " " + o.unit : ""}` : ""}{o.total_fjd ? ` · ${formatMoney(o.total_fjd)}` : ""}
+              </div>
+              <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
+                {o.counterparty_user_id && <button className="btn btn-sm btn-secondary" onClick={() => navigate(`/u/${o.counterparty_user_id}`)}>View {role === "buying" ? "seller" : "buyer"}</button>}
+                {role === "selling" && o.status === "REQUESTED" && <button className="btn btn-sm btn-primary" onClick={() => act(o.order_id, "ACCEPT")}>Accept</button>}
+                {(o.status === "ACCEPTED" || o.status === "REQUESTED") && <button className="btn btn-sm btn-primary" onClick={() => act(o.order_id, "DONE")}>Mark done</button>}
+                {o.status !== "DONE" && o.status !== "CANCELLED" && <button className="btn btn-sm btn-secondary" onClick={() => act(o.order_id, "CANCEL")}>Cancel</button>}
+              </div>
+            </div>
+          );
+        })}
+    </div>
+  );
+  return (
+    <div>
+      <Section title="Buying" rows={data.buying || []} role="buying" />
+      <Section title="Selling" rows={data.selling || []} role="selling" />
     </div>
   );
 }
@@ -447,25 +511,31 @@ export default function Marketplace() {
       )}
       {/* controls */}
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: 10 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 6, flex: 1, minWidth: 200, border: "1px solid var(--line)", borderRadius: 999, padding: "7px 12px", background: "var(--paper)" }}>
-          <Search size={14} style={{ color: "var(--muted)" }} />
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search the marketplace…" style={{ border: "none", outline: "none", flex: 1, fontSize: 13.5, background: "transparent" }} />
-        </div>
-        <select value={island} onChange={(e) => setIsland(e.target.value)} style={{ ...inp, width: "auto", borderRadius: 999 }}>
-          <option value="">All islands</option>
-          {ISLANDS.map((i) => <option key={i} value={i}>{i}</option>)}
-        </select>
+        {view !== "orders" && <>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, flex: 1, minWidth: 200, border: "1px solid var(--line)", borderRadius: 999, padding: "7px 12px", background: "var(--paper)" }}>
+            <Search size={14} style={{ color: "var(--muted)" }} />
+            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search the marketplace…" style={{ border: "none", outline: "none", flex: 1, fontSize: 13.5, background: "transparent" }} />
+          </div>
+          <select value={island} onChange={(e) => setIsland(e.target.value)} style={{ ...inp, width: "auto", borderRadius: 999 }}>
+            <option value="">All islands</option>
+            {ISLANDS.map((i) => <option key={i} value={i}>{i}</option>)}
+          </select>
+        </>}
         <button onClick={() => setView(view === "mine" ? "browse" : "mine")} style={{ padding: "8px 14px", borderRadius: 999, fontSize: 12.5, fontWeight: 600, cursor: "pointer", minHeight: 38, border: `1px solid ${view === "mine" ? "var(--green-dk)" : "var(--line)"}`, background: view === "mine" ? "var(--green)" : "var(--paper)", color: view === "mine" ? "var(--paper)" : "var(--soil)" }}>My listings</button>
+        <button onClick={() => setView(view === "orders" ? "browse" : "orders")} style={{ padding: "8px 14px", borderRadius: 999, fontSize: 12.5, fontWeight: 600, cursor: "pointer", minHeight: 38, border: `1px solid ${view === "orders" ? "var(--green-dk)" : "var(--line)"}`, background: view === "orders" ? "var(--green)" : "var(--paper)", color: view === "orders" ? "var(--paper)" : "var(--soil)" }}>My orders</button>
         <button onClick={() => setView(view === "saved" ? "browse" : "saved")} style={{ padding: "8px 14px", borderRadius: 999, fontSize: 12.5, fontWeight: 600, cursor: "pointer", minHeight: 38, border: `1px solid ${view === "saved" ? "var(--green-dk)" : "var(--line)"}`, background: view === "saved" ? "var(--green)" : "var(--paper)", color: view === "saved" ? "var(--paper)" : "var(--soil)" }}>Saved</button>
       </div>
-      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 14 }}>
-        {CATS.map(([v, l]) => (
-          <button key={v} onClick={() => setCat(v)} style={{ padding: "7px 13px", borderRadius: 999, fontSize: 12.5, fontWeight: 600, cursor: "pointer", minHeight: 38, border: `1px solid ${cat === v ? "var(--green-dk)" : "var(--line)"}`, background: cat === v ? "var(--green)" : "var(--paper)", color: cat === v ? "var(--paper)" : "var(--soil)" }}>{l}</button>
-        ))}
-      </div>
+      {view !== "orders" && (
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 14 }}>
+          {CATS.map(([v, l]) => (
+            <button key={v} onClick={() => setCat(v)} style={{ padding: "7px 13px", borderRadius: 999, fontSize: 12.5, fontWeight: 600, cursor: "pointer", minHeight: 38, border: `1px solid ${cat === v ? "var(--green-dk)" : "var(--line)"}`, background: cat === v ? "var(--green)" : "var(--paper)", color: cat === v ? "var(--paper)" : "var(--soil)" }}>{l}</button>
+          ))}
+        </div>
+      )}
 
-      {/* grid */}
-      {items == null ? <div className="card" style={{ padding: 20, color: "var(--muted)" }}>Loading…</div>
+      {/* grid / my orders */}
+      {view === "orders" ? <MyOrders navigate={navigate} /> :
+        items == null ? <div className="card" style={{ padding: 20, color: "var(--muted)" }}>Loading…</div>
         : items.length === 0 ? (
           <div className="card" style={{ padding: 24, color: "var(--muted)", textAlign: "center" }}>
             {view === "mine" ? "You haven't listed anything yet — tap New listing to sell or post a need."

@@ -267,6 +267,21 @@ async def order_from_listing(listing_id: str, body: ListingOrder, user: dict = D
             await db.execute(text(
                 "UPDATE community.listings SET listing_status='SOLD', sold_at=now(), updated_at=now() "
                 "WHERE listing_id=:l"), {"l": listing_id})
+        # Cross-tenant order ledger (M2) so the BUYER can see + track this order.
+        # Produce/Inputs auto-confirm today → ledger status ACCEPTED. Best-effort.
+        try:
+            await db.execute(text("""
+                INSERT INTO community.marketplace_orders
+                    (order_id, listing_id, buyer_user_id, seller_user_id, buyer_name,
+                     listing_title, category, quantity, unit, total_fjd, status)
+                VALUES (:oid, :lid, cast(:bid AS uuid), cast(:sid AS uuid), :bn,
+                        :title, :cat, :q, :u, :tot, 'ACCEPTED')
+                ON CONFLICT (order_id) DO NOTHING
+            """), {"oid": order_id, "lid": listing_id, "bid": buyer_uid, "sid": str(L["created_by"]),
+                   "bn": buyer_name, "title": L["listing_title"], "cat": L["category"],
+                   "q": qty, "u": basis, "tot": total})
+        except Exception as e:  # noqa: BLE001 — ledger is additive; never break the order
+            logger.warning("marketplace ledger write failed: %s", e)
         await db.commit()
 
     # 4) WhatsApp the seller (best-effort; mock-logs without creds).
@@ -345,3 +360,127 @@ async def request_service_from_listing(listing_id: str, body: ServiceRequest, us
             logger.warning("service request whatsapp failed: %s", e)
 
     return {"data": {"job_id": job_id, "status": "CLAIMED"}}
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# M2 — order/enquiry loop: cross-tenant ledger so the BUYER can see + track, and
+# every category has a real on-platform action + a shared status.
+# ════════════════════════════════════════════════════════════════════════════
+class EnquireBody(BaseModel):
+    note: Optional[str] = None
+    quantity: Optional[Decimal] = None
+
+
+@router.post("/listings/{listing_id}/enquire")
+async def enquire_listing(listing_id: str, body: EnquireBody, user: dict = Depends(get_current_user)):
+    """Universal intent for the categories without a transact path (Livestock /
+    Tools / Wanted) — records a REQUESTED order in the ledger + notifies the seller.
+    No stock hold. Produce/Inputs use /order; Services use /request-service."""
+    buyer_uid = str(user["user_id"]); buyer_tid = str(user["tenant_id"])
+    async with get_db_ctx() as db:
+        L = (await db.execute(text("""
+            SELECT listing_id, tenant_id, listing_title, created_by, listing_status,
+                   COALESCE(category,'PRODUCE') AS category, price_basis
+            FROM community.listings WHERE listing_id = :lid
+        """), {"lid": listing_id})).mappings().first()
+        if not L:
+            raise HTTPException(status_code=404, detail="Listing not found")
+        if L["category"] not in ("LIVESTOCK", "TOOLS", "WANTED"):
+            raise HTTPException(status_code=400, detail="This listing type isn't enquired here")
+        if L["listing_status"] != "ACTIVE":
+            raise HTTPException(status_code=409, detail="This listing is no longer available")
+        if str(L["tenant_id"]) == buyer_tid:
+            raise HTTPException(status_code=400, detail="That's your own listing")
+        bn = (await db.execute(text(
+            "SELECT COALESCE(t.company_name, u.full_name) FROM tenant.users u "
+            "JOIN tenant.tenants t ON t.tenant_id = u.tenant_id WHERE u.user_id = cast(:b AS uuid)"),
+            {"b": buyer_uid})).scalar() or "Teivaka buyer"
+        oid = f"ENQ-{datetime.now().strftime('%Y%m%d')}-{uuid.uuid4().hex[:4].upper()}"
+        await db.execute(text("""
+            INSERT INTO community.marketplace_orders
+                (order_id, listing_id, buyer_user_id, seller_user_id, buyer_name,
+                 listing_title, category, quantity, unit, status)
+            VALUES (:oid, :lid, cast(:b AS uuid), cast(:s AS uuid), :bn,
+                    :title, :cat, :q, :u, 'REQUESTED')
+        """), {"oid": oid, "lid": listing_id, "b": buyer_uid, "s": str(L["created_by"]), "bn": bn,
+               "title": L["listing_title"], "cat": L["category"], "q": body.quantity, "u": L["price_basis"]})
+        try:
+            await db.execute(text(
+                "INSERT INTO community.feed_notifications (user_id, actor_user_id, type, body) "
+                "VALUES (cast(:u AS uuid), cast(:a AS uuid), 'MARKETPLACE_ORDER', :b)"),
+                {"u": str(L["created_by"]), "a": buyer_uid,
+                 "b": f"{bn} enquired about {L['listing_title']}. Open Marketplace → My orders to respond."})
+        except Exception as e:  # noqa: BLE001
+            logger.warning("enquire notify failed: %s", e)
+        await db.commit()
+    return {"data": {"order_id": oid, "status": "REQUESTED"}}
+
+
+class OrderStatus(BaseModel):
+    action: str  # ACCEPT | DONE | CANCEL
+
+
+@router.post("/orders/{order_id}/status")
+async def set_order_status(order_id: str, body: OrderStatus, user: dict = Depends(get_current_user)):
+    """Move an order through the loop. Seller: ACCEPT / DONE; buyer: DONE (received)
+    / CANCEL. Notifies the counterparty."""
+    uid = str(user["user_id"]); act = (body.action or "").upper()
+    async with get_db_ctx() as db:
+        o = (await db.execute(text(
+            "SELECT buyer_user_id, seller_user_id, status, listing_title FROM community.marketplace_orders WHERE order_id = :o"),
+            {"o": order_id})).mappings().first()
+        if not o:
+            raise HTTPException(status_code=404, detail="Order not found")
+        is_seller = str(o["seller_user_id"]) == uid
+        is_buyer = str(o["buyer_user_id"]) == uid
+        if not (is_seller or is_buyer):
+            raise HTTPException(status_code=403, detail="Not your order")
+        if act == "ACCEPT" and is_seller:
+            new = "ACCEPTED"
+        elif act == "DONE":
+            new = "DONE"
+        elif act == "CANCEL":
+            new = "CANCELLED"
+        else:
+            raise HTTPException(status_code=422, detail="Invalid action")
+        await db.execute(text("UPDATE community.marketplace_orders SET status=:s, updated_at=now() WHERE order_id=:o"),
+                         {"s": new, "o": order_id})
+        other = str(o["buyer_user_id"]) if is_seller else str(o["seller_user_id"])
+        try:
+            await db.execute(text(
+                "INSERT INTO community.feed_notifications (user_id, actor_user_id, type, body) "
+                "VALUES (cast(:u AS uuid), cast(:a AS uuid), 'MARKETPLACE_ORDER', :b)"),
+                {"u": other, "a": uid, "b": f"Order for {o['listing_title']} is now {new.lower()}."})
+        except Exception as e:  # noqa: BLE001
+            logger.warning("order status notify failed: %s", e)
+        await db.commit()
+    return {"data": {"order_id": order_id, "status": new}}
+
+
+@router.get("/my-orders")
+async def my_orders(user: dict = Depends(get_current_user)):
+    """The caller's marketplace orders as buyer (buying) and seller (selling)."""
+    uid = str(user["user_id"])
+    async with get_db_ctx() as db:
+        rows = (await db.execute(text("""
+            SELECT o.order_id, o.listing_id, o.buyer_user_id, o.seller_user_id, o.buyer_name,
+                   o.listing_title, o.category, o.quantity, o.unit, o.total_fjd, o.status, o.created_at,
+                   s.full_name AS seller_name
+            FROM community.marketplace_orders o
+            LEFT JOIN tenant.users s ON s.user_id = o.seller_user_id
+            WHERE o.buyer_user_id = cast(:u AS uuid) OR o.seller_user_id = cast(:u AS uuid)
+            ORDER BY o.created_at DESC LIMIT 100
+        """), {"u": uid})).mappings().all()
+    buying, selling = [], []
+    for r in rows:
+        mine_as_buyer = str(r["buyer_user_id"]) == uid
+        item = {
+            "order_id": r["order_id"], "listing_id": r["listing_id"], "listing_title": r["listing_title"],
+            "category": r["category"], "quantity": (str(r["quantity"]) if r["quantity"] is not None else None),
+            "unit": r["unit"], "total_fjd": (str(r["total_fjd"]) if r["total_fjd"] is not None else None),
+            "status": r["status"], "created_at": r["created_at"].isoformat() if r["created_at"] else None,
+            "buyer_name": r["buyer_name"], "seller_name": r["seller_name"],
+            "counterparty_user_id": str(r["seller_user_id"]) if mine_as_buyer else str(r["buyer_user_id"]),
+        }
+        (buying if mine_as_buyer else selling).append(item)
+    return {"data": {"buying": buying, "selling": selling}}
