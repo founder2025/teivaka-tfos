@@ -12,6 +12,7 @@ import {
   Smile, MoreHorizontal, Trash2, Check, BadgeCheck, X, Leaf, ShoppingBag, Gift,
   Droplet, BookOpen, Rss, UserPlus, UserCheck, Pencil, Flag,
   Pin, Archive, Copy, EyeOff, Ban, BellOff, Bookmark, Users, Camera, MailCheck, Mail, Play, Sprout, Award, ShieldCheck,
+  Mic, Square, Volume2,
 } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { getCurrentUser } from "../../utils/auth";
@@ -28,6 +29,8 @@ import { getJSON, send, apiFetch } from "../../utils/api";
 import { impression, click } from "../../utils/feedSignals";
 // Share loop (Phase 1) — native "share anywhere" + WhatsApp/email shortcuts + invite.
 import { canNativeShare, nativeSharePost, shareToWhatsApp, shareViaEmail, invite } from "../../utils/whatsappShare";
+// Voice (Phase 5) — low-literacy access: read posts aloud + dictate a post.
+import { isSpeechSynthesisSupported, isSpeechRecognitionSupported, speak, stopSpeaking, listen } from "../../utils/speech";
 // Loud feedback — routed through the shell Toast. No silent failures.
 const toast = (message, type) => {
   try { window.dispatchEvent(new CustomEvent("tfos:toast", { detail: { message, type } })); }
@@ -306,6 +309,8 @@ function Composer({ me, onPosted, groupId }) {
   const [needVerify, setNeedVerify] = useState(false);
   const [resending, setResending] = useState(false);
   const [emojiOpen, setEmojiOpen] = useState(false);
+  const [dictating, setDictating] = useState(false);   // Phase 5 — voice dictation
+  const dictateStopRef = useRef(null);
   const [promptText] = useState(() => SMART_PROMPTS[Math.floor(Math.random() * SMART_PROMPTS.length)]);
   const [myEmail, setMyEmail] = useState(me?.email || "");
   const fileRef = useRef();
@@ -332,6 +337,19 @@ function Composer({ me, onPosted, groupId }) {
   const selectActivity = (a) => {
     if (a.key === "question") setDraft((d) => ({ ...d, isQuestion: !d.isQuestion, vertical: "" }));
     else setDraft((d) => ({ ...d, vertical: d.vertical === a.label ? "" : a.label, isQuestion: false }));
+  };
+  // Voice dictation (Phase 5) — speak a post instead of typing. One phrase per tap
+  // (appends); degrades to the mic being hidden where unsupported.
+  const toggleDictate = () => {
+    if (dictating) { dictateStopRef.current && dictateStopRef.current(); setDictating(false); return; }
+    const base = draft.body ? draft.body.replace(/\s*$/, "") + " " : "";
+    setDictating(true);
+    dictateStopRef.current = listen({
+      lang: "en-US",
+      onResult: ({ transcript }) => { if (transcript) set("body", (base + transcript).slice(0, BODY_MAX)); },
+      onEnd: () => setDictating(false),
+      onError: () => { setDictating(false); toast("Couldn't hear you — try again, or type.", "error"); },
+    });
   };
   const pickFile = async (e) => {
     const files = Array.from(e.target.files || []); e.target.value = ""; if (!files.length) return;
@@ -434,6 +452,7 @@ function Composer({ me, onPosted, groupId }) {
               <button className="cm-tool-btn" onClick={() => cameraRef.current?.click()} disabled={uploading} style={{ minHeight: 44 }}><Camera size={13} />Camera</button>
               <input ref={cameraRef} type="file" accept="image/*" capture="environment" hidden onChange={pickFile} />
             </>}
+            {isSpeechRecognitionSupported() && <button className="cm-tool-btn" onClick={toggleDictate} style={{ ...(narrow ? { minHeight: 44 } : {}), ...(dictating ? { color: "#b3261e", borderColor: "#b3261e" } : {}) }}>{dictating ? <Square size={13} /> : <Mic size={13} />}{dictating ? "Stop" : "Speak"}</button>}
             <button className="cm-tool-btn" onClick={() => setEmojiOpen((v) => !v)} style={narrow ? { minHeight: 44 } : undefined}><Smile size={13} />Emoji</button>
             <button className="cm-tool-btn" onClick={() => setModal("place")} style={narrow ? { minHeight: 44 } : undefined}><MapPin size={13} />Place</button>
             <button className="cm-tool-btn" onClick={() => setModal("mention")} style={narrow ? { minHeight: 44 } : undefined}><UserPlus size={13} />Mention</button>
@@ -551,6 +570,24 @@ function PostMedia({ photos, onOpen }) {
   );
 }
 
+// Read a post aloud (Phase 5) — low-literacy access. Icon-only, in the post header;
+// hidden where speech synthesis is unavailable. Stops on unmount.
+function ListenButton({ text }) {
+  const [playing, setPlaying] = useState(false);
+  useEffect(() => () => stopSpeaking(), []);
+  if (!isSpeechSynthesisSupported() || !String(text || "").trim()) return null;
+  const toggle = () => {
+    if (playing) { stopSpeaking(); setPlaying(false); return; }
+    setPlaying(true);
+    speak(String(text)).then(() => setPlaying(false));
+  };
+  return (
+    <button className="cm-post-menu-btn" onClick={toggle} title={playing ? "Stop" : "Listen to this post"} aria-label={playing ? "Stop" : "Listen to this post"}>
+      {playing ? <Square size={15} /> : <Volume2 size={15} />}
+    </button>
+  );
+}
+
 function PostCard({ post, me, onChange, onRemoved }) {
   const navigate = useNavigate();
   const [p, setP] = useState(post);
@@ -662,6 +699,7 @@ function PostCard({ post, me, onChange, onRemoved }) {
           <div className="cm-post-meta">{fmtTime(p.created_at)}{p.location ? ` · ${p.location}` : ""}{p.vertical ? ` · ${p.vertical}` : ""}{p.pinned ? " · 📌 Pinned" : ""}</div>
         </div>
         <div className="cm-post-head-actions">
+          <ListenButton text={p.body} />
           <button className="cm-post-menu-btn" onClick={() => setMenu(!menu)}><MoreHorizontal size={16} /></button>
           {menu && (
             <>

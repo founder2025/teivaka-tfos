@@ -50,6 +50,11 @@ export function speak(text, opts = {}) {
   });
 }
 
+/** Stop any in-flight utterance (the Listen "stop" control). */
+export function stopSpeaking() {
+  try { window.speechSynthesis.cancel(); } catch { /* noop */ }
+}
+
 /**
  * listen({ onResult, onError, onEnd, lang }) — start one phrase capture.
  * Returns a stop() function. continuous=false, interimResults=false.
