@@ -1,0 +1,77 @@
+"""trust.py — the Trust Ladder (Blocker #2 Slice 1).
+
+A member's trust, computed from REAL signals only (no fabricated points), expressed
+as both a raw score and a legible, earned LEVEL a farmer/buyer/lender can read at a
+glance. This is the mechanism that turns the audit-chain moat into visible trust:
+someone with a long real record + verified ID ranks above a day-old account.
+
+Signals (each guarded — a missing/locked table can never 500 the caller):
+  - kyc_verified      : admin-reviewed government ID (the strongest claim)
+  - email_verified    : a verified email
+  - verified_records  : audit.events the user authored (their real logged activity)
+  - certificates      : earned course certificates
+  - linked_posts      : posts linked to a verifiable audit record
+
+The LEVEL is derived, not stored (Slice 1). A later slice denormalizes it (beat-
+refreshed) so it can be shown cheaply everywhere (listings/directory/feed).
+"""
+from sqlalchemy import text
+
+# Ladder, most-trusted first. Kept small and legible on purpose.
+LEVELS = ("TRUSTED", "VERIFIED", "ACTIVE", "NEW")
+_LABEL = {"TRUSTED": "Trusted", "VERIFIED": "ID-verified", "ACTIVE": "Active", "NEW": "New member"}
+
+
+async def compute_trust(db, user_id) -> dict:
+    """Compute a user's trust from real signals using the given session. Works for
+    any user_id (not just the caller). For an accurate verified-records count pass a
+    session in that user's tenant context; cross-tenant reads may undercount records
+    (never inflate) — KYC/email still resolve correctly."""
+    uid = str(user_id)
+    kyc = email_verified = False
+    member_since = None
+    certs = records = linked = 0
+    try:
+        row = (await db.execute(text(
+            "SELECT kyc_verified, email_verified, created_at FROM tenant.users WHERE user_id = cast(:u AS uuid)"),
+            {"u": uid})).mappings().first()
+        if row:
+            kyc = bool(row["kyc_verified"])
+            email_verified = bool(row["email_verified"])
+            member_since = row["created_at"]
+    except Exception:  # noqa: BLE001 — guarded; a column/table gap must not 500
+        pass
+    try:
+        certs = (await db.execute(text(
+            "SELECT count(*) FROM community.course_certificates WHERE user_id = cast(:u AS uuid)"), {"u": uid})).scalar() or 0
+    except Exception:
+        pass
+    try:
+        linked = (await db.execute(text(
+            "SELECT count(*) FROM community.feed_posts WHERE author_user_id = cast(:u AS uuid) AND link_audit_hash IS NOT NULL"), {"u": uid})).scalar() or 0
+    except Exception:
+        pass
+    try:
+        records = (await db.execute(text(
+            "SELECT count(*) FROM audit.events WHERE created_by = cast(:u AS uuid)"), {"u": uid})).scalar() or 0
+    except Exception:
+        pass
+
+    records, certs, linked = int(records), int(certs), int(linked)
+    score = (10 if kyc else 0) + min(records, 100) + certs * 5 + linked * 2
+
+    if kyc and (records >= 20 or certs >= 1 or linked >= 3):
+        level = "TRUSTED"          # verified ID + a real track record
+    elif kyc:
+        level = "VERIFIED"         # verified government ID
+    elif records >= 1 or email_verified:
+        level = "ACTIVE"           # real logged activity or a verified email
+    else:
+        level = "NEW"
+
+    return {
+        "score": score, "level": level, "level_label": _LABEL[level],
+        "kyc_verified": kyc, "email_verified": email_verified,
+        "verified_records": records, "certificates": certs, "linked_posts": linked,
+        "member_since": member_since.isoformat() if member_since else None,
+    }

@@ -535,29 +535,10 @@ async def trust_score(user: dict = Depends(get_current_user)):
     earned certificates, audit records they authored, and community posts linked to a
     verified record. Read-only; each source is guarded so a missing/locked table can't
     500 the score."""
-    uid = str(user["user_id"])
-    kyc = False
-    certs = records = linked = 0
+    from app.core.trust import compute_trust
     async with get_rls_db(str(user["tenant_id"])) as db:
-        try:
-            kyc = bool((await db.execute(text(
-                "SELECT kyc_verified FROM tenant.users WHERE user_id = cast(:u AS uuid)"), {"u": uid})).scalar())
-        except Exception: pass
-        try:
-            certs = (await db.execute(text(
-                "SELECT count(*) FROM community.course_certificates WHERE user_id = cast(:u AS uuid)"), {"u": uid})).scalar() or 0
-        except Exception: pass
-        try:
-            linked = (await db.execute(text(
-                "SELECT count(*) FROM community.feed_posts WHERE author_user_id = cast(:u AS uuid) AND link_audit_hash IS NOT NULL"), {"u": uid})).scalar() or 0
-        except Exception: pass
-        try:
-            records = (await db.execute(text(
-                "SELECT count(*) FROM audit.events WHERE created_by = cast(:u AS uuid)"), {"u": uid})).scalar() or 0
-        except Exception: pass
-    score = (10 if kyc else 0) + min(int(records), 100) * 1 + int(certs) * 5 + int(linked) * 2
-    return {"data": {"score": score, "kyc_verified": kyc,
-                     "verified_records": int(records), "certificates": int(certs), "linked_posts": int(linked)}}
+        t = await compute_trust(db, user["user_id"])
+    return {"data": t}
 
 
 # ----------------------------------------------------------------------------- create / delete
@@ -1625,6 +1606,15 @@ async def get_profile(target_id: str, user: dict = Depends(get_current_user)):
         """), pparams)).mappings().all()
 
         prof = (u["account_type"] or "FARMER").lower()
+        # Trust Ladder (Blocker #2 Slice 1): computed in the TARGET's tenant context
+        # so the verified-records count is accurate. Best-effort — never 500s a profile.
+        from app.core.trust import compute_trust
+        trust = None
+        try:
+            async with get_rls_db(str(u["tenant_id"])) as tdb:
+                trust = await compute_trust(tdb, target_id)
+        except Exception:  # noqa: BLE001
+            trust = None
         return {"data": {
             "user_id": str(u["user_id"]), "full_name": u["full_name"],
             "profession": prof, "role": u["role"],
@@ -1632,7 +1622,7 @@ async def get_profile(target_id: str, user: dict = Depends(get_current_user)):
             "is_company": bool(u["is_company"]), "business_name": u["business_name"], "operator_name": u["operator_name"],
             "country": (u["country"] if allowed("location") else None),
             "bio": (u["bio"] if allowed("bio") else None),
-            "avatar_url": u["avatar_url"], "cover_url": u["cover_url"], "verified": u["verified"],
+            "avatar_url": u["avatar_url"], "cover_url": u["cover_url"], "verified": u["verified"], "trust": trust,
             "joined": (u["created_at"].isoformat() if (u["created_at"] and allowed("joined")) else None),
             "phone": (u["whatsapp_number"] if allowed("phone") else None),
             "is_you": is_you, "is_following": i_follow, "is_connected": connected, "is_matched": is_matched,

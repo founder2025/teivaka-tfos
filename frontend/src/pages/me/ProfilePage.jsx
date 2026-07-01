@@ -275,6 +275,30 @@ function BizModal({ biz, onClose, onSaved }) {
   );
 }
 
+// Trust Ladder chip (Blocker #2 Slice 1) — the earned, legible trust LEVEL shown
+// on any profile (yours or a seller's) so trust is visible where people decide.
+// Levels: Trusted > ID-verified > Active > New member. Real signals only.
+const _TRUST_STYLE = {
+  TRUSTED:  { bg: "rgba(106,168,79,.18)", fg: "#2f6b1f", icon: "🛡️" },
+  VERIFIED: { bg: "rgba(106,168,79,.14)", fg: "#2f6b1f", icon: "✅" },
+  ACTIVE:   { bg: "rgba(31,41,55,.10)",   fg: "#1F2937", icon: "🌱" },
+  NEW:      { bg: "rgba(31,41,55,.06)",   fg: "#6b7280", icon: "•" },
+};
+function TrustChip({ trust }) {
+  if (!trust?.level) return null;
+  const s = _TRUST_STYLE[trust.level] || _TRUST_STYLE.NEW;
+  const bits = [
+    trust.kyc_verified && "ID-verified",
+    (trust.verified_records || 0) > 0 && `${trust.verified_records} verified records`,
+    (trust.certificates || 0) > 0 && `${trust.certificates} certificates`,
+  ].filter(Boolean).join(" · ") || "New to Teivaka";
+  return (
+    <span title={`Trust: ${bits}`} style={{ display: "inline-flex", alignItems: "center", gap: 4, background: s.bg, color: s.fg, fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 6 }}>
+      <span aria-hidden>{s.icon}</span>{(trust.level_label || trust.level).toUpperCase()}
+    </span>
+  );
+}
+
 // Trust Score — real signals from GET /community/trust-score (KYC + certificates +
 // audit records authored + posts linked to a verified record). Own-profile only
 // (the endpoint scores the authenticated user); honest-hidden if it can't load.
@@ -600,6 +624,7 @@ export default function ProfilePage({ self = false }) {
               <h1 style={{ margin: 0, fontSize: 22, color: C.soil }}>{displayName}</h1>
               {isYou && !pub && <span style={{ background: "rgba(106,168,79,.14)", color: C.greenDk, fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 6 }}>YOU</span>}
               {p.verified && <span style={{ display: "inline-flex", alignItems: "center", gap: 3, background: "rgba(106,168,79,.14)", color: C.greenDk, fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 6 }}><BadgeCheck size={11} /> VERIFIED</span>}
+              {p.trust && <TrustChip trust={p.trust} />}
             </div>
             {isBiz && <div style={{ fontSize: 12.5, color: C.muted, marginTop: 3 }}>Business account · operated by {bizOperator || p.full_name}</div>}
             <div style={{ display: "flex", gap: 14, flexWrap: "wrap", fontSize: 12, color: C.muted, marginTop: 6 }}>
