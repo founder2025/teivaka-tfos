@@ -822,15 +822,21 @@ async def unsave_post(post_id: str, user: dict = Depends(get_current_user)):
 # ----------------------------------------------------------------------------- share
 @router.post("/feed/{post_id}/share")
 async def share_post(post_id: str, body: ShareBody, user: dict = Depends(community_write("share", 15))):
+    # The recipient may be in ANOTHER tenant (community sharing is cross-tenant),
+    # so check them under NULL context (permissive tenant.users read). The sharer's
+    # own RLS context can't see other tenants' users — that was the false
+    # "Recipient not found" on every cross-tenant share.
+    async with get_db_ctx() as rdb:
+        recipient = (await rdb.execute(text(
+            "SELECT 1 FROM tenant.users WHERE user_id = cast(:to AS uuid) AND is_active = TRUE"),
+            {"to": body.to_user_id})).first()
+    if not recipient:
+        raise HTTPException(status_code=404, detail="Recipient not found")
     async with get_rls_db(str(user["tenant_id"])) as db:
         ok = (await db.execute(text("SELECT 1 FROM community.feed_posts WHERE post_id=:pid AND status='active'"),
                                {"pid": post_id})).first()
         if not ok:
             raise HTTPException(status_code=404, detail="Post not found")
-        recipient = (await db.execute(text("SELECT 1 FROM tenant.users WHERE user_id=:to"),
-                                      {"to": body.to_user_id})).first()
-        if not recipient:
-            raise HTTPException(status_code=404, detail="Recipient not found")
         await db.execute(text("""
             INSERT INTO community.feed_shares (post_id, from_user_id, to_user_id, note)
             VALUES (:pid, :from_id, :to_id, :note)
@@ -1228,6 +1234,44 @@ async def report_target(body: GenericReport, user: dict = Depends(rate_limit_onl
         """), {"uid": str(user["user_id"]), "reason": body.reason.strip(), "tt": tt,
                "tid": str(body.target_id), "ruid": body.reported_user_id, "cat": (body.category or None)})
     return {"data": {"reported": True, "target_type": tt}}
+
+
+# Farmer-friendly names for the composer's "attach proof" picker (Proof Feed).
+_RECORD_LABELS = {
+    "HARVEST_LOGGED": "Harvest", "CASH_LOGGED": "Sale / payment", "DELIVERY_LOGGED": "Delivery",
+    "GRADING_LOGGED": "Grading", "CYCLE_CREATED": "Planting", "NURSERY_BATCH_CREATED": "Nursery batch",
+    "FIELD_OBSERVATION": "Field observation", "INPUT_USED": "Input applied", "CHEMICAL_APPLIED": "Chemical applied",
+    "EGGS_COLLECTED": "Eggs collected", "FLOCK_PLACED": "Flock placed", "MILK_COLLECTED": "Milk collected",
+    "LIVESTOCK_ACQUIRED": "Livestock acquired", "WEIGHT_CHECK": "Weight check",
+}
+
+
+def _record_label(event_type):
+    if event_type in _RECORD_LABELS:
+        return _RECORD_LABELS[event_type]
+    return (event_type or "Record").replace("_LOGGED", "").replace("_", " ").capitalize()
+
+
+@router.get("/my-records")
+async def my_verifiable_records(user: dict = Depends(get_current_user)):
+    """The caller's recent hash-chained farm records — for one-tap 'attach proof'
+    in the composer (Proof Feed). Read under tenant RLS context so audit.events
+    (strict tenant isolation) resolves reliably."""
+    async with get_rls_db(str(user["tenant_id"])) as db:
+        rows = (await db.execute(text("""
+            SELECT event_type, entity_type, occurred_at, audit_hash
+            FROM audit.events
+            WHERE audit_hash IS NOT NULL
+            ORDER BY occurred_at DESC
+            LIMIT 40
+        """))).mappings().all()
+    return {"data": [{
+        "audit_hash": r["audit_hash"],
+        "event_type": r["event_type"],
+        "label": _record_label(r["event_type"]),
+        "entity_type": r["entity_type"],
+        "occurred_at": r["occurred_at"].isoformat() if r["occurred_at"] else None,
+    } for r in rows]}
 
 
 # ----------------------------------------------------------------------------- uploads
