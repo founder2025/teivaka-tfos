@@ -17,6 +17,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { getCurrentUser } from "../../utils/auth";
 import { useIsNarrow } from "../../hooks/useIsNarrow";
 import Avatar from "../ui/Avatar";
+import TrustBadge from "../ui/TrustBadge";
 import PhotoLightbox from "./PhotoLightbox";
 
 const API = "/api/v1/community";
@@ -597,6 +598,7 @@ function PostCard({ post, me, onChange, onRemoved }) {
           <div className="cm-post-author-row">
             <span className="cm-post-author-name" onClick={() => { if (p.author_user_id) { click(p.post_id); navigate(`/u/${p.author_user_id}`); } }} style={{ cursor: "pointer" }}>{p.author_name}</span>
             {p.author_verified && <BadgeCheck size={13} className="cm-verified-tick" />}
+            {p.author_trust_level === "TRUSTED" && <TrustBadge level="TRUSTED" size={10} />}
             <span className="cm-prof-badge">{personaLabel(p.author_profession)}</span>
             {p.is_question && <span className="cm-prof-badge" style={{ background: "rgba(191,144,0,0.14)", color: "var(--amber,var(--amber))" }}><HelpCircle size={10} /> Question</span>}
           </div>

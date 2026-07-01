@@ -22,6 +22,26 @@ LEVELS = ("TRUSTED", "VERIFIED", "ACTIVE", "NEW")
 _LABEL = {"TRUSTED": "Trusted", "VERIFIED": "ID-verified", "ACTIVE": "Active", "NEW": "New member"}
 
 
+def level_from_signals(kyc, email_verified, records, certs=0, linked=0):
+    """The single source of truth for the ladder. Used by both the live API helper
+    and the batch worker (Slice 2) so the level can never drift between them."""
+    records, certs, linked = int(records or 0), int(certs or 0), int(linked or 0)
+    score = (10 if kyc else 0) + min(records, 100) + certs * 5 + linked * 2
+    if kyc and (records >= 20 or certs >= 1 or linked >= 3):
+        level = "TRUSTED"          # verified ID + a real track record
+    elif kyc:
+        level = "VERIFIED"         # verified government ID
+    elif records >= 1 or email_verified:
+        level = "ACTIVE"           # real logged activity or a verified email
+    else:
+        level = "NEW"
+    return level, score
+
+
+def level_label(level):
+    return _LABEL.get(level, "New member")
+
+
 async def compute_trust(db, user_id) -> dict:
     """Compute a user's trust from real signals using the given session. Works for
     any user_id (not just the caller). For an accurate verified-records count pass a
@@ -57,17 +77,7 @@ async def compute_trust(db, user_id) -> dict:
     except Exception:
         pass
 
-    records, certs, linked = int(records), int(certs), int(linked)
-    score = (10 if kyc else 0) + min(records, 100) + certs * 5 + linked * 2
-
-    if kyc and (records >= 20 or certs >= 1 or linked >= 3):
-        level = "TRUSTED"          # verified ID + a real track record
-    elif kyc:
-        level = "VERIFIED"         # verified government ID
-    elif records >= 1 or email_verified:
-        level = "ACTIVE"           # real logged activity or a verified email
-    else:
-        level = "NEW"
+    level, score = level_from_signals(kyc, email_verified, records, certs, linked)
 
     return {
         "score": score, "level": level, "level_label": _LABEL[level],

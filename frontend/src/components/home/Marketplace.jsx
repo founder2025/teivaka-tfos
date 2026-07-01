@@ -14,6 +14,7 @@ import { getJSON, send } from "../../utils/api";
 import { uploadMedia } from "../../utils/imageCompress";
 import { useChat } from "../../context/ChatContext";
 import Avatar from "../ui/Avatar";
+import TrustBadge from "../ui/TrustBadge";
 import { formatMoney } from "../../utils/money";
 
 const API = "/api/v1/community";
@@ -326,8 +327,9 @@ function ListingDetail({ l, onClose, onChanged }) {
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 14, padding: "10px 12px", border: "1px solid var(--line)", borderRadius: 10 }}>
             <Avatar src={l.seller_avatar} name={l.seller_name} size={38} />
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontWeight: 700, color: "var(--soil)", fontSize: 13.5, display: "flex", alignItems: "center", gap: 5 }}>
+              <div style={{ fontWeight: 700, color: "var(--soil)", fontSize: 13.5, display: "flex", alignItems: "center", gap: 5, flexWrap: "wrap" }}>
                 {l.seller_name || "Seller"}{l.seller_verified && <BadgeCheck size={14} style={{ color: "var(--green-dk)" }} />}
+                <TrustBadge level={l.seller_trust_level} size={10} />
               </div>
               <div style={{ fontSize: 11.5, color: "var(--muted)" }}>{l.seller_since ? `member since ${new Date(l.seller_since).getFullYear()}` : ""}</div>
             </div>
@@ -464,6 +466,7 @@ export default function Marketplace() {
                     <Avatar src={l.seller_avatar} name={l.seller_name} size={16} fontScale={0.45} />
                     <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{l.seller_name || "Seller"}</span>
                     {l.seller_verified && <BadgeCheck size={11} style={{ color: "var(--green-dk)", flexShrink: 0 }} />}
+                    {(l.seller_trust_level === "TRUSTED" || l.seller_trust_level === "ACTIVE") && <TrustBadge level={l.seller_trust_level} size={9} showLabel={false} style={{ flexShrink: 0 }} />}
                     {l.island && <span style={{ flexShrink: 0 }}>· {l.island}</span>}
                   </div>
                 </div>

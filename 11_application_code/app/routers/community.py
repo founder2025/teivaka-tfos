@@ -151,11 +151,13 @@ async def list_community_listings(
         q = f"""SELECT cl.*, p.production_name, {pcat_sel},
                        u.full_name AS seller_name, u.avatar_url AS seller_avatar,
                        {vexpr} AS seller_verified, u.created_at AS seller_since,
+                       ut.level AS seller_trust_level,
                        {saved_expr} AS is_saved,
                        (cl.created_by = cast(:uid AS uuid)) AS is_mine
                 FROM community.listings cl
                 LEFT JOIN shared.productions p ON p.production_id = cl.production_id
                 LEFT JOIN tenant.users u ON u.user_id = cl.created_by
+                LEFT JOIN community.user_trust ut ON ut.user_id = cl.created_by
                 WHERE {where}"""
         if saved and has_saves:
             q += " AND EXISTS (SELECT 1 FROM community.listing_saves ls2 WHERE ls2.listing_id = cl.listing_id AND ls2.user_id = cast(:uid AS uuid))"

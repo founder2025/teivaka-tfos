@@ -147,6 +147,13 @@ app.conf.update(
             "schedule": crontab(minute="*/10"),
             "options": {"queue": "maintenance"},
         },
+        # Trust-level cache refresh (Trust Ladder Slice 2) — hourly. Denormalizes
+        # each user's earned trust level for cheap badges on listings/directory/feed.
+        "recompute-trust-levels": {
+            "task": "app.workers.community_worker.recompute_trust_levels",
+            "schedule": crontab(minute=25),
+            "options": {"queue": "maintenance"},
+        },
         # Infra health monitor — cheap probes every 15 min at :00 :15 :30 :45
         "ops-run-cheap-checks": {
             "task": "ops.run_cheap_checks",

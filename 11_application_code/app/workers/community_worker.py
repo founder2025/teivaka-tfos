@@ -69,3 +69,63 @@ def recompute_feed_rank():
         return {"reranked": 0, "error": str(e)}
     finally:
         conn.close()
+
+
+@celery_app.task(
+    name="app.workers.community_worker.recompute_trust_levels",
+    queue="maintenance",
+)
+def recompute_trust_levels():
+    """Refresh the denormalized trust-level cache (Trust Ladder Slice 2) so the
+    badge shows cheaply on listings/directory/feed authors.
+
+    audit.events has STRICT tenant-isolation RLS, so record counts must be read
+    per-tenant (Strike #95 two-stage scan): iterate tenants, set app.tenant_id,
+    aggregate that tenant's users. Level is decided by the SAME
+    trust.level_from_signals used by the live API helper (no drift). Fail-soft
+    per tenant — one bad tenant never aborts the batch."""
+    from app.core.trust import level_from_signals
+    conn = get_sync_db()
+    total = 0
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT tenant_id FROM tenant.tenants")
+        tenant_ids = [r["tenant_id"] for r in cur.fetchall()]
+        for tid in tenant_ids:
+            try:
+                cur.execute("SET app.tenant_id = %s", (str(tid),))
+                cur.execute(
+                    """
+                    SELECT u.user_id,
+                           COALESCE(u.kyc_verified, FALSE)   AS kyc,
+                           COALESCE(u.email_verified, FALSE) AS email,
+                           (SELECT count(*) FROM audit.events e WHERE e.created_by = u.user_id) AS records,
+                           (SELECT count(*) FROM community.feed_posts p
+                             WHERE p.author_user_id = u.user_id AND p.link_audit_hash IS NOT NULL) AS linked
+                    FROM tenant.users u
+                    WHERE u.tenant_id = cast(%s AS uuid) AND u.is_active = TRUE
+                    """, (str(tid),))
+                rows = cur.fetchall()
+                for r in rows:
+                    level, score = level_from_signals(r["kyc"], r["email"], r["records"], 0, r["linked"])
+                    cur.execute(
+                        """
+                        INSERT INTO community.user_trust (user_id, level, score, kyc, verified_records, computed_at)
+                        VALUES (%s, %s, %s, %s, %s, now())
+                        ON CONFLICT (user_id) DO UPDATE
+                           SET level = EXCLUDED.level, score = EXCLUDED.score, kyc = EXCLUDED.kyc,
+                               verified_records = EXCLUDED.verified_records, computed_at = now()
+                        """, (str(r["user_id"]), level, score, bool(r["kyc"]), int(r["records"])))
+                    total += 1
+                conn.commit()
+            except Exception as te:  # noqa: BLE001 — one tenant's failure must not abort the batch
+                conn.rollback()
+                logger.warning("[TRUST] tenant %s failed: %s", tid, te)
+        logger.info("[TRUST] recomputed %s user trust levels across %s tenants", total, len(tenant_ids))
+        return {"users": total, "tenants": len(tenant_ids)}
+    except Exception as e:  # noqa: BLE001
+        conn.rollback()
+        logger.warning("[TRUST] failed: %s", e)
+        return {"users": total, "error": str(e)}
+    finally:
+        conn.close()

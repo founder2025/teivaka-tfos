@@ -11,6 +11,7 @@ import { Search, BadgeCheck, UserPlus, UserCheck, MessageCircle, Tag, Share2 } f
 import { getJSON, send } from "../../utils/api";
 import { useChat } from "../../context/ChatContext";
 import Avatar from "../ui/Avatar";
+import TrustBadge from "../ui/TrustBadge";
 
 const API = "/api/v1/community";
 const toast = (message, type) => { try { window.dispatchEvent(new CustomEvent("tfos:toast", { detail: { message, type } })); } catch { /* noop */ } };
@@ -106,8 +107,9 @@ export default function Directory() {
                 </button>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <button onClick={() => navigate(`/u/${p.user_id}`)} style={{ background: "transparent", border: "none", cursor: "pointer", padding: 0, textAlign: "left" }}>
-                    <span style={{ fontWeight: 700, color: "var(--soil)", fontSize: 14, display: "inline-flex", alignItems: "center", gap: 5 }}>
+                    <span style={{ fontWeight: 700, color: "var(--soil)", fontSize: 14, display: "inline-flex", alignItems: "center", gap: 5, flexWrap: "wrap" }}>
                       {p.full_name}{p.verified && <BadgeCheck size={14} style={{ color: "var(--green-dk)" }} />}
+                      {(p.trust_level === "TRUSTED" || p.trust_level === "ACTIVE") && <TrustBadge level={p.trust_level} size={10} />}
                     </span>
                   </button>
                   <div style={{ fontSize: 11.5, color: "var(--muted)", display: "flex", gap: 8, flexWrap: "wrap", marginTop: 1 }}>

@@ -291,12 +291,14 @@ async def list_feed(
                        u.full_name AS author_name, u.avatar_url AS author_avatar, {vexpr} AS author_verified,
                        orig.body AS repost_body, ou.full_name AS repost_author_name, ou.avatar_url AS repost_author_avatar,
                        orig.author_profession AS repost_author_profession,
+                       aut.level AS author_trust_level,
                        fp.like_count, fp.reply_count, fp.repost_count,   -- denormalized (Feed v2 Slice 1b)
                        EXISTS (SELECT 1 FROM community.feed_likes fl WHERE fl.post_id = fp.post_id AND fl.user_id = :uid) AS liked,
                        EXISTS (SELECT 1 FROM community.feed_saves fs WHERE fs.post_id = fp.post_id AND fs.user_id = :uid) AS saved,
                        (SELECT reaction FROM community.feed_reactions rx WHERE rx.target_type = 'post' AND rx.target_id = fp.post_id AND rx.user_id = :uid) AS my_reaction
                 FROM community.feed_posts fp
                 JOIN tenant.users u ON u.user_id = fp.author_user_id
+                LEFT JOIN community.user_trust aut ON aut.user_id = fp.author_user_id
                 LEFT JOIN community.feed_posts orig ON orig.post_id = fp.repost_of_id
                 LEFT JOIN tenant.users ou ON ou.user_id = orig.author_user_id
                 WHERE fp.post_id = :pid AND fp.status = 'active'
@@ -421,12 +423,14 @@ async def list_feed(
                    orig.body AS repost_body, ou.full_name AS repost_author_name, ou.avatar_url AS repost_author_avatar,
                    orig.author_profession AS repost_author_profession,
                    fp.rank_score,                                    -- for the keyset cursor (Slice 2b)
+                   aut.level AS author_trust_level,                  -- denormalized trust badge (Trust Ladder Slice 2)
                    fp.like_count, fp.reply_count, fp.repost_count,   -- denormalized (Feed v2 Slice 1b — kills the N+1)
                    EXISTS (SELECT 1 FROM community.feed_likes fl WHERE fl.post_id = fp.post_id AND fl.user_id = :uid) AS liked,
                    EXISTS (SELECT 1 FROM community.feed_saves fs WHERE fs.post_id = fp.post_id AND fs.user_id = :uid) AS saved,
                    (SELECT reaction FROM community.feed_reactions rx WHERE rx.target_type = 'post' AND rx.target_id = fp.post_id AND rx.user_id = :uid) AS my_reaction
             FROM community.feed_posts fp
             JOIN tenant.users u ON u.user_id = fp.author_user_id
+            LEFT JOIN community.user_trust aut ON aut.user_id = fp.author_user_id
             LEFT JOIN community.feed_posts orig ON orig.post_id = fp.repost_of_id
             LEFT JOIN tenant.users ou ON ou.user_id = orig.author_user_id
             WHERE {' AND '.join(where)}
@@ -1073,8 +1077,10 @@ async def list_people(search: str = Query(None), following: bool = Query(False),
                    EXISTS (SELECT 1 FROM community.follows f
                            WHERE f.follower_user_id = :uid AND f.followed_user_id = u.user_id) AS is_following,
                    EXISTS (SELECT 1 FROM community.follows f2
-                           WHERE f2.follower_user_id = u.user_id AND f2.followed_user_id = :uid) AS follows_me
+                           WHERE f2.follower_user_id = u.user_id AND f2.followed_user_id = :uid) AS follows_me,
+                   ut.level AS trust_level
             FROM tenant.users u
+            LEFT JOIN community.user_trust ut ON ut.user_id = u.user_id
             WHERE u.user_id <> :uid AND u.is_active = TRUE{clause}
               AND u.user_id NOT IN (SELECT blocked_user_id FROM community.user_blocks WHERE user_id = :uid)
               AND u.user_id NOT IN (SELECT user_id FROM community.user_blocks WHERE blocked_user_id = :uid)
@@ -1103,6 +1109,7 @@ async def list_people(search: str = Query(None), following: bool = Query(False),
         "online": pres.get(str(r["user_id"]), {}).get("online", False),
         "is_following": r["is_following"],
         "is_connected": bool(r["is_following"] and r["follows_me"]),
+        "trust_level": r["trust_level"],
     } for r in rows],
         "meta": {"members": int(totals["members"] or 0) + 1, "verified": int(totals["verified"] or 0)}}
 
