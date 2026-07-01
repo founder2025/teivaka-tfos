@@ -552,3 +552,49 @@ async def seller_reviews(seller_id: str, user: dict = Depends(get_current_user))
         """), {"s": seller_id})).mappings().all()
     return {"data": [{"rating": r["rating"], "comment": r["comment"], "reviewer_name": r["reviewer_name"],
                       "created_at": r["created_at"].isoformat() if r["created_at"] else None} for r in rows]}
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# M4 — dispute from an order: either party flags a problem → order goes DISPUTED
+# and it lands in the unified moderation queue (feed_flags) so a moderator can act
+# (incl. suspend, T&S S3). One "Report a problem" button; no separate dispute UI.
+# ════════════════════════════════════════════════════════════════════════════
+class DisputeBody(BaseModel):
+    reason: str
+
+
+@router.post("/orders/{order_id}/dispute")
+async def dispute_order(order_id: str, body: DisputeBody, user: dict = Depends(get_current_user)):
+    uid = str(user["user_id"])
+    if not (body.reason and body.reason.strip()):
+        raise HTTPException(status_code=422, detail="A reason is required")
+    async with get_db_ctx() as db:
+        o = (await db.execute(text(
+            "SELECT buyer_user_id, seller_user_id, status, listing_title FROM community.marketplace_orders WHERE order_id = :o"),
+            {"o": order_id})).mappings().first()
+        if not o:
+            raise HTTPException(status_code=404, detail="Order not found")
+        is_seller = str(o["seller_user_id"]) == uid
+        is_buyer = str(o["buyer_user_id"]) == uid
+        if not (is_seller or is_buyer):
+            raise HTTPException(status_code=403, detail="Not your order")
+        if o["status"] == "CANCELLED":
+            raise HTTPException(status_code=400, detail="This order is cancelled")
+        counterparty = str(o["seller_user_id"]) if is_buyer else str(o["buyer_user_id"])
+        await db.execute(text("UPDATE community.marketplace_orders SET status='DISPUTED', updated_at=now() WHERE order_id=:o"),
+                         {"o": order_id})
+        # file into the unified moderation queue (reuses target_type/target_id — M4)
+        await db.execute(text("""
+            INSERT INTO community.feed_flags
+                (reporter_user_id, reason, target_type, target_id, reported_user_id, category)
+            VALUES (cast(:r AS uuid), :reason, 'ORDER', :oid, cast(:cp AS uuid), 'DISPUTE')
+        """), {"r": uid, "reason": f"Order dispute: {body.reason.strip()}", "oid": order_id, "cp": counterparty})
+        try:
+            await db.execute(text(
+                "INSERT INTO community.feed_notifications (user_id, actor_user_id, type, body) "
+                "VALUES (cast(:u AS uuid), cast(:a AS uuid), 'MARKETPLACE_ORDER', :b)"),
+                {"u": counterparty, "a": uid, "b": f"A problem was reported on the order for {o['listing_title']}. A moderator will review it."})
+        except Exception as e:  # noqa: BLE001
+            logger.warning("dispute notify failed: %s", e)
+        await db.commit()
+    return {"data": {"order_id": order_id, "status": "DISPUTED"}}

@@ -443,6 +443,12 @@ function MyOrders({ navigate }) {
       setReviewing(null); setRcomment(""); setRstar(5); load();
     } catch (e) { toast(`${e.userMessage || e.message}`, "error"); }
   };
+  const reportProblem = async (order_id) => {
+    const reason = window.prompt("What went wrong? (e.g. not delivered, wrong grade, no payment)");
+    if (!reason || !reason.trim()) return;
+    try { await send("POST", `/api/v1/marketplace/orders/${order_id}/dispute`, { reason: reason.trim() }); toast("Reported ✓ — a moderator will look into it.", "success"); load(); }
+    catch (e) { toast(`${e.userMessage || e.message}`, "error"); }
+  };
   if (data == null) return <div className="card" style={{ padding: 20, color: "var(--muted)" }}>Loading…</div>;
   const Section = ({ title, rows, role }) => (
     <div style={{ marginBottom: 18 }}>
@@ -468,6 +474,7 @@ function MyOrders({ navigate }) {
                 {role === "buying" && o.status === "DONE" && (o.reviewed
                   ? <span style={{ fontSize: 12, color: "var(--muted)", alignSelf: "center" }}>Reviewed ✓</span>
                   : <button className="btn btn-sm btn-primary" onClick={() => { setReviewing(o.order_id); setRstar(5); setRcomment(""); }}><Star size={13} /> Leave a review</button>)}
+                {o.status !== "DISPUTED" && o.status !== "CANCELLED" && <button className="btn btn-sm" style={{ border: "1px solid var(--red)", background: "var(--paper)", color: "var(--red)", padding: "6px 12px", borderRadius: 6, cursor: "pointer" }} onClick={() => reportProblem(o.order_id)}>Report a problem</button>}
               </div>
               {reviewing === o.order_id && (
                 <div style={{ marginTop: 10, borderTop: "1px solid var(--line)", paddingTop: 10 }}>
