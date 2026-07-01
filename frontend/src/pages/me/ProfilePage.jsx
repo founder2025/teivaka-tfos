@@ -12,7 +12,7 @@ import {
   Eye, Layers, Play, Image as ImageIcon, Bookmark, Activity as ActivityIcon, Settings as Cog,
   Rss, Users, Store, Contact, Camera, Pencil, Download, Shield, BadgeCheck, Phone, Calendar,
   Clock, MapPin, MessageCircle, UserPlus, UserCheck, ArrowRight, X, Award, QrCode,
-  PenSquare, Tag, Megaphone,
+  PenSquare, Tag, Megaphone, ShieldCheck, Sprout, Circle,
 } from "lucide-react";
 import { C, getJSON, send, card } from "./_meCommon";
 import { personaOf, personaLabel, pillarsFor, isProducer, PERSONA_OPTIONS, CATEGORIES } from "../../utils/personas";
@@ -279,14 +279,15 @@ function BizModal({ biz, onClose, onSaved }) {
 // on any profile (yours or a seller's) so trust is visible where people decide.
 // Levels: Trusted > ID-verified > Active > New member. Real signals only.
 const _TRUST_STYLE = {
-  TRUSTED:  { bg: "rgba(106,168,79,.18)", fg: "#2f6b1f", icon: "🛡️" },
-  VERIFIED: { bg: "rgba(106,168,79,.14)", fg: "#2f6b1f", icon: "✅" },
-  ACTIVE:   { bg: "rgba(31,41,55,.10)",   fg: "#1F2937", icon: "🌱" },
-  NEW:      { bg: "rgba(31,41,55,.06)",   fg: "#6b7280", icon: "•" },
+  TRUSTED:  { bg: "rgba(106,168,79,.18)", fg: "#2f6b1f", Icon: ShieldCheck },
+  VERIFIED: { bg: "rgba(106,168,79,.14)", fg: "#2f6b1f", Icon: BadgeCheck },
+  ACTIVE:   { bg: "rgba(31,41,55,.10)",   fg: "#1F2937", Icon: Sprout },
+  NEW:      { bg: "rgba(31,41,55,.06)",   fg: "#6b7280", Icon: Circle },
 };
 function TrustChip({ trust }) {
   if (!trust?.level) return null;
   const s = _TRUST_STYLE[trust.level] || _TRUST_STYLE.NEW;
+  const Icon = s.Icon;
   const bits = [
     trust.kyc_verified && "ID-verified",
     (trust.verified_records || 0) > 0 && `${trust.verified_records} verified records`,
@@ -294,7 +295,7 @@ function TrustChip({ trust }) {
   ].filter(Boolean).join(" · ") || "New to Teivaka";
   return (
     <span title={`Trust: ${bits}`} style={{ display: "inline-flex", alignItems: "center", gap: 4, background: s.bg, color: s.fg, fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 6 }}>
-      <span aria-hidden>{s.icon}</span>{(trust.level_label || trust.level).toUpperCase()}
+      <Icon size={11} />{(trust.level_label || trust.level).toUpperCase()}
     </span>
   );
 }
