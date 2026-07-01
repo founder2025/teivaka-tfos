@@ -465,7 +465,8 @@ async def my_orders(user: dict = Depends(get_current_user)):
         rows = (await db.execute(text("""
             SELECT o.order_id, o.listing_id, o.buyer_user_id, o.seller_user_id, o.buyer_name,
                    o.listing_title, o.category, o.quantity, o.unit, o.total_fjd, o.status, o.created_at,
-                   s.full_name AS seller_name
+                   s.full_name AS seller_name,
+                   EXISTS (SELECT 1 FROM community.marketplace_reviews r WHERE r.order_id = o.order_id) AS reviewed
             FROM community.marketplace_orders o
             LEFT JOIN tenant.users s ON s.user_id = o.seller_user_id
             WHERE o.buyer_user_id = cast(:u AS uuid) OR o.seller_user_id = cast(:u AS uuid)
@@ -481,6 +482,73 @@ async def my_orders(user: dict = Depends(get_current_user)):
             "status": r["status"], "created_at": r["created_at"].isoformat() if r["created_at"] else None,
             "buyer_name": r["buyer_name"], "seller_name": r["seller_name"],
             "counterparty_user_id": str(r["seller_user_id"]) if mine_as_buyer else str(r["buyer_user_id"]),
+            "reviewed": bool(r["reviewed"]),
         }
         (buying if mine_as_buyer else selling).append(item)
     return {"data": {"buying": buying, "selling": selling}}
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# M3 — reviews & reputation: buyer-of-a-DONE-order only, one per order (unbuyable,
+# non-anonymous). Aggregates ride the community.user_trust cache so ★ shows on
+# listings/directory/profile via the join already wired.
+# ════════════════════════════════════════════════════════════════════════════
+class ReviewBody(BaseModel):
+    rating: int
+    comment: Optional[str] = None
+
+
+@router.post("/orders/{order_id}/review")
+async def review_order(order_id: str, body: ReviewBody, user: dict = Depends(get_current_user)):
+    uid = str(user["user_id"])
+    if not (1 <= int(body.rating) <= 5):
+        raise HTTPException(status_code=422, detail="Rating must be 1–5")
+    async with get_db_ctx() as db:
+        o = (await db.execute(text(
+            "SELECT buyer_user_id, seller_user_id, status, listing_id FROM community.marketplace_orders WHERE order_id = :o"),
+            {"o": order_id})).mappings().first()
+        if not o:
+            raise HTTPException(status_code=404, detail="Order not found")
+        if str(o["buyer_user_id"]) != uid:
+            raise HTTPException(status_code=403, detail="Only the buyer can review this order")
+        if o["status"] != "DONE":
+            raise HTTPException(status_code=400, detail="You can review once the order is done")
+        if (await db.execute(text("SELECT 1 FROM community.marketplace_reviews WHERE order_id = :o"), {"o": order_id})).first():
+            raise HTTPException(status_code=409, detail="You've already reviewed this order")
+        await db.execute(text("""
+            INSERT INTO community.marketplace_reviews (order_id, listing_id, seller_user_id, reviewer_user_id, rating, comment)
+            VALUES (:o, :lid, cast(:s AS uuid), cast(:r AS uuid), :rat, :c)
+        """), {"o": order_id, "lid": o["listing_id"], "s": str(o["seller_user_id"]), "r": uid,
+               "rat": int(body.rating), "c": (body.comment or None)})
+        # recount-on-write into the trust cache (drift-proof; beat also maintains it)
+        agg = (await db.execute(text(
+            "SELECT count(*) AS n, avg(rating) AS a FROM community.marketplace_reviews WHERE seller_user_id = cast(:s AS uuid)"),
+            {"s": str(o["seller_user_id"])})).mappings().first()
+        await db.execute(text("""
+            INSERT INTO community.user_trust (user_id, review_count, avg_rating)
+            VALUES (cast(:s AS uuid), :n, :a)
+            ON CONFLICT (user_id) DO UPDATE SET review_count = EXCLUDED.review_count, avg_rating = EXCLUDED.avg_rating
+        """), {"s": str(o["seller_user_id"]), "n": int(agg["n"]), "a": agg["a"]})
+        try:
+            await db.execute(text(
+                "INSERT INTO community.feed_notifications (user_id, actor_user_id, type, body) "
+                "VALUES (cast(:u AS uuid), cast(:a AS uuid), 'MARKETPLACE_ORDER', :b)"),
+                {"u": str(o["seller_user_id"]), "a": uid, "b": f"You received a {int(body.rating)}★ review on a sale."})
+        except Exception as e:  # noqa: BLE001
+            logger.warning("review notify failed: %s", e)
+        await db.commit()
+    return {"data": {"order_id": order_id, "rating": int(body.rating)}}
+
+
+@router.get("/sellers/{seller_id}/reviews")
+async def seller_reviews(seller_id: str, user: dict = Depends(get_current_user)):
+    async with get_db_ctx() as db:
+        rows = (await db.execute(text("""
+            SELECT r.rating, r.comment, r.created_at, u.full_name AS reviewer_name
+            FROM community.marketplace_reviews r
+            LEFT JOIN tenant.users u ON u.user_id = r.reviewer_user_id
+            WHERE r.seller_user_id = cast(:s AS uuid)
+            ORDER BY r.created_at DESC LIMIT 20
+        """), {"s": seller_id})).mappings().all()
+    return {"data": [{"rating": r["rating"], "comment": r["comment"], "reviewer_name": r["reviewer_name"],
+                      "created_at": r["created_at"].isoformat() if r["created_at"] else None} for r in rows]}

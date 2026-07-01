@@ -22,17 +22,19 @@ LEVELS = ("TRUSTED", "VERIFIED", "ACTIVE", "NEW")
 _LABEL = {"TRUSTED": "Trusted", "VERIFIED": "ID-verified", "ACTIVE": "Active", "NEW": "New member"}
 
 
-def level_from_signals(kyc, email_verified, records, certs=0, linked=0):
+def level_from_signals(kyc, email_verified, records, certs=0, linked=0, reviews=0):
     """The single source of truth for the ladder. Used by both the live API helper
-    and the batch worker (Slice 2) so the level can never drift between them."""
-    records, certs, linked = int(records or 0), int(certs or 0), int(linked or 0)
-    score = (10 if kyc else 0) + min(records, 100) + certs * 5 + linked * 2
-    if kyc and (records >= 20 or certs >= 1 or linked >= 3):
-        level = "TRUSTED"          # verified ID + a real track record
+    and the batch worker so the level can never drift between them. `reviews` =
+    completed marketplace reviews (Marketplace M3) — real outcomes, a form of
+    track record."""
+    records, certs, linked, reviews = int(records or 0), int(certs or 0), int(linked or 0), int(reviews or 0)
+    score = (10 if kyc else 0) + min(records, 100) + certs * 5 + linked * 2 + reviews * 3
+    if kyc and (records >= 20 or certs >= 1 or linked >= 3 or reviews >= 3):
+        level = "TRUSTED"          # verified ID + a real track record (incl. reviewed sales)
     elif kyc:
         level = "VERIFIED"         # verified government ID
-    elif records >= 1 or email_verified:
-        level = "ACTIVE"           # real logged activity or a verified email
+    elif records >= 1 or email_verified or reviews >= 1:
+        level = "ACTIVE"           # real logged activity, a verified email, or a reviewed sale
     else:
         level = "NEW"
     return level, score

@@ -9,7 +9,7 @@
  */
 import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
-import { Search, MapPin, BadgeCheck, MessageCircle, Bookmark, Share2, X, ChevronLeft, ChevronRight, Tag, CheckCircle2, RotateCcw, Flag, Image as ImageIcon } from "lucide-react";
+import { Search, MapPin, BadgeCheck, MessageCircle, Bookmark, Share2, X, ChevronLeft, ChevronRight, Tag, CheckCircle2, RotateCcw, Flag, Star, Image as ImageIcon } from "lucide-react";
 import { getJSON, send } from "../../utils/api";
 import { uploadMedia } from "../../utils/imageCompress";
 import { useChat } from "../../context/ChatContext";
@@ -363,6 +363,7 @@ function ListingDetail({ l, onClose, onChanged }) {
               <div style={{ fontWeight: 700, color: "var(--soil)", fontSize: 13.5, display: "flex", alignItems: "center", gap: 5, flexWrap: "wrap" }}>
                 {l.seller_name || "Seller"}{l.seller_verified && <BadgeCheck size={14} style={{ color: "var(--green-dk)" }} />}
                 <TrustBadge level={l.seller_trust_level} size={10} />
+                <SellerRating avg={l.seller_avg_rating} count={l.seller_review_count} size={11} />
               </div>
               <div style={{ fontSize: 11.5, color: "var(--muted)" }}>{l.seller_since ? `member since ${new Date(l.seller_since).getFullYear()}` : ""}</div>
             </div>
@@ -404,6 +405,18 @@ function ListingDetail({ l, onClose, onChanged }) {
   );
 }
 
+/* ---------------- seller rating (M3) ---------------- */
+function SellerRating({ avg, count, size = 11 }) {
+  const c = Number(count || 0);
+  if (!c) return null;
+  const a = Number(avg || 0);
+  return (
+    <span title={`${a.toFixed(1)} from ${c} ${c === 1 ? "review" : "reviews"}`} style={{ display: "inline-flex", alignItems: "center", gap: 2, fontSize: size, fontWeight: 700, color: "var(--amber)", flexShrink: 0 }}>
+      <Star size={size} style={{ fill: "var(--amber)", color: "var(--amber)" }} />{a.toFixed(1)}<span style={{ color: "var(--muted)", fontWeight: 500 }}>({c})</span>
+    </span>
+  );
+}
+
 /* ---------------- my orders (M2) ---------------- */
 const ORDER_STATUS = {
   REQUESTED: { label: "Requested", bg: "rgba(191,144,0,.14)", fg: "var(--amber)" },
@@ -419,6 +432,16 @@ function MyOrders({ navigate }) {
   const act = async (order_id, action) => {
     try { await send("POST", `/api/v1/marketplace/orders/${order_id}/status`, { action }); toast("Updated ✓", "success"); load(); }
     catch (e) { toast(`${e.userMessage || e.message}`, "error"); }
+  };
+  const [reviewing, setReviewing] = useState(null);
+  const [rstar, setRstar] = useState(5);
+  const [rcomment, setRcomment] = useState("");
+  const submitReview = async (order_id) => {
+    try {
+      await send("POST", `/api/v1/marketplace/orders/${order_id}/review`, { rating: rstar, comment: rcomment.trim() || null });
+      toast("Review posted ✓ — thanks, it builds their trust.", "success");
+      setReviewing(null); setRcomment(""); setRstar(5); load();
+    } catch (e) { toast(`${e.userMessage || e.message}`, "error"); }
   };
   if (data == null) return <div className="card" style={{ padding: 20, color: "var(--muted)" }}>Loading…</div>;
   const Section = ({ title, rows, role }) => (
@@ -442,7 +465,26 @@ function MyOrders({ navigate }) {
                 {role === "selling" && o.status === "REQUESTED" && <button className="btn btn-sm btn-primary" onClick={() => act(o.order_id, "ACCEPT")}>Accept</button>}
                 {(o.status === "ACCEPTED" || o.status === "REQUESTED") && <button className="btn btn-sm btn-primary" onClick={() => act(o.order_id, "DONE")}>Mark done</button>}
                 {o.status !== "DONE" && o.status !== "CANCELLED" && <button className="btn btn-sm btn-secondary" onClick={() => act(o.order_id, "CANCEL")}>Cancel</button>}
+                {role === "buying" && o.status === "DONE" && (o.reviewed
+                  ? <span style={{ fontSize: 12, color: "var(--muted)", alignSelf: "center" }}>Reviewed ✓</span>
+                  : <button className="btn btn-sm btn-primary" onClick={() => { setReviewing(o.order_id); setRstar(5); setRcomment(""); }}><Star size={13} /> Leave a review</button>)}
               </div>
+              {reviewing === o.order_id && (
+                <div style={{ marginTop: 10, borderTop: "1px solid var(--line)", paddingTop: 10 }}>
+                  <div style={{ display: "flex", gap: 4, marginBottom: 8 }}>
+                    {[1, 2, 3, 4, 5].map((n) => (
+                      <button key={n} onClick={() => setRstar(n)} style={{ background: "none", border: "none", cursor: "pointer", padding: 2 }} aria-label={`${n} star`}>
+                        <Star size={22} style={{ fill: n <= rstar ? "var(--amber)" : "none", color: "var(--amber)" }} />
+                      </button>
+                    ))}
+                  </div>
+                  <textarea value={rcomment} onChange={(e) => setRcomment(e.target.value)} maxLength={500} placeholder="Delivered as described? Grade honest? (optional)" style={{ width: "100%", border: "1px solid var(--line)", borderRadius: 8, padding: 8, fontSize: 13, boxSizing: "border-box", minHeight: 54, resize: "vertical" }} />
+                  <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                    <button className="btn btn-sm btn-secondary" onClick={() => setReviewing(null)}>Cancel</button>
+                    <button className="btn btn-sm btn-primary" onClick={() => submitReview(o.order_id)}>Post review</button>
+                  </div>
+                </div>
+              )}
             </div>
           );
         })}
@@ -561,6 +603,7 @@ export default function Marketplace() {
                     <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{l.seller_name || "Seller"}</span>
                     {l.seller_verified && <BadgeCheck size={11} style={{ color: "var(--green-dk)", flexShrink: 0 }} />}
                     {(l.seller_trust_level === "TRUSTED" || l.seller_trust_level === "ACTIVE") && <TrustBadge level={l.seller_trust_level} size={9} showLabel={false} style={{ flexShrink: 0 }} />}
+                    {Number(l.seller_review_count) > 0 && <SellerRating avg={l.seller_avg_rating} count={l.seller_review_count} size={9} />}
                     {l.island && <span style={{ flexShrink: 0 }}>· {l.island}</span>}
                   </div>
                 </div>

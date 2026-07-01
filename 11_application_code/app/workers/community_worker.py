@@ -117,21 +117,25 @@ def recompute_trust_levels():
                            COALESCE(u.kyc_verified, FALSE)   AS kyc,
                            COALESCE(u.email_verified, FALSE) AS email,
                            (SELECT count(*) FROM community.feed_posts p
-                             WHERE p.author_user_id = u.user_id AND p.link_audit_hash IS NOT NULL) AS linked
+                             WHERE p.author_user_id = u.user_id AND p.link_audit_hash IS NOT NULL) AS linked,
+                           (SELECT count(*)   FROM community.marketplace_reviews mr WHERE mr.seller_user_id = u.user_id) AS reviews,
+                           (SELECT avg(rating) FROM community.marketplace_reviews mr WHERE mr.seller_user_id = u.user_id) AS avg_rating
                     FROM tenant.users u
                     WHERE u.tenant_id = cast(%s AS uuid) AND u.is_active = TRUE
                     """, (str(tid),))
                 rows = cur.fetchall()
                 for r in rows:
-                    level, score = level_from_signals(r["kyc"], r["email"], trec, 0, r["linked"])
+                    reviews = int(r["reviews"] or 0)
+                    level, score = level_from_signals(r["kyc"], r["email"], trec, 0, r["linked"], reviews)
                     cur.execute(
                         """
-                        INSERT INTO community.user_trust (user_id, level, score, kyc, verified_records, computed_at)
-                        VALUES (%s, %s, %s, %s, %s, now())
+                        INSERT INTO community.user_trust (user_id, level, score, kyc, verified_records, review_count, avg_rating, computed_at)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, now())
                         ON CONFLICT (user_id) DO UPDATE
                            SET level = EXCLUDED.level, score = EXCLUDED.score, kyc = EXCLUDED.kyc,
-                               verified_records = EXCLUDED.verified_records, computed_at = now()
-                        """, (str(r["user_id"]), level, score, bool(r["kyc"]), trec))
+                               verified_records = EXCLUDED.verified_records, review_count = EXCLUDED.review_count,
+                               avg_rating = EXCLUDED.avg_rating, computed_at = now()
+                        """, (str(r["user_id"]), level, score, bool(r["kyc"]), trec, reviews, r["avg_rating"]))
                     total += 1
                 conn.commit()
             except Exception as te:  # noqa: BLE001 — one tenant's failure must not abort the batch

@@ -151,7 +151,7 @@ async def list_community_listings(
         q = f"""SELECT cl.*, p.production_name, {pcat_sel},
                        u.full_name AS seller_name, u.avatar_url AS seller_avatar,
                        {vexpr} AS seller_verified, u.created_at AS seller_since,
-                       ut.level AS seller_trust_level,
+                       ut.level AS seller_trust_level, ut.avg_rating AS seller_avg_rating, ut.review_count AS seller_review_count,
                        {saved_expr} AS is_saved,
                        (cl.created_by = cast(:uid AS uuid)) AS is_mine
                 FROM community.listings cl
