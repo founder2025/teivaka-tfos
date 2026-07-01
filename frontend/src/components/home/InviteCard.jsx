@@ -4,7 +4,7 @@
  * link; they land on the public Landing → Register prefilled with attribution.
  */
 import { UserPlus } from "lucide-react";
-import { inviteViaWhatsApp } from "../../utils/whatsappShare";
+import { invite } from "../../utils/whatsappShare";
 
 export default function InviteCard({ compact }) {
   return (
@@ -16,8 +16,8 @@ export default function InviteCard({ compact }) {
       <div style={{ fontSize: 12.5, color: "var(--muted)", marginBottom: 10, lineHeight: 1.45 }}>
         Invite a farmer, buyer or worker you know. They join with your link — you both grow.
       </div>
-      <button className="btn btn-primary" style={{ width: "100%", justifyContent: "center" }} onClick={() => inviteViaWhatsApp()}>
-        <UserPlus size={14} /> Invite via WhatsApp
+      <button className="btn btn-primary" style={{ width: "100%", justifyContent: "center" }} onClick={() => invite()}>
+        <UserPlus size={14} /> Invite to Teivaka
       </button>
     </div>
   );

@@ -11,7 +11,7 @@ import {
   Image, MapPin, HelpCircle, Link2, Send, Star, MessageSquare, Repeat2, Share2,
   Smile, MoreHorizontal, Trash2, Check, BadgeCheck, X, Leaf, ShoppingBag, Gift,
   Droplet, BookOpen, Rss, UserPlus, UserCheck, Pencil, Flag,
-  Pin, Archive, Copy, EyeOff, Ban, BellOff, Bookmark, Users, Camera, MailCheck, Play, Sprout, Award,
+  Pin, Archive, Copy, EyeOff, Ban, BellOff, Bookmark, Users, Camera, MailCheck, Mail, Play, Sprout, Award,
 } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { getCurrentUser } from "../../utils/auth";
@@ -26,8 +26,8 @@ const API = "/api/v1/community";
 import { getJSON, send, apiFetch } from "../../utils/api";
 // Engagement signal producers (Slice 1.1) — best-effort IMPRESSION/CLICK logging.
 import { impression, click } from "../../utils/feedSignals";
-// WhatsApp growth loop (Phase 1) — share posts out + attributed invites.
-import { shareToWhatsApp, inviteViaWhatsApp } from "../../utils/whatsappShare";
+// Share loop (Phase 1) — native "share anywhere" + WhatsApp/email shortcuts + invite.
+import { canNativeShare, nativeSharePost, shareToWhatsApp, shareViaEmail, invite } from "../../utils/whatsappShare";
 // Loud feedback — routed through the shell Toast. No silent failures.
 const toast = (message, type) => {
   try { window.dispatchEvent(new CustomEvent("tfos:toast", { detail: { message, type } })); }
@@ -176,10 +176,12 @@ function ShareSheet({ post, onPerson, onCopy, onClose }) {
   return (
     <Overlay title="Share" onClose={onClose}>
       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        {canNativeShare() && <Item Icon={Share2} color="var(--green-dk)" label="Share anywhere…" sub="WhatsApp, Messenger, SMS, email — any app" onClick={() => { nativeSharePost(post); onClose(); }} />}
         <Item Icon={Send} color="var(--green-dk)" label="Share to WhatsApp" sub="Send this post to anyone" onClick={() => { shareToWhatsApp(post); onClose(); }} />
+        <Item Icon={Mail} color="var(--soil)" label="Share by email" sub="Opens your mail app" onClick={() => { shareViaEmail(post); onClose(); }} />
         <Item Icon={Copy} color="var(--soil)" label="Copy link" sub="Paste it anywhere" onClick={() => { onCopy(); onClose(); }} />
         <Item Icon={Users} color="var(--soil)" label="Send to a Teivaka person" sub="Share in a private message" onClick={onPerson} />
-        <Item Icon={UserPlus} color="var(--green-dk)" label="Invite people to Teivaka" sub="They join with your link — you both grow" onClick={() => { inviteViaWhatsApp(); onClose(); }} />
+        <Item Icon={UserPlus} color="var(--green-dk)" label="Invite people to Teivaka" sub="They join with your link — you both grow" onClick={() => { invite(); onClose(); }} />
       </div>
     </Overlay>
   );
