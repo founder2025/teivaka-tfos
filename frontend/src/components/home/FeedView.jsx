@@ -52,6 +52,9 @@ const FILTERS = [
   ["topics", "Topics"], ["group_PRODUCER", "Producers"], ["group_TRADE", "Trade"],
   ["group_CAPITAL", "Capital"], ["group_GOVERNANCE", "Governance"], ["group_SERVICE", "Services"],
 ];
+// Following is a MODE (Everyone | Following toggle), not a pill — F1. The rest
+// are secondary refinements of the "Everyone" view only.
+const SECONDARY_FILTERS = FILTERS.filter(([id]) => id !== "all" && id !== "following");
 const AUDIENCES = [
   ["everyone", "Everyone"], ["followers", "Your followers"], ["PRODUCER", "Producers"],
   ["TRADE", "Trade"], ["CAPITAL", "Capital"], ["GOVERNANCE", "Governance"], ["SERVICE", "Services"],
@@ -856,6 +859,7 @@ export default function FeedView({ initialFilter = "all", groupId = null }) {
   const [me, setMe] = useState(() => {
     try { const p = getCurrentUser(); return p ? { ...p, user_id: p.user_id || p.sub } : null; } catch { return null; }
   });
+  const navigate = useNavigate();
   useEffect(() => {
     getJSON("/api/v1/auth/me").then((r) => { const d = r?.data ?? r; if (d?.user_id) setMe(d); }).catch(() => {});
   }, []);
@@ -965,18 +969,43 @@ export default function FeedView({ initialFilter = "all", groupId = null }) {
         <>
           <Composer me={me} groupId={groupId} onPosted={() => { if (!groupId) setFilter("all"); load(); }} />
 
-          {!groupId && <div className="cm-filter-row">
-            {FILTERS.map(([id, label]) => (
-              <button key={id} className={`cm-pill ${filter === id ? "cm-pill-active" : ""}`} onClick={() => setFilter(id)}>{label}</button>
-            ))}
-            <div className="cm-pill-spacer" />
-            <button className={`cm-pill cm-pill-verified ${verifiedOnly ? "cm-pill-active" : ""}`} onClick={() => setVerifiedOnly(!verifiedOnly)}><Check size={11} /> Verified only</button>
-            <button className="cm-pill" onClick={() => setTopicsOpen(true)}><Rss size={11} /> Manage topics</button>
-          </div>}
+          {!groupId && <>
+            {/* Primary mode: your chosen graph vs the open network — Following is a MODE, not a tab (F1) */}
+            <div style={{ display: "flex", gap: 4, background: "var(--cream)", border: "1px solid var(--line)", borderRadius: 999, padding: 3, marginBottom: 10, width: "fit-content" }}>
+              {[["all", "Everyone", Sparkles], ["following", "Following", Users]].map(([id, label, Icon]) => {
+                const on = id === "following" ? filter === "following" : filter !== "following";
+                return (
+                  <button key={id} onClick={() => setFilter(id)} style={{ display: "inline-flex", alignItems: "center", gap: 6, border: "none", cursor: "pointer", borderRadius: 999, padding: "7px 16px", fontSize: 13, fontWeight: 700, minHeight: 40, background: on ? "var(--green)" : "transparent", color: on ? "#fff" : "var(--muted)" }}>
+                    <Icon size={14} />{label}
+                  </button>
+                );
+              })}
+            </div>
+            {/* Secondary refine — Everyone view only; Following mode stays minimal */}
+            {filter !== "following" && (
+              <div className="cm-filter-row">
+                {SECONDARY_FILTERS.map(([id, label]) => (
+                  <button key={id} className={`cm-pill ${filter === id ? "cm-pill-active" : ""}`} onClick={() => setFilter(id)}>{label}</button>
+                ))}
+                <div className="cm-pill-spacer" />
+                <button className={`cm-pill cm-pill-verified ${verifiedOnly ? "cm-pill-active" : ""}`} onClick={() => setVerifiedOnly(!verifiedOnly)}><Check size={11} /> Verified only</button>
+                <button className="cm-pill" onClick={() => setTopicsOpen(true)}><Rss size={11} /> Manage topics</button>
+              </div>
+            )}
+          </>}
 
           {posts == null ? <div className="cm-empty">Loading feed…</div> :
             posts.length === 0 ? (
-              (filter === "all" && !verifiedOnly) ? (
+              filter === "following" ? (
+                <div className="cm-empty" style={{ textAlign: "center", padding: "28px 18px" }}>
+                  <Users size={26} style={{ color: "var(--green-dk)" }} />
+                  <div style={{ fontWeight: 800, color: "var(--soil)", fontSize: 16, marginTop: 8 }}>Your people, in one place</div>
+                  <div style={{ fontSize: 13, color: "var(--muted)", margin: "6px auto 14px", maxWidth: 320, lineHeight: 1.5 }}>
+                    Follow farmers, buyers and mentors — their posts show here. Find people to follow in the Directory.
+                  </div>
+                  <button className="btn btn-primary" onClick={() => navigate("/home/directory")}><Users size={14} /> Find people to follow</button>
+                </div>
+              ) : (filter === "all" && !verifiedOnly) ? (
                 <div className="cm-empty" style={{ textAlign: "center", padding: "28px 18px" }}>
                   <Sparkles size={26} style={{ color: "var(--green-dk)" }} />
                   <div style={{ fontWeight: 800, color: "var(--soil)", fontSize: 16, marginTop: 8 }}>Start the conversation</div>

@@ -355,8 +355,10 @@ async def list_feed(
             where.append("fp.group_id IS NULL")
 
         if filter == "following":
-            where.append("""(fp.author_user_id = :uid OR fp.author_user_id IN
-                (SELECT followed_user_id FROM community.follows WHERE follower_user_id = :uid))""")
+            # Following is a MODE = purely people you follow (own posts excluded, so the
+            # empty state can trigger and the "your people" semantics are honest) — F1.
+            where.append("""fp.author_user_id IN
+                (SELECT followed_user_id FROM community.follows WHERE follower_user_id = :uid)""")
         elif filter == "saved":
             where.append("EXISTS (SELECT 1 FROM community.feed_saves s WHERE s.post_id = fp.post_id AND s.user_id = :uid)")
         elif filter == "questions":

@@ -50,8 +50,9 @@ const PILLARS = [
   { id: "tis", label: "TIS", Icon: Sparkles, to: "/tis" },
 ];
 const HOME_NAV = [
+  // "Following" retired as a tab — it's now a MODE toggle inside Feed (F1).
+  // /home/following still routes (deep-link back-compat), just not a nav entry.
   { id: "feed", label: "Feed", Icon: Rss },
-  { id: "following", label: "Following", Icon: Users },
   { id: "marketplace", label: "Marketplace", Icon: ShoppingBag },
   { id: "prices", label: "Market prices", Icon: TrendingUp },
   { id: "directory", label: "Directory", Icon: ListIcon },
