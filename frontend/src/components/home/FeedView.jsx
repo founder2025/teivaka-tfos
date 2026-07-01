@@ -968,11 +968,10 @@ export default function FeedView({ initialFilter = "all", groupId = null }) {
         </>
       ) : (
         <>
-          <Composer me={me} groupId={groupId} onPosted={() => { if (!groupId) setFilter("all"); load(); }} />
-
-          {!groupId && <>
-            {/* Primary mode: your chosen graph vs the open network — Following is a MODE, not a tab (F1) */}
-            <div style={{ display: "flex", gap: 4, background: "var(--cream)", border: "1px solid var(--line)", borderRadius: 999, padding: 3, marginBottom: 10, width: "fit-content" }}>
+          {/* Primary mode ABOVE the composer — the first thing you choose: your
+              chosen graph vs the open network. Following is a MODE, not a tab (F1). */}
+          {!groupId && (
+            <div style={{ display: "flex", gap: 4, background: "var(--cream)", border: "1px solid var(--line)", borderRadius: 999, padding: 3, marginBottom: 12, width: "fit-content" }}>
               {[["all", "Everyone", Sparkles], ["following", "Following", Users]].map(([id, label, Icon]) => {
                 const on = id === "following" ? filter === "following" : filter !== "following";
                 return (
@@ -982,18 +981,21 @@ export default function FeedView({ initialFilter = "all", groupId = null }) {
                 );
               })}
             </div>
-            {/* Secondary refine — Everyone view only; Following mode stays minimal */}
-            {filter !== "following" && (
-              <div className="cm-filter-row">
-                {SECONDARY_FILTERS.map(([id, label]) => (
-                  <button key={id} className={`cm-pill ${filter === id ? "cm-pill-active" : ""}`} onClick={() => setFilter(id)}>{label}</button>
-                ))}
-                <div className="cm-pill-spacer" />
-                <button className={`cm-pill cm-pill-verified ${verifiedOnly ? "cm-pill-active" : ""}`} onClick={() => setVerifiedOnly(!verifiedOnly)}><Check size={11} /> Verified only</button>
-                <button className="cm-pill" onClick={() => setTopicsOpen(true)}><Rss size={11} /> Manage topics</button>
-              </div>
-            )}
-          </>}
+          )}
+
+          <Composer me={me} groupId={groupId} onPosted={() => { if (!groupId) setFilter("all"); load(); }} />
+
+          {/* Secondary refine — Everyone view only; Following mode stays minimal */}
+          {!groupId && filter !== "following" && (
+            <div className="cm-filter-row">
+              {SECONDARY_FILTERS.map(([id, label]) => (
+                <button key={id} className={`cm-pill ${filter === id ? "cm-pill-active" : ""}`} onClick={() => setFilter(id)}>{label}</button>
+              ))}
+              <div className="cm-pill-spacer" />
+              <button className={`cm-pill cm-pill-verified ${verifiedOnly ? "cm-pill-active" : ""}`} onClick={() => setVerifiedOnly(!verifiedOnly)}><Check size={11} /> Verified only</button>
+              <button className="cm-pill" onClick={() => setTopicsOpen(true)}><Rss size={11} /> Manage topics</button>
+            </div>
+          )}
 
           {posts == null ? <div className="cm-empty">Loading feed…</div> :
             posts.length === 0 ? (
