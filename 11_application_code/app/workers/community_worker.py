@@ -45,13 +45,24 @@ def recompute_feed_rank():
         has_kyc = cur.fetchone() is not None
         vterm = "CASE WHEN COALESCE(u.kyc_verified, FALSE) THEN 36 ELSE 0 END" if has_kyc else "0"
         # vterm is internally controlled (no user input) — safe to interpolate.
+        # Engagement flywheel (Blocker #3): fold REAL engagement into the score —
+        # denormalized like/reply/repost counters (weighted; a reply/repost is
+        # worth more than a like) + distinct-user CLICK signals. ln()-dampened and
+        # capped at +48h-equivalent so virality NUDGES but never buries fresh
+        # content (an ag feed values freshness); distinct-user clicks blunt
+        # self-gaming. Zero engagement → +0, so new/quiet posts are unaffected.
+        eng = ("(fp.like_count + 2*fp.reply_count + 3*fp.repost_count "
+               "+ (SELECT count(DISTINCT s.user_id) FROM community.feed_signals s "
+               "WHERE s.post_id = fp.post_id AND s.signal_type = 'CLICK'))")
+        # vterm/eng are internally controlled (no user input) — safe to interpolate.
         cur.execute(
             f"""
             UPDATE community.feed_posts fp
             SET rank_score =
                   ( - extract(epoch from (now() - fp.created_at)) / 3600.0
                     + {vterm}
-                    + CASE WHEN fp.is_question AND fp.best_answer_reply_id IS NULL THEN 24 ELSE 0 END ),
+                    + CASE WHEN fp.is_question AND fp.best_answer_reply_id IS NULL THEN 24 ELSE 0 END
+                    + LEAST(48.0, 12.0 * ln(1 + {eng})) ),
                 ranked_at = now()
             FROM tenant.users u
             WHERE u.user_id = fp.author_user_id
