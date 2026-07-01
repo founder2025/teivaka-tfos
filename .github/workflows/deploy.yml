@@ -1,0 +1,44 @@
+name: Deploy to prod droplet
+
+# Push → SSH to the droplet → run the EXISTING deploy.sh (which keeps every
+# prod-safety guard: --no-cache API build (B78), migrate-as-owner (Strike #123),
+# verify-deploy.sh, EXPECTED_HEAD assert). This workflow only RUNS deploy.sh.
+#
+# Triggers: a push to the branch (only when the AUTO_DEPLOY repo variable is "true"),
+# and a manual "Run workflow" button (always allowed). Pure-docs pushes are skipped.
+
+on:
+  push:
+    branches: [claude/beautiful-fermi-F0dLX]
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+  workflow_dispatch: {}
+
+# Never let two deploys run at once (deploy.sh isn't concurrency-safe). Queue,
+# don't cancel — a half-finished deploy is worse than a delayed one.
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    # Manual runs always deploy. Push-triggered runs deploy ONLY when AUTO_DEPLOY
+    # is on — set the repo variable AUTO_DEPLOY to "true" to enable, anything else
+    # (or delete it) to pause auto-deploy while keeping the manual button.
+    if: ${{ github.event_name == 'workflow_dispatch' || vars.AUTO_DEPLOY == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Deploy (ssh → cd /opt/teivaka && bash deploy.sh)
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.DROPLET_HOST }}
+          username: ${{ secrets.DROPLET_USER }}
+          key: ${{ secrets.DROPLET_SSH_KEY }}
+          port: ${{ secrets.DROPLET_PORT || '22' }}
+          fingerprint: ${{ secrets.DROPLET_FINGERPRINT }}   # optional; set it to pin the host key
+          command_timeout: 25m
+          script_stop: true                                  # fail the job the instant deploy.sh errors
+          script: |
+            cd /opt/teivaka && bash deploy.sh
