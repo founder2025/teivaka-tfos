@@ -96,16 +96,18 @@ export default function HomePillar() {
   let body;
   if (gateFlag && !flagOn(gateFlag)) {
     body = <DisabledNotice what={head ? head[0] : "This area"} />;
-  } else if (view === "feed") {
+  } else if (view === "feed" || view === "following") {
+    // Following is a MODE of the Feed (Everyone|Following toggle), so /home/following
+    // renders the SAME full layout (greeting + weather + right-rail cards), just with
+    // the Following mode pre-selected — no more bare/stripped deep-link view.
+    const startFilter = view === "following" ? "following" : "all";
     body = wide ? (
-      // Feed v2 — stream-first: a farmer reaches a post in one screen. The vanity/social
-      // widgets (stats, stories, news) are cut; "what's happening" + trends move to the
-      // aside so the main column is greeting → weather → the ranked stream.
+      // Feed v2 — stream-first: greeting → weather → ranked stream; aside carries the cards.
       <div style={{ display: "flex", gap: 20, alignItems: "flex-start" }}>
         <div style={{ flex: 1, minWidth: 0 }}>
           <Greeting me={me} />
           <WeatherStrip />
-          <FeedView initialFilter="all" />
+          <FeedView initialFilter={startFilter} />
         </div>
         <aside style={{ width: 300, flexShrink: 0, position: "sticky", top: 72 }}>
           <NearYouRail />
@@ -119,13 +121,11 @@ export default function HomePillar() {
         <Greeting me={me} />
         <WeatherStrip />
         <NearYouRail compact />
-        <FeedView initialFilter="all" />
+        <FeedView initialFilter={startFilter} />
         <SponsorCorner compact />
         <InviteCard compact />
       </>
     );
-  } else if (view === "following") {
-    body = <FeedView initialFilter="following" />;
   } else if (view === "marketplace") {
     body = <Marketplace />;
   } else if (view === "prices") {
