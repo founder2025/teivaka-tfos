@@ -12,7 +12,7 @@ import {
   Smile, MoreHorizontal, Trash2, Check, BadgeCheck, X, Leaf, ShoppingBag, Gift,
   Droplet, BookOpen, Rss, UserPlus, UserCheck, Pencil, Flag,
   Pin, Archive, Copy, EyeOff, Ban, BellOff, Bookmark, Users, Camera, MailCheck, Mail, Play, Sprout, Award, ShieldCheck,
-  Mic, Square, Volume2,
+  Mic, Square, Volume2, Globe,
 } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { getCurrentUser } from "../../utils/auth";
@@ -311,6 +311,8 @@ function Composer({ me, onPosted, groupId }) {
   const [emojiOpen, setEmojiOpen] = useState(false);
   const [dictating, setDictating] = useState(false);   // Phase 5 — voice dictation
   const dictateStopRef = useRef(null);
+  const [toolsMore, setToolsMore] = useState(false);   // Phase 2 — progressive tools
+  const [focused, setFocused] = useState(false);       // reveal chips only once engaged
   const [promptText] = useState(() => SMART_PROMPTS[Math.floor(Math.random() * SMART_PROMPTS.length)]);
   const [myEmail, setMyEmail] = useState(me?.email || "");
   const fileRef = useRef();
@@ -399,17 +401,19 @@ function Composer({ me, onPosted, groupId }) {
     <div className="cm-composer">
       <div className="cm-composer-avatar"><Avatar src={me?.avatar_url} name={me?.full_name} size={40} /></div>
       <div className="cm-composer-body">
-        <div className="cm-activity-row">
-          {ACTIVITIES.map((a) => {
-            const on = activeActivity === a.key;
-            return (
-              <button key={a.key} type="button" className={`cm-activity-chip${on ? " on" : ""}`} onClick={() => selectActivity(a)}>
-                <a.Icon size={14} />{a.label}
-              </button>
-            );
-          })}
-        </div>
-        <textarea placeholder={promptText} value={draft.body} maxLength={BODY_MAX} onChange={(e) => set("body", e.target.value)} />
+        {(focused || draft.body.trim() || activeActivity) && (
+          <div className="cm-activity-row">
+            {ACTIVITIES.map((a) => {
+              const on = activeActivity === a.key;
+              return (
+                <button key={a.key} type="button" className={`cm-activity-chip${on ? " on" : ""}`} onClick={() => selectActivity(a)}>
+                  <a.Icon size={14} />{a.label}
+                </button>
+              );
+            })}
+          </div>
+        )}
+        <textarea placeholder={promptText} value={draft.body} maxLength={BODY_MAX} onFocus={() => setFocused(true)} onChange={(e) => set("body", e.target.value)} />
         {draft.body.length > BODY_MAX - 300 && (
           <div style={{ textAlign: "right", fontSize: 11, color: draft.body.length >= BODY_MAX ? "#b3261e" : "var(--muted)", marginTop: 2 }}>
             {draft.body.length.toLocaleString()} / {BODY_MAX.toLocaleString()}
@@ -423,7 +427,7 @@ function Composer({ me, onPosted, groupId }) {
           {draft.link && <span className="cm-draft-tag"><ShieldCheck size={11} />Proof attached<button className="cm-draft-tag-x" onClick={() => set("link", null)}><X size={10} /></button></span>}
           {draft.isQuestion && <span className="cm-draft-tag"><HelpCircle size={11} />Question<button className="cm-draft-tag-x" onClick={() => set("isQuestion", false)}><X size={10} /></button></span>}
           {draft.kind === "EDU_REEL" && <span className="cm-draft-tag"><BookOpen size={11} />Educational reel (global)<button className="cm-draft-tag-x" onClick={() => set("kind", "POST")}><X size={10} /></button></span>}
-          {draft.reach === "GLOBAL" && <span className="cm-draft-tag">🌐 Global reach<button className="cm-draft-tag-x" onClick={() => set("reach", "LOCAL")}><X size={10} /></button></span>}
+          {draft.reach === "GLOBAL" && <span className="cm-draft-tag"><Globe size={11} />Global reach<button className="cm-draft-tag-x" onClick={() => set("reach", "LOCAL")}><X size={10} /></button></span>}
         </div>
         {uploading && (
           <div style={{ margin: "8px 0 2px" }}>
@@ -446,6 +450,7 @@ function Composer({ me, onPosted, groupId }) {
         )}
         <div className="cm-composer-foot" style={narrow ? { flexDirection: "column", alignItems: "stretch", gap: 8 } : undefined}>
           <div className="cm-composer-tools" style={{ flexWrap: "wrap", rowGap: 6 }}>
+            {/* Primary tools — the few a farmer needs most; the rest live behind "More". */}
             <button className="cm-tool-btn" onClick={() => fileRef.current?.click()} disabled={uploading} style={narrow ? { minHeight: 44 } : undefined}><Image size={13} />Photo / Video</button>
             <input ref={fileRef} type="file" accept="image/*,video/*" multiple hidden onChange={pickFile} />
             {narrow && <>
@@ -453,12 +458,15 @@ function Composer({ me, onPosted, groupId }) {
               <input ref={cameraRef} type="file" accept="image/*" capture="environment" hidden onChange={pickFile} />
             </>}
             {isSpeechRecognitionSupported() && <button className="cm-tool-btn" onClick={toggleDictate} style={{ ...(narrow ? { minHeight: 44 } : {}), ...(dictating ? { color: "#b3261e", borderColor: "#b3261e" } : {}) }}>{dictating ? <Square size={13} /> : <Mic size={13} />}{dictating ? "Stop" : "Speak"}</button>}
-            <button className="cm-tool-btn" onClick={() => setEmojiOpen((v) => !v)} style={narrow ? { minHeight: 44 } : undefined}><Smile size={13} />Emoji</button>
-            <button className="cm-tool-btn" onClick={() => setModal("place")} style={narrow ? { minHeight: 44 } : undefined}><MapPin size={13} />Place</button>
-            <button className="cm-tool-btn" onClick={() => setModal("mention")} style={narrow ? { minHeight: 44 } : undefined}><UserPlus size={13} />Mention</button>
             <button className="cm-tool-btn" onClick={() => setModal("link")} style={narrow ? { minHeight: 44 } : undefined}><ShieldCheck size={13} />Proof</button>
-            <button className={`cm-tool-btn ${draft.kind === "EDU_REEL" ? "cm-tool-active" : ""}`} onClick={() => set("kind", draft.kind === "EDU_REEL" ? "POST" : "EDU_REEL")} style={narrow ? { minHeight: 44 } : undefined}><BookOpen size={13} />Reel</button>
-            {canGlobal && <button className={`cm-tool-btn ${draft.reach === "GLOBAL" ? "cm-tool-active" : ""}`} onClick={() => set("reach", draft.reach === "GLOBAL" ? "LOCAL" : "GLOBAL")} title="Global reach (exporters/importers)">🌐</button>}
+            <button className={`cm-tool-btn ${toolsMore ? "cm-tool-active" : ""}`} onClick={() => setToolsMore((v) => !v)} style={narrow ? { minHeight: 44 } : undefined}><MoreHorizontal size={13} />More</button>
+            {toolsMore && <>
+              <button className="cm-tool-btn" onClick={() => setEmojiOpen((v) => !v)} style={narrow ? { minHeight: 44 } : undefined}><Smile size={13} />Emoji</button>
+              <button className="cm-tool-btn" onClick={() => setModal("place")} style={narrow ? { minHeight: 44 } : undefined}><MapPin size={13} />Place</button>
+              <button className="cm-tool-btn" onClick={() => setModal("mention")} style={narrow ? { minHeight: 44 } : undefined}><UserPlus size={13} />Mention</button>
+              <button className={`cm-tool-btn ${draft.kind === "EDU_REEL" ? "cm-tool-active" : ""}`} onClick={() => set("kind", draft.kind === "EDU_REEL" ? "POST" : "EDU_REEL")} style={narrow ? { minHeight: 44 } : undefined}><BookOpen size={13} />Reel</button>
+              {canGlobal && <button className={`cm-tool-btn ${draft.reach === "GLOBAL" ? "cm-tool-active" : ""}`} onClick={() => set("reach", draft.reach === "GLOBAL" ? "LOCAL" : "GLOBAL")} title="Global reach (exporters/importers)" style={narrow ? { minHeight: 44 } : undefined}><Globe size={13} />Global</button>}
+            </>}
             <select className="cm-audience-select" value={draft.audience} onChange={(e) => set("audience", e.target.value)} style={narrow ? { minHeight: 44 } : undefined}>
               {AUDIENCES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
             </select>
@@ -472,7 +480,7 @@ function Composer({ me, onPosted, groupId }) {
             ))}
           </div>
         )}
-        {!narrow && <div className="cm-composer-hint">Seen by your country's {draft.audience === "everyone" ? "whole network" : (AUDIENCE_LABELS[draft.audience] || draft.audience)} (global if Reel/🌐). Use Mention to tag people. Reports go to Cody as moderator.</div>}
+        {!narrow && <div className="cm-composer-hint">Seen by your country's {draft.audience === "everyone" ? "whole network" : (AUDIENCE_LABELS[draft.audience] || draft.audience)} (global if Reel or Global reach). More tools under “More”.</div>}
       </div>
       {modal === "place" && <PlaceModal onClose={() => setModal(null)} onPick={(v) => { set("location", v); setModal(null); }} />}
       {modal === "link" && <RecordPicker onClose={() => setModal(null)} onPick={(v) => { set("link", v); setModal(null); }} />}
