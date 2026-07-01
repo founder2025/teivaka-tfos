@@ -6,7 +6,7 @@
 import { useEffect, useState } from "react";
 import AdminLayout from "../../components/admin/AdminLayout";
 import { authHeader } from "../../utils/auth";
-import { Flag, EyeOff, Check, RotateCcw } from "lucide-react";
+import { Flag, EyeOff, Check, RotateCcw, UserX, UserCheck } from "lucide-react";
 
 async function getJSON(u) { const r = await fetch(u, { headers: authHeader() }); if (!r.ok) throw new Error(String(r.status)); return r.json(); }
 async function act(u, body) {
@@ -18,17 +18,34 @@ const fmt = (iso) => { try { return new Date(iso).toLocaleString(); } catch { re
 
 export default function Moderation() {
   const [flags, setFlags] = useState(null);
+  const [susp, setSusp] = useState(null);
   const [tab, setTab] = useState("OPEN");
-  const load = () => { setFlags(null); getJSON(`/api/v1/community/flags?status_filter=${tab}`).then((r) => setFlags(r.data || [])).catch(() => setFlags([])); };
+  const loadSusp = () => getJSON(`/api/v1/community/suspensions`).then((r) => setSusp(r.data || [])).catch(() => setSusp([]));
+  const load = () => { setFlags(null); getJSON(`/api/v1/community/flags?status_filter=${tab}`).then((r) => setFlags(r.data || [])).catch(() => setFlags([])); loadSusp(); };
   useEffect(() => { load(); /* eslint-disable-next-line */ }, [tab]);
 
   const doAction = async (flag_id, action) => { await act(`/api/v1/community/flags/${flag_id}/action`, { action }); load(); };
+  const unsuspend = async (user_id) => { await act(`/api/v1/community/unsuspend/${user_id}`, {}); loadSusp(); };
+  const suspend = (flag_id) => { if (window.confirm("Suspend this user? They won't be able to post, list, or message until you lift it. This is reversible.")) doAction(flag_id, "SUSPEND_USER"); };
 
   return (
     <AdminLayout>
       <div style={{ maxWidth: 900, margin: "0 auto" }}>
         <h1 style={{ display: "flex", alignItems: "center", gap: 8, color: "var(--soil)" }}><Flag size={20} /> Moderation</h1>
         <p style={{ color: "var(--muted)", marginTop: 4 }}>Reported posts, listings, and users. Hide removes a post; Remove takes a listing off the marketplace; Dismiss clears the report.</p>
+
+        {susp && susp.length > 0 && (
+          <div style={{ margin: "14px 0", padding: 12, background: "rgba(179,38,30,0.06)", border: "1px solid rgba(179,38,30,0.25)", borderRadius: 10 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 6, fontWeight: 700, color: "var(--red)", fontSize: 13, marginBottom: 8 }}><UserX size={15} /> Suspended users ({susp.length})</div>
+            {susp.map((s) => (
+              <div key={s.user_id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0", borderTop: "1px solid rgba(179,38,30,0.12)", flexWrap: "wrap" }}>
+                <span style={{ fontSize: 13, color: "var(--soil)", fontWeight: 600 }}>{s.full_name || s.user_id}</span>
+                <span style={{ fontSize: 11.5, color: "var(--muted)" }}>{s.reason || ""}{s.suspended_by_name ? ` · by ${s.suspended_by_name}` : ""}</span>
+                <button className="btn btn-sm" style={{ marginLeft: "auto", background: "var(--paper)", border: "1px solid var(--green)", color: "var(--green-dk)", padding: "5px 10px", borderRadius: 6, cursor: "pointer", display: "inline-flex", gap: 5, alignItems: "center" }} onClick={() => unsuspend(s.user_id)}><UserCheck size={13} />Unsuspend</button>
+              </div>
+            ))}
+          </div>
+        )}
 
         <div style={{ display: "flex", gap: 8, margin: "14px 0" }}>
           {["OPEN", "ACTIONED", "DISMISSED", "ALL"].map((s) => (
@@ -66,6 +83,7 @@ export default function Moderation() {
                   <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
                     {isPost && <button className="btn btn-sm" style={btn("var(--red)", "none", "#fff")} onClick={() => doAction(f.flag_id, "HIDE")}><EyeOff size={13} />Hide post</button>}
                     {isListing && <button className="btn btn-sm" style={btn("var(--red)", "none", "#fff")} onClick={() => doAction(f.flag_id, "REMOVE_LISTING")}><EyeOff size={13} />Remove listing</button>}
+                    <button className="btn btn-sm" style={btn("var(--paper)", "1px solid var(--red)", "var(--red)")} onClick={() => suspend(f.flag_id)}><UserX size={13} />Suspend user</button>
                     <button className="btn btn-sm" style={btn("var(--paper)", "1px solid var(--line)", "var(--soil)")} onClick={() => doAction(f.flag_id, "DISMISS")}><Check size={13} />Dismiss</button>
                   </div>
                 )}

@@ -63,13 +63,38 @@ async def rate_limit(user: dict, action: str, limit: int, window_seconds: int) -
         logger.warning("community rate_limit fail-open (action=%s): %s", action, e)
 
 
+async def assert_not_suspended(user: dict) -> None:
+    """Block community WRITES from a suspended account (Trust & Safety Slice 3).
+    Authoritative check against community.user_suspensions. FAIL-OPEN on any DB
+    error — a blip must never lock out every farmer (and if the DB is down the
+    write fails anyway). Reads are never blocked; suspension gates writes only."""
+    try:
+        from app.db.session import get_db_ctx
+        from sqlalchemy import text
+        async with get_db_ctx() as db:
+            row = (await db.execute(text(
+                "SELECT 1 FROM community.user_suspensions "
+                "WHERE user_id = cast(:u AS uuid) AND (until IS NULL OR until > now()) LIMIT 1"),
+                {"u": str(user["user_id"])})).first()
+        if row:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Your account is suspended for a policy violation. Contact support if you believe this is a mistake.",
+            )
+    except HTTPException:
+        raise
+    except Exception as e:  # DB blip — fail-open, never lock out legitimate users
+        logger.warning("suspension check fail-open: %s", e)
+
+
 def community_write(action: str, limit: int, window_seconds: int = 60):
     """Dependency factory for community WRITE actions. As of 2026-06-13 this is
     rate-limit-ONLY — the email-verification hard gate was removed so a new,
     unverified farmer can post, comment, upload a profile pic/cover, share a
     story and list produce from day one. Spam defense is the per-action rate
-    limit (+ auth + RLS + file validation), not an unpassable wall."""
+    limit (+ suspension gate + auth + RLS + file validation), not an unpassable wall."""
     async def dep(user: dict = Depends(get_current_user)) -> dict:
+        await assert_not_suspended(user)
         await rate_limit(user, action, limit, window_seconds)
         return user
     return dep
@@ -78,8 +103,10 @@ def community_write(action: str, limit: int, window_seconds: int = 60):
 def rate_limit_only(action: str, limit: int, window_seconds: int = 60):
     """Rate-limit WITHOUT the email-verification gate. For low-abuse relationship
     actions (e.g. follow) that every authenticated user should be able to do —
-    so a new/unverified user can still build their graph. Still abuse-capped."""
+    so a new/unverified user can still build their graph. Still abuse-capped +
+    suspension-gated."""
     async def dep(user: dict = Depends(get_current_user)) -> dict:
+        await assert_not_suspended(user)
         await rate_limit(user, action, limit, window_seconds)
         return user
     return dep

@@ -1441,7 +1441,7 @@ async def list_flags(status_filter: str = Query("OPEN"), user: dict = Depends(ge
 
 
 class FlagAction(BaseModel):
-    action: str  # HIDE | RESTORE | REMOVE_LISTING | DISMISS
+    action: str  # HIDE | RESTORE | REMOVE_LISTING | SUSPEND_USER | DISMISS
 
 
 @router.post("/flags/{flag_id}/action")
@@ -1451,7 +1451,7 @@ async def action_flag(flag_id: str, body: FlagAction, user: dict = Depends(get_c
     act = (body.action or "").upper()
     async with get_rls_db(str(user["tenant_id"])) as db:
         flag = (await db.execute(text(
-            "SELECT post_id, target_type, target_id FROM community.feed_flags WHERE flag_id = :f"),
+            "SELECT post_id, target_type, target_id, reported_user_id, reason FROM community.feed_flags WHERE flag_id = :f"),
             {"f": flag_id})).mappings().first()
         if not flag:
             raise HTTPException(status_code=404, detail="Flag not found")
@@ -1468,6 +1468,27 @@ async def action_flag(flag_id: str, body: FlagAction, user: dict = Depends(get_c
             await db.execute(text("UPDATE community.listings SET listing_status='ARCHIVED', updated_at=now() WHERE listing_id=:l"),
                              {"l": flag["target_id"]})
             new_status, taken = "ACTIONED", "listing_removed"
+        elif act == "SUSPEND_USER":
+            # Resolve the offending user from the report (explicit reported_user_id,
+            # else the post author / listing seller). Suspension is a reversible
+            # community-level fact that blocks WRITES only (migration 206).
+            target = flag["reported_user_id"]
+            if not target and post_id:
+                target = (await db.execute(text("SELECT author_user_id FROM community.feed_posts WHERE post_id=:p"), {"p": post_id})).scalar()
+            if not target and flag["target_type"] == "LISTING" and flag["target_id"]:
+                target = (await db.execute(text("SELECT created_by FROM community.listings WHERE listing_id=:l"), {"l": flag["target_id"]})).scalar()
+            if not target:
+                raise HTTPException(status_code=422, detail="No user to suspend on this report")
+            if str(target) == str(user["user_id"]):
+                raise HTTPException(status_code=422, detail="You can't suspend yourself")
+            await db.execute(text("""
+                INSERT INTO community.user_suspensions (user_id, reason, suspended_by)
+                VALUES (cast(:t AS uuid), :r, cast(:by AS uuid))
+                ON CONFLICT (user_id) DO UPDATE
+                   SET reason = EXCLUDED.reason, suspended_by = EXCLUDED.suspended_by,
+                       until = NULL, created_at = now()
+            """), {"t": str(target), "r": f"moderation: {flag['reason'] or 'policy violation'}", "by": str(user["user_id"])})
+            new_status, taken = "ACTIONED", "user_suspended"
         elif act == "DISMISS":
             new_status, taken = "DISMISSED", "dismissed"
         else:
@@ -1478,6 +1499,35 @@ async def action_flag(flag_id: str, body: FlagAction, user: dict = Depends(get_c
              WHERE flag_id=:f
         """), {"s": new_status, "t": taken, "by": str(user["user_id"]), "f": flag_id})
     return {"data": {"flag_id": flag_id, "status": new_status, "action": taken}}
+
+
+@router.get("/suspensions")
+async def list_suspensions(user: dict = Depends(get_current_user)):
+    """Active suspensions — admin/founder only. Reversible via /unsuspend."""
+    if user.get("role") not in _ADMIN_ROLES:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Moderators only")
+    async with get_db_ctx() as db:
+        rows = (await db.execute(text("""
+            SELECT s.user_id, s.reason, s.until, s.created_at,
+                   u.full_name, u.account_type, b.full_name AS suspended_by_name
+            FROM community.user_suspensions s
+            LEFT JOIN tenant.users u ON u.user_id = s.user_id
+            LEFT JOIN tenant.users b ON b.user_id = s.suspended_by
+            WHERE s.until IS NULL OR s.until > now()
+            ORDER BY s.created_at DESC LIMIT 200
+        """))).mappings().all()
+    return {"data": [dict(r) for r in rows]}
+
+
+@router.post("/unsuspend/{user_id}")
+async def unsuspend_user(user_id: str, user: dict = Depends(get_current_user)):
+    """Lift a suspension — admin/founder only. Deleting the row restores writes."""
+    if user.get("role") not in _ADMIN_ROLES:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Moderators only")
+    async with get_db_ctx() as db:
+        await db.execute(text("DELETE FROM community.user_suspensions WHERE user_id = cast(:u AS uuid)"), {"u": user_id})
+        await db.commit()
+    return {"data": {"user_id": user_id, "suspended": False}}
 
 
 # ----------------------------------------------------------------------------- public profile
