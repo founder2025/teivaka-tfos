@@ -25,6 +25,7 @@ import Marketplace from "../../components/home/Marketplace";
 import WorkHub from "./WorkHub";
 import SponsorCorner from "../../components/home/SponsorCorner";
 import NearYouRail from "../../components/home/NearYouRail";
+import InviteCard from "../../components/home/InviteCard";
 import { useIsNarrow } from "../../hooks/useIsNarrow";
 import "../../styles/feed.css";
 
@@ -107,6 +108,7 @@ export default function HomePillar() {
         </div>
         <aside style={{ width: 300, flexShrink: 0, position: "sticky", top: 72 }}>
           <NearYouRail />
+          <InviteCard />
           <SponsorCorner />
         </aside>
       </div>
@@ -118,6 +120,7 @@ export default function HomePillar() {
         <NearYouRail compact />
         <FeedView initialFilter="all" />
         <SponsorCorner compact />
+        <InviteCard compact />
       </>
     );
   } else if (view === "following") {

@@ -26,6 +26,8 @@ const API = "/api/v1/community";
 import { getJSON, send, apiFetch } from "../../utils/api";
 // Engagement signal producers (Slice 1.1) — best-effort IMPRESSION/CLICK logging.
 import { impression, click } from "../../utils/feedSignals";
+// WhatsApp growth loop (Phase 1) — share posts out + attributed invites.
+import { shareToWhatsApp, inviteViaWhatsApp } from "../../utils/whatsappShare";
 // Loud feedback — routed through the shell Toast. No silent failures.
 const toast = (message, type) => {
   try { window.dispatchEvent(new CustomEvent("tfos:toast", { detail: { message, type } })); }
@@ -158,6 +160,31 @@ function ShareModal({ post, onClose, onShared }) {
     </Overlay>
   );
 }
+// Unified share sheet (Phase 1): WhatsApp out · copy link · send to a Teivaka
+// person · invite. Replaces the old single-purpose "share to a user" jump so the
+// growth loop (WhatsApp + invite) is one tap from every post.
+function ShareSheet({ post, onPerson, onCopy, onClose }) {
+  const Item = ({ Icon, label, sub, onClick, color }) => (
+    <button className="cm-menu-item" onClick={onClick} style={{ alignItems: "center", gap: 10, width: "100%" }}>
+      <span style={{ width: 34, height: 34, borderRadius: 9, background: `${color}1a`, color, display: "grid", placeItems: "center", flexShrink: 0 }}><Icon size={16} /></span>
+      <span style={{ flex: 1, textAlign: "left" }}>
+        <span style={{ display: "block", fontWeight: 600, color: "var(--soil)", fontSize: 13.5 }}>{label}</span>
+        {sub && <span style={{ fontSize: 11.5, color: "var(--muted)" }}>{sub}</span>}
+      </span>
+    </button>
+  );
+  return (
+    <Overlay title="Share" onClose={onClose}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        <Item Icon={Send} color="var(--green-dk)" label="Share to WhatsApp" sub="Send this post to anyone" onClick={() => { shareToWhatsApp(post); onClose(); }} />
+        <Item Icon={Copy} color="var(--soil)" label="Copy link" sub="Paste it anywhere" onClick={() => { onCopy(); onClose(); }} />
+        <Item Icon={Users} color="var(--soil)" label="Send to a Teivaka person" sub="Share in a private message" onClick={onPerson} />
+        <Item Icon={UserPlus} color="var(--green-dk)" label="Invite people to Teivaka" sub="They join with your link — you both grow" onClick={() => { inviteViaWhatsApp(); onClose(); }} />
+      </div>
+    </Overlay>
+  );
+}
+
 function TopicsModal({ onClose }) {
   const [topics, setTopics] = useState(null);
   const [v, setV] = useState("");
@@ -678,7 +705,7 @@ function PostCard({ post, me, onChange, onRemoved }) {
           ? <button className="cm-action-btn" disabled title="Comments are turned off" style={{ opacity: 0.5, cursor: "default" }}><MessageSquare size={13} />Comments off</button>
           : <button className="cm-action-btn" onClick={() => { if (!showReplies) click(p.post_id); setShowReplies(!showReplies); }}><MessageSquare size={13} />Reply · {p.reply_count || 0}</button>}
         <button className="cm-action-btn" onClick={repost}><Repeat2 size={13} />Repost{p.repost_count ? ` · ${p.repost_count}` : ""}</button>
-        <button className="cm-action-btn" onClick={() => { click(p.post_id); setShare(true); }}><Share2 size={13} />Share</button>
+        <button className="cm-action-btn" onClick={() => { click(p.post_id); setShare("sheet"); }}><Share2 size={13} />Share</button>
         <button className={`cm-action-btn ${p.my_reaction ? "cm-action-active" : ""}`} onClick={() => setShowTray(!showTray)}><Smile size={13} />{p.my_reaction ? (RX[p.my_reaction]?.label || "Reacted") : "React"}</button>
         <button className={`cm-action-btn ${p.saved ? "cm-action-active" : ""}`} style={{ marginLeft: "auto" }} onClick={toggleSave}><BookOpen size={13} />{p.saved ? "Saved" : "Save"}</button>
       </div>
@@ -691,7 +718,8 @@ function PostCard({ post, me, onChange, onRemoved }) {
 
       {showReplies && <Replies post={p} me={me} onCount={(n) => setP((pp) => ({ ...pp, reply_count: n }))} />}
 
-      {share && <ShareModal post={p} onClose={() => setShare(false)} onShared={(u) => { setShare(false); }} />}
+      {share === "sheet" && <ShareSheet post={p} onPerson={() => setShare("person")} onCopy={copyLink} onClose={() => setShare(false)} />}
+      {share === "person" && <ShareModal post={p} onClose={() => setShare(false)} onShared={() => setShare(false)} />}
       {reporting && <ReportModal post={p} onClose={() => setReporting(false)} />}
       {lightbox != null && <PhotoLightbox post={p} startIndex={lightbox} onClose={() => setLightbox(null)} />}
       {audienceOpen && (
