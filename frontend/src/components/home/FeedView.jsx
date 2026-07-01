@@ -11,7 +11,7 @@ import {
   Image, MapPin, HelpCircle, Link2, Send, Star, MessageSquare, Repeat2, Share2,
   Smile, MoreHorizontal, Trash2, Check, BadgeCheck, X, Leaf, ShoppingBag, Gift,
   Droplet, BookOpen, Rss, UserPlus, UserCheck, Pencil, Flag,
-  Pin, Archive, Copy, EyeOff, Ban, BellOff, Bookmark, Users, Camera, MailCheck, Mail, Play, Sprout, Award,
+  Pin, Archive, Copy, EyeOff, Ban, BellOff, Bookmark, Users, Camera, MailCheck, Mail, Play, Sprout, Award, ShieldCheck,
 } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { getCurrentUser } from "../../utils/auth";
@@ -117,13 +117,41 @@ function PlaceModal({ onPick, onClose }) {
     </Overlay>
   );
 }
-function LinkRecordModal({ onPick, onClose }) {
+// Proof Feed (Phase 3): one-tap attach of the farmer's OWN verifiable records.
+// Lists recent hash-chained farm records (GET /community/my-records) → tap to
+// attach; a manual-hash path stays for Bank-Evidence / off-app hashes.
+function RecordPicker({ onPick, onClose }) {
+  const [recs, setRecs] = useState(null);
+  const [manual, setManual] = useState(false);
   const [v, setV] = useState("");
+  const fmt = (iso) => { try { return new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }); } catch { return ""; } };
+  useEffect(() => { getJSON(`${API}/my-records`).then((r) => setRecs(r.data || [])).catch(() => setRecs([])); }, []);
   return (
-    <Overlay title="Link a record" onClose={onClose}
-      foot={<><button className="btn btn-secondary" onClick={onClose}>Cancel</button><button className="btn btn-primary" onClick={() => v.trim() && onPick(v.trim())}>Attach</button></>}>
-      <p style={{ fontSize: 12.5, color: "var(--muted)", marginTop: 0 }}>Attach a verifiable audit record by its hash (from a Bank Evidence PDF or /verify). It shows as a tappable Linked record on your post.</p>
-      <input style={inp} placeholder="Audit hash, e.g. c1a4b7e2d9f3" value={v} onChange={(e) => setV(e.target.value)} />
+    <Overlay title="Attach a proof" onClose={onClose}
+      foot={manual ? <><button className="btn btn-secondary" onClick={() => setManual(false)}>Back</button><button className="btn btn-primary" onClick={() => v.trim() && onPick(v.trim())}>Attach</button></> : undefined}>
+      <p style={{ fontSize: 12.5, color: "var(--muted)", marginTop: 0 }}>
+        Back this post with one of your real, tamper-evident records. It shows a <strong>✓ Proven</strong> badge anyone can verify.
+      </p>
+      {manual ? (
+        <input style={inp} placeholder="Audit hash, e.g. c1a4b7e2d9f3" value={v} onChange={(e) => setV(e.target.value)} autoFocus />
+      ) : recs == null ? (
+        <div className="cm-empty">Loading your records…</div>
+      ) : recs.length === 0 ? (
+        <div className="cm-empty">No verifiable records yet — log a harvest, sale or field event in Farm and it'll appear here.</div>
+      ) : (
+        <div style={{ maxHeight: 300, overflowY: "auto", display: "flex", flexDirection: "column", gap: 6 }}>
+          {recs.map((r) => (
+            <button key={r.audit_hash} className="cm-menu-item" style={{ alignItems: "center", gap: 10 }} onClick={() => onPick(r.audit_hash)}>
+              <span style={{ width: 30, height: 30, borderRadius: 8, background: "rgba(106,168,79,.14)", color: "var(--green-dk)", display: "grid", placeItems: "center", flexShrink: 0 }}><ShieldCheck size={15} /></span>
+              <span style={{ flex: 1, textAlign: "left", minWidth: 0 }}>
+                <span style={{ display: "block", fontWeight: 600, color: "var(--soil)", fontSize: 13.5 }}>{r.label}</span>
+                <span style={{ fontSize: 11.5, color: "var(--muted)" }}>{fmt(r.occurred_at)} · {String(r.audit_hash).slice(0, 10)}…</span>
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+      {!manual && <button className="cm-tool-btn" style={{ marginTop: 10 }} onClick={() => setManual(true)}><Link2 size={12} />Paste a hash instead</button>}
     </Overlay>
   );
 }
@@ -374,7 +402,7 @@ function Composer({ me, onPosted, groupId }) {
             <div className="cm-draft-thumb" key={ph.id}>{ph.video ? <video src={ph.url} muted /> : <img src={ph.url} alt="" />}<button className="cm-draft-thumb-x" onClick={() => set("photos", draft.photos.filter((p) => p.id !== ph.id))}><X size={11} /></button></div>
           ))}
           {draft.location && <span className="cm-draft-tag"><MapPin size={11} />{draft.location}<button className="cm-draft-tag-x" onClick={() => set("location", null)}><X size={10} /></button></span>}
-          {draft.link && <span className="cm-draft-tag"><Link2 size={11} />Record {draft.link}<button className="cm-draft-tag-x" onClick={() => set("link", null)}><X size={10} /></button></span>}
+          {draft.link && <span className="cm-draft-tag"><ShieldCheck size={11} />Proof attached<button className="cm-draft-tag-x" onClick={() => set("link", null)}><X size={10} /></button></span>}
           {draft.isQuestion && <span className="cm-draft-tag"><HelpCircle size={11} />Question<button className="cm-draft-tag-x" onClick={() => set("isQuestion", false)}><X size={10} /></button></span>}
           {draft.kind === "EDU_REEL" && <span className="cm-draft-tag"><BookOpen size={11} />Educational reel (global)<button className="cm-draft-tag-x" onClick={() => set("kind", "POST")}><X size={10} /></button></span>}
           {draft.reach === "GLOBAL" && <span className="cm-draft-tag">🌐 Global reach<button className="cm-draft-tag-x" onClick={() => set("reach", "LOCAL")}><X size={10} /></button></span>}
@@ -409,7 +437,7 @@ function Composer({ me, onPosted, groupId }) {
             <button className="cm-tool-btn" onClick={() => setEmojiOpen((v) => !v)} style={narrow ? { minHeight: 44 } : undefined}><Smile size={13} />Emoji</button>
             <button className="cm-tool-btn" onClick={() => setModal("place")} style={narrow ? { minHeight: 44 } : undefined}><MapPin size={13} />Place</button>
             <button className="cm-tool-btn" onClick={() => setModal("mention")} style={narrow ? { minHeight: 44 } : undefined}><UserPlus size={13} />Mention</button>
-            {!narrow && <button className="cm-tool-btn" onClick={() => setModal("link")}><Link2 size={13} />Link record</button>}
+            <button className="cm-tool-btn" onClick={() => setModal("link")} style={narrow ? { minHeight: 44 } : undefined}><ShieldCheck size={13} />Proof</button>
             <button className={`cm-tool-btn ${draft.kind === "EDU_REEL" ? "cm-tool-active" : ""}`} onClick={() => set("kind", draft.kind === "EDU_REEL" ? "POST" : "EDU_REEL")} style={narrow ? { minHeight: 44 } : undefined}><BookOpen size={13} />Reel</button>
             {canGlobal && <button className={`cm-tool-btn ${draft.reach === "GLOBAL" ? "cm-tool-active" : ""}`} onClick={() => set("reach", draft.reach === "GLOBAL" ? "LOCAL" : "GLOBAL")} title="Global reach (exporters/importers)">🌐</button>}
             <select className="cm-audience-select" value={draft.audience} onChange={(e) => set("audience", e.target.value)} style={narrow ? { minHeight: 44 } : undefined}>
@@ -428,7 +456,7 @@ function Composer({ me, onPosted, groupId }) {
         {!narrow && <div className="cm-composer-hint">Seen by your country's {draft.audience === "everyone" ? "whole network" : (AUDIENCE_LABELS[draft.audience] || draft.audience)} (global if Reel/🌐). Use Mention to tag people. Reports go to Cody as moderator.</div>}
       </div>
       {modal === "place" && <PlaceModal onClose={() => setModal(null)} onPick={(v) => { set("location", v); setModal(null); }} />}
-      {modal === "link" && <LinkRecordModal onClose={() => setModal(null)} onPick={(v) => { set("link", v); setModal(null); }} />}
+      {modal === "link" && <RecordPicker onClose={() => setModal(null)} onPick={(v) => { set("link", v); setModal(null); }} />}
       {modal === "mention" && <MentionPicker onClose={() => setModal(null)} onPick={(name) => { set("body", `${draft.body}${draft.body && !draft.body.endsWith(" ") ? " " : ""}@[${name}] `); setModal(null); }} />}
     </div>
   );
@@ -691,7 +719,11 @@ function PostCard({ post, me, onChange, onRemoved }) {
       )}
 
       {p.link_audit_hash && (
-        <a className="cm-link-record" href={`/verify/${p.link_audit_hash}`} target="_blank" rel="noreferrer"><Link2 size={12} />Linked record · {p.link_audit_hash}</a>
+        <a href={`/verify/${p.link_audit_hash}`} target="_blank" rel="noreferrer"
+           title="This post is backed by a tamper-evident farm record. Tap to verify."
+           style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "rgba(106,168,79,.14)", color: "var(--green-dk)", border: "1px solid rgba(106,168,79,.4)", borderRadius: 8, padding: "5px 10px", fontSize: 12.5, fontWeight: 700, textDecoration: "none", margin: "2px 0 8px" }}>
+          <ShieldCheck size={14} /> Proven <span style={{ fontWeight: 500, opacity: 0.75 }}>· verifiable record {String(p.link_audit_hash).slice(0, 10)}…</span>
+        </a>
       )}
       {p.photos?.length > 0 && <PostMedia photos={p.photos} onOpen={(i) => { click(p.post_id); setLightbox(i); }} />}
 
