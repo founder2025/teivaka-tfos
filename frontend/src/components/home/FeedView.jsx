@@ -12,7 +12,7 @@ import {
   Smile, MoreHorizontal, Trash2, Check, BadgeCheck, X, Leaf, ShoppingBag, Gift,
   Droplet, BookOpen, Rss, UserPlus, UserCheck, Pencil, Flag,
   Pin, Archive, Copy, EyeOff, Ban, BellOff, Bookmark, Users, Camera, MailCheck, Mail, Play, Sprout, Award, ShieldCheck,
-  Mic, Square, Volume2, Globe,
+  Mic, Square, Volume2, Globe, Eye, Sparkles,
 } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { getCurrentUser } from "../../utils/auth";
@@ -779,6 +779,12 @@ function PostCard({ post, me, onChange, onRemoved }) {
         </div>
       )}
 
+      {mine && p.reach > 0 && (
+        <div style={{ fontSize: 11.5, color: "var(--muted)", display: "flex", alignItems: "center", gap: 5, margin: "2px 0 6px" }}>
+          <Eye size={12} /> Seen by {p.reach} {p.reach === 1 ? "farmer" : "farmers"}
+        </div>
+      )}
+
       <div className="cm-post-actions">
         <button className={`cm-action-btn ${p.liked ? "cm-action-active" : ""}`} onClick={toggleLike}><Star size={13} />Like · {p.like_count || 0}</button>
         {p.comments_enabled === false
@@ -969,7 +975,18 @@ export default function FeedView({ initialFilter = "all", groupId = null }) {
           </div>}
 
           {posts == null ? <div className="cm-empty">Loading feed…</div> :
-            posts.length === 0 ? <div className="cm-empty">No posts match your filter yet. Share the first update.</div> :
+            posts.length === 0 ? (
+              (filter === "all" && !verifiedOnly) ? (
+                <div className="cm-empty" style={{ textAlign: "center", padding: "28px 18px" }}>
+                  <Sparkles size={26} style={{ color: "var(--green-dk)" }} />
+                  <div style={{ fontWeight: 800, color: "var(--soil)", fontSize: 16, marginTop: 8 }}>Start the conversation</div>
+                  <div style={{ fontSize: 13, color: "var(--muted)", margin: "6px auto 14px", maxWidth: 320, lineHeight: 1.5 }}>
+                    Share what happened on your farm today — a harvest, a question, a price. Your first post reaches farmers and buyers near you.
+                  </div>
+                  <button className="btn btn-primary" onClick={() => { try { const el = document.querySelector(".cm-composer textarea"); if (el) { el.scrollIntoView({ block: "center", behavior: "smooth" }); el.focus(); } } catch { /* noop */ } }}><Pencil size={14} /> Write your first post</button>
+                </div>
+              ) : <div className="cm-empty">No posts match this filter yet.</div>
+            ) :
               <>
                 {posts.map((p) => <PostCard key={p.post_id} post={p} me={me} onChange={() => load(true)} onRemoved={(id) => setPosts((l) => l.filter((x) => x.post_id !== id))} />)}
                 {!end && (

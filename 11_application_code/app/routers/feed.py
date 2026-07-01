@@ -424,6 +424,10 @@ async def list_feed(
                    orig.author_profession AS repost_author_profession,
                    fp.rank_score,                                    -- for the keyset cursor (Slice 2b)
                    aut.level AS author_trust_level,                  -- denormalized trust badge (Trust Ladder Slice 2)
+                   CASE WHEN fp.author_user_id = :uid THEN            -- your post's reach (Phase 6 return trigger)
+                     (SELECT count(DISTINCT s.user_id) FROM community.feed_signals s
+                       WHERE s.post_id = fp.post_id AND s.signal_type = 'IMPRESSION' AND s.user_id <> fp.author_user_id)
+                   END AS reach,
                    fp.like_count, fp.reply_count, fp.repost_count,   -- denormalized (Feed v2 Slice 1b — kills the N+1)
                    EXISTS (SELECT 1 FROM community.feed_likes fl WHERE fl.post_id = fp.post_id AND fl.user_id = :uid) AS liked,
                    EXISTS (SELECT 1 FROM community.feed_saves fs WHERE fs.post_id = fp.post_id AND fs.user_id = :uid) AS saved,
