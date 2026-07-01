@@ -28,6 +28,7 @@ import { submitCapture, ensureCaptureSync } from "./submitCapture";
 import { newIdem } from "./offlineQueue";
 import { recordCapture, lastValues } from "./captureMemory";
 import { cachedJSON } from "./referenceCache";
+import { send } from "../utils/api";
 import { listen, isSpeechRecognitionSupported } from "../utils/speech";
 import { draftFromTranscript } from "./voiceDraft";
 
@@ -117,6 +118,11 @@ export default function CaptureEngine({ config = cropsConfig, onDone, onBack, pr
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState("");
+  // Records → Social loop (Phase 4): share the just-logged record to the Feed as a
+  // ✓ Proven post. null = closed, string = editing the caption.
+  const [shareText, setShareText] = useState(null);
+  const [shareBusy, setShareBusy] = useState(false);
+  const [sharePosted, setSharePosted] = useState(false);
   // 48h correction window — edit the just-logged record (note / photo) on the success screen.
   const [editOpen, setEditOpen] = useState(false);
   const [editNotes, setEditNotes] = useState("");
@@ -616,6 +622,26 @@ export default function CaptureEngine({ config = cropsConfig, onDone, onBack, pr
     padding: "12px 6px", borderRadius: 12, border: active ? "2px solid var(--green)" : "1px dashed var(--line)",
     background: active ? "#eaf3ea" : "#fff", cursor: "pointer", fontSize: 12 });
 
+  // Records → Social loop (Phase 4): a proven default caption from the just-logged
+  // record, and the one-tap post to the Feed carrying its audit hash.
+  function shareCaption() {
+    const v = verb?.label || "Farm activity";
+    const anchor = selectedItem?.label || selectedItem?.name || selectedItem?.farmer_label || "";
+    return anchor ? `${v} — ${anchor}.` : `${v}.`;
+  }
+  async function postToFeed() {
+    if (!shareText?.trim() || shareBusy) return;
+    setShareBusy(true);
+    try {
+      await send("POST", "/api/v1/community/feed", {
+        body: shareText.trim(), link_audit_hash: result.audit_hash, audience: "everyone",
+      });
+      setSharePosted(true); setShareText(null);
+    } catch (e) {
+      try { window.dispatchEvent(new CustomEvent("tfos:toast", { detail: { message: `Couldn't share: ${e?.userMessage || e?.message || e}`, type: "error" } })); } catch { /* noop */ }
+    } finally { setShareBusy(false); }
+  }
+
   // --- success ---
   if (result) return (
     <div style={wrap}>
@@ -668,6 +694,29 @@ export default function CaptureEngine({ config = cropsConfig, onDone, onBack, pr
             <button onClick={saveEdit} disabled={editBusy || editPhotoUploading} style={{ flex: 1, padding: 12, borderRadius: 12, border: "none", background: "var(--green)", color: "#fff", fontWeight: 700, cursor: "pointer" }}>{editBusy ? "Saving…" : "Save changes"}</button>
           </div>
         </div>
+      )}
+
+      {result.audit_hash && !result.queued && !result.batch && (
+        sharePosted ? (
+          <div style={{ ...card, textAlign: "center" }}>
+            <p style={{ fontSize: 12.5, color: "var(--green-dk)", margin: 0, fontWeight: 600 }}>Shared to the community ✓ — your post shows a Proven badge.</p>
+          </div>
+        ) : shareText == null ? (
+          <div style={{ ...card, textAlign: "center" }}>
+            <p style={{ fontSize: 12.5, color: "var(--muted)", marginBottom: 10 }}>Share this to the community as a <strong>Proven</strong> post — real, verifiable, and it builds your reputation.</p>
+            <button onClick={() => setShareText(shareCaption())} style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "none", border: "1px solid var(--green)", borderRadius: 12, padding: "10px 16px", fontWeight: 700, cursor: "pointer", color: "var(--green-dk)" }}><ShieldCheck size={16} /> Share to Feed</button>
+          </div>
+        ) : (
+          <div style={card}>
+            <div style={cardHead}>Share to Feed</div>
+            <textarea value={shareText} maxLength={2000} rows={3} onChange={(e) => setShareText(e.target.value)} style={{ ...inputBox, resize: "vertical", marginBottom: 8 }} />
+            <div style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11.5, fontWeight: 700, color: "var(--green-dk)", background: "rgba(106,168,79,.14)", borderRadius: 8, padding: "3px 8px", marginBottom: 10 }}><ShieldCheck size={12} /> Proven · verifiable record attached</div>
+            <div style={{ display: "flex", gap: 10 }}>
+              <button onClick={() => setShareText(null)} style={{ flex: 1, padding: 12, borderRadius: 12, border: "1px solid var(--line)", background: "var(--paper)", cursor: "pointer" }}>Cancel</button>
+              <button onClick={postToFeed} disabled={shareBusy || !shareText.trim()} style={{ flex: 1, padding: 12, borderRadius: 12, border: "none", background: "var(--green)", color: "#fff", fontWeight: 700, cursor: "pointer" }}>{shareBusy ? "Posting…" : "Post to Feed"}</button>
+            </div>
+          </div>
+        )
       )}
 
       <button onClick={goBack} style={{ ...tile, justifyContent: "center", marginTop: 12 }}><Plus size={18} /> Log something else</button>
