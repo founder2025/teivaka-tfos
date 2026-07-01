@@ -861,6 +861,7 @@ export default function FeedView({ initialFilter = "all", groupId = null }) {
     try { const p = getCurrentUser(); return p ? { ...p, user_id: p.user_id || p.sub } : null; } catch { return null; }
   });
   const navigate = useNavigate();
+  const narrow = useIsNarrow(760);   // mobile → full-width segmented toggle; desktop/tablet → compact
   useEffect(() => {
     getJSON("/api/v1/auth/me").then((r) => { const d = r?.data ?? r; if (d?.user_id) setMe(d); }).catch(() => {});
   }, []);
@@ -971,11 +972,11 @@ export default function FeedView({ initialFilter = "all", groupId = null }) {
           {/* Primary mode ABOVE the composer — the first thing you choose: your
               chosen graph vs the open network. Following is a MODE, not a tab (F1). */}
           {!groupId && (
-            <div style={{ display: "flex", gap: 4, background: "var(--cream)", border: "1px solid var(--line)", borderRadius: 999, padding: 3, marginBottom: 12, width: "fit-content" }}>
+            <div style={{ display: "flex", gap: 4, background: "var(--cream)", border: "1px solid var(--line)", borderRadius: 999, padding: 3, marginBottom: 12, width: narrow ? "100%" : "fit-content" }}>
               {[["all", "Everyone", Sparkles], ["following", "Following", Users]].map(([id, label, Icon]) => {
                 const on = id === "following" ? filter === "following" : filter !== "following";
                 return (
-                  <button key={id} onClick={() => setFilter(id)} style={{ display: "inline-flex", alignItems: "center", gap: 6, border: "none", cursor: "pointer", borderRadius: 999, padding: "7px 16px", fontSize: 13, fontWeight: 700, minHeight: 40, background: on ? "var(--green)" : "transparent", color: on ? "#fff" : "var(--muted)" }}>
+                  <button key={id} onClick={() => setFilter(id)} style={{ flex: narrow ? 1 : "none", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6, border: "none", cursor: "pointer", borderRadius: 999, padding: "7px 16px", fontSize: 13, fontWeight: 700, minHeight: narrow ? 44 : 40, background: on ? "var(--green)" : "transparent", color: on ? "#fff" : "var(--muted)" }}>
                     <Icon size={14} />{label}
                   </button>
                 );
