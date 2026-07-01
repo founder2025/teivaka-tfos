@@ -80,12 +80,25 @@ async def compute_trust(db, user_id) -> dict:
         records = (await db.execute(text("SELECT count(*) FROM audit.events"))).scalar() or 0
     except Exception:
         pass
+    reviews = 0
+    avg_rating = None
+    try:
+        rr = (await db.execute(text(
+            "SELECT count(*) AS n, avg(rating) AS a FROM community.marketplace_reviews WHERE seller_user_id = cast(:u AS uuid)"),
+            {"u": uid})).mappings().first()
+        if rr:
+            reviews = int(rr["n"] or 0)
+            avg_rating = float(rr["a"]) if rr["a"] is not None else None
+    except Exception:  # noqa: BLE001
+        pass
 
-    level, score = level_from_signals(kyc, email_verified, records, certs, linked)
+    # Include reviews so the LIVE profile chip matches the beat-refreshed cache badge.
+    level, score = level_from_signals(kyc, email_verified, records, certs, linked, reviews)
 
     return {
         "score": score, "level": level, "level_label": _LABEL[level],
         "kyc_verified": kyc, "email_verified": email_verified,
         "verified_records": records, "certificates": certs, "linked_posts": linked,
+        "review_count": reviews, "avg_rating": avg_rating,
         "member_since": member_since.isoformat() if member_since else None,
     }
