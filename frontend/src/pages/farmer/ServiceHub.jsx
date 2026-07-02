@@ -18,8 +18,9 @@
  */
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Truck, Snowflake, MapPin, Check, X, Sparkles, Plus, AlertTriangle, ChevronDown } from "lucide-react";
+import { Truck, Snowflake, MapPin, Check, X, Sparkles, Plus, AlertTriangle, ChevronDown, Star } from "lucide-react";
 import TfpShell from "../../components/farm/TfpShell";
+import TrustBadge from "../../components/ui/TrustBadge";
 import { getJSON, send } from "../../utils/api";
 import { getCurrentUser } from "../../utils/auth";
 import { formatMoney } from "../../utils/money";
@@ -56,6 +57,14 @@ function ErrorCard({ msg, onRetry }) {
   return <div className="card" style={{ padding: 22, textAlign: "center", color: C.muted }}><div style={{ display: "flex", gap: 8, justifyContent: "center", alignItems: "center", marginBottom: 10 }}><AlertTriangle size={16} style={{ color: "var(--amber)" }} /><span style={{ fontWeight: 600, color: C.soil }}>{msg}</span></div><button className="btn btn-secondary btn-sm" onClick={onRetry}>Retry</button></div>;
 }
 
+// WH2 — reviews rating (mirrors Marketplace SellerRating). No-ops until reviews exist.
+function Rating({ avg, count, size = 11 }) {
+  const c = Number(count || 0);
+  if (!c) return null;
+  const a = Number(avg || 0);
+  return <span title={`${a.toFixed(1)} from ${c} ${c === 1 ? "review" : "reviews"}`} style={{ display: "inline-flex", alignItems: "center", gap: 2, fontSize: size, fontWeight: 700, color: "var(--amber)", flexShrink: 0 }}><Star size={size} style={{ fill: "var(--amber)", color: "var(--amber)" }} />{a.toFixed(1)}<span style={{ color: "var(--muted)", fontWeight: 500 }}>({c})</span></span>;
+}
+
 function JobCard({ j, children }) {
   const Icon = j.service_type === "COLD_STORAGE" ? Snowflake : Truck;
   return (
@@ -65,6 +74,8 @@ function JobCard({ j, children }) {
         <strong style={{ color: C.soil, fontSize: 13.5 }}>{j.title}</strong>
         <span style={pill("var(--cream)", C.greenDk)}>{svcLabel(j.service_type)}</span>
         <span style={pill(j.status === "OPEN" || j.status === "COMPLETED" ? "#eef7ee" : j.status === "CANCELLED" ? "#f3f3f3" : "var(--cream)", C.muted)}>{STATUS_LABEL[j.status] || j.status}</span>
+        {j.requester_trust_level && <TrustBadge level={j.requester_trust_level} size={9} showLabel={false} />}
+        <Rating avg={j.requester_avg_rating} count={j.requester_review_count} size={10} />
         {j.distance_km != null && <span style={{ fontSize: 11.5, color: C.muted, marginLeft: "auto" }}><MapPin size={11} style={{ verticalAlign: "-1px" }} /> {j.distance_km} km</span>}
       </div>
       <div style={{ fontSize: 12.5, color: C.soil, marginTop: 6 }}>

@@ -276,8 +276,12 @@ async def available_jobs(user: dict = Depends(get_current_user)):
         if not prof or not prof["is_active"] or not prof["service_types"]:
             return {"data": [], "needs_profile": not prof}
         rows = (await db.execute(text(
-            "SELECT * FROM community.service_jobs WHERE status = 'OPEN' "
-            "AND service_type = ANY(:types) ORDER BY created_at DESC LIMIT 200"),
+            "SELECT sj.*, ut.level AS requester_trust_level, ut.avg_rating AS requester_avg_rating, "
+            "ut.review_count AS requester_review_count "
+            "FROM community.service_jobs sj "
+            "LEFT JOIN community.user_trust ut ON ut.user_id = sj.requester_user_id "
+            "WHERE sj.status = 'OPEN' AND sj.service_type = ANY(:types) "
+            "ORDER BY sj.created_at DESC LIMIT 200"),
             {"types": list(prof["service_types"])})).mappings().all()
 
     radius = prof["service_radius_km"] or 25

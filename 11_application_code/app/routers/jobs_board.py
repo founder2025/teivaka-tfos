@@ -182,8 +182,12 @@ async def available_listings(employment_type: str = Query(None), sector: str = Q
             f"""SELECT listing_id, poster_user_id, poster_org_name, sector, role_title, employment_type,
                        positions, location, region, base_lat, base_lng, pay_rate_fjd, pay_period,
                        pay_negotiable, skills_required, experience_required, start_date, duration_note,
-                       description, apply_deadline, status, created_at
-                FROM community.job_listings WHERE {' AND '.join(cl)} ORDER BY created_at DESC LIMIT 200"""), p))
+                       description, apply_deadline, status, created_at,
+                       ut.level AS poster_trust_level, ut.avg_rating AS poster_avg_rating,
+                       ut.review_count AS poster_review_count
+                FROM community.job_listings
+                LEFT JOIN community.user_trust ut ON ut.user_id = poster_user_id
+                WHERE {' AND '.join(cl)} ORDER BY created_at DESC LIMIT 200"""), p))
         my_apps = {r["listing_id"] for r in _rows(await db.execute(text(
             "SELECT listing_id FROM community.job_applications WHERE applicant_user_id = :u"),
             {"u": str(user["user_id"])}))}
@@ -339,9 +343,12 @@ async def listing_applications(listing_id: str, user: dict = Depends(get_current
             SELECT a.application_id, a.status, a.applied_at, a.cover_note, a.applicant_user_id,
                    w.display_name, w.skills, w.experience_note, w.location, w.available_from,
                    CASE WHEN a.status = 'ACCEPTED' THEN w.phone ELSE NULL END AS phone,
-                   CASE WHEN a.status = 'ACCEPTED' THEN w.whatsapp ELSE NULL END AS whatsapp
+                   CASE WHEN a.status = 'ACCEPTED' THEN w.whatsapp ELSE NULL END AS whatsapp,
+                   ut.level AS applicant_trust_level, ut.avg_rating AS applicant_avg_rating,
+                   ut.review_count AS applicant_review_count
             FROM community.job_applications a
             LEFT JOIN community.worker_profiles w ON w.user_id = a.applicant_user_id
+            LEFT JOIN community.user_trust ut ON ut.user_id = a.applicant_user_id
             WHERE a.listing_id = :l AND a.status <> 'WITHDRAWN' ORDER BY a.applied_at ASC"""),
             {"l": listing_id}))
         return {"data": rows}

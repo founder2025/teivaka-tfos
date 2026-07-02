@@ -14,8 +14,9 @@
  */
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Briefcase, MapPin, X, Sparkles, Plus, AlertTriangle, ChevronDown, Check, Users, MessageCircle, User } from "lucide-react";
+import { Briefcase, MapPin, X, Sparkles, Plus, AlertTriangle, ChevronDown, Check, Users, MessageCircle, User, Star } from "lucide-react";
 import TfpShell from "../../components/farm/TfpShell";
+import TrustBadge from "../../components/ui/TrustBadge";
 import { useChat } from "../../context/ChatContext";
 import { getJSON, send } from "../../utils/api";
 import { getCurrentUser } from "../../utils/auth";
@@ -77,6 +78,14 @@ function MinWageNote({ rate, period }) {
   return <div style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 11.5, color: C.amber, marginTop: 6 }}><AlertTriangle size={12} />That's about {formatMoney(h, { decimals: 2 })}/hr — below Fiji minimum wage (FJD {MIN_WAGE_HR.toFixed(2)}/hr).</div>;
 }
 
+// WH2 — reviews rating (mirrors Marketplace SellerRating). No-ops until reviews exist.
+function Rating({ avg, count, size = 11 }) {
+  const c = Number(count || 0);
+  if (!c) return null;
+  const a = Number(avg || 0);
+  return <span title={`${a.toFixed(1)} from ${c} ${c === 1 ? "review" : "reviews"}`} style={{ display: "inline-flex", alignItems: "center", gap: 2, fontSize: size, fontWeight: 700, color: "var(--amber)", flexShrink: 0 }}><Star size={size} style={{ fill: "var(--amber)", color: "var(--amber)" }} />{a.toFixed(1)}<span style={{ color: "var(--muted)", fontWeight: 500 }}>({c})</span></span>;
+}
+
 function ListingCard({ l, children }) {
   return (
     <div className="card" style={{ padding: 13, marginBottom: 10 }}>
@@ -86,6 +95,8 @@ function ListingCard({ l, children }) {
         <span style={pill("var(--cream)", C.greenDk)}>{EMP_LABEL[l.employment_type] || l.employment_type}</span>
         {l.sector && <span style={pill("var(--cream)", C.muted)}>{SECTOR_LABEL[l.sector] || l.sector}</span>}
         {l.status && l.status !== "OPEN" && <span style={pill("#f3f3f3", C.muted)}>{l.status}</span>}
+        {l.poster_trust_level && <TrustBadge level={l.poster_trust_level} size={9} showLabel={false} />}
+        <Rating avg={l.poster_avg_rating} count={l.poster_review_count} size={11} />
         {l.distance_km != null && <span style={{ fontSize: 11.5, color: C.muted, marginLeft: "auto" }}><MapPin size={11} style={{ verticalAlign: "-1px" }} /> {l.distance_km} km</span>}
       </div>
       <div style={{ fontSize: 12.5, color: C.soil, marginTop: 6 }}>
@@ -404,6 +415,8 @@ function ApplicantsModal({ listing, onClose, onHire, onChanged }) {
           <div key={a.application_id} className="card" style={{ padding: "10px 13px", marginBottom: 8 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
               <strong style={{ color: C.soil }}>{a.display_name || "Applicant"}</strong>
+              {a.applicant_trust_level && <TrustBadge level={a.applicant_trust_level} size={9} showLabel={false} />}
+              <Rating avg={a.applicant_avg_rating} count={a.applicant_review_count} size={10} />
               <span style={pill(a.status === "ACCEPTED" ? "#eef7ee" : "var(--cream)", a.status === "ACCEPTED" ? C.greenDk : C.muted)}>{APP_STATUS[a.status] || a.status}</span>
             </div>
             <div style={{ fontSize: 12, color: C.muted, marginTop: 3 }}>{a.location || ""}{(a.skills || []).length ? ` · ${a.skills.join(", ")}` : ""}{a.available_from ? ` · from ${String(a.available_from).slice(0, 10)}` : ""}</div>
