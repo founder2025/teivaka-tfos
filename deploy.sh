@@ -191,5 +191,3 @@ else
   echo "   alembic log: /tmp/dep_alembic.out   api build: /tmp/dep_build.out   frontend: /tmp/dep_fe.out"
 fi
 exit "$fail"
-
-# deploy-pipeline smoke: first-run
