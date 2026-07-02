@@ -24,6 +24,7 @@ FILED (fast-follow, not faked): notify matching seekers on post (in-app + WhatsA
 service_jobs._whatsapp_blast); server-side min-wage hard validation; worker/employer
 reliability; map view. Phase 1 ships the marketplace + the Labour hire bridge for real.
 """
+import logging
 import math
 import uuid
 from decimal import Decimal
@@ -39,6 +40,7 @@ from app.db.session import get_db_ctx
 from app.middleware.rls import get_current_user
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 _EMPLOYMENT = ("CASUAL", "PERMANENT", "CONTRACT", "SEASONAL", "APPRENTICE")
 _PERIOD = ("HOUR", "DAY", "WEEK", "MONTH", "PIECE", "NEGOTIABLE")
@@ -305,10 +307,72 @@ async def my_applications(user: dict = Depends(get_current_user)):
                    l.listing_id, l.role_title, l.employment_type, l.location, l.pay_rate_fjd,
                    l.pay_period, l.pay_negotiable, l.poster_org_name,
                    CASE WHEN a.status = 'ACCEPTED' THEN l.poster_org_name ELSE NULL END AS contact_org,
-                   CASE WHEN a.status = 'ACCEPTED' THEN l.poster_user_id::text ELSE NULL END AS poster_user_id
+                   CASE WHEN a.status = 'ACCEPTED' THEN l.poster_user_id::text ELSE NULL END AS poster_user_id,
+                   EXISTS (SELECT 1 FROM community.marketplace_reviews r
+                           WHERE r.order_id = 'JOB:' || a.application_id || ':by-worker') AS worker_reviewed
             FROM community.job_applications a JOIN community.job_listings l ON l.listing_id = a.listing_id
             WHERE a.applicant_user_id = :u ORDER BY a.applied_at DESC"""), {"u": str(user["user_id"])}))
         return {"data": rows}
+
+
+# ───────────────────────── reviews (WH3, two-sided) ─────────────────────────
+# Employer↔worker reviews ride the SHARED reputation table (community.marketplace_reviews)
+# via a synthetic order_id key, so they feed the SAME trust ladder + ★ badge as sales
+# (compute_trust + the beat both count marketplace_reviews.seller_user_id). No new table.
+class ReviewBody(BaseModel):
+    rating: int
+    comment: Optional[str] = None
+
+
+async def _recount_reviews(db, subject_user_id):
+    """Recount ALL reviews about a user (sales + work share one table) into the user_trust
+    cache so the ★ updates immediately (the beat also maintains it)."""
+    agg = (await db.execute(text(
+        "SELECT count(*) AS n, avg(rating) AS a FROM community.marketplace_reviews "
+        "WHERE seller_user_id = cast(:s AS uuid)"), {"s": str(subject_user_id)})).mappings().first()
+    await db.execute(text("""
+        INSERT INTO community.user_trust (user_id, review_count, avg_rating)
+        VALUES (cast(:s AS uuid), :n, :a)
+        ON CONFLICT (user_id) DO UPDATE SET review_count = EXCLUDED.review_count, avg_rating = EXCLUDED.avg_rating
+    """), {"s": str(subject_user_id), "n": int(agg["n"]), "a": agg["a"]})
+
+
+@router.post("/job-applications/{application_id}/review")
+async def review_application(application_id: str, body: ReviewBody, user: dict = Depends(get_current_user)):
+    """Two-sided: the employer (poster) or the hired worker (accepted applicant) reviews the
+    other, once the application is ACCEPTED. One review per direction (synthetic-key UNIQUE)."""
+    if not (1 <= int(body.rating) <= 5):
+        raise HTTPException(422, detail="Rating must be 1–5")
+    uid = str(user["user_id"])
+    async with get_db_ctx() as db:
+        row = (await db.execute(text("""
+            SELECT a.applicant_user_id, a.status, l.poster_user_id, l.listing_id, l.role_title
+            FROM community.job_applications a JOIN community.job_listings l ON l.listing_id = a.listing_id
+            WHERE a.application_id = :a"""), {"a": application_id})).mappings().first()
+        if not row:
+            raise HTTPException(404, detail="Application not found")
+        if row["status"] != "ACCEPTED":
+            raise HTTPException(400, detail="You can review once the hire is confirmed")
+        if uid == str(row["poster_user_id"]):
+            subject, key = str(row["applicant_user_id"]), f"JOB:{application_id}:by-employer"
+        elif uid == str(row["applicant_user_id"]):
+            subject, key = str(row["poster_user_id"]), f"JOB:{application_id}:by-worker"
+        else:
+            raise HTTPException(403, detail="Only the employer or the hired worker can review")
+        if (await db.execute(text("SELECT 1 FROM community.marketplace_reviews WHERE order_id = :k"), {"k": key})).first():
+            raise HTTPException(409, detail="You've already reviewed this")
+        await db.execute(text("""
+            INSERT INTO community.marketplace_reviews (order_id, listing_id, seller_user_id, reviewer_user_id, rating, comment)
+            VALUES (:k, :lid, cast(:s AS uuid), cast(:r AS uuid), :rat, :c)
+        """), {"k": key, "lid": row["listing_id"], "s": subject, "r": uid, "rat": int(body.rating), "c": (body.comment or None)})
+        await _recount_reviews(db, subject)
+        try:
+            from app.routers.feed import _notify
+            await _notify(db, subject, uid, "JOB_REVIEW", f"You received a {int(body.rating)}★ review on {row['role_title']}.")
+        except Exception as e:  # noqa: BLE001
+            logger.warning("job review notify failed: %s", e)
+        await db.commit()
+    return {"data": {"application_id": application_id, "rating": int(body.rating)}}
 
 
 @router.patch("/job-applications/{application_id}/withdraw")
@@ -345,7 +409,9 @@ async def listing_applications(listing_id: str, user: dict = Depends(get_current
                    CASE WHEN a.status = 'ACCEPTED' THEN w.phone ELSE NULL END AS phone,
                    CASE WHEN a.status = 'ACCEPTED' THEN w.whatsapp ELSE NULL END AS whatsapp,
                    ut.level AS applicant_trust_level, ut.avg_rating AS applicant_avg_rating,
-                   ut.review_count AS applicant_review_count
+                   ut.review_count AS applicant_review_count,
+                   EXISTS (SELECT 1 FROM community.marketplace_reviews r
+                           WHERE r.order_id = 'JOB:' || a.application_id || ':by-employer') AS employer_reviewed
             FROM community.job_applications a
             LEFT JOIN community.worker_profiles w ON w.user_id = a.applicant_user_id
             LEFT JOIN community.user_trust ut ON ut.user_id = a.applicant_user_id

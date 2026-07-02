@@ -17,6 +17,7 @@ import { useNavigate } from "react-router-dom";
 import { Briefcase, MapPin, X, Sparkles, Plus, AlertTriangle, ChevronDown, Check, Users, MessageCircle, User, Star } from "lucide-react";
 import TfpShell from "../../components/farm/TfpShell";
 import TrustBadge from "../../components/ui/TrustBadge";
+import ReviewModal from "../../components/ui/ReviewModal";
 import { useChat } from "../../context/ChatContext";
 import { getJSON, send } from "../../utils/api";
 import { getCurrentUser } from "../../utils/auth";
@@ -134,6 +135,7 @@ export default function Jobs({ embedded = false, initialTab }) {
   const [applyFor, setApplyFor] = useState(null);
   const [applicantsFor, setApplicantsFor] = useState(null);
   const [hireFor, setHireFor] = useState(null); // {listing, application}
+  const [reviewFor, setReviewFor] = useState(null); // WH3: worker rates employer on an accepted app
   const [prof, setProf] = useState({ display_name: "", skills: [], experience_note: "", location: "", base_lat: "", base_lng: "", available_from: "", desired_types: [], phone: "", whatsapp: "", is_active: true });
   const [skillsText, setSkillsText] = useState("");
 
@@ -253,6 +255,9 @@ export default function Jobs({ embedded = false, initialTab }) {
                         {a.status === "ACCEPTED" && a.poster_user_id && (<>
                           <button className="btn btn-secondary btn-sm" onClick={() => navigate(`/u/${a.poster_user_id}`)}><User size={13} style={{ verticalAlign: "-2px" }} /> View profile</button>
                           <button className="btn btn-primary btn-sm" onClick={() => chat.openWith({ user_id: a.poster_user_id, full_name: a.poster_org_name || "Employer" })}><MessageCircle size={13} style={{ verticalAlign: "-2px" }} /> Message</button>
+                          {a.worker_reviewed
+                            ? <span style={{ fontSize: 11.5, color: C.muted }}><Star size={11} style={{ verticalAlign: "-1px", fill: "var(--amber)", color: "var(--amber)" }} /> Reviewed</span>
+                            : <button className="btn btn-secondary btn-sm" onClick={() => setReviewFor(a)}><Star size={13} style={{ verticalAlign: "-2px" }} /> Rate employer</button>}
                         </>)}
                         {(a.status === "APPLIED" || a.status === "SHORTLISTED") && <button className="btn btn-secondary btn-sm" onClick={() => withdraw(a.application_id)}>Withdraw</button>}
                       </div>
@@ -287,6 +292,9 @@ export default function Jobs({ embedded = false, initialTab }) {
       {(postOpen || postEdit) && <PostListingModal edit={postEdit} onClose={() => { setPostOpen(false); setPostEdit(null); }} onSaved={() => { loadHire(); setPostOpen(false); setPostEdit(null); }} />}
       {applicantsFor && <ApplicantsModal listing={applicantsFor} onClose={() => setApplicantsFor(null)} onHire={(app) => { setHireFor({ listing: applicantsFor, application: app }); }} onChanged={loadHire} />}
       {hireFor && <HireModal listing={hireFor.listing} application={hireFor.application} onClose={() => setHireFor(null)} onSaved={() => { setHireFor(null); setApplicantsFor(null); loadHire(); }} />}
+      {reviewFor && <ReviewModal title="Rate the employer" subtitle={`How was working with ${reviewFor.poster_org_name || "the employer"} on ${reviewFor.role_title}?`}
+        onClose={() => setReviewFor(null)}
+        onSubmit={async (rating, comment) => { await send("POST", `/api/v1/job-applications/${reviewFor.application_id}/review`, { rating, comment }); emitToast("Thanks for your review"); setReviewFor(null); loadFind(); }} />}
     </>
   );
   if (embedded) return (<>{content}{overlays}</>);
@@ -385,6 +393,7 @@ function ApplicantsModal({ listing, onClose, onHire, onChanged }) {
   const navigate = useNavigate();
   const [rows, setRows] = useState(undefined);
   const [busy, setBusy] = useState(false);
+  const [reviewA, setReviewA] = useState(null); // WH3: employer rates worker on an accepted app
   const load = () => getJSON(`/api/v1/job-listings/${listing.listing_id}/applications`).then((r) => setRows(r?.data || [])).catch(() => setRows([]));
   useEffect(() => { load(); }, []); // eslint-disable-line
   async function decide(id, status) {
@@ -407,6 +416,7 @@ function ApplicantsModal({ listing, onClose, onHire, onChanged }) {
   const shown = sorted.slice(0, 100); // JBS5: cap the drawer; note if more
   const appliedCount = (rows || []).filter((x) => x.status === "APPLIED").length;
   return (
+   <>
     <Modal title={`Applicants — ${listing.role_title}`} onClose={onClose} maxWidth={620} foot={<button className="btn btn-primary" onClick={onClose}>Close</button>}>
       {appliedCount > 1 && <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}><button className="btn btn-secondary btn-sm" onClick={shortlistAll} disabled={busy}>Shortlist all new ({appliedCount})</button></div>}
       {rows === undefined ? <div style={{ color: C.muted }}>Loading…</div>
@@ -427,6 +437,9 @@ function ApplicantsModal({ listing, onClose, onHire, onChanged }) {
               <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
                 <button className="btn btn-secondary btn-sm" onClick={() => navigate(`/u/${a.applicant_user_id}`)}><User size={13} style={{ verticalAlign: "-2px" }} /> View profile</button>
                 <button className="btn btn-primary btn-sm" onClick={() => chat.openWith({ user_id: a.applicant_user_id, full_name: a.display_name || "Applicant" })}><MessageCircle size={13} style={{ verticalAlign: "-2px" }} /> Message</button>
+                {a.employer_reviewed
+                  ? <span style={{ fontSize: 11.5, color: C.muted, alignSelf: "center" }}><Star size={11} style={{ verticalAlign: "-1px", fill: "var(--amber)", color: "var(--amber)" }} /> Reviewed</span>
+                  : <button className="btn btn-secondary btn-sm" onClick={() => setReviewA(a)}><Star size={13} style={{ verticalAlign: "-2px" }} /> Rate worker</button>}
               </div>
             )}
             {a.status !== "ACCEPTED" && a.status !== "DECLINED" && (
@@ -440,6 +453,10 @@ function ApplicantsModal({ listing, onClose, onHire, onChanged }) {
         ))}
       {rows && rows.length > 100 && <div style={{ fontSize: 11.5, color: C.muted, marginTop: 6 }}>Showing the first 100 applicants.</div>}
     </Modal>
+    {reviewA && <ReviewModal title="Rate the worker" subtitle={`How did ${reviewA.display_name || "the worker"} do on ${listing.role_title}?`}
+      onClose={() => setReviewA(null)}
+      onSubmit={async (rating, comment) => { await send("POST", `/api/v1/job-applications/${reviewA.application_id}/review`, { rating, comment }); emitToast("Thanks for your review"); setReviewA(null); load(); onChanged?.(); }} />}
+   </>
   );
 }
 

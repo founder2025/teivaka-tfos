@@ -244,8 +244,10 @@ async def my_jobs(user: dict = Depends(get_current_user)):
                 "SELECT to_regclass('community.service_jobs') IS NOT NULL"))).scalar():
             return {"data": []}
         rows = (await db.execute(text(
-            "SELECT * FROM community.service_jobs WHERE requester_user_id = cast(:u AS uuid) "
-            "ORDER BY created_at DESC LIMIT 100"), {"u": str(user["user_id"])})).mappings().all()
+            "SELECT sj.*, EXISTS (SELECT 1 FROM community.marketplace_reviews r "
+            "WHERE r.order_id = 'SVC:' || sj.job_id || ':by-requester') AS requester_reviewed "
+            "FROM community.service_jobs sj WHERE sj.requester_user_id = cast(:u AS uuid) "
+            "ORDER BY sj.created_at DESC LIMIT 100"), {"u": str(user["user_id"])})).mappings().all()
     return {"data": [dict(r) for r in rows]}
 
 
@@ -256,8 +258,10 @@ async def claimed_jobs(user: dict = Depends(get_current_user)):
                 "SELECT to_regclass('community.service_jobs') IS NOT NULL"))).scalar():
             return {"data": []}
         rows = (await db.execute(text(
-            "SELECT * FROM community.service_jobs WHERE claimed_by_user_id = cast(:u AS uuid) "
-            "ORDER BY claimed_at DESC LIMIT 100"), {"u": str(user["user_id"])})).mappings().all()
+            "SELECT sj.*, EXISTS (SELECT 1 FROM community.marketplace_reviews r "
+            "WHERE r.order_id = 'SVC:' || sj.job_id || ':by-provider') AS provider_reviewed "
+            "FROM community.service_jobs sj WHERE sj.claimed_by_user_id = cast(:u AS uuid) "
+            "ORDER BY sj.claimed_at DESC LIMIT 100"), {"u": str(user["user_id"])})).mappings().all()
     return {"data": [dict(r) for r in rows]}
 
 
@@ -455,3 +459,55 @@ async def cancel_job(job_id: str, user: dict = Depends(get_current_user)):
             raise HTTPException(status_code=404, detail="Job not found or cannot be cancelled")
         await db.commit()
     return {"data": {"job_id": job_id, "status": "CANCELLED"}}
+
+
+# ── Reviews (WH3, two-sided) ───────────────────────────────────────────────────
+# Requester↔provider reviews ride the SHARED reputation table (marketplace_reviews)
+# via a synthetic order_id key → same trust ladder + ★ badge, no new table.
+class ServiceReview(BaseModel):
+    rating: int
+    comment: Optional[str] = None
+
+
+@router.post("/service-jobs/{job_id}/review")
+async def review_service_job(job_id: str, body: ServiceReview, user: dict = Depends(get_current_user)):
+    """Two-sided: the requester or the provider reviews the other once the job is COMPLETED.
+    One review per direction (synthetic-key UNIQUE)."""
+    if not (1 <= int(body.rating) <= 5):
+        raise HTTPException(status_code=422, detail="Rating must be 1–5")
+    uid = str(user["user_id"])
+    async with get_db_ctx() as db:
+        job = (await db.execute(text(
+            "SELECT requester_user_id, claimed_by_user_id, status, title "
+            "FROM community.service_jobs WHERE job_id = :j"), {"j": job_id})).mappings().first()
+        if not job:
+            raise HTTPException(status_code=404, detail="Job not found")
+        if job["status"] != "COMPLETED":
+            raise HTTPException(status_code=400, detail="You can review once the job is done")
+        if uid == str(job["requester_user_id"]):
+            subject, key = (str(job["claimed_by_user_id"]) if job["claimed_by_user_id"] else None), f"SVC:{job_id}:by-requester"
+        elif job["claimed_by_user_id"] and uid == str(job["claimed_by_user_id"]):
+            subject, key = str(job["requester_user_id"]), f"SVC:{job_id}:by-provider"
+        else:
+            raise HTTPException(status_code=403, detail="Only the requester or the provider can review")
+        if not subject:
+            raise HTTPException(status_code=400, detail="There is no counterparty to review")
+        if (await db.execute(text("SELECT 1 FROM community.marketplace_reviews WHERE order_id = :k"), {"k": key})).first():
+            raise HTTPException(status_code=409, detail="You've already reviewed this")
+        await db.execute(text("""
+            INSERT INTO community.marketplace_reviews (order_id, listing_id, seller_user_id, reviewer_user_id, rating, comment)
+            VALUES (:k, :lid, cast(:s AS uuid), cast(:r AS uuid), :rat, :c)
+        """), {"k": key, "lid": job_id, "s": subject, "r": uid, "rat": int(body.rating), "c": (body.comment or None)})
+        # Recount ALL reviews about the subject (sales + work share one table) into user_trust.
+        agg = (await db.execute(text(
+            "SELECT count(*) AS n, avg(rating) AS a FROM community.marketplace_reviews "
+            "WHERE seller_user_id = cast(:s AS uuid)"), {"s": subject})).mappings().first()
+        await db.execute(text("""
+            INSERT INTO community.user_trust (user_id, review_count, avg_rating)
+            VALUES (cast(:s AS uuid), :n, :a)
+            ON CONFLICT (user_id) DO UPDATE SET review_count = EXCLUDED.review_count, avg_rating = EXCLUDED.avg_rating
+        """), {"s": subject, "n": int(agg["n"]), "a": agg["a"]})
+        await _notify(db, subject, uid, "SERVICE_JOB_REVIEW",
+                      f"You received a {int(body.rating)}★ review on {job['title']}.")
+        await db.commit()
+    return {"data": {"job_id": job_id, "rating": int(body.rating)}}

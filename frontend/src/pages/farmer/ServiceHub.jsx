@@ -21,6 +21,7 @@ import { useNavigate } from "react-router-dom";
 import { Truck, Snowflake, MapPin, Check, X, Sparkles, Plus, AlertTriangle, ChevronDown, Star } from "lucide-react";
 import TfpShell from "../../components/farm/TfpShell";
 import TrustBadge from "../../components/ui/TrustBadge";
+import ReviewModal from "../../components/ui/ReviewModal";
 import { getJSON, send } from "../../utils/api";
 import { getCurrentUser } from "../../utils/auth";
 import { formatMoney } from "../../utils/money";
@@ -107,6 +108,7 @@ export default function ServiceHub({ embedded = false, initialTab }) {
   const [mySearch, setMySearch] = useState("");
   const [postOpen, setPostOpen] = useState(false);
   const [completeFor, setCompleteFor] = useState(null);
+  const [reviewFor, setReviewFor] = useState(null); // WH3: {job, label} — rate the counterparty on a done job
   const [p, setP] = useState({ display_name: "", service_types: [], base_location: "", base_lat: "", base_lng: "", service_radius_km: 25, phone: "", capacity_note: "", is_active: true });
 
   const loadProfile = () => getJSON("/api/v1/service-provider/profile")
@@ -174,6 +176,9 @@ export default function ServiceHub({ embedded = false, initialTab }) {
                     {j.status === "CLAIMED" && <button className="btn btn-primary btn-sm" onClick={() => setCompleteFor(j)}><Check size={13} style={{ verticalAlign: "-2px" }} /> Confirm done</button>}
                     {(j.status === "OPEN" || j.status === "CLAIMED") && <button className="btn btn-secondary btn-sm" style={{ color: C.red }} onClick={() => cancel(j.job_id)}><X size={13} style={{ verticalAlign: "-2px" }} /> Cancel</button>}
                     {j.status === "COMPLETED" && j.agreed_price_fjd != null && <span style={{ fontSize: 12.5, color: C.greenDk, fontWeight: 700 }}>Paid {fjd(j.agreed_price_fjd)}</span>}
+                    {j.status === "COMPLETED" && (j.requester_reviewed
+                      ? <span style={{ fontSize: 11.5, color: C.muted }}><Star size={11} style={{ verticalAlign: "-1px", fill: "var(--amber)", color: "var(--amber)" }} /> Reviewed</span>
+                      : <button className="btn btn-secondary btn-sm" onClick={() => setReviewFor({ job: j, label: "provider" })}><Star size={13} style={{ verticalAlign: "-2px" }} /> Rate provider</button>)}
                   </JobCard>
                 ))}
             </>
@@ -224,7 +229,13 @@ export default function ServiceHub({ embedded = false, initialTab }) {
               {claimed && claimed.length > 0 && (
                 <>
                   <strong style={{ color: C.soil, fontSize: 14, display: "block", marginTop: 16 }}>Jobs you've claimed</strong>
-                  <div style={{ marginTop: 8 }}>{claimed.map((j) => <JobCard key={j.job_id} j={j} />)}</div>
+                  <div style={{ marginTop: 8 }}>{claimed.map((j) => (
+                    <JobCard key={j.job_id} j={j}>
+                      {j.status === "COMPLETED" && (j.provider_reviewed
+                        ? <span style={{ fontSize: 11.5, color: C.muted }}><Star size={11} style={{ verticalAlign: "-1px", fill: "var(--amber)", color: "var(--amber)" }} /> Reviewed</span>
+                        : <button className="btn btn-secondary btn-sm" onClick={() => setReviewFor({ job: j, label: "requester" })}><Star size={13} style={{ verticalAlign: "-2px" }} /> Rate requester</button>)}
+                    </JobCard>
+                  ))}</div>
                 </>
               )}
             </>
@@ -235,6 +246,9 @@ export default function ServiceHub({ embedded = false, initialTab }) {
     <>
       {postOpen && <PostJobModal onClose={() => setPostOpen(false)} onSaved={() => { loadMine(); setPostOpen(false); }} />}
       {completeFor && <CompletePriceModal job={completeFor} onClose={() => setCompleteFor(null)} onSaved={() => { loadMine(); setCompleteFor(null); }} />}
+      {reviewFor && <ReviewModal title={`Rate the ${reviewFor.label}`} subtitle={`How did "${reviewFor.job.title}" go?`}
+        onClose={() => setReviewFor(null)}
+        onSubmit={async (rating, comment) => { await send("POST", `/api/v1/service-jobs/${reviewFor.job.job_id}/review`, { rating, comment }); emitToast("Thanks for your review"); setReviewFor(null); loadMine(); loadWork(); }} />}
     </>
   );
   if (embedded) return (<>{content}{overlays}</>);
