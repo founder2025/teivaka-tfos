@@ -146,7 +146,7 @@ async def order_from_listing(listing_id: str, body: ListingOrder, user: dict = D
         L = (await db.execute(text("""
             SELECT listing_id, tenant_id, farm_id, production_id, listing_title,
                    quantity_available_kg, price_per_kg_fjd, grade, listing_status,
-                   created_by, contact_whatsapp, COALESCE(category,'PRODUCE') AS category,
+                   created_by, contact_whatsapp, island, COALESCE(category,'PRODUCE') AS category,
                    COALESCE(price_basis,'kg') AS price_basis
             FROM community.listings WHERE listing_id = :lid
         """), {"lid": listing_id})).mappings().first()
@@ -282,6 +282,27 @@ async def order_from_listing(listing_id: str, body: ListingOrder, user: dict = D
                    "q": qty, "u": basis, "tot": total})
         except Exception as e:  # noqa: BLE001 — ledger is additive; never break the order
             logger.warning("marketplace ledger write failed: %s", e)
+        # MP1 — auto-ingest this real produce sale into the Market Prices board as a
+        # TRANSACTION observation (is_actual_sale=TRUE → weights the market price).
+        # PRODUCE + per-kg + a real crop only; best-effort so it never breaks the sale.
+        if L["category"] == "PRODUCE" and basis == "kg" and L["production_id"]:
+            try:
+                await db.execute(text("""
+                    INSERT INTO community.price_records
+                        (tenant_id, farm_id, created_by, production_id, grade, island,
+                         quantity_kg, price_per_kg_fjd, buyer_type, source, is_actual_sale,
+                         observed_at, country, notes)
+                    VALUES
+                        (cast(:t AS uuid), :farm, cast(:cb AS uuid), :pid, :grade, :island,
+                         :qty, :price, 'MARKETPLACE', 'TRANSACTION', TRUE,
+                         now(), (SELECT country FROM tenant.tenants WHERE tenant_id = cast(:t AS uuid)),
+                         :notes)
+                """), {"t": seller_tid, "farm": L["farm_id"], "cb": str(L["created_by"]),
+                       "pid": L["production_id"], "grade": L["grade"] or "A", "island": L["island"],
+                       "qty": qty, "price": price,
+                       "notes": f"Auto from marketplace order {order_id}"})
+            except Exception as e:  # noqa: BLE001 — price ingest is additive; never break the sale
+                logger.warning("market price ingest failed for %s: %s", order_id, e)
         await db.commit()
 
     # 4) WhatsApp the seller (best-effort; mock-logs without creds).
