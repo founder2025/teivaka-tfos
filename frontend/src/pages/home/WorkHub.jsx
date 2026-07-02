@@ -10,7 +10,7 @@ import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Briefcase, Truck, Plus, X, Sparkles, Megaphone } from "lucide-react";
 import TfpShell from "../../components/farm/TfpShell";
-import SponsorCorner from "../../components/home/SponsorCorner";
+import Boost from "../../components/home/Boost";
 
 const Jobs = lazy(() => import("../farmer/Jobs"));
 const ServiceHub = lazy(() => import("../farmer/ServiceHub"));
@@ -85,7 +85,7 @@ export default function WorkHub() {
               ? <Jobs key={`j${k}`} embedded initialTab={jobsTab} />
               : sub === "services"
               ? <ServiceHub key={`s${k}`} embedded initialTab={svcTab} />
-              : <SponsorCorner />}
+              : <Boost />}
           </Suspense>
         </div>
       </main>

@@ -20,7 +20,7 @@
 set -uo pipefail
 
 BRANCH="${1:-claude/beautiful-fermi-F0dLX}"
-EXPECTED_HEAD="${2:-209_marketplace_reviews}"
+EXPECTED_HEAD="${2:-210_featured_placements}"
 ROOT="/opt/teivaka"
 COMPOSE="docker compose -f ${ROOT}/04_environment/docker-compose.yml"
 PSQL="docker exec -i teivaka_db psql -v ON_ERROR_STOP=1 -tA -U teivaka -d teivaka_db"

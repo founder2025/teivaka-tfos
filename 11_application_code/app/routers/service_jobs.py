@@ -283,9 +283,12 @@ async def available_jobs(user: dict = Depends(get_current_user)):
             return {"data": [], "needs_profile": not prof}
         rows = (await db.execute(text(
             "SELECT sj.*, ut.level AS requester_trust_level, ut.avg_rating AS requester_avg_rating, "
-            "ut.review_count AS requester_review_count "
+            "ut.review_count AS requester_review_count, "
+            "(fp.placement_id IS NOT NULL) AS is_featured "
             "FROM community.service_jobs sj "
             "LEFT JOIN community.user_trust ut ON ut.user_id = sj.requester_user_id "
+            "LEFT JOIN community.featured_placements fp "
+            "  ON fp.target_type = 'SERVICE_JOB' AND fp.target_id = sj.job_id AND fp.featured_until > now() "
             "WHERE sj.status = 'OPEN' AND sj.service_type = ANY(:types) "
             "ORDER BY sj.created_at DESC LIMIT 200"),
             {"types": list(prof["service_types"])})).mappings().all()
@@ -299,7 +302,7 @@ async def available_jobs(user: dict = Depends(get_current_user)):
         item = dict(r)
         item["distance_km"] = (round(d, 1) if d is not None else None)
         out.append(item)
-    out.sort(key=lambda x: (x["distance_km"] is None, x["distance_km"] or 0))
+    out.sort(key=lambda x: (not x.get("is_featured"), x["distance_km"] is None, x["distance_km"] or 0))
     return {"data": out}
 
 

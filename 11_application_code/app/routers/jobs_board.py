@@ -186,9 +186,12 @@ async def available_listings(employment_type: str = Query(None), sector: str = Q
                        pay_negotiable, skills_required, experience_required, start_date, duration_note,
                        description, apply_deadline, status, created_at,
                        ut.level AS poster_trust_level, ut.avg_rating AS poster_avg_rating,
-                       ut.review_count AS poster_review_count
+                       ut.review_count AS poster_review_count,
+                       (fp.placement_id IS NOT NULL) AS is_featured
                 FROM community.job_listings
                 LEFT JOIN community.user_trust ut ON ut.user_id = poster_user_id
+                LEFT JOIN community.featured_placements fp
+                       ON fp.target_type = 'JOB_LISTING' AND fp.target_id = listing_id AND fp.featured_until > now()
                 WHERE {' AND '.join(cl)} ORDER BY created_at DESC LIMIT 200"""), p))
         my_apps = {r["listing_id"] for r in _rows(await db.execute(text(
             "SELECT listing_id FROM community.job_applications WHERE applicant_user_id = :u"),
@@ -197,7 +200,7 @@ async def available_listings(employment_type: str = Query(None), sector: str = Q
             r["distance_km"] = _haversine_km(prof["base_lat"], prof["base_lng"], r["base_lat"], r["base_lng"]) if prof else None
             r["already_applied"] = r["listing_id"] in my_apps
             r.pop("base_lat", None); r.pop("base_lng", None)  # coords used for distance only, not exposed
-        rows.sort(key=lambda x: (x["distance_km"] is None, x["distance_km"] or 0))
+        rows.sort(key=lambda x: (not x.get("is_featured"), x["distance_km"] is None, x["distance_km"] or 0))
         return {"data": rows, "has_profile": bool(prof)}
 
 

@@ -93,6 +93,7 @@ function ListingCard({ l, children }) {
       <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
         <Briefcase size={15} style={{ color: C.greenDk }} />
         <strong style={{ color: C.soil, fontSize: 14 }}>{l.role_title}</strong>
+        {l.is_featured && <span style={pill("var(--green-dk)", "#fff")}><Star size={10} style={{ verticalAlign: "-1px", fill: "#fff" }} /> Featured</span>}
         <span style={pill("var(--cream)", C.greenDk)}>{EMP_LABEL[l.employment_type] || l.employment_type}</span>
         {l.sector && <span style={pill("var(--cream)", C.muted)}>{SECTOR_LABEL[l.sector] || l.sector}</span>}
         {l.status && l.status !== "OPEN" && <span style={pill("#f3f3f3", C.muted)}>{l.status}</span>}

@@ -73,6 +73,7 @@ function JobCard({ j, children }) {
       <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
         <Icon size={15} style={{ color: C.greenDk }} />
         <strong style={{ color: C.soil, fontSize: 13.5 }}>{j.title}</strong>
+        {j.is_featured && <span style={pill("var(--green-dk)", "#fff")}><Star size={10} style={{ verticalAlign: "-1px", fill: "#fff" }} /> Featured</span>}
         <span style={pill("var(--cream)", C.greenDk)}>{svcLabel(j.service_type)}</span>
         <span style={pill(j.status === "OPEN" || j.status === "COMPLETED" ? "#eef7ee" : j.status === "CANCELLED" ? "#f3f3f3" : "var(--cream)", C.muted)}>{STATUS_LABEL[j.status] || j.status}</span>
         {j.requester_trust_level && <TrustBadge level={j.requester_trust_level} size={9} showLabel={false} />}
