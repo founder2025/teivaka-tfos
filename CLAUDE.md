@@ -293,6 +293,26 @@ Every step hash-chained in audit.events, verifiable via /verify/{audit_hash}, sc
 - sudo systemctl status tis-bridge / tis
 - sudo journalctl -u tis-bridge -n 50
 
+## Deploy → Verify Gate (STANDING RULE — Operator-ratified 2026-07-02, binding)
+
+Every time anything is deployed to prod (via the auto-deploy pipeline or manually),
+Claude MUST close the loop with a three-part report and then STOP — do not begin the
+next execution until the Operator confirms the verify passed:
+
+1. **DEPLOYED** — the commit SHA + one line of what changed, the GitHub Actions run
+   status (🟢 success / 🔴 failed), and the current alembic head.
+2. **VERIFY (Operator)** — the EXACT thing to check on teivaka.com before moving on:
+   the click-path (where to go), what you should SEE = pass, and the red flags = fail.
+   Browser-reachable and specific to this change (not a generic "looks fine"). If a
+   surface needs 2 accounts or seed data to exercise, say so.
+3. **STOP** — the next slice/execution does not start until the Operator replies that
+   it passed. A green Actions run proves it *deployed*, never that it *works* — only
+   the browser check does. (This is why the 2026-07-02 verify pass caught the SSE 502
+   flood + the stale-SW transition that green deploys had hidden.)
+
+This binds every session. It complements the Prime Directive's STOP gate (step 4:
+browser-reachable + end-to-end) and the Visibility Rule (Strike #97).
+
 ## Deploy patterns
 
 **Frontend change:** edit /opt/teivaka/frontend/src/, then `cd /opt/teivaka/frontend && npm run build`. Caddy picks up dist/ automatically.
