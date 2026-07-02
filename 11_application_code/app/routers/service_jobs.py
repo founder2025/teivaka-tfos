@@ -29,7 +29,7 @@ from typing import Optional, List
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import text
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.db.session import get_db_ctx
 from app.middleware.rls import get_current_user
@@ -301,6 +301,8 @@ async def claim_job(job_id: str, user: dict = Depends(get_current_user)):
             {"j": job_id})).mappings().first()
         if not job:
             raise HTTPException(status_code=404, detail="Job not found")
+        if str(job["requester_user_id"]) == str(user["user_id"]):
+            raise HTTPException(status_code=400, detail="You can't claim your own job")
         claimed = (await db.execute(text("""
             UPDATE community.service_jobs SET status='CLAIMED',
                 claimed_by_user_id = cast(:u AS uuid), claimed_by_tenant_id = cast(:tid AS uuid),
@@ -316,7 +318,7 @@ async def claim_job(job_id: str, user: dict = Depends(get_current_user)):
 
 
 class JobComplete(BaseModel):
-    agreed_price_fjd: Decimal
+    agreed_price_fjd: Decimal = Field(..., gt=Decimal("0"))
 
 
 async def _book_service_cash_leg(*, tenant_id, actor_user_id, job_id, service_type, title,
@@ -399,11 +401,15 @@ async def complete_job(job_id: str, body: JobComplete, user: dict = Depends(get_
             raise HTTPException(status_code=404, detail="Job not found")
         if str(job["requester_user_id"]) != str(user["user_id"]):
             raise HTTPException(status_code=403, detail="Only the requester can confirm completion")
-        if job["status"] != "CLAIMED":
-            raise HTTPException(status_code=409, detail="Job must be claimed before it can be completed")
-        await db.execute(text(
+        # Atomic gate: only the winner of a concurrent double-submit flips CLAIMED→COMPLETED,
+        # so the fee accrual + audit + money legs run EXACTLY once. (The ledger is deduped by
+        # reference_id, but fee + audit have no dedupe — this conditional UPDATE is the guard.)
+        won = (await db.execute(text(
             "UPDATE community.service_jobs SET status='COMPLETED', agreed_price_fjd=:p, completed_at=now() "
-            "WHERE job_id = :j"), {"p": body.agreed_price_fjd, "j": job_id})
+            "WHERE job_id = :j AND status='CLAIMED' RETURNING job_id"),
+            {"p": body.agreed_price_fjd, "j": job_id})).scalar()
+        if not won:
+            raise HTTPException(status_code=409, detail="Job must be claimed before it can be completed")
         fee = None
         if job["claimed_by_tenant_id"]:
             try:
