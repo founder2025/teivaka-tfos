@@ -451,17 +451,26 @@ export default function ChatWidget() {
     } catch { /* ignore */ }
   }, [chat]);
 
+  // pollConns changes identity every render (the chat context value is a fresh object
+  // each render + pollConns writes conns). Drive the effects off a ref so they mount
+  // ONCE — otherwise each poll → setConns → re-render → new pollConns → effect re-fires
+  // → reopens the SSE stream + re-polls, an infinite loop that floods the api (502s).
+  const pollRef = useRef(pollConns);
+  useEffect(() => { pollRef.current = pollConns; }, [pollConns]);
+
   // initial fetch + slow safety-net poll (SSE drives the fast path)
-  useEffect(() => { if (!tok()) return undefined; pollConns(); const id = setInterval(pollConns, 25000); return () => clearInterval(id); }, [pollConns]);
+  useEffect(() => { if (!tok()) return undefined; pollRef.current(); const id = setInterval(() => pollRef.current(), 25000); return () => clearInterval(id); }, []);
 
   // SSE realtime: instant message / reaction / typing / seen, no busy polling
   useEffect(() => {
     if (!tok()) return undefined;
     // SSE auth via single-use ticket (no JWT in the URL — B93); helper reconnects.
+    // Mount ONCE (deps []) via pollRef — never key this effect on pollConns identity,
+    // or every render reopens the stream (mint ticket + new EventSource) → api flood.
     const stream = openTicketedStream(`${API}/chat/stream`, {
       listeners: {
         chat: (e) => {
-          pollConns();
+          pollRef.current();
           let detail = {}; try { detail = JSON.parse(e.data); } catch { /* ignore */ }
           window.dispatchEvent(new CustomEvent("tfos-chat-refresh", { detail }));
         },
@@ -469,7 +478,7 @@ export default function ChatWidget() {
       },
     });
     return () => stream.close();
-  }, [pollConns]);
+  }, []);
 
   useEffect(() => { if (!toasts.length) return undefined; const id = setTimeout(() => setToasts((t) => t.slice(1)), 5000); return () => clearTimeout(id); }, [toasts]);
 

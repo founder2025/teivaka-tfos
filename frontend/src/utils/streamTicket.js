@@ -35,6 +35,7 @@ export function openTicketedStream(path, { listeners = {}, onOpen, onError } = {
   let closed = false;
   let retry = 0;
   let timer = null;
+  let stableTimer = null;
 
   const schedule = () => {
     if (closed || timer) return;
@@ -55,9 +56,17 @@ export function openTicketedStream(path, { listeners = {}, onOpen, onError } = {
       schedule();
       return;
     }
-    es.onopen = () => { retry = 0; onOpen && onOpen(); };
+    es.onopen = () => {
+      onOpen && onOpen();
+      // Only treat the connection as "good" (reset backoff) after it survives 10s.
+      // Resetting on open alone lets a stream that opens-then-immediately-drops
+      // reconnect every 1s forever — a flood. Flapping now backs off exponentially.
+      if (stableTimer) clearTimeout(stableTimer);
+      stableTimer = setTimeout(() => { retry = 0; stableTimer = null; }, 10000);
+    };
     es.onerror = () => {
       onError && onError();
+      if (stableTimer) { clearTimeout(stableTimer); stableTimer = null; }
       try { es && es.close(); } catch { /* ignore */ }
       es = null;
       schedule(); // reconnect with a fresh ticket — the old one is single-use
@@ -71,6 +80,7 @@ export function openTicketedStream(path, { listeners = {}, onOpen, onError } = {
     close() {
       closed = true;
       if (timer) { clearTimeout(timer); timer = null; }
+      if (stableTimer) { clearTimeout(stableTimer); stableTimer = null; }
       try { es && es.close(); } catch { /* ignore */ }
     },
   };
