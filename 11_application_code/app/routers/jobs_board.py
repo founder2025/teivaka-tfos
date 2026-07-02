@@ -309,9 +309,10 @@ async def my_applications(user: dict = Depends(get_current_user)):
                    CASE WHEN a.status = 'ACCEPTED' THEN l.poster_org_name ELSE NULL END AS contact_org,
                    CASE WHEN a.status = 'ACCEPTED' THEN l.poster_user_id::text ELSE NULL END AS poster_user_id,
                    EXISTS (SELECT 1 FROM community.marketplace_reviews r
-                           WHERE r.order_id = 'JOB:' || a.application_id || ':by-worker') AS worker_reviewed
+                           WHERE r.order_id = :rk_pfx || a.application_id || :rk_sfx) AS worker_reviewed
             FROM community.job_applications a JOIN community.job_listings l ON l.listing_id = a.listing_id
-            WHERE a.applicant_user_id = :u ORDER BY a.applied_at DESC"""), {"u": str(user["user_id"])}))
+            WHERE a.applicant_user_id = :u ORDER BY a.applied_at DESC"""),
+            {"u": str(user["user_id"]), "rk_pfx": "JOB:", "rk_sfx": ":by-worker"}))
         return {"data": rows}
 
 
@@ -411,12 +412,12 @@ async def listing_applications(listing_id: str, user: dict = Depends(get_current
                    ut.level AS applicant_trust_level, ut.avg_rating AS applicant_avg_rating,
                    ut.review_count AS applicant_review_count,
                    EXISTS (SELECT 1 FROM community.marketplace_reviews r
-                           WHERE r.order_id = 'JOB:' || a.application_id || ':by-employer') AS employer_reviewed
+                           WHERE r.order_id = :rk_pfx || a.application_id || :rk_sfx) AS employer_reviewed
             FROM community.job_applications a
             LEFT JOIN community.worker_profiles w ON w.user_id = a.applicant_user_id
             LEFT JOIN community.user_trust ut ON ut.user_id = a.applicant_user_id
             WHERE a.listing_id = :l AND a.status <> 'WITHDRAWN' ORDER BY a.applied_at ASC"""),
-            {"l": listing_id}))
+            {"l": listing_id, "rk_pfx": "JOB:", "rk_sfx": ":by-employer"}))
         return {"data": rows}
 
 

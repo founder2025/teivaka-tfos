@@ -245,9 +245,10 @@ async def my_jobs(user: dict = Depends(get_current_user)):
             return {"data": []}
         rows = (await db.execute(text(
             "SELECT sj.*, EXISTS (SELECT 1 FROM community.marketplace_reviews r "
-            "WHERE r.order_id = 'SVC:' || sj.job_id || ':by-requester') AS requester_reviewed "
+            "WHERE r.order_id = :rk_pfx || sj.job_id || :rk_sfx) AS requester_reviewed "
             "FROM community.service_jobs sj WHERE sj.requester_user_id = cast(:u AS uuid) "
-            "ORDER BY sj.created_at DESC LIMIT 100"), {"u": str(user["user_id"])})).mappings().all()
+            "ORDER BY sj.created_at DESC LIMIT 100"),
+            {"u": str(user["user_id"]), "rk_pfx": "SVC:", "rk_sfx": ":by-requester"})).mappings().all()
     return {"data": [dict(r) for r in rows]}
 
 
@@ -259,9 +260,10 @@ async def claimed_jobs(user: dict = Depends(get_current_user)):
             return {"data": []}
         rows = (await db.execute(text(
             "SELECT sj.*, EXISTS (SELECT 1 FROM community.marketplace_reviews r "
-            "WHERE r.order_id = 'SVC:' || sj.job_id || ':by-provider') AS provider_reviewed "
+            "WHERE r.order_id = :rk_pfx || sj.job_id || :rk_sfx) AS provider_reviewed "
             "FROM community.service_jobs sj WHERE sj.claimed_by_user_id = cast(:u AS uuid) "
-            "ORDER BY sj.claimed_at DESC LIMIT 100"), {"u": str(user["user_id"])})).mappings().all()
+            "ORDER BY sj.claimed_at DESC LIMIT 100"),
+            {"u": str(user["user_id"]), "rk_pfx": "SVC:", "rk_sfx": ":by-provider"})).mappings().all()
     return {"data": [dict(r) for r in rows]}
 
 
