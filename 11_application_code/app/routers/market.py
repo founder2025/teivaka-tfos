@@ -158,6 +158,7 @@ async def list_prices(production_id: str = None, island: str = None, user: dict 
         q = f"""
             SELECT pr.production_id,
                    p.production_name,
+                   pr.grade                                                        AS grade,
                    COUNT(*)                                                        AS sample_count,
                    COUNT(*) FILTER (WHERE pr.is_actual_sale)                       AS sale_count,
                    MIN(pr.price_per_kg_fjd)                                        AS price_low,
@@ -176,8 +177,8 @@ async def list_prices(production_id: str = None, island: str = None, user: dict 
             FROM community.price_records pr
             LEFT JOIN shared.productions p ON p.production_id = pr.production_id
             WHERE {' AND '.join(where)}
-            GROUP BY pr.production_id, p.production_name
-            ORDER BY last_observed DESC
+            GROUP BY pr.production_id, p.production_name, pr.grade
+            ORDER BY p.production_name NULLS LAST, pr.grade NULLS LAST
         """
         rows = (await db.execute(text(q), params)).mappings().all()
 
@@ -188,6 +189,7 @@ async def list_prices(production_id: str = None, island: str = None, user: dict 
         out.append({
             "production_id": r["production_id"],
             "production_name": r["production_name"] or r["production_id"],
+            "grade": r["grade"],
             "weighted_price_fjd": round(weighted, 2) if weighted is not None else None,
             "price_avg_fjd": round(float(r["price_avg"]), 2) if r["price_avg"] is not None else None,
             "price_low_fjd": round(float(r["price_low"]), 2) if r["price_low"] is not None else None,

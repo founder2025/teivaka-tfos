@@ -236,11 +236,12 @@ function Prices({ rows, onAdd, onSeed, isAdmin }) {
         <div className="comm-note">No prices logged yet. Submit the price you bought or sold at — the board fills as farmers and buyers report real numbers.</div>
       ) : (
         <table className="prices-tbl">
-          <thead><tr><th>Crop</th><th>Market price</th><th>Range</th><th>Trend</th><th>Confidence</th><th>Updated</th></tr></thead>
+          <thead><tr><th>Crop</th><th>Grade</th><th>Market price</th><th>Range</th><th>Trend</th><th>Confidence</th><th>Updated</th></tr></thead>
           <tbody>
             {rows.map((r) => (
-              <tr key={r.production_id}>
+              <tr key={`${r.production_id}-${r.grade || "x"}`}>
                 <td className="prices-crop">{r.production_name}</td>
+                <td><span className="prices-grade">{r.grade ? `Grade ${r.grade}` : "—"}</span></td>
                 <td><div className="prices-fjd">{fjd(r.weighted_price_fjd)}</div><div className="prices-grade">{r.weighted_from_sales ? "weighted · sales" : "avg · reported"}</div></td>
                 <td><div className="prices-grade">{fjd(r.price_low_fjd)} – {fjd(r.price_high_fjd)}</div></td>
                 <td><TrendIcon t={r.trend} /></td>
