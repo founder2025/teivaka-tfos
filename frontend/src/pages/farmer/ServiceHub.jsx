@@ -297,7 +297,7 @@ function CompletePriceModal({ job, onClose, onSaved }) {
     <Modal title="Confirm done" onClose={onClose} maxWidth={440} foot={<><button className="btn btn-secondary" onClick={onClose}>Cancel</button><button className="btn btn-primary" onClick={submit} disabled={busy}>{busy ? "Saving…" : "Confirm done"}</button></>}>
       <div style={{ fontSize: 12.5, color: C.muted, marginBottom: 12 }}>{job.title}. Enter the price you actually paid the provider.</div>
       <div className="form-row"><label>Price paid (FJD)</label><input type="number" min="0" step="0.50" value={price} onChange={(e) => setPrice(e.target.value)} autoFocus /></div>
-      <div style={{ fontSize: 11, color: C.muted, marginTop: 8, lineHeight: 1.5 }}>A 5% marketplace fee applies to the provider. (Posting this to your Cash book is on the roadmap.)</div>
+      <div style={{ fontSize: 11, color: C.muted, marginTop: 8, lineHeight: 1.5 }}>This records an expense in your Cash book and income for the provider — both bank-verifiable. A 5% marketplace fee applies to the provider.</div>
     </Modal>
   );
 }

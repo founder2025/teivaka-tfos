@@ -319,13 +319,81 @@ class JobComplete(BaseModel):
     agreed_price_fjd: Decimal
 
 
+async def _book_service_cash_leg(*, tenant_id, actor_user_id, job_id, service_type, title,
+                                 amount_fjd, txn_type, role, counterparty_user_id,
+                                 preferred_farm_id=None) -> dict:
+    """WH1 — book ONE cash_ledger money leg + a SERVICE_JOB_COMPLETED audit row for one
+    party, in THAT party's own tenant RLS context. Best-effort: never raises (the job is
+    already COMPLETED; money-booking is additive). Returns an honest status dict.
+
+    cash_ledger.farm_id is NOT NULL, so a leg needs a farm. The requester is a farmer and
+    has one; a provider may be a pure logistics operator with none — so we ALWAYS emit the
+    audit (needs no farm) and book the ledger row only when a farm exists, naming the skip.
+    NOTE: get_rls_db auto-commits on exit and forbids an explicit db.commit() (the field-
+    events trap) — do NOT add one here."""
+    out = {"role": role, "ledger": "skipped", "reason": None, "audit_hash": None}
+    try:
+        from uuid import UUID
+        from app.db.session import get_rls_db
+        from app.core.audit_chain import emit_audit_event
+        async with get_rls_db(str(tenant_id)) as db:
+            # The bank-verifiable fact of completion — emitted regardless of farm.
+            try:
+                _, this_hash = await emit_audit_event(
+                    db=db, tenant_id=UUID(str(tenant_id)), actor_user_id=UUID(str(actor_user_id)),
+                    event_type="SERVICE_JOB_COMPLETED", entity_type="service_job", entity_id=job_id,
+                    payload={"role": role, "job_id": job_id, "service_type": service_type,
+                             "title": title, "amount_fjd": str(amount_fjd),
+                             "counterparty_user_id": (str(counterparty_user_id) if counterparty_user_id else None)})
+                out["audit_hash"] = this_hash
+            except Exception as e:  # noqa: BLE001
+                logger.warning("service audit (%s) failed for %s: %s", role, job_id, e)
+            # Resolve a farm to attach the ledger row to.
+            farm_id = None
+            if preferred_farm_id and (await db.execute(text(
+                    "SELECT 1 FROM tenant.farms WHERE farm_id = :f LIMIT 1"),
+                    {"f": preferred_farm_id})).first():
+                farm_id = preferred_farm_id
+            if not farm_id:
+                farm_id = (await db.execute(text(
+                    "SELECT farm_id FROM tenant.farms LIMIT 1"))).scalar()
+            if not farm_id:
+                out["reason"] = "no farm on this account"
+                return out
+            # Idempotency belt-and-suspenders (status gate already blocks re-runs).
+            if (await db.execute(text(
+                    "SELECT 1 FROM tenant.cash_ledger WHERE reference_id = :r "
+                    "AND reference_type = 'SERVICE_JOB' LIMIT 1"), {"r": job_id})).first():
+                out["ledger"] = "exists"
+                return out
+            ledger_id = f"CSH-{datetime.now().strftime('%Y%m%d')}-{uuid.uuid4().hex[:4].upper()}"
+            await db.execute(text("""
+                INSERT INTO tenant.cash_ledger
+                    (ledger_id, tenant_id, farm_id, transaction_date, transaction_type,
+                     category, description, amount_fjd, reference_id, reference_type, created_by)
+                VALUES
+                    (:lid, cast(:tid AS uuid), :fid, now()::date, :tt,
+                     :cat, :desc, :amt, :ref, 'SERVICE_JOB', cast(:cb AS uuid))
+            """), {"lid": ledger_id, "tid": str(tenant_id), "fid": farm_id, "tt": txn_type,
+                   "cat": service_type, "desc": f"Service: {title} ({job_id})",
+                   "amt": amount_fjd, "ref": job_id, "cb": str(actor_user_id)})
+            out["ledger"] = "booked"
+            out["ledger_id"] = ledger_id
+    except Exception as e:  # noqa: BLE001
+        out["reason"] = "booking error"
+        logger.warning("service cash leg (%s) failed for %s: %s", role, job_id, e)
+    return out
+
+
 @router.post("/service-jobs/{job_id}/complete")
 async def complete_job(job_id: str, body: JobComplete, user: dict = Depends(get_current_user)):
-    """Requester confirms the job is done + the price paid → marks COMPLETED and
-    accrues the 5% Services fee against the PROVIDER (their marketplace fee)."""
+    """Requester confirms the job is done + the price paid → marks COMPLETED, accrues the
+    5% Services fee against the PROVIDER, and books both money legs (WH1): requester
+    expense + provider income, each hash-chained on that party's own audit."""
     async with get_db_ctx() as db:
         job = (await db.execute(text(
-            "SELECT requester_user_id, claimed_by_user_id, claimed_by_tenant_id, status, title "
+            "SELECT requester_user_id, requester_tenant_id, claimed_by_user_id, "
+            "claimed_by_tenant_id, status, title, service_type, farm_id "
             "FROM community.service_jobs WHERE job_id = :j"), {"j": job_id})).mappings().first()
         if not job:
             raise HTTPException(status_code=404, detail="Job not found")
@@ -349,8 +417,22 @@ async def complete_job(job_id: str, body: JobComplete, user: dict = Depends(get_
             await _notify(db, job["claimed_by_user_id"], user["user_id"], "SERVICE_JOB_COMPLETED",
                           f"Job marked complete: {job['title']}")
         await db.commit()
+
+    # WH1 — money legs, post-commit + best-effort (the job is COMPLETED regardless).
+    legs = {"requester": await _book_service_cash_leg(
+        tenant_id=job["requester_tenant_id"], actor_user_id=job["requester_user_id"],
+        job_id=job_id, service_type=job["service_type"], title=job["title"],
+        amount_fjd=body.agreed_price_fjd, txn_type="EXPENSE", role="requester",
+        counterparty_user_id=job["claimed_by_user_id"], preferred_farm_id=job["farm_id"])}
+    if job["claimed_by_tenant_id"] and job["claimed_by_user_id"]:
+        legs["provider"] = await _book_service_cash_leg(
+            tenant_id=job["claimed_by_tenant_id"], actor_user_id=job["claimed_by_user_id"],
+            job_id=job_id, service_type=job["service_type"], title=job["title"],
+            amount_fjd=body.agreed_price_fjd, txn_type="INCOME", role="provider",
+            counterparty_user_id=job["requester_user_id"], preferred_farm_id=None)
     return {"data": {"job_id": job_id, "status": "COMPLETED",
-                     "service_fee_fjd": (str(fee["fee_amount_fjd"]) if fee else None)}}
+                     "service_fee_fjd": (str(fee["fee_amount_fjd"]) if fee else None),
+                     "cash_legs": legs}}
 
 
 @router.post("/service-jobs/{job_id}/cancel")
