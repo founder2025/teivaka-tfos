@@ -184,15 +184,15 @@ async def available_listings(employment_type: str = Query(None), sector: str = Q
             f"""SELECT listing_id, poster_user_id, poster_org_name, sector, role_title, employment_type,
                        positions, location, region, base_lat, base_lng, pay_rate_fjd, pay_period,
                        pay_negotiable, skills_required, experience_required, start_date, duration_note,
-                       description, apply_deadline, status, created_at,
+                       description, apply_deadline, status, job_listings.created_at,
                        ut.level AS poster_trust_level, ut.avg_rating AS poster_avg_rating,
                        ut.review_count AS poster_review_count,
                        (fp.placement_id IS NOT NULL) AS is_featured
                 FROM community.job_listings
-                LEFT JOIN community.user_trust ut ON ut.user_id = poster_user_id
+                LEFT JOIN community.user_trust ut ON ut.user_id = job_listings.poster_user_id
                 LEFT JOIN community.featured_placements fp
-                       ON fp.target_type = 'JOB_LISTING' AND fp.target_id = listing_id AND fp.featured_until > now()
-                WHERE {' AND '.join(cl)} ORDER BY created_at DESC LIMIT 200"""), p))
+                       ON fp.target_type = 'JOB_LISTING' AND fp.target_id = job_listings.listing_id AND fp.featured_until > now()
+                WHERE {' AND '.join(cl)} ORDER BY job_listings.created_at DESC LIMIT 200"""), p))
         my_apps = {r["listing_id"] for r in _rows(await db.execute(text(
             "SELECT listing_id FROM community.job_applications WHERE applicant_user_id = :u"),
             {"u": str(user["user_id"])}))}
