@@ -350,15 +350,13 @@ async def _book_service_cash_leg(*, tenant_id, actor_user_id, job_id, service_ty
                 out["audit_hash"] = this_hash
             except Exception as e:  # noqa: BLE001
                 logger.warning("service audit (%s) failed for %s: %s", role, job_id, e)
-            # Resolve a farm to attach the ledger row to.
-            farm_id = None
-            if preferred_farm_id and (await db.execute(text(
-                    "SELECT 1 FROM tenant.farms WHERE farm_id = :f LIMIT 1"),
-                    {"f": preferred_farm_id})).first():
-                farm_id = preferred_farm_id
-            if not farm_id:
-                farm_id = (await db.execute(text(
-                    "SELECT farm_id FROM tenant.farms LIMIT 1"))).scalar()
+            # Resolve a farm to attach the ledger row to, in ONE deterministic query:
+            # the job's farm when it's this tenant's, else a stable fallback (RLS already
+            # scopes tenant.farms to this tenant, so a cross-tenant pref simply misses).
+            farm_id = (await db.execute(text(
+                "SELECT farm_id FROM tenant.farms "
+                "ORDER BY (farm_id = :pref) DESC NULLS LAST, farm_id LIMIT 1"),
+                {"pref": preferred_farm_id})).scalar()
             if not farm_id:
                 out["reason"] = "no farm on this account"
                 return out
